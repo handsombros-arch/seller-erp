@@ -1,0 +1,1 @@
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS main_products TEXT;

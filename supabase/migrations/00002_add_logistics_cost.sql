@@ -1,0 +1,2 @@
+-- SKU에 물류비 컬럼 추가
+ALTER TABLE skus ADD COLUMN IF NOT EXISTS logistics_cost NUMERIC(12, 2) DEFAULT 0;

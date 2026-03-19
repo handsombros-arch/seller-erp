@@ -1,0 +1,965 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
+import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon } from 'lucide-react';
+import type { Supplier, SupplierAddress } from '@/types';
+import CsvImportDialog from '@/components/CsvImportDialog';
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface Warehouse { id: string; name: string; }
+interface Channel { id: string; name: string; type: string; }
+
+interface SkuRow {
+  id: string;
+  sku_code: string;
+  product_name: string;
+  option_label: string;
+  cost_price: string;
+  lead_time_days: string;
+  supplier_id: string;
+  sales_30d: string;
+  inventory: Record<string, string>;  // warehouse_id → qty
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string;
+}
+
+// ─── Cell Input ─────────────────────────────────────────────────────────────
+
+function NumCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="number"
+      min="0"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="0"
+      className="w-full h-9 px-2.5 rounded-lg border border-transparent bg-transparent text-[13px] tabular-nums text-right
+        hover:border-[#E5E8EB] hover:bg-white
+        focus:outline-none focus:border-[#3182F6] focus:bg-white focus:ring-2 focus:ring-[#3182F6]/10
+        transition-all placeholder:text-[#D0D5DD]"
+    />
+  );
+}
+
+function SelectCell({ value, onChange, options, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full h-9 px-2 rounded-lg border border-transparent bg-transparent text-[13px]
+        hover:border-[#E5E8EB] hover:bg-white
+        focus:outline-none focus:border-[#3182F6] focus:bg-white focus:ring-2 focus:ring-[#3182F6]/10
+        transition-all text-[#191F28]"
+    >
+      <option value="">{placeholder ?? '–'}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Platform Tab ────────────────────────────────────────────────────────────
+
+interface PlatformRow {
+  sku_id: string;
+  sku_code: string;
+  product_name: string;
+  option_label: string;
+  names: Record<string, string>; // channel_id → platform_product_name
+  dirty: boolean;
+  saving: boolean;
+}
+
+interface ChannelInfo { id: string; name: string; }
+
+function PlatformTab({ skuOptions, channels }: {
+  skuOptions: { id: string; label: string; sku_code: string; product_name: string; option_label: string }[];
+  channels: ChannelInfo[];
+}) {
+  const [rows, setRows] = useState<PlatformRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/platform-skus');
+    const platformData: any[] = res.ok ? await res.json().catch(() => []) : [];
+    const bySkuId: Record<string, Record<string, string>> = {};
+    for (const p of platformData ?? []) {
+      if (!bySkuId[p.sku_id]) bySkuId[p.sku_id] = {};
+      bySkuId[p.sku_id][p.channel_id] = p.platform_product_name ?? '';
+    }
+    const built: PlatformRow[] = skuOptions.map((s) => ({
+      sku_id: s.id,
+      sku_code: s.sku_code,
+      product_name: s.product_name,
+      option_label: s.option_label,
+      names: Object.fromEntries(channels.map((c) => [c.id, bySkuId[s.id]?.[c.id] ?? ''])),
+      dirty: false,
+      saving: false,
+    }));
+    setRows(built);
+    setLoading(false);
+  }, [skuOptions, channels]);
+
+  useEffect(() => { if (skuOptions.length && channels.length) load(); }, [load, skuOptions.length, channels.length]);
+
+  function updateName(skuId: string, channelId: string, value: string) {
+    setRows((prev) => prev.map((r) => r.sku_id === skuId
+      ? { ...r, names: { ...r.names, [channelId]: value }, dirty: true }
+      : r
+    ));
+  }
+
+  async function saveRow(row: PlatformRow) {
+    setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: true } : r));
+    await Promise.all(
+      channels
+        .filter((c) => row.names[c.id] !== undefined)
+        .map(async (c) => {
+          const name = row.names[c.id].trim();
+          // platform_skus 저장
+          await fetch('/api/platform-skus', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sku_id: row.sku_id, channel_id: c.id, platform_product_name: name || null }),
+          });
+          // sku_name_aliases에도 자동 등록 (CSV 자동 매칭용)
+          if (name) {
+            await fetch('/api/sku-aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channel_name: name, sku_id: row.sku_id }),
+            });
+          }
+        })
+    );
+    setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false } : r));
+  }
+
+  const filtered = q
+    ? rows.filter((r) => `${r.product_name} ${r.sku_code} ${r.option_label}`.toLowerCase().includes(q.toLowerCase()))
+    : rows;
+
+  const inputCls = 'w-full h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <Link2 className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
+        <p className="text-[13px] text-[#3182F6]">
+          <span className="font-semibold">상품(SKU) 기준</span>으로 각 플랫폼에서 사용하는 상품명을 등록합니다.
+          저장 시 채널 별칭에도 자동 반영되어 CSV 업로드 시 자동 매칭됩니다.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[#F2F4F6]">
+          <span className="text-[13px] font-semibold text-[#191F28]">SKU별 플랫폼 상품명</span>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
+              className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+        ) : channels.length === 0 ? (
+          <div className="text-center py-12 text-[#B0B8C1] text-[13px]">설정 &gt; 채널에서 플랫폼을 먼저 등록하세요</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                  <th className="text-left px-5 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[200px] sticky left-0 bg-[#F8F9FB]">상품 / SKU</th>
+                  {channels.map((c) => (
+                    <th key={c.id} className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[220px]">{c.name}</th>
+                  ))}
+                  <th className="px-4 py-3 min-w-[60px]" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F2F4F6]">
+                {filtered.map((row) => (
+                  <tr key={row.sku_id} className={`transition-colors ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
+                    <td className={`px-5 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      <p className="text-[13.5px] font-medium text-[#191F28]">{row.product_name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11.5px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                        {row.option_label && (
+                          <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{row.option_label}</span>
+                        )}
+                      </div>
+                    </td>
+                    {channels.map((c) => (
+                      <td key={c.id} className="px-3 py-2">
+                        <input
+                          value={row.names[c.id] ?? ''}
+                          onChange={(e) => updateName(row.sku_id, c.id, e.target.value)}
+                          placeholder={`${c.name} 상품명`}
+                          className={inputCls}
+                        />
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 text-center">
+                      {row.saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-[#3182F6] mx-auto" />
+                      ) : row.dirty ? (
+                        <button onClick={() => saveRow(row)}
+                          className="h-7 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] whitespace-nowrap">
+                          저장
+                        </button>
+                      ) : (
+                        <Check className="h-4 w-4 text-[#D0D5DD] mx-auto" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Suppliers Tab ───────────────────────────────────────────────────────────
+
+const COUNTRY_CODES = [
+  { code: '+82', label: '+82 한국' },
+  { code: '+86', label: '+86 중국' },
+  { code: '+1',  label: '+1 미국' },
+  { code: '+81', label: '+81 일본' },
+  { code: '+84', label: '+84 베트남' },
+  { code: '+66', label: '+66 태국' },
+  { code: '+60', label: '+60 말레이시아' },
+  { code: '+62', label: '+62 인도네시아' },
+  { code: '+91', label: '+91 인도' },
+  { code: '+44', label: '+44 영국' },
+];
+
+const ADDRESS_TYPES = [
+  { value: 'office',  label: '쇼룸/사무실' },
+  { value: 'factory', label: '공장/출고지' },
+  { value: 'other',   label: '기타' },
+] as const;
+
+interface SupplierFormState {
+  name: string; contact_person: string;
+  phone_country_code: string; phone: string;
+  email: string; country: string; lead_time_days: string;
+  main_products: string; note: string;
+  addresses: SupplierAddress[];
+}
+
+const EMPTY_SUPPLIER_FORM: SupplierFormState = {
+  name: '', contact_person: '',
+  phone_country_code: '+86', phone: '',
+  email: '', country: '중국', lead_time_days: '21',
+  main_products: '', note: '',
+  addresses: [],
+};
+
+const sfInputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+
+function SfField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[13px] font-medium text-[#191F28]">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
+  initial: SupplierFormState;
+  onSave: (f: SupplierFormState) => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [form, setForm] = useState(initial);
+  const [addrInput, setAddrInput] = useState({ type: 'office' as SupplierAddress['type'], label: '쇼룸/사무실', address: '' });
+  const set = (k: keyof SupplierFormState, v: any) => setForm((f) => ({ ...f, [k]: v }));
+
+  function addAddress() {
+    if (!addrInput.address.trim()) return;
+    set('addresses', [...form.addresses, { ...addrInput, address: addrInput.address.trim() }]);
+    setAddrInput((a) => ({ ...a, address: '' }));
+  }
+
+  function removeAddress(i: number) {
+    set('addresses', form.addresses.filter((_, idx) => idx !== i));
+  }
+
+  function handleAddrTypeChange(type: SupplierAddress['type']) {
+    const found = ADDRESS_TYPES.find((t) => t.value === type);
+    setAddrInput((a) => ({ ...a, type, label: found?.label ?? type }));
+  }
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
+      <SfField label="회사명 / 제조사명" required>
+        <input className={sfInputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+      </SfField>
+      <div className="grid grid-cols-2 gap-3">
+        <SfField label="담당자">
+          <input className={sfInputCls} placeholder="담당자 이름" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
+        </SfField>
+        <SfField label="국가">
+          <input className={sfInputCls} placeholder="중국" value={form.country} onChange={(e) => set('country', e.target.value)} />
+        </SfField>
+      </div>
+      <SfField label="연락처">
+        <div className="flex gap-2">
+          <select value={form.phone_country_code} onChange={(e) => set('phone_country_code', e.target.value)}
+            className="h-11 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors shrink-0">
+            {COUNTRY_CODES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+          <input className={sfInputCls} placeholder="010-1234-5678" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+        </div>
+      </SfField>
+      <SfField label="이메일">
+        <input className={sfInputCls} type="email" placeholder="example@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
+      </SfField>
+      <SfField label="기본 리드타임 (일)">
+        <div className="flex items-center gap-2">
+          <input className={sfInputCls} type="number" min="1" max="365" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
+          <span className="text-[13px] text-[#6B7684] whitespace-nowrap">일</span>
+        </div>
+        <p className="text-[11.5px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
+      </SfField>
+      <SfField label="주요 상품">
+        <input className={sfInputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
+      </SfField>
+      <div className="space-y-2">
+        <label className="text-[13px] font-medium text-[#191F28]">주소</label>
+        {form.addresses.map((addr, i) => (
+          <div key={i} className="flex items-start gap-2 bg-[#F8F9FB] rounded-xl px-3 py-2.5">
+            <MapPin className="h-3.5 w-3.5 text-[#B0B8C1] mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11.5px] font-semibold text-[#6B7684]">{addr.label}</p>
+              <p className="text-[13px] text-[#191F28] break-all">{addr.address}</p>
+            </div>
+            <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors shrink-0">
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        <div className="border border-[#E5E8EB] rounded-xl p-3 space-y-2">
+          <div className="flex gap-2">
+            <select value={addrInput.type} onChange={(e) => handleAddrTypeChange(e.target.value as SupplierAddress['type'])}
+              className="h-9 px-2 rounded-xl border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6] transition-colors shrink-0">
+              {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <input
+              className="flex-1 h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+              placeholder="주소 입력" value={addrInput.address}
+              onChange={(e) => setAddrInput((a) => ({ ...a, address: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAddress(); } }}
+            />
+            <button type="button" onClick={addAddress} className="h-9 w-9 flex items-center justify-center rounded-xl bg-[#EBF1FE] text-[#3182F6] hover:bg-[#3182F6] hover:text-white transition-colors shrink-0">
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <SfField label="메모">
+        <textarea className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
+          rows={2} placeholder="특이사항, 계좌 정보 등" value={form.note} onChange={(e) => set('note', e.target.value)} />
+      </SfField>
+      <div className="flex gap-2 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
+        <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          저장
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function SuppliersTab() {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Supplier | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch('/api/suppliers');
+    setSuppliers(await res.json());
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function formToBody(form: SupplierFormState) {
+    return {
+      name: form.name.trim(),
+      contact_person: form.contact_person.trim() || null,
+      phone_country_code: form.phone_country_code || '+86',
+      phone: form.phone.trim() || null,
+      email: form.email.trim() || null,
+      country: form.country.trim() || '중국',
+      lead_time_days: Number(form.lead_time_days) || 21,
+      main_products: form.main_products.trim() || null,
+      note: form.note.trim() || null,
+      addresses: form.addresses,
+    };
+  }
+
+  async function handleAdd(form: SupplierFormState) {
+    setSaving(true);
+    const res = await fetch('/api/suppliers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formToBody(form)),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSuppliers((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setAddOpen(false);
+    }
+    setSaving(false);
+  }
+
+  async function handleEdit(form: SupplierFormState) {
+    if (!editTarget) return;
+    setSaving(true);
+    const res = await fetch(`/api/suppliers/${editTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formToBody(form)),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSuppliers((prev) => prev.map((s) => s.id === data.id ? data : s));
+      setEditTarget(null);
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(id: string) {
+    await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    setDeleteId(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-[13.5px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-9 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+            <Upload className="h-3.5 w-3.5" /> CSV 업로드
+          </button>
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-9 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+            <Plus className="h-3.5 w-3.5" /> 공급처 추가
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+        </div>
+      ) : suppliers.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+          <Building2 className="h-10 w-10 text-[#B0B8C1] mb-3" />
+          <p className="text-[14px] font-medium text-[#6B7684]">등록된 공급처가 없습니다</p>
+          <p className="text-[13px] text-[#B0B8C1] mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {suppliers.map((s) => (
+            <div key={s.id} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#F2F4F6] flex items-center justify-center shrink-0">
+                    <Building2 className="h-5 w-5 text-[#6B7684]" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[15px] font-bold text-[#191F28]">{s.name}</h3>
+                      {s.country && <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F2F4F6] text-[#6B7684] rounded-full">{s.country}</span>}
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 flex-wrap">
+                      {s.contact_person && <span className="text-[12.5px] text-[#6B7684]"><span className="text-[#B0B8C1]">담당자</span> {s.contact_person}</span>}
+                      {s.phone && <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]"><Phone className="h-3.5 w-3.5 text-[#B0B8C1]" />{s.phone_country_code && `${s.phone_country_code} `}{s.phone}</span>}
+                      {s.email && <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]"><Mail className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.email}</span>}
+                      <span className="flex items-center gap-1 text-[12.5px] font-medium text-[#3182F6]"><Clock className="h-3.5 w-3.5" /> 리드타임 {s.lead_time_days}일</span>
+                      {s.main_products && <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]"><Package className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.main_products}</span>}
+                    </div>
+                    {(s.addresses ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {s.addresses.map((addr, i) => (
+                          <span key={i} className="flex items-center gap-1 text-[12px] text-[#6B7684]">
+                            <MapPin className="h-3 w-3 text-[#B0B8C1]" />
+                            <span className="text-[#B0B8C1] font-medium">{addr.label}</span> {addr.address}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {s.note && <p className="text-[12px] text-[#B0B8C1] mt-1.5 line-clamp-1">{s.note}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => setEditTarget(s)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#6B7684] transition-colors">
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => setDeleteId(s.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <CsvImportDialog
+        open={csvOpen} onClose={() => setCsvOpen(false)} onImported={load}
+        title="공급처 CSV 일괄 등록" templateType="suppliers" importUrl="/api/suppliers/import"
+        columns={['업체명', '담당자', '국가코드', '전화번호', '이메일', '국가', '리드타임(일)']}
+        description="업체명이 중복되면 건너뜁니다."
+      />
+
+      {/* 추가 다이얼로그 */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setAddOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+              <h2 className="text-[16px] font-bold text-[#191F28]">공급처 추가</h2>
+              <button onClick={() => setAddOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
+                <XIcon className="h-4 w-4 text-[#6B7684]" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <SupplierFormDialog initial={EMPTY_SUPPLIER_FORM} onSave={handleAdd} onCancel={() => setAddOpen(false)} saving={saving} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수정 다이얼로그 */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setEditTarget(null)} />
+          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+              <h2 className="text-[16px] font-bold text-[#191F28]">공급처 수정</h2>
+              <button onClick={() => setEditTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
+                <XIcon className="h-4 w-4 text-[#6B7684]" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <SupplierFormDialog
+                initial={{
+                  name: editTarget.name,
+                  contact_person: editTarget.contact_person ?? '',
+                  phone_country_code: editTarget.phone_country_code ?? '+86',
+                  phone: editTarget.phone ?? '',
+                  email: editTarget.email ?? '',
+                  country: editTarget.country ?? '중국',
+                  lead_time_days: String(editTarget.lead_time_days),
+                  main_products: editTarget.main_products ?? '',
+                  note: editTarget.note ?? '',
+                  addresses: editTarget.addresses ?? [],
+                }}
+                onSave={handleEdit} onCancel={() => setEditTarget(null)} saving={saving}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 삭제 확인 */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteId(null)} />
+          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+            <h3 className="text-[16px] font-bold text-[#191F28] mb-2">공급처 삭제</h3>
+            <p className="text-[13.5px] text-[#6B7684]">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
+              <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[14px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
+
+export default function MasterPage() {
+  const [tab, setTab] = useState<'master' | 'platform'>('master');
+  const [rows, setRows] = useState<SkuRow[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingAll, setSavingAll] = useState(false);
+  const [skuOptions, setSkuOptions] = useState<{ id: string; label: string; sku_code: string; product_name: string; option_label: string }[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [products, whs, chs, supplierData] = await Promise.all([
+        fetch('/api/products').then((r) => r.json()).catch(() => []),
+        fetch('/api/settings/warehouses').then((r) => r.json()).catch(() => []),
+        fetch('/api/settings/channels').then((r) => r.json()).catch(() => []),
+        fetch('/api/suppliers').then((r) => r.json()).catch(() => []),
+      ]);
+      setSuppliers(supplierData ?? []);
+
+      const warehouseList: Warehouse[] = whs ?? [];
+      const channelList: Channel[] = chs ?? [];
+      setWarehouses(warehouseList);
+      setChannels(channelList);
+
+      const flat: SkuRow[] = [];
+      for (const product of (products ?? [])) {
+        for (const sku of (product.skus ?? [])) {
+          // 재고 초기화
+          const inv: Record<string, string> = {};
+          warehouseList.forEach((w) => { inv[w.id] = ''; });
+          for (const i of (sku.inventory ?? [])) {
+            const whId = i.warehouse?.id ?? warehouseList.find((w: Warehouse) => w.name === i.warehouse?.name)?.id;
+            if (whId) inv[whId] = String(i.quantity ?? 0);
+          }
+
+          flat.push({
+            id: sku.id,
+            sku_code: sku.sku_code,
+            product_name: product.name,
+            option_label: skuOptionLabel(sku.option_values ?? {}),
+            cost_price: String(sku.cost_price ?? ''),
+            lead_time_days: String(sku.lead_time_days ?? ''),
+            supplier_id: sku.supplier_id ?? '',
+            sales_30d: sku.manual_daily_avg != null
+              ? String(Math.round(sku.manual_daily_avg * 30))
+              : '',
+            inventory: inv,
+            dirty: false,
+            saving: false,
+            saved: false,
+            error: '',
+          });
+        }
+      }
+      setRows(flat);
+
+      // SKU 옵션 목록 (별칭/플랫폼 탭용)
+      const opts = flat.map((r) => ({
+        id: r.id,
+        label: `${r.product_name}${r.option_label ? ' · ' + r.option_label : ''} (${r.sku_code})`,
+        sku_code: r.sku_code,
+        product_name: r.product_name,
+        option_label: r.option_label,
+      }));
+      setSkuOptions(opts);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function markDirty(id: string, patch: Partial<SkuRow>) {
+    setRows((prev) => prev.map((r) => r.id === id
+      ? { ...r, ...patch, dirty: true, saved: false }
+      : r
+    ));
+  }
+
+  function updateInventory(id: string, warehouseId: string, value: string) {
+    setRows((prev) => prev.map((r) => r.id === id
+      ? { ...r, inventory: { ...r.inventory, [warehouseId]: value }, dirty: true, saved: false }
+      : r
+    ));
+  }
+
+
+  async function saveRow(row: SkuRow) {
+    setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, saving: true, error: '' } : r));
+    try {
+      const manual_daily_avg = row.sales_30d.trim() ? Number(row.sales_30d) / 30 : null;
+
+      await Promise.all([
+        // SKU 마스터 업데이트
+        fetch(`/api/skus/${row.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cost_price: row.cost_price ? Number(row.cost_price) : 0,
+            lead_time_days: row.lead_time_days ? Number(row.lead_time_days) : null,
+            supplier_id: row.supplier_id || null,
+            manual_daily_avg,
+          }),
+        }),
+        // 창고별 재고
+        ...Object.entries(row.inventory)
+          .filter(([, qty]) => qty.trim() !== '')
+          .map(([warehouse_id, qty]) =>
+            fetch('/api/inventory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sku_id: row.id,
+                warehouse_id,
+                new_quantity: Number(qty),
+                reason: '마스터 시트 일괄 입력',
+              }),
+            })
+          ),
+      ]);
+
+      setRows((prev) => prev.map((r) => r.id === row.id
+        ? { ...r, saving: false, saved: true, dirty: false }
+        : r
+      ));
+      setTimeout(() => {
+        setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, saved: false } : r));
+      }, 2000);
+    } catch (err: unknown) {
+      setRows((prev) => prev.map((r) => r.id === row.id
+        ? { ...r, saving: false, error: err instanceof Error ? err.message : '오류' }
+        : r
+      ));
+    }
+  }
+
+  async function saveAll() {
+    const dirty = rows.filter((r) => r.dirty);
+    if (!dirty.length) return;
+    setSavingAll(true);
+    await Promise.all(dirty.map(saveRow));
+    setSavingAll(false);
+  }
+
+  const dirtyCount = rows.filter((r) => r.dirty).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="sticky top-[60px] z-20 bg-[#F2F4F6] pb-3 -mb-2 flex items-start justify-between">
+        <div>
+          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">마스터 시트</h2>
+          <p className="mt-1 text-[13.5px] text-[#6B7684]">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl">
+            {([['master', '마스터 시트'], ['platform', '플랫폼 상품명']] as const).map(([t, label]) => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors ${tab === t ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === 'master' && (
+            <>
+              <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+                <RefreshCw className="h-4 w-4" /> 새로고침
+              </button>
+              {dirtyCount > 0 && (
+                <button onClick={saveAll} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+                  {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  저장 ({dirtyCount})
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 플랫폼 상품명 탭 */}
+      {tab === 'platform' && <PlatformTab skuOptions={skuOptions} channels={channels} />}
+
+      {/* 마스터 시트 탭 */}
+      {tab === 'master' && <>
+      {/* 안내 */}
+      <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <FileSpreadsheet className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
+        <p className="text-[13px] text-[#3182F6]">
+          <span className="font-semibold">셀을 클릭해 직접 수정</span>하세요.
+          플랫폼 상품명은 채널별로 다르게 입력할 수 있으며, 변경 시 바로 반영됩니다.
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+          <FileSpreadsheet className="h-10 w-10 text-[#B0B8C1] mb-3" />
+          <p className="text-[14px] font-medium text-[#6B7684]">상품 관리에서 상품을 먼저 등록하세요</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                  {/* 고정 컬럼들 */}
+                  <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap sticky left-0 bg-[#F8F9FB] z-10 min-w-[180px]">
+                    상품명 / SKU
+                  </th>
+                  <th className="text-left px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[130px]">공급처</th>
+                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[110px]">
+                    원가 <span className="font-normal text-[#B0B8C1]">(VAT제외)</span>
+                  </th>
+
+                  {/* 창고별 재고 */}
+                  {warehouses.map((w) => (
+                    <th key={w.id} className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[110px]">
+                      {w.name}
+                    </th>
+                  ))}
+
+                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[90px]">리드타임</th>
+
+                  {/* 판매량 */}
+                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[100px]">30일 판매</th>
+                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[80px]">일일 평균</th>
+
+                  <th className="px-3 py-3 min-w-[60px]" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F2F4F6]">
+                {rows.map((row) => {
+                  const dailyAvg = row.sales_30d.trim() ? Number(row.sales_30d) / 30 : null;
+
+                  return (
+                    <tr key={row.id} className={`transition-colors ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
+                      {/* 상품명 - sticky */}
+                      <td className={`px-4 py-2.5 sticky left-0 z-10 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                        <p className="text-[13.5px] font-medium text-[#191F28] truncate max-w-[160px]">{row.product_name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11.5px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                          {row.option_label && (
+                            <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{row.option_label}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 공급처 */}
+                      <td className="px-2 py-2">
+                        <SelectCell
+                          value={row.supplier_id}
+                          onChange={(v) => {
+                            const sup = suppliers.find((s) => s.id === v);
+                            markDirty(row.id, {
+                              supplier_id: v,
+                              // 리드타임이 비어있으면 공급처 기본값으로 채움
+                              lead_time_days: !row.lead_time_days && sup ? String(sup.lead_time_days) : row.lead_time_days,
+                            });
+                          }}
+                          options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+                          placeholder="공급처 선택"
+                        />
+                      </td>
+
+                      {/* 원가 (도착가 VAT제외) */}
+                      <td className="px-2 py-2">
+                        <NumCell value={row.cost_price} onChange={(v) => markDirty(row.id, { cost_price: v })} />
+                        {row.cost_price && (
+                          <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">
+                            {formatCurrency(Number(row.cost_price))} · VAT포함 {formatCurrency(Math.round(Number(row.cost_price) * 1.1))}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* 창고별 재고 */}
+                      {warehouses.map((w) => (
+                        <td key={w.id} className="px-2 py-2">
+                          <NumCell value={row.inventory[w.id] ?? ''} onChange={(v) => updateInventory(row.id, w.id, v)} />
+                          {row.inventory[w.id] && (
+                            <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.inventory[w.id]))}개</p>
+                          )}
+                        </td>
+                      ))}
+
+                      {/* 리드타임 */}
+                      <td className="px-2 py-2">
+                        <NumCell value={row.lead_time_days} onChange={(v) => markDirty(row.id, { lead_time_days: v })} />
+                        {row.lead_time_days && (
+                          <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{row.lead_time_days}일</p>
+                        )}
+                      </td>
+
+                      {/* 30일 판매량 */}
+                      <td className="px-2 py-2">
+                        <NumCell value={row.sales_30d} onChange={(v) => markDirty(row.id, { sales_30d: v })} />
+                        {row.sales_30d && (
+                          <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.sales_30d))}개</p>
+                        )}
+                      </td>
+
+                      {/* 일일 평균 (읽기전용) */}
+                      <td className="px-3 py-2 text-right">
+                        <span className="text-[13px] text-[#6B7684] tabular-nums">
+                          {dailyAvg !== null ? `${Math.round(dailyAvg * 10) / 10}개` : '–'}
+                        </span>
+                      </td>
+
+                      {/* 저장 */}
+                      <td className="px-3 py-2 text-center">
+                        {row.error && <p className="text-[11px] text-red-500 mb-1">{row.error}</p>}
+                        {row.saved ? (
+                          <Check className="h-4 w-4 text-green-500 mx-auto" />
+                        ) : row.saving ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-[#3182F6] mx-auto" />
+                        ) : row.dirty ? (
+                          <button
+                            onClick={() => saveRow(row)}
+                            className="h-7 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] transition-colors whitespace-nowrap"
+                          >
+                            저장
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-5 py-3 bg-[#F8F9FB] border-t border-[#F2F4F6]">
+            <span className="text-[12.5px] text-[#6B7684]">총 {formatNumber(rows.length)}개 SKU</span>
+            {dirtyCount > 0 && (
+              <span className="text-[12.5px] text-[#3182F6] font-medium">{dirtyCount}개 행 변경됨</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      </>}
+    </div>
+  );
+}
