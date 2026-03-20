@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { formatNumber, formatCurrency, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
 import type { InventoryItem, Warehouse } from '@/types';
@@ -883,7 +884,11 @@ const WH_LABELS: Record<WhCol, string> = {
 
 export default function InventoryPage() {
   const { vatOn, vatMult } = useVat();
-  const [tab, setTab] = useState<'summary' | 'warehouse' | 'rg'>('summary');
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<'summary' | 'warehouse' | 'rg'>(() => {
+    const t = searchParams.get('tab');
+    return (t === 'warehouse' || t === 'rg') ? t : 'summary';
+  });
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');

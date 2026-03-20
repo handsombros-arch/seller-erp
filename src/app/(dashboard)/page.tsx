@@ -393,11 +393,11 @@ export default function DashboardPage() {
 
   const stats = data?.stats;
   const statCards = [
-    { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-[#EBF1FE]', icon: Package },
-    { label: '창고 재고', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse },
-    { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음' },
-    { label: vatOn ? '재고 원가 총액 (VAT+10%)' : '재고 원가 총액 (VAT별도)', value: formatCurrency((stats?.totalStockValue ?? 0) * vatMult), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp },
-    { label: '발주 필요 SKU', value: formatNumber(stats?.needsReorderCount ?? 0), unit: '개', color: 'text-red-500', bg: 'bg-red-50', icon: AlertTriangle },
+    { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-[#EBF1FE]', icon: Package, href: '/products' },
+    { label: '창고 재고', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse, href: '/inventory?tab=warehouse' },
+    { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음', href: '/inventory?tab=rg' },
+    { label: vatOn ? '재고 원가 총액 (VAT+10%)' : '재고 원가 총액 (VAT별도)', value: formatCurrency((stats?.totalStockValue ?? 0) * vatMult), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp, href: '/inventory' },
+    { label: '발주 필요 SKU', value: formatNumber(stats?.needsReorderCount ?? 0), unit: '개', color: 'text-red-500', bg: 'bg-red-50', icon: AlertTriangle, href: '/forecast' },
   ];
 
   return (
@@ -444,7 +444,7 @@ export default function DashboardPage() {
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <Link key={s.label} href={s.href} className="block bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-150 cursor-pointer">
             <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
               <s.icon className={`h-[18px] w-[18px] ${s.color}`} strokeWidth={2.5} />
             </div>
@@ -454,7 +454,7 @@ export default function DashboardPage() {
               {s.unit && <span className="text-[13px] text-[#B0B8C1] font-medium">{s.unit}</span>}
             </div>
             {'sub' in s && s.sub && <p className="text-[10.5px] text-[#B0B8C1] mt-1">{s.sub}</p>}
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -485,7 +485,7 @@ export default function DashboardPage() {
                   const dLabel = ev.days_until === 0 ? 'D-day' : `D-${ev.days_until}`;
                   const urgent = ev.days_until <= 3;
                   return (
-                    <div key={i} className="flex items-center gap-3 px-5 py-3">
+                    <Link key={i} href={isInbound ? '/inbound' : '/forecast'} className="flex items-center gap-3 px-5 py-3 hover:bg-[#F8F9FB] transition-colors">
                       <div className={`shrink-0 w-14 text-center py-1 rounded-lg text-[11px] font-bold ${urgent ? 'bg-red-50 text-red-500' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
                         {dLabel}
                       </div>
@@ -496,7 +496,7 @@ export default function DashboardPage() {
                       <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${isInbound ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
                         {isInbound ? '입고예정' : '발주권장'}
                       </span>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
@@ -518,7 +518,7 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y divide-[#F2F4F6]">
                 {(data?.anomalies ?? []).map((a) => (
-                  <div key={a.sku_id} className="flex items-center justify-between px-5 py-3.5">
+                  <Link key={a.sku_id} href="/channel-sales" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13.5px] font-medium text-foreground truncate">{a.product_name}</p>
                       <p className="text-[12px] text-[#6B7684] font-mono mt-0.5">{a.sku_code}</p>
@@ -534,7 +534,7 @@ export default function DashboardPage() {
                         <p className="text-[11.5px] font-semibold text-amber-500">신규 급증</p>
                       )}
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -580,7 +580,7 @@ export default function DashboardPage() {
                 const daysRemaining = dailyAvg > 0 ? Math.floor(total / dailyAvg) : null;
                 const daysUntilReorder = daysRemaining !== null ? daysRemaining - (sku.lead_time_days ?? 0) : null;
                 return (
-                  <div key={sku.id} className="flex items-center justify-between px-5 py-3.5">
+                  <Link key={sku.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13.5px] font-medium text-foreground truncate">{sku.product?.name}</p>
                       <p className="text-[12px] text-[#6B7684] mt-0.5">{sku.sku_code} · {skuOptionLabel(sku.option_values ?? {})}</p>
@@ -593,7 +593,7 @@ export default function DashboardPage() {
                         <p className="text-[11px] text-[#B0B8C1]">발주점 {formatNumber(sku.reorder_point)}</p>
                       )}
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -627,7 +627,7 @@ export default function DashboardPage() {
                 };
                 const s = statusMap[po.status] ?? { label: po.status, color: 'bg-gray-100 text-gray-600' };
                 return (
-                  <div key={po.id} className="flex items-center justify-between px-5 py-3.5">
+                  <Link key={po.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13.5px] font-medium text-foreground">{po.po_number}</p>
                       <p className="text-[12px] text-[#6B7684] mt-0.5">
@@ -635,7 +635,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.color}`}>{s.label}</span>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -649,11 +649,11 @@ export default function DashboardPage() {
           <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] mb-4">이번 달 채널별 출고</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(data?.channelSales ?? {}).map(([ch, qty]) => (
-              <div key={ch} className="rounded-xl bg-[#F2F4F6] p-4 text-center">
+              <Link key={ch} href="/outbound" className="block rounded-xl bg-[#F2F4F6] p-4 text-center hover:bg-[#E8EBF0] transition-colors cursor-pointer">
                 <p className="text-[12px] text-[#6B7684] font-medium">{ch}</p>
                 <p className="text-[22px] font-bold text-foreground tracking-[-0.03em] mt-1">{formatNumber(qty)}</p>
                 <p className="text-[11px] text-[#B0B8C1]">개</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

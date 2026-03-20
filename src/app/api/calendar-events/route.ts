@@ -4,8 +4,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 export interface CalendarEvent {
   id: string;
   date: string;           // YYYY-MM-DD
-  type: 'inbound' | 'outbound' | 'reorder';
-  subtype: string;        // 'import' | 'local' | 'coupang_growth' | 'other' | 'reorder'
+  type: 'inbound' | 'outbound' | 'reorder' | 'order';
+  subtype: string;        // 'import' | 'local' | 'coupang_growth' | 'other' | 'reorder' | 'order'
   label: string;          // 상품명 요약
   quantity: number;
   box_count: number | null;
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
 
-  const [poRes, outboundCoupangRes, outboundOtherRes, skusRes] = await Promise.all([
+  const [poRes, poOrderedRes, outboundCoupangRes, outboundOtherRes, skusRes] = await Promise.all([
     // 입고: PO의 expected_date 기준 (완료 포함 - 완료 시 expected_date = 실제 입고일로 갱신됨)
     admin
       .from('purchase_orders')
@@ -45,6 +45,21 @@ export async function GET(request: NextRequest) {
       .not('expected_date', 'is', null)
       .gte('expected_date', start)
       .lte('expected_date', end)
+      .in('status', ['draft', 'ordered', 'transiting', 'partial', 'completed']),
+
+    // 발주일: PO의 order_date 기준
+    admin
+      .from('purchase_orders')
+      .select(`
+        id, po_number, supplier, inbound_type, order_date, status,
+        items:purchase_order_items(
+          quantity,
+          sku:skus(sku_code, product:products(name))
+        )
+      `)
+      .not('order_date', 'is', null)
+      .gte('order_date', start)
+      .lte('order_date', end)
       .in('status', ['draft', 'ordered', 'transiting', 'partial', 'completed']),
 
     // 쿠팡그로스 출고: arrival_date 기준
@@ -93,6 +108,30 @@ export async function GET(request: NextRequest) {
       date: po.expected_date as string,
       type: 'inbound',
       subtype: (po.inbound_type as string) ?? 'import',
+      label,
+      quantity: totalQty,
+      box_count: null,
+      supplier: po.supplier,
+      coupang_center: null,
+      source_id: po.id as string,
+      po_number: po.po_number,
+    });
+  }
+
+  // 발주일 이벤트
+  for (const po of (poOrderedRes.data ?? [])) {
+    const items = (po.items ?? []) as unknown as Array<{ quantity: number; sku: { sku_code: string; product: { name: string } } }>;
+    const firstItem = items[0];
+    const label = firstItem
+      ? `${firstItem.sku?.product?.name ?? firstItem.sku?.sku_code}${items.length > 1 ? ` 외 ${items.length - 1}개` : ''}`
+      : '품목 미지정';
+    const totalQty = items.reduce((s, i) => s + (i.quantity ?? 0), 0);
+
+    events.push({
+      id: `order-${po.id}`,
+      date: po.order_date as string,
+      type: 'order',
+      subtype: 'order',
       label,
       quantity: totalQty,
       box_count: null,

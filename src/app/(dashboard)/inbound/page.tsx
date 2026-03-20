@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
 import type { PurchaseOrder, PurchaseOrderItem, InboundRecord, Sku, Warehouse, Supplier } from '@/types';
 import {
-  PackageCheck, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck,
+  PackageCheck, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck, Trash2,
 } from 'lucide-react';
 import { SearchSelect } from '@/components/ui/search-select';
 
@@ -29,6 +29,7 @@ interface SkuOption {
   option_values: Record<string, string>;
   cost_price: number;
   logistics_cost: number;
+  lead_time_days: number;
   product: { name: string };
 }
 
@@ -96,13 +97,22 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
 
 interface POItemDraft { sku_id: string; quantity: string; unit_cost: string }
 
+function calcExpectedDate(orderDate: string, leadTime: string, transit: string) {
+  if (!orderDate) return '';
+  const lt = parseInt(leadTime) || 0;
+  const tr = parseInt(transit) || 0;
+  const d = new Date(orderDate);
+  d.setDate(d.getDate() + lt + tr);
+  return d.toISOString().slice(0, 10);
+}
+
 function AddPODialog({ open, onClose, skus, onSave }: {
   open: boolean;
   onClose: () => void;
   skus: SkuOption[];
   onSave: (po: PORow) => void;
 }) {
-  const [form, setForm] = useState({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import' });
+  const [form, setForm] = useState({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import', lead_time_days: '', transit_days: '10' });
   const [items, setItems] = useState<POItemDraft[]>([{ sku_id: '', quantity: '', unit_cost: '' }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -118,24 +128,19 @@ function AddPODialog({ open, onClose, skus, onSave }: {
   function handleSupplierSelect(supplierId: string) {
     setSelectedSupplierId(supplierId);
     const supplier = suppliers.find((s) => s.id === supplierId);
-    if (!supplier) { set('supplier', ''); return; }
-    set('supplier', supplier.name);
-    if (form.order_date && supplier.lead_time_days) {
-      const d = new Date(form.order_date);
-      d.setDate(d.getDate() + supplier.lead_time_days);
-      setForm((f) => ({ ...f, supplier: supplier.name, expected_date: d.toISOString().slice(0, 10) }));
-    }
+    set('supplier', supplier?.name ?? '');
   }
 
   function handleOrderDateChange(v: string) {
-    const supplier = suppliers.find((s) => s.id === selectedSupplierId);
-    if (supplier && v) {
-      const d = new Date(v);
-      d.setDate(d.getDate() + supplier.lead_time_days);
-      setForm((f) => ({ ...f, order_date: v, expected_date: d.toISOString().slice(0, 10) }));
-    } else {
-      set('order_date', v);
-    }
+    setForm((f) => ({ ...f, order_date: v, expected_date: calcExpectedDate(v, f.lead_time_days, f.transit_days) }));
+  }
+
+  function handleLeadTimeChange(v: string) {
+    setForm((f) => ({ ...f, lead_time_days: v, expected_date: calcExpectedDate(f.order_date, v, f.transit_days) }));
+  }
+
+  function handleTransitDaysChange(v: string) {
+    setForm((f) => ({ ...f, transit_days: v, expected_date: calcExpectedDate(f.order_date, f.lead_time_days, v) }));
   }
 
   function addItem() { setItems((i) => [...i, { sku_id: '', quantity: '', unit_cost: '' }]); }
@@ -145,11 +150,23 @@ function AddPODialog({ open, onClose, skus, onSave }: {
   }
   function handleSkuSelect(i: number, skuId: string) {
     const sku = skus.find((s) => s.id === skuId);
-    setItems((prev) => prev.map((row, idx) => idx === i ? {
-      ...row,
-      sku_id: skuId,
-      unit_cost: sku && sku.cost_price ? String(sku.cost_price) : row.unit_cost,
-    } : row));
+    setItems((prev) => {
+      const next = prev.map((row, idx) => idx === i ? {
+        ...row,
+        sku_id: skuId,
+        unit_cost: sku && sku.cost_price ? String(sku.cost_price) : row.unit_cost,
+      } : row);
+      // 선택된 SKU들 중 최대 리드타임을 기본값으로 설정
+      const selectedSkus = next.map((r) => skus.find((s) => s.id === r.sku_id)).filter(Boolean) as SkuOption[];
+      const maxLead = selectedSkus.reduce((mx, s) => Math.max(mx, s.lead_time_days ?? 0), 0);
+      if (maxLead > 0) {
+        setForm((f) => {
+          const newLt = String(maxLead);
+          return { ...f, lead_time_days: newLt, expected_date: calcExpectedDate(f.order_date, newLt, f.transit_days) };
+        });
+      }
+      return next;
+    });
   }
 
   const skuOptions = useMemo(() => skus.map((s) => {
@@ -190,7 +207,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       const data = await res.json();
       onSave(data);
-      setForm({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import' });
+      setForm({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import', lead_time_days: '', transit_days: '10' });
       setItems([{ sku_id: '', quantity: '', unit_cost: '' }]);
       setSelectedSupplierId('');
     } catch (err: unknown) {
@@ -240,13 +257,46 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            {selectedSupplierId && (() => {
-              const s = suppliers.find((x) => x.id === selectedSupplierId);
-              return s ? <p className="text-[11.5px] text-[#B0B8C1]">리드타임 {s.lead_time_days}일</p> : null;
-            })()}
           </div>
           <InputField label="발주일" type="date" value={form.order_date} onChange={(e) => handleOrderDateChange(e.target.value)} />
-          <InputField label="입고 예정일" type="date" value={form.expected_date} onChange={(e) => set('expected_date', e.target.value)} />
+        </div>
+
+        {/* 리드타임 + 운송기간 → 입고 예정일 자동 계산 */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-[#191F28]">리드타임 (일)</label>
+            <input
+              type="number" min="0" placeholder="예: 30"
+              value={form.lead_time_days}
+              onChange={(e) => handleLeadTimeChange(e.target.value)}
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            />
+            <p className="text-[11px] text-[#B0B8C1]">품목 최대 리드타임 자동</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-[#191F28]">운송기간 (일)</label>
+            <input
+              type="number" min="0" placeholder="10"
+              value={form.transit_days}
+              onChange={(e) => handleTransitDaysChange(e.target.value)}
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-[#191F28]">입고 예정일</label>
+            <input
+              type="date"
+              value={form.expected_date}
+              onChange={(e) => set('expected_date', e.target.value)}
+              className="w-full h-11 px-3.5 rounded-xl border border-[#3182F6] bg-[#EBF1FE] text-[14px] text-[#191F28] focus:outline-none focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            />
+            {form.lead_time_days && form.transit_days && (
+              <p className="text-[11px] text-[#3182F6]">리드타임 {form.lead_time_days}일 + 운송 {form.transit_days}일</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <InputField label="비고" placeholder="메모" value={form.note} onChange={(e) => set('note', e.target.value)} />
         </div>
 
@@ -446,15 +496,17 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
 
 // ─── PO Card ────────────────────────────────────────────────────────────────
 
-function POCard({ po, warehouses, onStatusChange, onInboundSave }: {
+function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   po: PORow;
   warehouses: Warehouse[];
   onStatusChange: (po: PORow, status: POStatus) => void;
   onInboundSave: (poId: string) => void;
+  onDelete: (poId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [inboundItem, setInboundItem] = useState<PORow['items'][0] | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const status = STATUS_MAP[po.status] ?? { label: po.status, color: 'bg-gray-100 text-gray-600' };
   const canOrder    = po.status === 'draft';
@@ -476,6 +528,18 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave }: {
       onStatusChange(data, newStatus);
     } finally {
       setStatusLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`발주서 ${po.po_number}를 삭제하시겠습니까?\n품목 데이터도 함께 삭제됩니다.`)) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/purchase-orders/${po.id}`, { method: 'DELETE' });
+      if (!res.ok) return;
+      onDelete(po.id);
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -550,6 +614,15 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave }: {
               취소
             </button>
           )}
+          <div className="w-px h-4 bg-[#E5E8EB]" />
+          <button
+            onClick={handleDelete}
+            disabled={deleteLoading}
+            title="발주서 삭제"
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors disabled:opacity-60"
+          >
+            {deleteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </button>
           <div className="w-px h-4 bg-[#E5E8EB]" />
           {expanded ? (
             <ChevronUp className="h-4 w-4 text-[#B0B8C1]" />
@@ -650,6 +723,10 @@ function POManagementTab() {
     setPos((prev) => prev.map((p) => p.id === updated.id ? updated : p));
   }
 
+  function handleDelete(poId: string) {
+    setPos((prev) => prev.filter((p) => p.id !== poId));
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -688,6 +765,7 @@ function POManagementTab() {
               warehouses={warehouses}
               onStatusChange={handleStatusChange}
               onInboundSave={refreshPO}
+              onDelete={handleDelete}
             />
           ))
         )}
