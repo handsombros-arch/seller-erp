@@ -387,7 +387,17 @@ export default function OrdersTab() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedMasterName, setSelectedMasterName] = useState('');
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(ALL_COLS.map((c) => c.key)));
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('orders-visible-cols') : null;
+      if (saved) {
+        const arr = JSON.parse(saved) as string[];
+        const valid = arr.filter((k) => ALL_COLS.some((c) => c.key === k)) as ColKey[];
+        if (valid.length) return new Set(valid);
+      }
+    } catch {}
+    return new Set(ALL_COLS.map((c) => c.key));
+  });
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [toast, setToast] = useState('');
@@ -544,6 +554,7 @@ export default function OrdersTab() {
     setVisibleCols((prev) => {
       const next = new Set(prev);
       if (next.has(k)) next.delete(k); else next.add(k);
+      try { localStorage.setItem('orders-visible-cols', JSON.stringify([...next])); } catch {}
       return next;
     });
   }
@@ -707,8 +718,8 @@ export default function OrdersTab() {
                   <tr key={o.id} className={`border-b border-[#F2F4F6] hover:bg-[#FAFAFA] transition-colors ${o.jeju_surcharge ? 'bg-blue-50/30' : ''}`}>
                     {visibleColList.map((c) => {
                       if (c.key === 'order_date') return (
-                        <td key={c.key} className="px-4 py-3 overflow-hidden">
-                          <div className="truncate text-[13px] text-[#6B7684]">{formatDate(o.order_date)}</div>
+                        <td key={c.key} className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-[13px] text-[#6B7684]">{formatDate(o.order_date)}</span>
                         </td>
                       );
                       if (c.key === 'product_name') return (

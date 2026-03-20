@@ -4,8 +4,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 export interface CalendarEvent {
   id: string;
   date: string;           // YYYY-MM-DD
-  type: 'inbound' | 'outbound';
-  subtype: string;        // 'import' | 'local' | 'coupang_growth' | 'other'
+  type: 'inbound' | 'outbound' | 'reorder';
+  subtype: string;        // 'import' | 'local' | 'coupang_growth' | 'other' | 'reorder'
   label: string;          // 상품명 요약
   quantity: number;
   box_count: number | null;
@@ -13,6 +13,8 @@ export interface CalendarEvent {
   coupang_center: string | null;
   source_id: string;
   po_number?: string | null;
+  days_until_stockout?: number;
+  sku_code?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
 
-  const [poRes, outboundCoupangRes, outboundOtherRes] = await Promise.all([
+  const [poRes, outboundCoupangRes, outboundOtherRes, skusRes] = await Promise.all([
     // 입고: PO의 expected_date 기준 (완료 포함 - 완료 시 expected_date = 실제 입고일로 갱신됨)
     admin
       .from('purchase_orders')
@@ -67,6 +69,12 @@ export async function GET(request: NextRequest) {
       .eq('outbound_type', 'other')
       .gte('outbound_date', start)
       .lte('outbound_date', end),
+
+    // 발주 권장일 계산용 SKU 데이터
+    admin
+      .from('skus')
+      .select('id, sku_code, lead_time_days, manual_daily_avg, sales_7d, sales_30d, product:products(name), inventory(quantity)')
+      .eq('is_active', true),
   ]);
 
   const events: CalendarEvent[] = [];
@@ -129,6 +137,45 @@ export async function GET(request: NextRequest) {
       coupang_center: null,
       source_id: rec.id as string,
     });
+  }
+
+  // 발주 권장일 이벤트
+  const today = new Date();
+  for (const sku of (skusRes.data ?? [])) {
+    const s = sku as any;
+    const currentStock = (s.inventory ?? []).reduce((sum: number, i: any) => sum + (i.quantity ?? 0), 0);
+    const s7d = s.sales_7d ?? 0;
+    const s30d = s.sales_30d ?? 0;
+    let dailyAvg = 0;
+    if (s7d > 0) dailyAvg = s7d / 7;
+    else if (s30d > 0) dailyAvg = s30d / 30;
+    else if (s.manual_daily_avg) dailyAvg = s.manual_daily_avg;
+    if (dailyAvg <= 0) continue;
+
+    const daysRemaining = currentStock / dailyAvg;
+    const daysUntilReorder = Math.floor(daysRemaining - (s.lead_time_days ?? 0));
+    if (daysUntilReorder < 0) continue;
+
+    const reorderDate = new Date(today);
+    reorderDate.setDate(today.getDate() + daysUntilReorder);
+    const reorderDateStr = reorderDate.toISOString().slice(0, 10);
+
+    if (reorderDateStr >= start && reorderDateStr <= end) {
+      events.push({
+        id: `reorder-${s.id}`,
+        date: reorderDateStr,
+        type: 'reorder',
+        subtype: 'reorder',
+        label: `${s.product?.name ?? ''} (${s.sku_code}) 발주 권장`,
+        quantity: 0,
+        box_count: null,
+        supplier: null,
+        coupang_center: null,
+        source_id: s.id,
+        sku_code: s.sku_code,
+        days_until_stockout: Math.floor(daysRemaining),
+      });
+    }
   }
 
   events.sort((a, b) => a.date.localeCompare(b.date));

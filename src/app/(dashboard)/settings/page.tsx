@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -688,6 +688,85 @@ function NaverApiSection() {
   );
 }
 
+// ───────────────── Data Reset section ─────────────────
+
+function DataResetSection() {
+  const [confirm, setConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function handleReset() {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/admin/reset-data', { method: 'POST' });
+      const d = await res.json();
+      if (d.ok) {
+        setResult({ ok: true, msg: `${d.cleared.length}개 테이블 초기화 완료` });
+      } else {
+        setResult({ ok: false, msg: (d.errors ?? [d.error ?? '오류']).join(', ') });
+      }
+    } catch {
+      setResult({ ok: false, msg: '요청 실패' });
+    }
+    setLoading(false);
+    setConfirm(false);
+  }
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <Trash2 className="w-4 h-4 text-red-500" />
+        <h2 className="text-[14px] font-bold text-[#191F28]">데이터 초기화</h2>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="px-5 py-4">
+          <p className="text-[13px] text-[#6B7684]">
+            상품·SKU·공급처·재고·입출고·채널판매 데이터를 모두 삭제합니다.<br />
+            <span className="text-red-500 font-medium">창고·채널 설정은 유지됩니다. 이 작업은 되돌릴 수 없습니다.</span>
+          </p>
+
+          {!confirm ? (
+            <button
+              onClick={() => { setConfirm(true); setResult(null); }}
+              className="mt-3 flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              데이터 초기화
+            </button>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-[13px] text-red-600 font-medium">정말 삭제할까요?</span>
+              <button
+                onClick={handleReset}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white bg-red-500 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-60"
+              >
+                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                확인
+              </button>
+              <button
+                onClick={() => setConfirm(false)}
+                className="px-4 py-2 text-[13px] font-medium text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          )}
+
+          {result && (
+            <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] font-medium ${result.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+              {result.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              {result.msg}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ───────────────── Main page ─────────────────
 
 export default function SettingsPage() {
@@ -703,6 +782,7 @@ export default function SettingsPage() {
       <CoupangApiSection />
       <NaverApiSection />
       <AccountSection />
+      <DataResetSection />
     </div>
   );
 }

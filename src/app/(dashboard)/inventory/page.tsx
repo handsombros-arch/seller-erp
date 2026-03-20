@@ -6,7 +6,7 @@ import type { InventoryItem, Warehouse } from '@/types';
 import type { InventorySummaryRow } from '@/app/api/inventory/summary/route';
 import {
   Warehouse as WarehouseIcon, Package, TrendingUp, SlidersHorizontal,
-  Download, Loader2, X, Plus, LayoutGrid, List, Edit3, Check, RefreshCw,
+  Download, Loader2, X, Plus, LayoutGrid, List, RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -221,9 +221,6 @@ function AdjustDialog({ open, onClose, item, onSave }: {
 function SummaryTab() {
   const [rows, setRows] = useState<InventorySummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editVals, setEditVals] = useState({ sales_30d: '', sales_7d: '', safety_stock: '' });
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -232,32 +229,6 @@ function SummaryTab() {
       setLoading(false);
     });
   }, []);
-
-  function startEdit(row: InventorySummaryRow) {
-    setEditingId(row.sku_id);
-    setEditVals({ sales_30d: String(row.sales_30d), sales_7d: String(row.sales_7d), safety_stock: String(row.safety_stock) });
-  }
-
-  async function saveEdit(skuId: string) {
-    setSaving(true);
-    await fetch(`/api/skus/${skuId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sales_30d: Number(editVals.sales_30d) || 0,
-        sales_7d: Number(editVals.sales_7d) || 0,
-        safety_stock: Number(editVals.safety_stock) || 0,
-      }),
-    });
-    setRows((prev) => prev.map((r) => r.sku_id === skuId ? {
-      ...r,
-      sales_30d: Number(editVals.sales_30d) || 0,
-      sales_7d: Number(editVals.sales_7d) || 0,
-      safety_stock: Number(editVals.safety_stock) || 0,
-    } : r));
-    setEditingId(null);
-    setSaving(false);
-  }
 
   if (loading) return <div className="flex items-center justify-center h-48"><Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" /></div>;
 
@@ -273,7 +244,7 @@ function SummaryTab() {
       <table className="w-full min-w-[900px]">
         <thead>
           <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
-            {['상품 / SKU', '자사창고', '쿠팡그로스', '수입중', '총 재고', '안전재고', '30일판매', '7일판매', '일평균', '설정'].map((h) => (
+            {['상품 / SKU', '자사창고', '쿠팡그로스', '수입중', '총 재고', '안전재고', '30일판매', '7일판매', '일평균'].map((h) => (
               <th key={h} className="text-left text-[11.5px] font-semibold text-[#6B7684] px-4 py-3 whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -283,7 +254,6 @@ function SummaryTab() {
             const dailyAvg = row.sales_30d > 0 ? Math.round(row.sales_30d / 30 * 10) / 10 : null;
             const daysLeft = dailyAvg && row.total_stock > 0 ? Math.floor(row.total_stock / dailyAvg) : null;
             const isLow = row.total_stock <= row.safety_stock && row.safety_stock > 0;
-            const isEditing = editingId === row.sku_id;
 
             return (
               <tr key={row.sku_id} className={`hover:bg-[#FAFAFA] transition-colors ${isLow ? 'bg-red-50/30' : ''}`}>
@@ -323,42 +293,19 @@ function SummaryTab() {
                 </td>
                 {/* 안전재고 */}
                 <td className="px-4 py-3">
-                  {isEditing
-                    ? <input type="number" min="0" value={editVals.safety_stock} onChange={(e) => setEditVals((v) => ({ ...v, safety_stock: e.target.value }))}
-                        className="w-16 h-8 px-2 rounded-lg border border-[#3182F6] text-[13px] text-[#191F28] focus:outline-none" />
-                    : <span className="text-[13px] text-[#6B7684] tabular-nums">{formatNumber(row.safety_stock)}</span>}
+                  <span className="text-[13px] text-[#6B7684] tabular-nums">{row.safety_stock > 0 ? formatNumber(row.safety_stock) : '-'}</span>
                 </td>
                 {/* 30일 판매 */}
                 <td className="px-4 py-3">
-                  {isEditing
-                    ? <input type="number" min="0" value={editVals.sales_30d} onChange={(e) => setEditVals((v) => ({ ...v, sales_30d: e.target.value }))}
-                        className="w-20 h-8 px-2 rounded-lg border border-[#3182F6] text-[13px] text-[#191F28] focus:outline-none" />
-                    : <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_30d > 0 ? formatNumber(row.sales_30d) : '-'}</span>}
+                  <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_30d > 0 ? formatNumber(row.sales_30d) : '-'}</span>
                 </td>
                 {/* 7일 판매 */}
                 <td className="px-4 py-3">
-                  {isEditing
-                    ? <input type="number" min="0" value={editVals.sales_7d} onChange={(e) => setEditVals((v) => ({ ...v, sales_7d: e.target.value }))}
-                        className="w-20 h-8 px-2 rounded-lg border border-[#3182F6] text-[13px] text-[#191F28] focus:outline-none" />
-                    : <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_7d > 0 ? formatNumber(row.sales_7d) : '-'}</span>}
+                  <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_7d > 0 ? formatNumber(row.sales_7d) : '-'}</span>
                 </td>
                 {/* 일평균 */}
                 <td className="px-4 py-3">
                   <span className="text-[13px] text-[#6B7684]">{dailyAvg !== null ? `${dailyAvg}개` : '-'}</span>
-                </td>
-                {/* 설정 버튼 */}
-                <td className="px-4 py-3">
-                  {isEditing ? (
-                    <button onClick={() => saveEdit(row.sku_id)} disabled={saving}
-                      className="h-8 w-8 flex items-center justify-center rounded-xl bg-[#3182F6] text-white hover:bg-[#1B64DA] disabled:opacity-60 transition-colors">
-                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  ) : (
-                    <button onClick={() => startEdit(row)}
-                      className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#6B7684] transition-colors">
-                      <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
                 </td>
               </tr>
             );

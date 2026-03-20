@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
 import type { Product, Sku } from '@/types';
 import {
@@ -119,12 +118,19 @@ function VatCostFields({ exclVat, onChange }: {
 
 // ─── Add Product Dialog ─────────────────────────────────────────────────────
 
+type NewSkuInfo = { id: string; sku_code: string; option_label: string };
+
 function AddProductDialog({ open, onClose, onSave }: {
-  open: boolean; onClose: () => void; onSave: () => void;
+  open: boolean; onClose: () => void; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '' });
+  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', lead_time_days: '', supplier_id: '' });
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/suppliers').then((r) => r.json()).then((d) => setSuppliers(d ?? []));
+  }, []);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -146,6 +152,9 @@ function AddProductDialog({ open, onClose, onSave }: {
       const product = await res.json();
 
       const skuCode = form.skuCode.trim() || autoSkuCode(form.name);
+      const leadTime = form.lead_time_days
+        ? Number(form.lead_time_days)
+        : (suppliers.find((s) => s.id === form.supplier_id)?.lead_time_days ?? 21);
       const skuRes = await fetch('/api/skus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -154,21 +163,25 @@ function AddProductDialog({ open, onClose, onSave }: {
           sku_code: skuCode,
           barcode: form.barcode.trim() || null,
           option_values: {},
-          cost_price: 0,
+          cost_price: Number(form.cost_price) || 0,
           logistics_cost: 0,
-          lead_time_days: 7,
+          lead_time_days: leadTime,
+          supplier_id: form.supplier_id || null,
           reorder_point: 0,
           safety_stock: 0,
           is_active: true,
         }),
       });
       if (!skuRes.ok) { const d = await skuRes.json(); throw new Error(d.error); }
-      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '' });
-      onSave();
+      const newSku = await skuRes.json();
+      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', lead_time_days: '', supplier_id: '' });
+      onSave([{ id: newSku.id, sku_code: newSku.sku_code, option_label: '' }]);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally { setLoading(false); }
   }
+
+  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
   return (
     <Dialog open={open} onClose={onClose} title="상품 추가">
@@ -176,6 +189,26 @@ function AddProductDialog({ open, onClose, onSave }: {
         <InputField label="상품명" required placeholder="예: 그랑누보 데일리 백팩" value={form.name} onChange={(e) => set('name', e.target.value)} />
         <InputField label="브랜드" placeholder="예: 그랑누보" value={form.brand} onChange={(e) => set('brand', e.target.value)} />
         <InputField label="옵션명" placeholder="예: 색상, 사이즈 (없으면 비워두세요)" value={form.optionName} onChange={(e) => set('optionName', e.target.value)} />
+
+        {/* 원가 */}
+        <VatCostFields exclVat={form.cost_price} onChange={(v) => set('cost_price', v)} />
+
+        {/* 공급처 + 리드타임 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-[#191F28]">공급처 <span className="text-[11.5px] text-[#B0B8C1] font-normal">(선택)</span></label>
+            <select value={form.supplier_id} onChange={(e) => {
+              const sup = suppliers.find((s) => s.id === e.target.value);
+              set('supplier_id', e.target.value);
+              if (sup && !form.lead_time_days) set('lead_time_days', String(sup.lead_time_days));
+            }} className={selectCls}>
+              <option value="">공급처 선택</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.alias ?? s.name}</option>)}
+            </select>
+          </div>
+          <InputField label="리드타임 (일)" type="number" min="1" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
+        </div>
+
         <InputField label="바코드" hint="(쿠팡만 기입)" placeholder="쿠팡 바코드 번호" value={form.barcode} onChange={(e) => set('barcode', e.target.value)} />
         <InputField label="제품코드" hint="(선택 · 없으면 자동 생성)" placeholder="예: PROD-001" value={form.skuCode} onChange={(e) => set('skuCode', e.target.value)} />
         {error && <p className="text-[13px] text-red-500">{error}</p>}
@@ -255,19 +288,24 @@ function cartesianOptions(opts: OptionType[]): Record<string, string>[] {
 }
 
 function AddSkuDialog({ open, onClose, product, onSave }: {
-  open: boolean; onClose: () => void; product: Product; onSave: () => void;
+  open: boolean; onClose: () => void; product: Product; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ barcode: '', cost_price: '', reorder_point: '', safety_stock: '' });
+  const [form, setForm] = useState({ barcode: '', cost_price: '', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
   const [optTypes, setOptTypes] = useState<OptionType[]>([]);
   const [newOptKey, setNewOptKey] = useState('');
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/suppliers').then((r) => r.json()).then((d) => setSuppliers(d ?? []));
+  }, []);
 
   useEffect(() => {
     if (open) {
       setOptTypes(product.category ? [{ key: product.category, values: [], inputVal: '' }] : []);
       setNewOptKey('');
-      setForm({ barcode: '', cost_price: '', reorder_point: '', safety_stock: '' });
+      setForm({ barcode: '', cost_price: '', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
       setError('');
     }
   }, [open, product.category]);
@@ -303,19 +341,37 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      const base = { product_id: product.id, barcode: form.barcode.trim() || null, cost_price: Number(form.cost_price) || 0, logistics_cost: 0, lead_time_days: 7, reorder_point: Number(form.reorder_point) || 0, safety_stock: Number(form.safety_stock) || 0, is_active: true };
-      const results = await Promise.all(combos.map((option_values) => {
+      const base = {
+        product_id: product.id,
+        barcode: form.barcode.trim() || null,
+        cost_price: Number(form.cost_price) || 0,
+        logistics_cost: 0,
+        lead_time_days: form.lead_time_days ? Number(form.lead_time_days) : (suppliers.find((s) => s.id === form.supplier_id)?.lead_time_days ?? 21),
+        supplier_id: form.supplier_id || null,
+        reorder_point: Number(form.reorder_point) || 0,
+        safety_stock: Number(form.safety_stock) || 0,
+        is_active: true,
+      };
+      const results = await Promise.all(combos.map(async (option_values) => {
         const suffix = Object.values(option_values).join('-').replace(/\s/g, '').slice(0, 8).toUpperCase();
         const sku_code = autoSkuCode(product.name) + (suffix ? '-' + suffix : '');
-        return fetch('/api/skus', {
+        const r = await fetch('/api/skus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...base, sku_code, option_values }),
         });
+        if (!r.ok) return null;
+        const data = await r.json();
+        return { id: data.id as string, sku_code: data.sku_code as string, option_values };
       }));
-      const failed = results.filter((r) => !r.ok);
+      const failed = results.filter((r) => !r);
       if (failed.length) throw new Error(`${failed.length}개 SKU 생성 실패`);
-      onSave();
+      const created: NewSkuInfo[] = (results.filter(Boolean) as { id: string; sku_code: string; option_values: Record<string, string> }[]).map((r) => ({
+        id: r.id,
+        sku_code: r.sku_code,
+        option_label: Object.values(r.option_values).join(' / '),
+      }));
+      onSave(created);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
     } finally { setLoading(false); }
@@ -400,6 +456,23 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
         {/* 원가 VAT */}
         <VatCostFields exclVat={form.cost_price} onChange={(v) => set('cost_price', v)} />
 
+        {/* 공급처 + 리드타임 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[13px] font-medium text-[#191F28]">공급처 <span className="text-[11.5px] text-[#B0B8C1] font-normal">(선택)</span></label>
+            <select value={form.supplier_id} onChange={(e) => {
+              const sup = suppliers.find((s) => s.id === e.target.value);
+              set('supplier_id', e.target.value);
+              if (sup && !form.lead_time_days) set('lead_time_days', String(sup.lead_time_days));
+            }}
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors">
+              <option value="">공급처 선택</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.alias ?? s.name}</option>)}
+            </select>
+          </div>
+          <InputField label="리드타임 (일)" hint="(일)" type="number" min="1" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
+        </div>
+
         {/* 발주점/안전재고 */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
@@ -429,6 +502,161 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
         </div>
       </form>
     </Dialog>
+  );
+}
+
+// ─── Platform Setup Dialog ───────────────────────────────────────────────────
+
+interface ChannelEntry { name: string; product_id: string; price: string; }
+
+function PlatformSetupDialog({ skus, onClose }: {
+  skus: NewSkuInfo[];
+  onClose: () => void;
+}) {
+  const [channels, setChannels] = useState<{ id: string; name: string }[]>([]);
+  const [entries, setEntries] = useState<Record<string, Record<string, ChannelEntry>>>({});
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/settings/channels').then((r) => r.json()).then((data: { id: string; name: string }[]) => {
+      setChannels(data ?? []);
+      const init: Record<string, Record<string, ChannelEntry>> = {};
+      for (const sku of skus) {
+        init[sku.id] = {};
+        for (const ch of data ?? []) {
+          init[sku.id][ch.id] = { name: '', product_id: '', price: '' };
+        }
+      }
+      setEntries(init);
+    });
+  }, [skus]);
+
+  function updateEntry(skuId: string, chId: string, field: keyof ChannelEntry, val: string) {
+    setEntries((prev) => ({
+      ...prev,
+      [skuId]: { ...prev[skuId], [chId]: { ...prev[skuId][chId], [field]: val } },
+    }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const tasks: Promise<unknown>[] = [];
+    for (const sku of skus) {
+      for (const ch of channels) {
+        const e = entries[sku.id]?.[ch.id];
+        if (!e?.name.trim() && !e?.product_id.trim() && !e?.price.trim()) continue;
+        tasks.push(
+          fetch('/api/platform-skus', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sku_id: sku.id,
+              channel_id: ch.id,
+              platform_product_name: e.name.trim() || null,
+              platform_product_id: e.product_id.trim() || null,
+              price: e.price.trim() ? Number(e.price) : null,
+            }),
+          })
+        );
+        if (e.name.trim()) {
+          tasks.push(
+            fetch('/api/sku-aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channel_name: e.name.trim(), sku_id: sku.id }),
+            })
+          );
+        }
+      }
+    }
+    await Promise.all(tasks);
+    setSaving(false);
+    setDone(true);
+    setTimeout(onClose, 800);
+  }
+
+  const inputCls = 'w-full h-8 px-2.5 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors';
+
+  if (!channels.length) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.14)] w-full max-w-xl mx-4 max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6] shrink-0">
+          <div>
+            <h2 className="text-[16px] font-bold text-[#191F28]">플랫폼 상품 정보 등록</h2>
+            <p className="text-[12.5px] text-[#6B7684] mt-0.5">각 채널의 상품명과 판매가를 입력하면 주문 자동 매칭에 사용됩니다</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors ml-3 shrink-0">
+            <X className="h-4 w-4 text-[#6B7684]" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {skus.map((sku) => (
+            <div key={sku.id} className="space-y-2">
+              {/* SKU 헤더 */}
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[12px] bg-[#F2F4F6] text-[#6B7684] px-2 py-1 rounded-lg">{sku.sku_code}</span>
+                {sku.option_label && <span className="text-[12px] text-[#191F28] font-medium">{sku.option_label}</span>}
+              </div>
+              {/* 채널별 입력 */}
+              <div className="border border-[#E5E8EB] rounded-xl overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                      <th className="text-left text-[11px] font-semibold text-[#6B7684] px-3 py-2 w-[100px]">채널</th>
+                      <th className="text-left text-[11px] font-semibold text-[#6B7684] px-3 py-2">플랫폼 상품명</th>
+                      <th className="text-left text-[11px] font-semibold text-[#6B7684] px-3 py-2 w-[120px]">상품 ID</th>
+                      <th className="text-left text-[11px] font-semibold text-[#6B7684] px-3 py-2 w-[90px]">판매가</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F2F4F6]">
+                    {channels.map((ch) => {
+                      const e = entries[sku.id]?.[ch.id] ?? { name: '', product_id: '', price: '' };
+                      return (
+                        <tr key={ch.id}>
+                          <td className="px-3 py-2">
+                            <span className="text-[12.5px] font-medium text-[#191F28]">{ch.name}</span>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input value={e.name} onChange={(ev) => updateEntry(sku.id, ch.id, 'name', ev.target.value)}
+                              placeholder="플랫폼에 등록된 상품명" className={inputCls} />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input value={e.product_id} onChange={(ev) => updateEntry(sku.id, ch.id, 'product_id', ev.target.value)}
+                              placeholder="상품 ID" className={inputCls} />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(sku.id, ch.id, 'price', ev.target.value)}
+                              placeholder="0" className={inputCls} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#F2F4F6] flex gap-2 shrink-0">
+          <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+            나중에 하기
+          </button>
+          <button onClick={handleSave} disabled={saving || done}
+            className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+            {done ? <><Check className="h-4 w-4" /> 저장완료</> : saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '저장'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -664,7 +892,7 @@ export default function ProductsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'product' | 'sku'; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
-  const [showPlatformBanner, setShowPlatformBanner] = useState(false);
+  const [platformSetupSkus, setPlatformSetupSkus] = useState<NewSkuInfo[] | null>(null);
 
   async function loadProducts() {
     setLoading(true);
@@ -689,19 +917,6 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
-      {showPlatformBanner && (
-        <div className="flex items-center justify-between gap-3 bg-[#EBF1FE] border border-[#3182F6]/20 rounded-xl px-4 py-3">
-          <p className="text-[13.5px] text-[#1B64DA]">
-            상품이 등록되었습니다.{' '}
-            <Link href="/master?tab=platform" className="font-semibold underline underline-offset-2">
-              플랫폼 정보 등록하기 →
-            </Link>
-          </p>
-          <button onClick={() => setShowPlatformBanner(false)} className="shrink-0 text-[#3182F6] hover:text-[#1B64DA]">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">상품 관리</h2>
@@ -760,10 +975,15 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)} onSave={() => { setAddProductOpen(false); loadProducts(); setShowPlatformBanner(true); }} />
+      <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)}
+        onSave={(skus) => { setAddProductOpen(false); loadProducts(); setPlatformSetupSkus(skus); }} />
       <EditProductDialog open={!!editProduct} onClose={() => setEditProduct(null)} product={editProduct} onSave={() => { setEditProduct(null); loadProducts(); }} />
       {addSkuProduct && (
-        <AddSkuDialog open={true} onClose={() => setAddSkuProduct(null)} product={addSkuProduct} onSave={() => { setAddSkuProduct(null); loadProducts(); }} />
+        <AddSkuDialog open={true} onClose={() => setAddSkuProduct(null)} product={addSkuProduct}
+          onSave={(skus) => { setAddSkuProduct(null); loadProducts(); setPlatformSetupSkus(skus); }} />
+      )}
+      {platformSetupSkus && (
+        <PlatformSetupDialog skus={platformSetupSkus} onClose={() => setPlatformSetupSkus(null)} />
       )}
       {editSkuState && (
         <EditSkuDialog open={true} onClose={() => setEditSkuState(null)} sku={editSkuState.sku} product={editSkuState.product} onSave={() => { setEditSkuState(null); loadProducts(); }} />
@@ -776,8 +996,8 @@ export default function ProductsPage() {
         title="상품 CSV 일괄 등록"
         templateType="products"
         importUrl="/api/products/import"
-        columns={['상품명', 'SKU코드', '원가', '옵션1유형', '옵션1값']}
-        description="행 1개 = SKU 1개. 같은 상품명은 자동으로 묶입니다."
+        columns={['상품명', 'SKU코드', '사이즈', '색상', '기타옵션', '원가', '물류비', '리드타임(일)', '발주점', '안전재고', '공급처명', '초기재고']}
+        description="행 1개 = SKU 1개. 같은 상품명은 자동으로 묶입니다. 템플릿 다운로드 후 # 설명 행을 참고하세요."
       />
 
       <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="삭제 확인">

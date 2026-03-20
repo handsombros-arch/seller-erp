@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, PackageCheck, PackageMinus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, PackageCheck, PackageMinus, Bell, X } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import type { CalendarEvent } from '@/app/api/calendar-events/route';
 
@@ -19,11 +19,18 @@ const OUTBOUND_SUBTYPES: Record<string, string> = {
   other:          '기타출고',
 };
 
-type FilterType = 'all' | 'inbound_import' | 'inbound_local' | 'outbound_coupang_growth' | 'outbound_other';
+type FilterType = 'all' | 'inbound_import' | 'inbound_local' | 'outbound_coupang_growth' | 'outbound_other' | 'reorder_reorder';
 
 // ─── Event Pill Style ────────────────────────────────────────────────────────
 
 function eventStyle(event: CalendarEvent): { pill: string; dot: string; badge: string } {
+  if (event.type === 'reorder') {
+    return {
+      pill: 'bg-orange-50 text-orange-700 border border-orange-200',
+      dot: 'bg-orange-500',
+      badge: 'bg-orange-100 text-orange-700',
+    };
+  }
   if (event.type === 'inbound') {
     if (event.subtype === 'import') {
       return {
@@ -62,10 +69,12 @@ function EventPopup({ event, onClose }: { event: CalendarEvent; onClose: () => v
   }, [onClose]);
 
   const style = eventStyle(event);
-  const subtypeLabel = event.type === 'inbound'
+  const subtypeLabel = event.type === 'reorder'
+    ? '발주 권장'
+    : event.type === 'inbound'
     ? INBOUND_SUBTYPES[event.subtype] ?? event.subtype
     : OUTBOUND_SUBTYPES[event.subtype] ?? event.subtype;
-  const Icon = event.type === 'inbound' ? PackageCheck : PackageMinus;
+  const Icon = event.type === 'reorder' ? Bell : event.type === 'inbound' ? PackageCheck : PackageMinus;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
@@ -76,8 +85,8 @@ function EventPopup({ event, onClose }: { event: CalendarEvent; onClose: () => v
       >
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${event.type === 'inbound' ? 'bg-emerald-50' : 'bg-blue-50'}`}>
-              <Icon className={`h-5 w-5 ${event.type === 'inbound' ? 'text-emerald-600' : 'text-blue-600'}`} />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${event.type === 'reorder' ? 'bg-orange-50' : event.type === 'inbound' ? 'bg-emerald-50' : 'bg-blue-50'}`}>
+              <Icon className={`h-5 w-5 ${event.type === 'reorder' ? 'text-orange-600' : event.type === 'inbound' ? 'text-emerald-600' : 'text-blue-600'}`} />
             </div>
             <div>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>{subtypeLabel}</span>
@@ -91,13 +100,27 @@ function EventPopup({ event, onClose }: { event: CalendarEvent; onClose: () => v
 
         <div className="space-y-2 text-[13px]">
           <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-            <span className="text-[#6B7684]">{event.type === 'inbound' ? '입고 예정일' : '쿠팡 도착 예정일'}</span>
+            <span className="text-[#6B7684]">{event.type === 'reorder' ? '발주 권장일' : event.type === 'inbound' ? '입고 예정일' : '쿠팡 도착 예정일'}</span>
             <span className="font-semibold text-[#191F28]">{event.date}</span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-            <span className="text-[#6B7684]">수량</span>
-            <span className="font-semibold text-[#191F28]">{formatNumber(event.quantity)}개</span>
-          </div>
+          {event.type !== 'reorder' && (
+            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
+              <span className="text-[#6B7684]">수량</span>
+              <span className="font-semibold text-[#191F28]">{formatNumber(event.quantity)}개</span>
+            </div>
+          )}
+          {event.type === 'reorder' && event.days_until_stockout != null && (
+            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
+              <span className="text-[#6B7684]">예상 소진일</span>
+              <span className="font-semibold text-orange-600">{event.days_until_stockout}일 후</span>
+            </div>
+          )}
+          {event.type === 'reorder' && event.sku_code && (
+            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
+              <span className="text-[#6B7684]">SKU 코드</span>
+              <span className="font-mono text-[12px] text-[#191F28]">{event.sku_code}</span>
+            </div>
+          )}
           {event.box_count != null && (
             <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
               <span className="text-[#6B7684]">박스 수</span>
@@ -186,6 +209,7 @@ export default function CalendarPage() {
   // Summary counts
   const inboundCount   = events.filter((e) => e.type === 'inbound').length;
   const outboundCount  = events.filter((e) => e.type === 'outbound').length;
+  const reorderCount   = events.filter((e) => e.type === 'reorder').length;
 
   const FILTERS: Array<{ value: FilterType; label: string; color: string }> = [
     { value: 'all',                     label: '전체',      color: 'bg-[#3182F6] text-white' },
@@ -193,6 +217,7 @@ export default function CalendarPage() {
     { value: 'inbound_local',           label: '국내입고',  color: 'bg-teal-600 text-white' },
     { value: 'outbound_coupang_growth', label: '쿠팡그로스', color: 'bg-blue-600 text-white' },
     { value: 'outbound_other',          label: '기타출고',  color: 'bg-gray-500 text-white' },
+    { value: 'reorder_reorder',         label: '발주권장',  color: 'bg-orange-500 text-white' },
   ];
 
   return (
@@ -205,7 +230,7 @@ export default function CalendarPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Summary badges */}
-          <div className="flex items-center gap-2 text-[12.5px]">
+          <div className="flex items-center gap-2 text-[12.5px] flex-wrap">
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl font-medium">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               입고 {inboundCount}건
@@ -214,6 +239,12 @@ export default function CalendarPage() {
               <div className="w-2 h-2 rounded-full bg-blue-500" />
               출고 {outboundCount}건
             </span>
+            {reorderCount > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl font-medium">
+                <div className="w-2 h-2 rounded-full bg-orange-500" />
+                발주권장 {reorderCount}건
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -381,6 +412,7 @@ export default function CalendarPage() {
           { color: 'bg-teal-500',    label: '국내입고 예정' },
           { color: 'bg-blue-500',    label: '쿠팡그로스 도착 예정' },
           { color: 'bg-gray-400',    label: '기타 출고' },
+          { color: 'bg-orange-500',  label: '발주 권장일' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-full ${color}`} />

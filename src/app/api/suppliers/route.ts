@@ -28,11 +28,15 @@ export async function POST(request: NextRequest) {
     .from('suppliers')
     .insert({
       name: body.name,
+      alias: body.alias ?? null,
       contact_person: body.contact_person ?? null,
+      phone_country_code: body.phone_country_code ?? null,
       phone: body.phone ?? null,
       email: body.email ?? null,
       country: body.country ?? '중국',
       lead_time_days: body.lead_time_days ?? 21,
+      main_products: body.main_products ?? null,
+      addresses: body.addresses ?? [],
       note: body.note ?? null,
     })
     .select()

@@ -173,7 +173,15 @@ export default function ForecastPage() {
                       {Object.keys(item.option_values ?? {}).length > 0 && ` · ${skuOptionLabel(item.option_values)}`}
                     </p>
                     <p className="text-[11.5px] text-[#B0B8C1] mt-0.5">
-                      발주점: {formatNumber(item.reorder_point)} · 안전재고: {formatNumber(item.safety_stock)}
+                      {item.days_remaining !== null
+                        ? (() => {
+                            const d = item.days_remaining - item.lead_time_days;
+                            return d <= 0
+                              ? <span className="text-red-500 font-semibold">지금 발주 필요</span>
+                              : <span>D-{d}일 후 발주 · 안전재고 {formatNumber(item.safety_stock)}</span>;
+                          })()
+                        : <span>발주점: {formatNumber(item.reorder_point)} · 안전재고: {formatNumber(item.safety_stock)}</span>
+                      }
                     </p>
                   </div>
 

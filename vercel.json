@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-rg-inventory",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-sales",
+      "schedule": "0 2 * * *"
     }
   ]
 }

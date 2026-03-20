@@ -7,6 +7,7 @@ export interface SupplierAddress {
 export interface Supplier {
   id: string;
   name: string;
+  alias: string | null;
   contact_person: string | null;
   phone_country_code: string | null;
   phone: string | null;

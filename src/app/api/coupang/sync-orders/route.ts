@@ -51,6 +51,17 @@ export async function POST(request: NextRequest) {
   const { data: skus } = await admin.from('skus').select('id, sku_code');
   const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
 
+  // 쿠팡그로스 vendorItemId → sku_id 매핑 (platform_skus.platform_sku_id 기준)
+  const { data: platformSkus } = await admin
+    .from('platform_skus')
+    .select('sku_id, platform_sku_id, channel:channels(type)')
+    .not('platform_sku_id', 'is', null);
+  const rgSkuMap = new Map(
+    (platformSkus ?? [])
+      .filter((ps: any) => ps.channel?.type === 'coupang')
+      .map((ps: any) => [String(ps.platform_sku_id), ps.sku_id as string])
+  );
+
   let synced = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -149,10 +160,11 @@ export async function POST(request: NextRequest) {
         const orderDate = new Date(Number(order.paidAt)).toISOString().slice(0, 10);
 
         for (const item of order.orderItems ?? []) {
+          const vendorItemId = String(item.vendorItemId ?? '');
           rows.push({
             channel:         'coupang_rg',
             order_date:      orderDate,
-            order_number:    `${order.orderId}-${item.vendorItemId}`,
+            order_number:    `${order.orderId}-${vendorItemId}`,
             product_name:    item.productName ?? '',
             option_name:     null,
             quantity:        Number(item.salesQuantity ?? 1),
@@ -164,7 +176,7 @@ export async function POST(request: NextRequest) {
             shipping_cost:   0,
             orig_shipping:   0,
             jeju_surcharge:  false,
-            sku_id:          null,
+            sku_id:          rgSkuMap.get(vendorItemId) ?? null,
           });
         }
       }

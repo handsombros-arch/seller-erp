@@ -6,10 +6,30 @@ import { formatCurrency, formatNumber, formatDate, skuOptionLabel } from '@/lib/
 import {
   Package, Warehouse, AlertTriangle, TrendingUp,
   PackageCheck, ArrowRight, Loader2, ChevronDown, X, Plus,
+  Store, Calendar, Zap,
 } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+
+interface UpcomingEvent {
+  type: 'inbound' | 'reorder';
+  date: string;
+  label: string;
+  days_until: number;
+  po_number?: string;
+  days_until_stockout?: number;
+}
+
+interface Anomaly {
+  sku_id: string;
+  sku_code: string;
+  product_name: string;
+  recent_7d: number;
+  prev_7d: number;
+  change_pct: number | null;
+}
 
 interface DashboardData {
   stats: {
@@ -17,11 +37,119 @@ interface DashboardData {
     totalStock: number;
     totalStockValue: number;
     needsReorderCount: number;
+    coupangStock: number;
+    coupangStockDate: string | null;
   };
   needsReorder: any[];
   pendingPOs: any[];
   recentInbound: any[];
   channelSales: Record<string, number>;
+  upcomingEvents: UpcomingEvent[];
+  anomalies: Anomaly[];
+}
+
+// ─── 일별 출고량 차트 ────────────────────────────────────────────────────────
+
+const CHANNEL_COLORS: Record<string, string> = {
+  '쿠팡': '#FF6B00',
+  '토스': '#3182F6',
+  '스마트스토어': '#1EC800',
+  '기타': '#B0B8C1',
+};
+function channelColor(ch: string, idx: number): string {
+  return CHANNEL_COLORS[ch] ?? ['#3182F6','#FF6B00','#1EC800','#9B59B6','#E74C3C','#1ABC9C'][idx % 6];
+}
+
+function DailyOutboundChart() {
+  const [days, setDays] = useState<30 | 60 | 90>(30);
+  const [chartData, setChartData] = useState<Record<string, any>[]>([]);
+  const [channels, setChannels] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/outbound/daily?days=${days}`)
+      .then((r) => r.json())
+      .then((d) => { setChartData(d.data ?? []); setChannels(d.channels ?? []); })
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  // 기간 내 총합
+  const grandTotal = chartData.reduce((s, row) => s + (row.total ?? 0), 0);
+  const maxDay = chartData.reduce((best, row) => (row.total > (best?.total ?? 0) ? row : best), null as any);
+
+  function fmtLabel(dateStr: string) {
+    const [, m, d] = dateStr.split('-');
+    return `${parseInt(m)}/${parseInt(d)}`;
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <h3 className="text-[14px] font-semibold text-[#191F28] tracking-[-0.02em]">일별 출고량</h3>
+          <p className="text-[12px] text-[#B0B8C1] mt-0.5">
+            {days}일간 총 <span className="font-semibold text-[#191F28]">{formatNumber(grandTotal)}개</span> 출고
+            {maxDay && maxDay.total > 0 && (
+              <span className="ml-2">· 최다 {fmtLabel(maxDay.date)} <span className="font-semibold text-[#FF6B00]">{formatNumber(maxDay.total)}개</span></span>
+            )}
+          </p>
+        </div>
+        <div className="flex rounded-xl border border-[#E5E8EB] overflow-hidden">
+          {([30, 60, 90] as const).map((d) => (
+            <button key={d} onClick={() => setDays(d)}
+              className={`h-8 px-3 text-[12.5px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              {d}일
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" />
+        </div>
+      ) : grandTotal === 0 ? (
+        <div className="flex flex-col items-center justify-center h-40">
+          <p className="text-[13px] text-[#B0B8C1]">출고 데이터가 없습니다</p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barSize={days <= 30 ? 10 : days <= 60 ? 6 : 4}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={fmtLabel}
+              tick={{ fontSize: 10, fill: '#B0B8C1' }}
+              tickLine={false}
+              axisLine={false}
+              interval={days <= 30 ? 6 : days <= 60 ? 13 : 20}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#B0B8C1' }}
+              tickLine={false}
+              axisLine={false}
+              width={28}
+            />
+            <Tooltip
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', fontSize: 12 }}
+              labelFormatter={fmtLabel}
+              formatter={(value: any, name: any) => [formatNumber(value) + '개', name]}
+            />
+            {channels.length > 1 && <Legend formatter={(v) => <span style={{ fontSize: 11, color: '#6B7684' }}>{v}</span>} />}
+            {channels.length === 0 ? (
+              <Bar dataKey="total" fill="#3182F6" radius={[3, 3, 0, 0]} />
+            ) : (
+              channels.map((ch, i) => (
+                <Bar key={ch} dataKey={ch} stackId="a" fill={channelColor(ch, i)}
+                  radius={i === channels.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
+              ))
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
 }
 
 // ─── 판매 추이 차트 ──────────────────────────────────────────────────────────
@@ -259,8 +387,9 @@ export default function DashboardPage() {
   const stats = data?.stats;
   const statCards = [
     { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-[#EBF1FE]', icon: Package },
-    { label: '총 재고 수량', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse },
-    { label: '재고 원가 총액', value: formatCurrency(stats?.totalStockValue ?? 0), unit: '', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: TrendingUp },
+    { label: '창고 재고', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse },
+    { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음' },
+    { label: '재고 원가 총액', value: formatCurrency(stats?.totalStockValue ?? 0), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp },
     { label: '발주 필요 SKU', value: formatNumber(stats?.needsReorderCount ?? 0), unit: '개', color: 'text-red-500', bg: 'bg-red-50', icon: AlertTriangle },
   ];
 
@@ -272,7 +401,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map((s) => (
           <div key={s.label} className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
@@ -283,11 +412,99 @@ export default function DashboardPage() {
               <span className={`text-[22px] font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</span>
               {s.unit && <span className="text-[13px] text-[#B0B8C1] font-medium">{s.unit}</span>}
             </div>
+            {'sub' in s && s.sub && <p className="text-[10.5px] text-[#B0B8C1] mt-1">{s.sub}</p>}
           </div>
         ))}
       </div>
 
-      {/* 판매 추이 그래프 */}
+      {/* 다가오는 예정 + 특이점 감지 */}
+      {((data?.upcomingEvents ?? []).length > 0 || (data?.anomalies ?? []).length > 0) && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* 다가오는 예정 */}
+          <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-primary" /> 다가오는 예정
+                </h3>
+                <p className="text-[12px] text-[#B0B8C1] mt-0.5">14일 이내 입고 · 발주 권장일</p>
+              </div>
+              <Link href="/calendar" className="flex items-center gap-1 text-[12.5px] text-primary font-medium">
+                캘린더 <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {(data?.upcomingEvents ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <p className="text-[13px] text-[#B0B8C1]">14일 내 예정 없음</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#F2F4F6]">
+                {(data?.upcomingEvents ?? []).map((ev, i) => {
+                  const isInbound = ev.type === 'inbound';
+                  const dLabel = ev.days_until === 0 ? 'D-day' : `D-${ev.days_until}`;
+                  const urgent = ev.days_until <= 3;
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-5 py-3">
+                      <div className={`shrink-0 w-14 text-center py-1 rounded-lg text-[11px] font-bold ${urgent ? 'bg-red-50 text-red-500' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
+                        {dLabel}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-foreground truncate">{ev.label}</p>
+                        <p className="text-[11.5px] text-[#B0B8C1]">{ev.date}</p>
+                      </div>
+                      <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${isInbound ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                        {isInbound ? '입고예정' : '발주권장'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 특이점 감지 */}
+          <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="px-5 pt-5 pb-3">
+              <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
+                <Zap className="h-4 w-4 text-amber-500" /> 특이점 감지
+              </h3>
+              <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 7일 판매 급증 SKU</p>
+            </div>
+            {(data?.anomalies ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <p className="text-[13px] text-[#B0B8C1]">이상 감지된 SKU 없음</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#F2F4F6]">
+                {(data?.anomalies ?? []).map((a) => (
+                  <div key={a.sku_id} className="flex items-center justify-between px-5 py-3.5">
+                    <div className="min-w-0">
+                      <p className="text-[13.5px] font-medium text-foreground truncate">{a.product_name}</p>
+                      <p className="text-[12px] text-[#6B7684] font-mono mt-0.5">{a.sku_code}</p>
+                      <p className="text-[11.5px] text-[#B0B8C1] mt-0.5">전주 {formatNumber(a.prev_7d)}개</p>
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <p className="text-[18px] font-bold text-foreground tabular-nums">
+                        {formatNumber(a.recent_7d)}<span className="text-[12px] font-normal text-[#6B7684] ml-1">개</span>
+                      </p>
+                      {a.change_pct !== null ? (
+                        <p className="text-[12px] font-bold text-red-500">↑{a.change_pct}%</p>
+                      ) : (
+                        <p className="text-[11.5px] font-semibold text-amber-500">신규 급증</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 일별 출고량 */}
+      <DailyOutboundChart />
+
+      {/* 판매 추이 그래프 (SKU별 상세) */}
       <SalesTrendSection />
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -313,6 +530,14 @@ export default function DashboardPage() {
             <div className="divide-y divide-[#F2F4F6]">
               {(data?.needsReorder ?? []).map((sku: any) => {
                 const total = (sku.inventory ?? []).reduce((s: number, i: any) => s + (i.quantity ?? 0), 0);
+                const s7d = sku.sales_7d ?? 0;
+                const s30d = sku.sales_30d ?? 0;
+                let dailyAvg = 0;
+                if (s7d > 0) dailyAvg = s7d / 7;
+                else if (s30d > 0) dailyAvg = s30d / 30;
+                else if (sku.manual_daily_avg) dailyAvg = sku.manual_daily_avg;
+                const daysRemaining = dailyAvg > 0 ? Math.floor(total / dailyAvg) : null;
+                const daysUntilReorder = daysRemaining !== null ? daysRemaining - (sku.lead_time_days ?? 0) : null;
                 return (
                   <div key={sku.id} className="flex items-center justify-between px-5 py-3.5">
                     <div className="min-w-0">
@@ -321,7 +546,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="text-right shrink-0 ml-3">
                       <span className="text-[15px] font-bold text-red-500 tabular-nums">{formatNumber(total)}</span>
-                      <p className="text-[11px] text-[#B0B8C1]">발주점 {formatNumber(sku.reorder_point)}</p>
+                      {daysUntilReorder !== null ? (
+                        <p className="text-[11px] font-semibold text-red-400">{daysUntilReorder <= 0 ? '지금 발주 필요' : `D-${daysUntilReorder}일 후 발주`}</p>
+                      ) : (
+                        <p className="text-[11px] text-[#B0B8C1]">발주점 {formatNumber(sku.reorder_point)}</p>
+                      )}
                     </div>
                   </div>
                 );

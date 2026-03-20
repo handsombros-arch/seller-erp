@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
 import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
@@ -18,9 +19,11 @@ interface SkuRow {
   option_label: string;
   cost_price: string;
   lead_time_days: string;
+  reorder_point: string;
+  safety_stock: string;
   supplier_id: string;
   sales_30d: string;
-  inventory: Record<string, string>;  // warehouse_id → qty
+  inventory: Record<string, string>;  // warehouse_id → qty (read-only display)
   dirty: boolean;
   saving: boolean;
   saved: boolean;
@@ -331,7 +334,7 @@ const ADDRESS_TYPES = [
 ] as const;
 
 interface SupplierFormState {
-  name: string; contact_person: string;
+  name: string; alias: string; contact_person: string;
   phone_country_code: string; phone: string;
   email: string; country: string; lead_time_days: string;
   main_products: string; note: string;
@@ -339,7 +342,7 @@ interface SupplierFormState {
 }
 
 const EMPTY_SUPPLIER_FORM: SupplierFormState = {
-  name: '', contact_person: '',
+  name: '', alias: '', contact_person: '',
   phone_country_code: '+86', phone: '',
   email: '', country: '중국', lead_time_days: '21',
   main_products: '', note: '',
@@ -388,6 +391,9 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
     <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
       <SfField label="회사명 / 제조사명" required>
         <input className={sfInputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+      </SfField>
+      <SfField label="별칭">
+        <input className={sfInputCls} placeholder="예: 선전공장, 중국A업체 (짧게 부르는 이름)" value={form.alias} onChange={(e) => set('alias', e.target.value)} />
       </SfField>
       <div className="grid grid-cols-2 gap-3">
         <SfField label="담당자">
@@ -487,6 +493,7 @@ function SuppliersTab() {
   function formToBody(form: SupplierFormState) {
     return {
       name: form.name.trim(),
+      alias: form.alias.trim() || null,
       contact_person: form.contact_person.trim() || null,
       phone_country_code: form.phone_country_code || '+86',
       phone: form.phone.trim() || null,
@@ -572,6 +579,7 @@ function SuppliersTab() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-[15px] font-bold text-[#191F28]">{s.name}</h3>
+                      {s.alias && <span className="text-[11.5px] font-medium px-2 py-0.5 bg-[#EBF1FE] text-[#3182F6] rounded-full">{s.alias}</span>}
                       {s.country && <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F2F4F6] text-[#6B7684] rounded-full">{s.country}</span>}
                     </div>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
@@ -648,6 +656,7 @@ function SuppliersTab() {
               <SupplierFormDialog
                 initial={{
                   name: editTarget.name,
+                  alias: editTarget.alias ?? '',
                   contact_person: editTarget.contact_person ?? '',
                   phone_country_code: editTarget.phone_country_code ?? '+86',
                   phone: editTarget.phone ?? '',
@@ -695,6 +704,45 @@ export default function MasterPage() {
   const [savingAll, setSavingAll] = useState(false);
   const [skuOptions, setSkuOptions] = useState<{ id: string; label: string; sku_code: string; product_name: string; option_label: string }[]>([]);
 
+  // ── 컬럼 너비 조절 ──────────────────────────────────────────────────────────
+  const resizingCol = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  const [colWidths, setColWidths] = useState<Record<string, number>>({
+    name: 200, supplier: 140, cost: 120,
+    lead: 100, reorder: 100, safety: 100, sales30: 110, avg: 90,
+  });
+
+  function handleResizeStart(e: React.MouseEvent, key: string) {
+    e.preventDefault();
+    resizingCol.current = { key, startX: e.clientX, startWidth: colWidths[key] ?? 100 };
+    function onMove(ev: MouseEvent) {
+      if (!resizingCol.current) return;
+      const delta = ev.clientX - resizingCol.current.startX;
+      setColWidths((prev) => ({ ...prev, [resizingCol.current!.key]: Math.max(60, resizingCol.current!.startWidth + delta) }));
+    }
+    function onUp() {
+      resizingCol.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  const rTh = (key: string, children: React.ReactNode, className = '') => (
+    <th style={{ width: colWidths[key] ?? 100, minWidth: colWidths[key] ?? 100 }}
+      className={`relative px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none overflow-hidden ${className}`}>
+      {children}
+      <div onMouseDown={(e) => handleResizeStart(e, key)}
+        className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center group/resize">
+        <div className="w-[2px] h-4 rounded-full bg-[#D1D5DB] group-hover/resize:bg-[#3182F6] group-hover/resize:h-full transition-all duration-100" />
+      </div>
+    </th>
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -729,6 +777,8 @@ export default function MasterPage() {
             option_label: skuOptionLabel(sku.option_values ?? {}),
             cost_price: String(sku.cost_price ?? ''),
             lead_time_days: String(sku.lead_time_days ?? ''),
+            reorder_point: String(sku.reorder_point ?? ''),
+            safety_stock: String(sku.safety_stock ?? ''),
             supplier_id: sku.supplier_id ?? '',
             sales_30d: sku.manual_daily_avg != null
               ? String(Math.round(sku.manual_daily_avg * 30))
@@ -766,13 +816,6 @@ export default function MasterPage() {
     ));
   }
 
-  function updateInventory(id: string, warehouseId: string, value: string) {
-    setRows((prev) => prev.map((r) => r.id === id
-      ? { ...r, inventory: { ...r.inventory, [warehouseId]: value }, dirty: true, saved: false }
-      : r
-    ));
-  }
-
 
   async function saveRow(row: SkuRow) {
     setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, saving: true, error: '' } : r));
@@ -787,25 +830,12 @@ export default function MasterPage() {
           body: JSON.stringify({
             cost_price: row.cost_price ? Number(row.cost_price) : 0,
             lead_time_days: row.lead_time_days ? Number(row.lead_time_days) : null,
+            reorder_point: row.reorder_point !== '' ? Number(row.reorder_point) : 0,
+            safety_stock: row.safety_stock !== '' ? Number(row.safety_stock) : 0,
             supplier_id: row.supplier_id || null,
             manual_daily_avg,
           }),
         }),
-        // 창고별 재고
-        ...Object.entries(row.inventory)
-          .filter(([, qty]) => qty.trim() !== '')
-          .map(([warehouse_id, qty]) =>
-            fetch('/api/inventory', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sku_id: row.id,
-                warehouse_id,
-                new_quantity: Number(qty),
-                reason: '마스터 시트 일괄 입력',
-              }),
-            })
-          ),
       ]);
 
       setRows((prev) => prev.map((r) => r.id === row.id
@@ -896,8 +926,9 @@ export default function MasterPage() {
       <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
         <FileSpreadsheet className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
         <p className="text-[13px] text-[#3182F6]">
-          <span className="font-semibold">셀을 클릭해 직접 수정</span>하세요.
-          플랫폼 상품명은 채널별로 다르게 입력할 수 있으며, 변경 시 바로 반영됩니다.
+          <span className="font-semibold">원가·리드타임·발주점·안전재고</span>를 여기서 관리하세요.
+          창고 재고 수량은 조회만 가능하며, 수정은{' '}
+          <Link href="/inventory" className="font-semibold underline underline-offset-2">재고현황</Link>에서 합니다.
         </p>
       </div>
 
@@ -909,33 +940,35 @@ export default function MasterPage() {
       ) : (
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse table-fixed">
               <thead>
                 <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
                   {/* 고정 컬럼들 */}
                   <th className="text-center px-2 py-3 text-[12px] font-semibold text-[#B0B8C1] whitespace-nowrap sticky left-0 bg-[#F8F9FB] z-10 w-10">#</th>
-                  <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap bg-[#F8F9FB] z-10 min-w-[180px]">
-                    상품명 / SKU
-                  </th>
-                  <th className="text-left px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[130px]">공급처</th>
-                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[110px]">
-                    원가 <span className="font-normal text-[#B0B8C1]">(VAT제외)</span>
-                  </th>
+                  {rTh('name', '상품명 / SKU', 'text-left bg-[#F8F9FB] z-10')}
+                  {rTh('supplier', '공급처', 'text-left')}
+                  {rTh('cost', <span>원가 <span className="font-normal text-[#B0B8C1]">(VAT제외)</span></span>, 'text-right')}
 
-                  {/* 창고별 재고 */}
+                  {/* 창고별 재고 (읽기 전용) */}
                   {warehouses.map((w) => (
-                    <th key={w.id} className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[110px]">
-                      {w.name}
+                    <th key={w.id} style={{ width: colWidths[`wh_${w.id}`] ?? 110, minWidth: colWidths[`wh_${w.id}`] ?? 110 }}
+                      className="relative text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none overflow-hidden">
+                      <span>{w.name}</span>
+                      <span className="ml-1 text-[10px] font-normal text-[#B0B8C1]">조회</span>
+                      <div onMouseDown={(e) => handleResizeStart(e, `wh_${w.id}`)}
+                        className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center group/resize">
+                        <div className="w-[2px] h-4 rounded-full bg-[#D1D5DB] group-hover/resize:bg-[#3182F6] group-hover/resize:h-full transition-all duration-100" />
+                      </div>
                     </th>
                   ))}
 
-                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[90px]">리드타임</th>
+                  {rTh('lead', '리드타임', 'text-right')}
+                  {rTh('reorder', '발주점', 'text-right')}
+                  {rTh('safety', '안전재고', 'text-right')}
+                  {rTh('sales30', '30일 판매', 'text-right')}
+                  {rTh('avg', '일일 평균', 'text-right')}
 
-                  {/* 판매량 */}
-                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[100px]">30일 판매</th>
-                  <th className="text-right px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[80px]">일일 평균</th>
-
-                  <th className="px-3 py-3 min-w-[60px]" />
+                  <th className="px-3 py-3 w-[60px]" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F4F6]">
@@ -943,7 +976,7 @@ export default function MasterPage() {
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleMaster(group.name)}>
-                      <td colSpan={8 + warehouses.length} className="px-4 py-2.5 sticky left-0 bg-inherit">
+                      <td colSpan={10 + warehouses.length} className="px-4 py-2.5 sticky left-0 bg-inherit">
                         <div className="flex items-center gap-2">
                           {collapsedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
@@ -996,13 +1029,13 @@ export default function MasterPage() {
                         )}
                       </td>
 
-                      {/* 창고별 재고 */}
+                      {/* 창고별 재고 (읽기 전용 — 수정은 재고현황에서) */}
                       {warehouses.map((w) => (
-                        <td key={w.id} className="px-2 py-2">
-                          <NumCell value={row.inventory[w.id] ?? ''} onChange={(v) => updateInventory(row.id, w.id, v)} />
-                          {row.inventory[w.id] && (
-                            <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.inventory[w.id]))}개</p>
-                          )}
+                        <td key={w.id} className="px-4 py-2.5 text-right">
+                          {row.inventory[w.id]
+                            ? <span className="text-[13.5px] font-semibold text-[#191F28] tabular-nums">{formatNumber(Number(row.inventory[w.id]))}<span className="text-[11px] font-normal text-[#B0B8C1] ml-0.5">개</span></span>
+                            : <span className="text-[13px] text-[#D0D5DD]">–</span>
+                          }
                         </td>
                       ))}
 
@@ -1011,6 +1044,22 @@ export default function MasterPage() {
                         <NumCell value={row.lead_time_days} onChange={(v) => markDirty(row.id, { lead_time_days: v })} />
                         {row.lead_time_days && (
                           <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{row.lead_time_days}일</p>
+                        )}
+                      </td>
+
+                      {/* 발주점 */}
+                      <td className="px-2 py-2">
+                        <NumCell value={row.reorder_point} onChange={(v) => markDirty(row.id, { reorder_point: v })} />
+                        {row.reorder_point && (
+                          <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.reorder_point))}개</p>
+                        )}
+                      </td>
+
+                      {/* 안전재고 */}
+                      <td className="px-2 py-2">
+                        <NumCell value={row.safety_stock} onChange={(v) => markDirty(row.id, { safety_stock: v })} />
+                        {row.safety_stock && (
+                          <p className="text-[10.5px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.safety_stock))}개</p>
                         )}
                       </td>
 
@@ -1065,6 +1114,7 @@ export default function MasterPage() {
       )}
 
       </>}
+
     </div>
   );
 }

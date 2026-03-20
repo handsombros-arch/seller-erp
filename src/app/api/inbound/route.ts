@@ -58,7 +58,12 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // If linked to a PO item, update received_quantity
+  // Update SKU cost_price if unit_cost is provided
+  if (unit_cost != null) {
+    await admin.from('skus').update({ cost_price: unit_cost }).eq('id', sku_id);
+  }
+
+  // If linked to a PO item, update received_quantity and lead_time_days
   if (po_item_id) {
     const { data: poItem } = await admin
       .from('purchase_order_items')
@@ -84,6 +89,22 @@ export async function POST(request: NextRequest) {
         const anyReceived = allItems.some((i) => (i.received_quantity ?? 0) > 0);
         const newStatus = allComplete ? 'completed' : anyReceived ? 'partial' : 'ordered';
         await admin.from('purchase_orders').update({ status: newStatus }).eq('id', poItem.po_id);
+      }
+
+      // Auto-update lead_time_days from actual order_date to inbound_date
+      const { data: po } = await admin
+        .from('purchase_orders')
+        .select('order_date')
+        .eq('id', poItem.po_id)
+        .single();
+
+      if (po?.order_date) {
+        const orderMs = new Date(po.order_date).getTime();
+        const inboundMs = new Date(inbound_date).getTime();
+        const actualLeadTime = Math.round((inboundMs - orderMs) / (1000 * 60 * 60 * 24));
+        if (actualLeadTime > 0) {
+          await admin.from('skus').update({ lead_time_days: actualLeadTime }).eq('id', sku_id);
+        }
       }
     }
   }
