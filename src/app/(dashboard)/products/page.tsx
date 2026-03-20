@@ -95,7 +95,7 @@ function VatCostFields({ exclVat, onChange }: {
   return (
     <div className="space-y-2">
       <label className="text-[13px] font-medium text-[#191F28]">
-        원가 <span className="text-[11.5px] text-[#B0B8C1] font-normal">(물류비 포함 최종 도착가)</span>
+        원가 <span className="text-[11.5px] text-[#B0B8C1] font-normal">(VAT 미포함 · 최종 도착가)</span>
       </label>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
@@ -123,7 +123,7 @@ type NewSkuInfo = { id: string; sku_code: string; option_label: string };
 function AddProductDialog({ open, onClose, onSave }: {
   open: boolean; onClose: () => void; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', lead_time_days: '', supplier_id: '' });
+  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '' });
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -164,7 +164,7 @@ function AddProductDialog({ open, onClose, onSave }: {
           barcode: form.barcode.trim() || null,
           option_values: {},
           cost_price: Number(form.cost_price) || 0,
-          logistics_cost: 0,
+          logistics_cost: Number(form.logistics_cost) || 0,
           lead_time_days: leadTime,
           supplier_id: form.supplier_id || null,
           reorder_point: 0,
@@ -174,7 +174,7 @@ function AddProductDialog({ open, onClose, onSave }: {
       });
       if (!skuRes.ok) { const d = await skuRes.json(); throw new Error(d.error); }
       const newSku = await skuRes.json();
-      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', lead_time_days: '', supplier_id: '' });
+      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '' });
       onSave([{ id: newSku.id, sku_code: newSku.sku_code, option_label: '' }]);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
@@ -190,8 +190,16 @@ function AddProductDialog({ open, onClose, onSave }: {
         <InputField label="브랜드" placeholder="예: 그랑누보" value={form.brand} onChange={(e) => set('brand', e.target.value)} />
         <InputField label="옵션명" placeholder="예: 색상, 사이즈 (없으면 비워두세요)" value={form.optionName} onChange={(e) => set('optionName', e.target.value)} />
 
-        {/* 원가 */}
+        {/* 원가 + 물류비 */}
         <VatCostFields exclVat={form.cost_price} onChange={(v) => set('cost_price', v)} />
+        <InputField
+          label="물류비"
+          hint="(VAT 미포함 · 자사창고→고객 배송비)"
+          type="number" min="0"
+          placeholder="2650"
+          value={form.logistics_cost}
+          onChange={(e) => set('logistics_cost', e.target.value)}
+        />
 
         {/* 공급처 + 리드타임 */}
         <div className="grid grid-cols-2 gap-3">
@@ -290,7 +298,7 @@ function cartesianOptions(opts: OptionType[]): Record<string, string>[] {
 function AddSkuDialog({ open, onClose, product, onSave }: {
   open: boolean; onClose: () => void; product: Product; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ barcode: '', cost_price: '', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
+  const [form, setForm] = useState({ barcode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
   const [optTypes, setOptTypes] = useState<OptionType[]>([]);
   const [newOptKey, setNewOptKey] = useState('');
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
@@ -305,7 +313,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
     if (open) {
       setOptTypes(product.category ? [{ key: product.category, values: [], inputVal: '' }] : []);
       setNewOptKey('');
-      setForm({ barcode: '', cost_price: '', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
+      setForm({ barcode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
       setError('');
     }
   }, [open, product.category]);
@@ -345,7 +353,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
         product_id: product.id,
         barcode: form.barcode.trim() || null,
         cost_price: Number(form.cost_price) || 0,
-        logistics_cost: 0,
+        logistics_cost: Number(form.logistics_cost) || 0,
         lead_time_days: form.lead_time_days ? Number(form.lead_time_days) : (suppliers.find((s) => s.id === form.supplier_id)?.lead_time_days ?? 21),
         supplier_id: form.supplier_id || null,
         reorder_point: Number(form.reorder_point) || 0,
@@ -453,8 +461,16 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
 
         <InputField label="바코드" hint="(쿠팡만 기입)" placeholder="쿠팡 바코드 번호" value={form.barcode} onChange={(e) => set('barcode', e.target.value)} />
 
-        {/* 원가 VAT */}
+        {/* 원가 + 물류비 */}
         <VatCostFields exclVat={form.cost_price} onChange={(v) => set('cost_price', v)} />
+        <InputField
+          label="물류비"
+          hint="(VAT 미포함 · 자사창고→고객 배송비)"
+          type="number" min="0"
+          placeholder="2650"
+          value={form.logistics_cost}
+          onChange={(e) => set('logistics_cost', e.target.value)}
+        />
 
         {/* 공급처 + 리드타임 */}
         <div className="grid grid-cols-2 gap-3">
