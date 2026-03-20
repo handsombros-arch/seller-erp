@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const TEMPLATES: Record<string, { filename: string; csv: string }> = {
+  'platform-skus': {
+    filename: 'platform_skus_template.csv',
+    csv: 'SKU코드,채널명,플랫폼상품명,플랫폼상품ID,판매가\n'
+      + 'GNB-001,스마트스토어,그랑누보 백팩 블랙M,123456789,39900\n'
+      + 'GNB-001,쿠팡,그랑누보 백팩 블랙M 소형,COUPANG-001,42000\n',
+  },
   products: {
     filename: 'products_template.csv',
     csv: '상품명,카테고리,브랜드,SKU코드,옵션1유형,옵션1값,옵션2유형,옵션2값,원가,물류비,안전재고,발주점,리드타임(일),공급처명\n'

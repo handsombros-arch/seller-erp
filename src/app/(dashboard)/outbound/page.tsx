@@ -360,7 +360,7 @@ export default function OutboundPage() {
       </div>
 
       {/* 쿠팡 이번달 통계 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: '쿠팡그로스 이번달 총 수량', value: `${formatNumber(coupangMonthly.qty)}개`, color: 'text-red-600' },
           { label: '이번달 총 박스수',           value: `${formatNumber(coupangMonthly.boxes)}박스`, color: 'text-blue-600' },
@@ -385,7 +385,8 @@ export default function OutboundPage() {
             <p className="text-[13.5px]">출고 내역이 없습니다</p>
           </div>
         ) : (
-          <div className="divide-y divide-[#F2F4F6]">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-[#F2F4F6] min-w-[620px]">
             <div className="grid grid-cols-[1fr_1.4fr_80px_70px_100px_90px_72px] gap-3 px-5 py-3 bg-[#F9FAFB]">
               {['센터 / 채널', '상품 / SKU', '수량', '박스', '출고일', '쿠팡도착', ''].map((h, i) => (
                 <span key={i} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
@@ -451,6 +452,7 @@ export default function OutboundPage() {
                 </div>
               );
             })}
+          </div>
           </div>
         )}
       </div>

@@ -77,7 +77,7 @@ export default function ForecastPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-4 h-4 text-red-500" />
@@ -138,7 +138,8 @@ export default function ForecastPage() {
             <p className="text-[13.5px]">데이터가 없습니다</p>
           </div>
         ) : (
-          <div className="divide-y divide-[#F2F4F6]">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-[#F2F4F6] min-w-[700px]">
             {/* Table header */}
             <div className="grid grid-cols-[1fr_100px_180px_140px_100px_100px] gap-4 px-5 py-3 bg-[#F9FAFB]">
               {['상품 / SKU', '현재 재고', '판매 평균', '소진까지', '발주 권장일', '리드타임'].map((h) => (
@@ -269,6 +270,7 @@ export default function ForecastPage() {
                 </div>
               );
             })}
+          </div>
           </div>
         )}
       </div>

@@ -718,6 +718,8 @@ export default function InventoryPage() {
 
           {/* Warehouse inventory table */}
           <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="overflow-x-auto">
+            <div className="min-w-[580px]">
             <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
               {['상품 / SKU', '창고', '수량', '원가', '재고가치', '조정'].map((h) => (
                 <span key={h} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
@@ -779,6 +781,8 @@ export default function InventoryPage() {
                 <span className="text-[13px] font-semibold text-[#191F28]">합계 {formatCurrency(filtered.reduce((s, i) => s + i.quantity * (i.sku?.cost_price ?? 0), 0))}</span>
               </div>
             )}
+            </div>
+            </div>
           </div>
         </>
       )}

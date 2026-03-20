@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
 import type { Product, Sku } from '@/types';
 import {
@@ -663,6 +664,7 @@ export default function ProductsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'product' | 'sku'; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [showPlatformBanner, setShowPlatformBanner] = useState(false);
 
   async function loadProducts() {
     setLoading(true);
@@ -687,6 +689,19 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
+      {showPlatformBanner && (
+        <div className="flex items-center justify-between gap-3 bg-[#EBF1FE] border border-[#3182F6]/20 rounded-xl px-4 py-3">
+          <p className="text-[13.5px] text-[#1B64DA]">
+            상품이 등록되었습니다.{' '}
+            <Link href="/master?tab=platform" className="font-semibold underline underline-offset-2">
+              플랫폼 정보 등록하기 →
+            </Link>
+          </p>
+          <button onClick={() => setShowPlatformBanner(false)} className="shrink-0 text-[#3182F6] hover:text-[#1B64DA]">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">상품 관리</h2>
@@ -745,7 +760,7 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)} onSave={() => { setAddProductOpen(false); loadProducts(); }} />
+      <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)} onSave={() => { setAddProductOpen(false); loadProducts(); setShowPlatformBanner(true); }} />
       <EditProductDialog open={!!editProduct} onClose={() => setEditProduct(null)} product={editProduct} onSave={() => { setEditProduct(null); loadProducts(); }} />
       {addSkuProduct && (
         <AddSkuDialog open={true} onClose={() => setAddSkuProduct(null)} product={addSkuProduct} onSave={() => { setAddSkuProduct(null); loadProducts(); }} />

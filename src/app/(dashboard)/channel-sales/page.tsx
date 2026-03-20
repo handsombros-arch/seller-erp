@@ -599,6 +599,8 @@ function UploadDialog({ open, onClose, onUploaded }: {
                 </div>
               </div>
               <div className="border border-[#F2F4F6] rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                <div className="min-w-[560px]">
                 <div className="grid grid-cols-[1.8fr_1.2fr_0.7fr_1fr_1fr_1.8fr] gap-2 px-3 py-2 bg-[#F8F9FB] border-b border-[#F2F4F6]">
                   {['상품명', '옵션', '수량', '매출액', '채널', 'SKU 연결'].map((h) => (
                     <span key={h} className="text-[11.5px] font-semibold text-[#6B7684]">{h}</span>
@@ -637,6 +639,8 @@ function UploadDialog({ open, onClose, onUploaded }: {
                       </div>
                     );
                   })}
+                </div>
+                </div>
                 </div>
               </div>
               <p className="text-[11.5px] text-[#B0B8C1] mt-1.5">주황 행 = 자동 매칭 실패. 드롭다운으로 직접 SKU를 선택하세요.</p>
@@ -1369,6 +1373,8 @@ export default function ChannelSalesPage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[580px]">
         <div className="grid grid-cols-[1fr_1.5fr_2fr_1fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
           {['판매일', '채널', '상품', '옵션', '수량', '매출액'].map((h) => (
             <span key={h} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
@@ -1430,6 +1436,8 @@ export default function ChannelSalesPage() {
             </div>
           </div>
         )}
+        </div>
+        </div>
       </div>
       </>}
 

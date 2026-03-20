@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
 import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
@@ -70,12 +70,14 @@ function SelectCell({ value, onChange, options, placeholder }: {
 
 // ─── Platform Tab ────────────────────────────────────────────────────────────
 
+interface ChannelEntry { name: string; product_id: string; price: string; }
+
 interface PlatformRow {
   sku_id: string;
   sku_code: string;
   product_name: string;
   option_label: string;
-  names: Record<string, string>; // channel_id → platform_product_name
+  entries: Record<string, ChannelEntry>; // channel_id → data
   dirty: boolean;
   saving: boolean;
 }
@@ -89,24 +91,30 @@ function PlatformTab({ skuOptions, channels }: {
   const [rows, setRows] = useState<PlatformRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     const res = await fetch('/api/platform-skus');
     const platformData: any[] = res.ok ? await res.json().catch(() => []) : [];
-    const bySkuId: Record<string, Record<string, string>> = {};
+    const bySkuId: Record<string, Record<string, ChannelEntry>> = {};
     for (const p of platformData ?? []) {
       if (!bySkuId[p.sku_id]) bySkuId[p.sku_id] = {};
-      bySkuId[p.sku_id][p.channel_id] = p.platform_product_name ?? '';
+      bySkuId[p.sku_id][p.channel_id] = {
+        name:       p.platform_product_name ?? '',
+        product_id: p.platform_product_id   ?? '',
+        price:      p.price != null ? String(p.price) : '',
+      };
     }
+    const empty: ChannelEntry = { name: '', product_id: '', price: '' };
     const built: PlatformRow[] = skuOptions.map((s) => ({
-      sku_id: s.id,
-      sku_code: s.sku_code,
+      sku_id:       s.id,
+      sku_code:     s.sku_code,
       product_name: s.product_name,
       option_label: s.option_label,
-      names: Object.fromEntries(channels.map((c) => [c.id, bySkuId[s.id]?.[c.id] ?? ''])),
-      dirty: false,
-      saving: false,
+      entries: Object.fromEntries(channels.map((c) => [c.id, bySkuId[s.id]?.[c.id] ?? { ...empty }])),
+      dirty:   false,
+      saving:  false,
     }));
     setRows(built);
     setLoading(false);
@@ -114,35 +122,36 @@ function PlatformTab({ skuOptions, channels }: {
 
   useEffect(() => { if (skuOptions.length && channels.length) load(); }, [load, skuOptions.length, channels.length]);
 
-  function updateName(skuId: string, channelId: string, value: string) {
-    setRows((prev) => prev.map((r) => r.sku_id === skuId
-      ? { ...r, names: { ...r.names, [channelId]: value }, dirty: true }
-      : r
-    ));
+  function updateEntry(skuId: string, channelId: string, field: keyof ChannelEntry, value: string) {
+    setRows((prev) => prev.map((r) => r.sku_id !== skuId ? r : {
+      ...r,
+      entries: { ...r.entries, [channelId]: { ...r.entries[channelId], [field]: value } },
+      dirty: true,
+    }));
   }
 
   async function saveRow(row: PlatformRow) {
     setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: true } : r));
     await Promise.all(
-      channels
-        .filter((c) => row.names[c.id] !== undefined)
-        .map(async (c) => {
-          const name = row.names[c.id].trim();
-          // platform_skus 저장
-          await fetch('/api/platform-skus', {
+      channels.map(async (c) => {
+        const e = row.entries[c.id];
+        const name       = e.name.trim();
+        const product_id = e.product_id.trim() || null;
+        const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
+
+        await fetch('/api/platform-skus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sku_id: row.sku_id, channel_id: c.id, platform_product_name: name || null, platform_product_id: product_id, price }),
+        });
+        if (name) {
+          await fetch('/api/sku-aliases', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sku_id: row.sku_id, channel_id: c.id, platform_product_name: name || null }),
+            body: JSON.stringify({ channel_name: name, sku_id: row.sku_id }),
           });
-          // sku_name_aliases에도 자동 등록 (CSV 자동 매칭용)
-          if (name) {
-            await fetch('/api/sku-aliases', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ channel_name: name, sku_id: row.sku_id }),
-            });
-          }
-        })
+        }
+      })
     );
     setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false } : r));
   }
@@ -151,25 +160,40 @@ function PlatformTab({ skuOptions, channels }: {
     ? rows.filter((r) => `${r.product_name} ${r.sku_code} ${r.option_label}`.toLowerCase().includes(q.toLowerCase()))
     : rows;
 
-  const inputCls = 'w-full h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
+  const filteredGroups = (() => {
+    const map = new Map<string, PlatformRow[]>();
+    for (const row of filtered) {
+      if (!map.has(row.product_name)) map.set(row.product_name, []);
+      map.get(row.product_name)!.push(row);
+    }
+    return Array.from(map.entries()).map(([name, skus]) => ({ name, skus }));
+  })();
+
+  const inputCls = 'w-full h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
 
   return (
     <div className="space-y-4">
       <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
         <Link2 className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
         <p className="text-[13px] text-[#3182F6]">
-          <span className="font-semibold">상품(SKU) 기준</span>으로 각 플랫폼에서 사용하는 상품명을 등록합니다.
-          저장 시 채널 별칭에도 자동 반영되어 CSV 업로드 시 자동 매칭됩니다.
+          <span className="font-semibold">상품(SKU) 기준</span>으로 각 플랫폼의 상품명·상품ID·판매가를 등록합니다.
+          저장 시 채널 별칭에도 자동 반영되어 주문 동기화 시 자동 매칭됩니다.
         </p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#F2F4F6]">
-          <span className="text-[13px] font-semibold text-[#191F28]">SKU별 플랫폼 상품명</span>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
-              className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
+          <span className="text-[13px] font-semibold text-[#191F28]">SKU별 플랫폼 정보</span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
+                className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-40" />
+            </div>
+            <button onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <Upload className="h-3.5 w-3.5" /> 엑셀 업로드
+            </button>
           </div>
         </div>
 
@@ -179,38 +203,69 @@ function PlatformTab({ skuOptions, channels }: {
           <div className="text-center py-12 text-[#B0B8C1] text-[13px]">설정 &gt; 채널에서 플랫폼을 먼저 등록하세요</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  <th className="text-left px-5 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[200px] sticky left-0 bg-[#F8F9FB]">상품 / SKU</th>
+                <tr className="bg-[#F8F9FB]">
+                  <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-0 bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
                   {channels.map((c) => (
-                    <th key={c.id} className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[220px]">{c.name}</th>
+                    <th key={c.id} colSpan={3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
                   ))}
-                  <th className="px-4 py-3 min-w-[60px]" />
+                  <th rowSpan={2} className="border-b border-[#F2F4F6] min-w-[52px]" />
+                </tr>
+                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                  {channels.map((c) => (
+                    <Fragment key={c.id}>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[180px] border-l border-[#F2F4F6]">상품명</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">상품ID</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
+                    </Fragment>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F6]">
-                {filtered.map((row) => (
-                  <tr key={row.sku_id} className={`transition-colors ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
-                    <td className={`px-5 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
-                      <p className="text-[13.5px] font-medium text-[#191F28]">{row.product_name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[11.5px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
-                        {row.option_label && (
-                          <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{row.option_label}</span>
-                        )}
+              <tbody>
+                {filteredGroups.map((group, gIdx) => (
+                  <Fragment key={group.name}>
+                    {/* 상품 그룹 헤더 */}
+                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB]">
+                      <td className="px-4 py-2 sticky left-0 bg-[#F8F9FB]" colSpan={2 + channels.length * 3}>
+                        <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
+                        <span className="text-[12.5px] font-semibold text-[#191F28] ml-1.5">{group.name}</span>
+                        <span className="text-[11px] text-[#B0B8C1] ml-2">{group.skus.length}개 옵션</span>
+                      </td>
+                      <td className="bg-[#F8F9FB]" />
+                    </tr>
+                    {group.skus.map((row, sIdx) => (
+                  <tr key={row.sku_id} className={`transition-colors border-b border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
+                    <td className={`px-4 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      <div className="flex items-center gap-2 pl-2">
+                        <span className="text-[11px] text-[#B0B8C1] tabular-nums w-7 shrink-0">{gIdx + 1}-{sIdx + 1}</span>
+                        <div>
+                          {row.option_label
+                            ? <p className="text-[13px] font-medium text-[#191F28]">{row.option_label}</p>
+                            : <p className="text-[12px] text-[#B0B8C1]">기본</p>}
+                          <span className="text-[11px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                        </div>
                       </div>
                     </td>
-                    {channels.map((c) => (
-                      <td key={c.id} className="px-3 py-2">
-                        <input
-                          value={row.names[c.id] ?? ''}
-                          onChange={(e) => updateName(row.sku_id, c.id, e.target.value)}
-                          placeholder={`${c.name} 상품명`}
-                          className={inputCls}
-                        />
-                      </td>
-                    ))}
+                    {channels.map((c) => {
+                      const e = row.entries[c.id] ?? { name: '', product_id: '', price: '' };
+                      return (
+                        <Fragment key={c.id}>
+                          <td className="px-2 py-2 border-l border-[#F2F4F6]">
+                            <input value={e.name} onChange={(ev) => updateEntry(row.sku_id, c.id, 'name', ev.target.value)}
+                              placeholder="플랫폼 상품명" className={inputCls} />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input value={e.product_id} onChange={(ev) => updateEntry(row.sku_id, c.id, 'product_id', ev.target.value)}
+                              placeholder="상품ID" className={inputCls} />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value)}
+                              placeholder="0" className={inputCls} />
+                          </td>
+                        </Fragment>
+                      );
+                    })}
                     <td className="px-3 py-2 text-center">
                       {row.saving ? (
                         <Loader2 className="h-4 w-4 animate-spin text-[#3182F6] mx-auto" />
@@ -224,12 +279,25 @@ function PlatformTab({ skuOptions, channels }: {
                       )}
                     </td>
                   </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => { setImportOpen(false); load(); }}
+        title="플랫폼 상품정보 엑셀 업로드"
+        templateType="platform-skus"
+        importUrl="/api/platform-skus/import"
+        columns={['SKU코드', '채널명', '플랫폼상품명', '플랫폼상품ID', '판매가']}
+        description="SKU코드와 채널명은 필수입니다. 채널명은 설정>채널에 등록된 이름과 동일해야 합니다."
+      />
     </div>
   );
 }
@@ -825,7 +893,8 @@ export default function MasterPage() {
               <thead>
                 <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
                   {/* 고정 컬럼들 */}
-                  <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap sticky left-0 bg-[#F8F9FB] z-10 min-w-[180px]">
+                  <th className="text-center px-2 py-3 text-[12px] font-semibold text-[#B0B8C1] whitespace-nowrap sticky left-0 bg-[#F8F9FB] z-10 w-10">#</th>
+                  <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap bg-[#F8F9FB] z-10 min-w-[180px]">
                     상품명 / SKU
                   </th>
                   <th className="text-left px-3 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[130px]">공급처</th>
@@ -850,13 +919,17 @@ export default function MasterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F4F6]">
-                {rows.map((row) => {
+                {rows.map((row, rowIdx) => {
                   const dailyAvg = row.sales_30d.trim() ? Number(row.sales_30d) / 30 : null;
 
                   return (
                     <tr key={row.id} className={`transition-colors ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
-                      {/* 상품명 - sticky */}
-                      <td className={`px-4 py-2.5 sticky left-0 z-10 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      {/* 번호 */}
+                      <td className={`text-center px-2 py-2.5 sticky left-0 z-10 text-[11.5px] text-[#B0B8C1] tabular-nums ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                        {rowIdx + 1}
+                      </td>
+                      {/* 상품명 */}
+                      <td className={`px-4 py-2.5 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
                         <p className="text-[13.5px] font-medium text-[#191F28] truncate max-w-[160px]">{row.product_name}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[11.5px] text-[#B0B8C1] font-mono">{row.sku_code}</span>

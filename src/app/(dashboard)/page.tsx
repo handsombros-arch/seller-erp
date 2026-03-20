@@ -377,7 +377,7 @@ export default function DashboardPage() {
       {Object.keys(data?.channelSales ?? {}).length > 0 && (
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
           <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] mb-4">이번 달 채널별 출고</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(data?.channelSales ?? {}).map(([ch, qty]) => (
               <div key={ch} className="rounded-xl bg-[#F2F4F6] p-4 text-center">
                 <p className="text-[12px] text-[#6B7684] font-medium">{ch}</p>

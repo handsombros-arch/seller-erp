@@ -793,6 +793,8 @@ function InboundRecordsTab() {
 
       {/* Records list */}
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[560px]">
         {/* Header */}
         <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
           <span className="text-[12px] font-semibold text-[#6B7684]">입고일</span>
@@ -838,6 +840,8 @@ function InboundRecordsTab() {
             ))}
           </div>
         )}
+        </div>
+        </div>
       </div>
     </div>
   );
