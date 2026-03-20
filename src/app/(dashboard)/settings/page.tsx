@@ -219,6 +219,7 @@ function ChannelSection() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Channel | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'coupang' });
 
@@ -230,14 +231,34 @@ function ChannelSection() {
 
   useEffect(() => { fetchChannels(); }, []);
 
+  function openAdd() {
+    setEditTarget(null);
+    setForm({ name: '', type: 'coupang' });
+    setOpen(true);
+  }
+
+  function openEdit(c: Channel) {
+    setEditTarget(c);
+    setForm({ name: c.name, type: c.type });
+    setOpen(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await fetch('/api/settings/channels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: form.name, type: form.type }),
-    });
+    if (editTarget) {
+      await fetch('/api/settings/channels', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editTarget.id, name: form.name, type: form.type }),
+      });
+    } else {
+      await fetch('/api/settings/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name, type: form.type }),
+      });
+    }
     setSubmitting(false);
     setOpen(false);
     setForm({ name: '', type: 'coupang' });
@@ -252,7 +273,7 @@ function ChannelSection() {
           <h2 className="text-[14px] font-bold text-[#191F28]">채널 관리</h2>
         </div>
         <button
-          onClick={() => setOpen(true)}
+          onClick={openAdd}
           className="flex items-center gap-1 px-3.5 py-1.5 bg-[#3182F6] text-white text-[13px] font-medium rounded-xl hover:bg-[#1B64DA] transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -270,14 +291,23 @@ function ChannelSection() {
         ) : (
           <div className="divide-y divide-[#F2F4F6]">
             {channels.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 px-5 py-4">
-                <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium ${CHANNEL_TYPE_BADGE[c.type] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {CHANNEL_TYPE_LABELS[c.type] ?? c.type}
-                </span>
-                <p className="text-[13.5px] font-medium text-[#191F28]">{c.name}</p>
-                {!c.is_active && (
-                  <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-500">비활성</span>
-                )}
+              <div key={c.id} className="flex items-center justify-between px-5 py-4 hover:bg-[#F9FAFB] transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium ${CHANNEL_TYPE_BADGE[c.type] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {CHANNEL_TYPE_LABELS[c.type] ?? c.type}
+                  </span>
+                  <p className="text-[13.5px] font-medium text-[#191F28]">{c.name}</p>
+                  {!c.is_active && (
+                    <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-500">비활성</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => openEdit(c)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
+                >
+                  <Pencil className="w-3 h-3" />
+                  수정
+                </button>
               </div>
             ))}
           </div>
@@ -287,7 +317,7 @@ function ChannelSection() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-white rounded-2xl max-w-sm p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-            <DialogTitle className="text-[15px] font-bold text-[#191F28]">채널 추가</DialogTitle>
+            <DialogTitle className="text-[15px] font-bold text-[#191F28]">{editTarget ? '채널 수정' : '채널 추가'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="px-6 py-5 space-y-4">
@@ -329,7 +359,7 @@ function ChannelSection() {
                 className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13.5px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                추가
+                {editTarget ? '저장' : '추가'}
               </button>
             </DialogFooter>
           </form>
