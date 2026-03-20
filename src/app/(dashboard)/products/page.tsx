@@ -123,7 +123,7 @@ type NewSkuInfo = { id: string; sku_code: string; option_label: string };
 function AddProductDialog({ open, onClose, onSave }: {
   open: boolean; onClose: () => void; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '' });
+  const [form, setForm] = useState({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2409', lead_time_days: '', supplier_id: '' });
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -174,7 +174,7 @@ function AddProductDialog({ open, onClose, onSave }: {
       });
       if (!skuRes.ok) { const d = await skuRes.json(); throw new Error(d.error); }
       const newSku = await skuRes.json();
-      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '' });
+      setForm({ name: '', brand: '', optionName: '', barcode: '', skuCode: '', cost_price: '', logistics_cost: '2409', lead_time_days: '', supplier_id: '' });
       onSave([{ id: newSku.id, sku_code: newSku.sku_code, option_label: '' }]);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
@@ -196,7 +196,7 @@ function AddProductDialog({ open, onClose, onSave }: {
           label="물류비"
           hint="(VAT 미포함 · 자사창고→고객 배송비)"
           type="number" min="0"
-          placeholder="2650"
+          placeholder="2409"
           value={form.logistics_cost}
           onChange={(e) => set('logistics_cost', e.target.value)}
         />
@@ -298,7 +298,7 @@ function cartesianOptions(opts: OptionType[]): Record<string, string>[] {
 function AddSkuDialog({ open, onClose, product, onSave }: {
   open: boolean; onClose: () => void; product: Product; onSave: (skus: NewSkuInfo[]) => void;
 }) {
-  const [form, setForm] = useState({ barcode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
+  const [form, setForm] = useState({ barcode: '', cost_price: '', logistics_cost: '2409', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
   const [optTypes, setOptTypes] = useState<OptionType[]>([]);
   const [newOptKey, setNewOptKey] = useState('');
   const [suppliers, setSuppliers] = useState<{ id: string; name: string; alias: string | null; lead_time_days: number }[]>([]);
@@ -313,7 +313,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
     if (open) {
       setOptTypes(product.category ? [{ key: product.category, values: [], inputVal: '' }] : []);
       setNewOptKey('');
-      setForm({ barcode: '', cost_price: '', logistics_cost: '2650', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
+      setForm({ barcode: '', cost_price: '', logistics_cost: '2409', lead_time_days: '', supplier_id: '', reorder_point: '', safety_stock: '' });
       setError('');
     }
   }, [open, product.category]);
@@ -467,7 +467,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
           label="물류비"
           hint="(VAT 미포함 · 자사창고→고객 배송비)"
           type="number" min="0"
-          placeholder="2650"
+          placeholder="2409"
           value={form.logistics_cost}
           onChange={(e) => set('logistics_cost', e.target.value)}
         />
