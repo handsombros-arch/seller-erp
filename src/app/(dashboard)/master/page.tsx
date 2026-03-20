@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
-import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon } from 'lucide-react';
+import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 
@@ -92,6 +92,10 @@ function PlatformTab({ skuOptions, channels }: {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  function toggleCollapsed(name: string) {
+    setCollapsed((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,15 +230,18 @@ function PlatformTab({ skuOptions, channels }: {
                 {filteredGroups.map((group, gIdx) => (
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
-                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB]">
-                      <td className="px-4 py-2 sticky left-0 bg-[#F8F9FB]" colSpan={2 + channels.length * 3}>
-                        <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
-                        <span className="text-[12.5px] font-semibold text-[#191F28] ml-1.5">{group.name}</span>
-                        <span className="text-[11px] text-[#B0B8C1] ml-2">{group.skus.length}개 옵션</span>
+                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleCollapsed(group.name)}>
+                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={2 + channels.length * 3}>
+                        <div className="flex items-center gap-2">
+                          {collapsed.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
+                          <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
+                          <span className="text-[12.5px] font-semibold text-[#191F28]">{group.name}</span>
+                          <span className="text-[11px] text-[#B0B8C1]">{group.skus.length}개 옵션</span>
+                        </div>
                       </td>
-                      <td className="bg-[#F8F9FB]" />
+                      <td className="bg-inherit" />
                     </tr>
-                    {group.skus.map((row, sIdx) => (
+                    {!collapsed.has(group.name) && group.skus.map((row, sIdx) => (
                   <tr key={row.sku_id} className={`transition-colors border-b border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
                     <td className={`px-4 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
                       <div className="flex items-center gap-2 pl-2">
@@ -826,6 +833,19 @@ export default function MasterPage() {
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
 
+  const masterGroups = (() => {
+    const map = new Map<string, SkuRow[]>();
+    for (const row of rows) {
+      if (!map.has(row.product_name)) map.set(row.product_name, []);
+      map.get(row.product_name)!.push(row);
+    }
+    return Array.from(map.entries()).map(([name, skus]) => ({ name, skus }));
+  })();
+  const [collapsedMaster, setCollapsedMaster] = useState<Set<string>>(new Set());
+  function toggleMaster(name: string) {
+    setCollapsedMaster((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -919,23 +939,33 @@ export default function MasterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F4F6]">
-                {rows.map((row, rowIdx) => {
+                {masterGroups.map((group, gIdx) => (
+                  <Fragment key={group.name}>
+                    {/* 상품 그룹 헤더 */}
+                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleMaster(group.name)}>
+                      <td colSpan={8 + warehouses.length} className="px-4 py-2.5 sticky left-0 bg-inherit">
+                        <div className="flex items-center gap-2">
+                          {collapsedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
+                          <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
+                          <span className="text-[13px] font-semibold text-[#191F28]">{group.name}</span>
+                          <span className="text-[11.5px] text-[#B0B8C1]">{group.skus.length}개 옵션</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {!collapsedMaster.has(group.name) && group.skus.map((row, sIdx) => {
                   const dailyAvg = row.sales_30d.trim() ? Number(row.sales_30d) / 30 : null;
 
                   return (
                     <tr key={row.id} className={`transition-colors ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
                       {/* 번호 */}
                       <td className={`text-center px-2 py-2.5 sticky left-0 z-10 text-[11.5px] text-[#B0B8C1] tabular-nums ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
-                        {rowIdx + 1}
+                        {gIdx + 1}-{sIdx + 1}
                       </td>
-                      {/* 상품명 */}
+                      {/* 옵션 */}
                       <td className={`px-4 py-2.5 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
-                        <p className="text-[13.5px] font-medium text-[#191F28] truncate max-w-[160px]">{row.product_name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="pl-2">
+                          <p className="text-[13px] font-medium text-[#191F28]">{row.option_label || '기본'}</p>
                           <span className="text-[11.5px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
-                          {row.option_label && (
-                            <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{row.option_label}</span>
-                          )}
                         </div>
                       </td>
 
@@ -1018,6 +1048,8 @@ export default function MasterPage() {
                     </tr>
                   );
                 })}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>
