@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Loader2, TrendingDown, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, TrendingDown, AlertTriangle, CheckCircle2, EyeOff, Eye } from 'lucide-react';
 import { formatNumber, formatDate, skuOptionLabel } from '@/lib/utils';
 import type { ForecastData } from '@/types';
 
@@ -26,6 +26,24 @@ export default function ForecastPage() {
   const [forecast, setForecast] = useState<ForecastItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ForecastFilter>('all');
+  const [stockSort, setStockSort] = useState<'none' | 'asc' | 'desc'>('none');
+  const [showFaded, setShowFaded] = useState(false);
+  const [fadedSkus, setFadedSkus] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const saved = localStorage.getItem('forecast_faded');
+      return new Set(JSON.parse(saved ?? '[]'));
+    } catch { return new Set(); }
+  });
+
+  function toggleFade(skuId: string) {
+    setFadedSkus((prev) => {
+      const next = new Set(prev);
+      next.has(skuId) ? next.delete(skuId) : next.add(skuId);
+      try { localStorage.setItem('forecast_faded', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetch('/api/forecast')
@@ -39,10 +57,17 @@ export default function ForecastPage() {
   const reorderCount = useMemo(() => forecast.filter((f) => f.needs_reorder).length, [forecast]);
 
   const filtered = useMemo(() => {
-    if (filter === 'reorder') return forecast.filter((f) => f.needs_reorder);
-    if (filter === 'normal') return forecast.filter((f) => !f.needs_reorder);
-    return forecast;
-  }, [forecast, filter]);
+    let result = forecast;
+    if (filter === 'reorder') result = result.filter((f) => f.needs_reorder);
+    else if (filter === 'normal') result = result.filter((f) => !f.needs_reorder);
+    if (!showFaded) result = result.filter((f) => !fadedSkus.has(f.sku_id));
+    if (stockSort !== 'none') {
+      result = [...result].sort((a, b) =>
+        stockSort === 'asc' ? a.current_stock - b.current_stock : b.current_stock - a.current_stock
+      );
+    }
+    return result;
+  }, [forecast, filter, fadedSkus, showFaded, stockSort]);
 
   function stockColor(item: ForecastData) {
     if (item.needs_reorder) return 'text-red-600';
@@ -61,6 +86,8 @@ export default function ForecastPage() {
     if (item.days_remaining !== null && item.days_remaining < item.lead_time_days * 2) return 'bg-amber-400';
     return 'bg-[#3182F6]';
   }
+
+  const fadedCount = useMemo(() => forecast.filter((f) => fadedSkus.has(f.sku_id)).length, [forecast, fadedSkus]);
 
   const filterTabs: Array<{ value: ForecastFilter; label: string; count?: number }> = [
     { value: 'all',     label: '전체',     count: forecast.length },
@@ -105,7 +132,7 @@ export default function ForecastPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {filterTabs.map((tab) => (
           <button
             key={tab.value}
@@ -124,6 +151,19 @@ export default function ForecastPage() {
             )}
           </button>
         ))}
+        {fadedCount > 0 && (
+          <button
+            onClick={() => setShowFaded((v) => !v)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-[13.5px] font-medium rounded-xl transition-colors ${
+              showFaded
+                ? 'bg-[#6B7684] text-white'
+                : 'bg-white text-[#B0B8C1] hover:bg-[#F2F4F6] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'
+            }`}
+          >
+            {showFaded ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            숨김 {fadedCount}개
+          </button>
+        )}
       </div>
 
       {/* Forecast list */}
@@ -141,10 +181,22 @@ export default function ForecastPage() {
           <div className="overflow-x-auto">
           <div className="divide-y divide-[#F2F4F6] min-w-[700px]">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_100px_180px_140px_100px_100px] gap-4 px-5 py-3 bg-[#F9FAFB]">
-              {['상품 / SKU', '현재 재고', '판매 평균', '소진까지', '발주 권장일', '리드타임'].map((h) => (
-                <span key={h} className="text-[12px] font-medium text-[#6B7684]">{h}</span>
-              ))}
+            <div className="grid grid-cols-[1fr_100px_180px_140px_100px_100px_36px] gap-4 px-5 py-3 bg-[#F9FAFB]">
+              <span className="text-[12px] font-medium text-[#6B7684]">상품 / SKU</span>
+              <button
+                onClick={() => setStockSort((s) => s === 'none' ? 'desc' : s === 'desc' ? 'asc' : 'none')}
+                className="text-[12px] font-medium text-[#6B7684] flex items-center gap-1 hover:text-[#3182F6] transition-colors text-left"
+              >
+                현재 재고
+                <span className="text-[10px]">
+                  {stockSort === 'none' ? '↕' : stockSort === 'desc' ? '↓' : '↑'}
+                </span>
+              </button>
+              <span className="text-[12px] font-medium text-[#6B7684]">판매 평균</span>
+              <span className="text-[12px] font-medium text-[#6B7684]">소진까지</span>
+              <span className="text-[12px] font-medium text-[#6B7684]">발주 권장일</span>
+              <span className="text-[12px] font-medium text-[#6B7684]">리드타임</span>
+              <span />
             </div>
 
             {filtered.map((item) => {
@@ -156,12 +208,17 @@ export default function ForecastPage() {
               return (
                 <div
                   key={item.sku_id}
-                  className="grid grid-cols-[1fr_100px_180px_140px_100px_100px] gap-4 px-5 py-4 hover:bg-[#F9FAFB] transition-colors items-start"
+                  className={`grid grid-cols-[1fr_100px_180px_140px_100px_100px_36px] gap-4 px-5 py-4 transition-colors items-start ${fadedSkus.has(item.sku_id) ? 'opacity-40' : 'hover:bg-[#F9FAFB]'}`}
                 >
                   {/* Product + SKU */}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-[13.5px] font-medium text-[#191F28] truncate">{item.product_name}</p>
+                      <p className="text-[13.5px] font-medium text-[#191F28]">
+                        {item.product_name}
+                        {Object.keys(item.option_values ?? {}).length > 0 && (
+                          <span className="ml-1.5 text-[13px] font-normal text-[#6B7684]">· {skuOptionLabel(item.option_values)}</span>
+                        )}
+                      </p>
                       {item.needs_reorder && (
                         <span className="shrink-0 inline-block px-1.5 py-0.5 bg-red-100 text-red-700 text-[11px] font-medium rounded-lg">
                           발주 필요
@@ -274,6 +331,17 @@ export default function ForecastPage() {
                   {/* Lead time */}
                   <div>
                     <p className="text-[13.5px] text-[#6B7684]">{item.lead_time_days}일</p>
+                  </div>
+
+                  {/* Fadeout button */}
+                  <div className="flex items-start justify-center pt-1">
+                    <button
+                      onClick={() => toggleFade(item.sku_id)}
+                      title={fadedSkus.has(item.sku_id) ? '숨김 해제' : '목록에서 숨기기'}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-[#D0D5DD] hover:text-[#6B7684] hover:bg-[#F2F4F6] transition-colors"
+                    >
+                      {fadedSkus.has(item.sku_id) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </button>
                   </div>
                 </div>
               );

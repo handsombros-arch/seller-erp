@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
   const { data: skus } = await admin.from('skus').select('id, sku_code');
   const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
 
-  const { data: channels } = await admin.from('channels').select('id, name');
-  const channelMap = new Map((channels ?? []).map((c: any) => [c.name, c.id]));
+  const { data: channels } = await admin.from('channels').select('id, name, type');
+  const channelMap = new Map((channels ?? []).map((c: any) => [c.name, { id: c.id as string, type: c.type as string }]));
 
   const upsertRows: any[] = [];
   const aliasRows: { channel_name: string; sku_id: string }[] = [];
@@ -34,15 +34,24 @@ export async function POST(request: NextRequest) {
     const skuId = skuMap.get(skuCode);
     if (!skuId) { errors.push(`${rowNum}행: SKU코드 '${skuCode}' 없음`); continue; }
 
-    const channelId = channelMap.get(channelName);
-    if (!channelId) { errors.push(`${rowNum}행: 채널명 '${channelName}' 없음 (설정>채널에서 확인)`); continue; }
+    const channelInfo = channelMap.get(channelName);
+    if (!channelInfo) { errors.push(`${rowNum}행: 채널명 '${channelName}' 없음 (설정>채널에서 확인)`); continue; }
+    const channelId = channelInfo.id;
+    const isCoupang = channelInfo.type === 'coupang';
 
     const platformProductName = String(row['플랫폼상품명'] ?? '').trim() || null;
-    const platformProductId   = String(row['플랫폼상품ID'] ?? '').trim() || null;
+    const platformId          = String(row['플랫폼상품ID'] ?? '').trim() || null;
     const priceRaw = String(row['판매가'] ?? '').trim().replace(/,/g, '');
     const price    = priceRaw ? Number(priceRaw) : null;
 
-    upsertRows.push({ sku_id: skuId, channel_id: channelId, platform_product_name: platformProductName, platform_product_id: platformProductId, price });
+    upsertRows.push({
+      sku_id: skuId,
+      channel_id: channelId,
+      platform_product_name: platformProductName,
+      platform_product_id:   isCoupang ? null : platformId,
+      platform_sku_id:       isCoupang ? platformId : null,
+      price,
+    });
     if (platformProductName) aliasRows.push({ channel_name: platformProductName, sku_id: skuId });
   }
 

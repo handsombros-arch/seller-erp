@@ -6,6 +6,7 @@ import type { PurchaseOrder, PurchaseOrderItem, InboundRecord, Sku, Warehouse, S
 import {
   PackageCheck, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck,
 } from 'lucide-react';
+import { SearchSelect } from '@/components/ui/search-select';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ interface SkuOption {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
+
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const STATUS_MAP: Record<POStatus, { label: string; color: string }> = {
   draft:      { label: '초안',    color: 'bg-[#F2F4F6] text-[#6B7684]' },
@@ -99,7 +102,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
   skus: SkuOption[];
   onSave: (po: PORow) => void;
 }) {
-  const [form, setForm] = useState({ supplier: '', order_date: '', expected_date: '', note: '', inbound_type: 'import' });
+  const [form, setForm] = useState({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import' });
   const [items, setItems] = useState<POItemDraft[]>([{ sku_id: '', quantity: '', unit_cost: '' }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -145,9 +148,19 @@ function AddPODialog({ open, onClose, skus, onSave }: {
     setItems((prev) => prev.map((row, idx) => idx === i ? {
       ...row,
       sku_id: skuId,
-      unit_cost: sku ? String(sku.cost_price) : row.unit_cost,
+      unit_cost: sku && sku.cost_price ? String(sku.cost_price) : row.unit_cost,
     } : row));
   }
+
+  const skuOptions = useMemo(() => skus.map((s) => {
+    const optLabel = skuOptionLabel(s.option_values ?? {});
+    return {
+      id: s.id,
+      label: s.product.name,
+      sub: s.sku_code + (optLabel ? ` · ${optLabel}` : ''),
+      extra: s.cost_price > 0 ? `원가 ${formatCurrency(s.cost_price)}` : undefined,
+    };
+  }), [skus]);
 
   const total = items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_cost) || 0), 0);
 
@@ -177,7 +190,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       const data = await res.json();
       onSave(data);
-      setForm({ supplier: '', order_date: '', expected_date: '', note: '', inbound_type: 'import' });
+      setForm({ supplier: '', order_date: TODAY, expected_date: '', note: '', inbound_type: 'import' });
       setItems([{ sku_id: '', quantity: '', unit_cost: '' }]);
       setSelectedSupplierId('');
     } catch (err: unknown) {
@@ -250,18 +263,12 @@ function AddPODialog({ open, onClose, skus, onSave }: {
               <div key={i} className="space-y-1">
                 <div className="flex gap-2 items-start">
                   <div className="flex-1">
-                    <select
+                    <SearchSelect
+                      options={skuOptions}
                       value={item.sku_id}
-                      onChange={(e) => handleSkuSelect(i, e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors bg-white"
-                    >
-                      <option value="">SKU 선택</option>
-                      {skus.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.product.name} - {s.sku_code} ({skuOptionLabel(s.option_values)})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(id) => handleSkuSelect(i, id)}
+                      placeholder="상품명 또는 SKU코드 검색..."
+                    />
                   </div>
                   <input
                     type="number"

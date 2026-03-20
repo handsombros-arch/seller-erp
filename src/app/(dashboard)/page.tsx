@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber, formatDate, skuOptionLabel } from '@/lib/utils';
+import { useVat } from '@/components/layout/vat-provider';
 import {
   Package, Warehouse, AlertTriangle, TrendingUp,
   PackageCheck, ArrowRight, Loader2, ChevronDown, X, Plus,
@@ -366,14 +367,20 @@ function SalesTrendSection() {
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { vatOn, vatMult } = useVat();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stockAlerts, setStockAlerts] = useState<{ sku_id: string; sku_code: string; product_name: string; warehouse_name: string; quantity: number }[]>([]);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
 
   useEffect(() => {
     fetch('/api/dashboard')
       .then((r) => r.json())
       .then(setData)
       .finally(() => setLoading(false));
+    fetch('/api/inventory/alerts')
+      .then((r) => r.json())
+      .then((d) => setStockAlerts(d.items ?? []));
   }, []);
 
   if (loading) {
@@ -389,7 +396,7 @@ export default function DashboardPage() {
     { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-[#EBF1FE]', icon: Package },
     { label: '창고 재고', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse },
     { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음' },
-    { label: '재고 원가 총액', value: formatCurrency(stats?.totalStockValue ?? 0), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp },
+    { label: vatOn ? '재고 원가 총액 (VAT+10%)' : '재고 원가 총액 (VAT별도)', value: formatCurrency((stats?.totalStockValue ?? 0) * vatMult), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp },
     { label: '발주 필요 SKU', value: formatNumber(stats?.needsReorderCount ?? 0), unit: '개', color: 'text-red-500', bg: 'bg-red-50', icon: AlertTriangle },
   ];
 
@@ -399,6 +406,40 @@ export default function DashboardPage() {
         <h2 className="text-[20px] font-bold tracking-[-0.03em] text-foreground">대시보드</h2>
         <p className="mt-1 text-[13.5px] text-[#6B7684]">재고 현황과 발주 알림을 확인하세요</p>
       </div>
+
+      {/* 재고 음수 경고 */}
+      {stockAlerts.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[14px] font-bold text-red-700">재고 이상 감지 — {stockAlerts.length}개 SKU 재고 음수</p>
+                <p className="text-[12.5px] text-red-500 mt-0.5">주문 자동 차감으로 재고가 0 이하가 된 항목입니다. 수기 재고 기입 또는 발주를 확인하세요.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setAlertsExpanded((v) => !v)}
+              className="text-[12px] font-medium text-red-600 hover:text-red-800 whitespace-nowrap shrink-0"
+            >
+              {alertsExpanded ? '접기' : '상세 보기'}
+            </button>
+          </div>
+          {alertsExpanded && (
+            <div className="mt-3 border-t border-red-200 pt-3 space-y-1.5">
+              {stockAlerts.map((a) => (
+                <div key={a.sku_id + a.warehouse_name} className="flex items-center gap-3 text-[12.5px]">
+                  <span className="font-semibold text-red-700 w-5 text-right">{a.quantity}</span>
+                  <span className="text-red-400">개</span>
+                  <span className="font-medium text-[#191F28]">{a.product_name}</span>
+                  <span className="text-[#6B7684] font-mono">{a.sku_code}</span>
+                  <span className="text-[#B0B8C1]">· {a.warehouse_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

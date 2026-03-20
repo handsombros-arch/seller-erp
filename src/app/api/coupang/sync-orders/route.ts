@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { coupangFetch } from '@/lib/coupang/auth';
+import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,16 +52,16 @@ export async function POST(request: NextRequest) {
   const { data: skus } = await admin.from('skus').select('id, sku_code');
   const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
 
-  // 쿠팡그로스 vendorItemId → sku_id 매핑 (platform_skus.platform_sku_id 기준)
+  // 쿠팡그로스 vendorItemId → sku_id 매핑 (신상품 + 반품재판매 옵션ID 모두 포함)
   const { data: platformSkus } = await admin
     .from('platform_skus')
-    .select('sku_id, platform_sku_id, channel:channels(type)')
-    .not('platform_sku_id', 'is', null);
-  const rgSkuMap = new Map(
-    (platformSkus ?? [])
-      .filter((ps: any) => ps.channel?.type === 'coupang')
-      .map((ps: any) => [String(ps.platform_sku_id), ps.sku_id as string])
-  );
+    .select('sku_id, platform_sku_id, platform_sku_id_return, channel:channels(type)');
+  const rgSkuMap = new Map<string, string>();
+  for (const ps of platformSkus ?? []) {
+    if ((ps as any).channel?.type !== 'coupang') continue;
+    if ((ps as any).platform_sku_id)        rgSkuMap.set(String((ps as any).platform_sku_id),        (ps as any).sku_id);
+    if ((ps as any).platform_sku_id_return) rgSkuMap.set(String((ps as any).platform_sku_id_return), (ps as any).sku_id);
+  }
 
   let synced = 0;
   let skipped = 0;
@@ -196,5 +197,19 @@ export async function POST(request: NextRequest) {
     await sleep(400); // rate limit: 분당 50회
   }
 
-  return NextResponse.json({ synced, skipped, errors: errors.length ? errors : undefined });
+  // 주문 동기화 후 재고 자동 차감
+  let deductResult: { applied: number; skipped: number; negativeSkuIds: string[] } | null = null;
+  try {
+    deductResult = await applyOrdersToInventory(admin, user.id);
+  } catch {
+    // 재고 차감 실패는 주문 동기화 성공에 영향 없음
+  }
+
+  return NextResponse.json({
+    synced,
+    skipped,
+    errors: errors.length ? errors : undefined,
+    deducted: deductResult?.applied ?? 0,
+    deductNegative: deductResult?.negativeSkuIds?.length ?? 0,
+  });
 }

@@ -28,9 +28,15 @@ export async function POST(request: NextRequest) {
     vendorId:  cred.vendor_id,
   };
 
-  // externalSkuId → sku_id 매핑
-  const { data: skus } = await admin.from('skus').select('id, sku_code');
-  const skuMap = new Map((skus ?? []).map((s: any) => [String(s.sku_code), s.id]));
+  // platform_skus.platform_sku_id (externalSkuId 또는 vendorItemId) → sku_id 매핑
+  const { data: psRows } = await admin
+    .from('platform_skus')
+    .select('sku_id, platform_sku_id')
+    .not('platform_sku_id', 'is', null);
+  const platformMap = new Map<string, string>();
+  for (const r of psRows ?? []) {
+    if (r.sku_id && r.platform_sku_id) platformMap.set(String(r.platform_sku_id), r.sku_id as string);
+  }
 
   const snapshotDate = new Date().toISOString().slice(0, 10);
   const path = INVENTORY_PATH(credentials.vendorId);
@@ -58,7 +64,9 @@ export async function POST(request: NextRequest) {
       external_sku_id:     item.externalSkuId ? String(item.externalSkuId) : null,
       total_orderable_qty: Number(item.inventoryDetails?.totalOrderableQuantity ?? 0),
       sales_last_30d:      Number(item.salesCountMap?.SALES_COUNT_LAST_THIRTY_DAYS ?? 0),
-      sku_id:              item.externalSkuId ? (skuMap.get(String(item.externalSkuId)) ?? null) : null,
+      sku_id: (item.externalSkuId ? platformMap.get(String(item.externalSkuId)) : undefined)
+           ?? platformMap.get(String(item.vendorItemId))
+           ?? null,
     }));
 
     if (rows.length > 0) {

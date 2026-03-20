@@ -33,6 +33,8 @@ function yesterday() {
   return d.toISOString().slice(0, 10);
 }
 
+const TODAY_DATE = new Date().toISOString().slice(0, 10);
+
 function resolvePlatformName(sku: any, channel: string): string | null {
   if (!sku?.platform_skus?.length) return null;
   const channelType = channel === 'coupang_direct' ? 'coupang' : channel;
@@ -75,14 +77,14 @@ function AddDialog({ open, onClose, onSaved }: {
   const [skus, setSkus] = useState<SkuFlat[]>([]);
   const [form, setForm] = useState({
     channel: 'smartstore', sku_id: '', product_name: '', option_name: '',
-    quantity: '', revenue: '', sale_date: yesterday(),
+    quantity: '', revenue: '', sale_date: TODAY_DATE,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setForm({ channel: 'smartstore', sku_id: '', product_name: '', option_name: '', quantity: '', revenue: '', sale_date: yesterday() });
+    setForm({ channel: 'smartstore', sku_id: '', product_name: '', option_name: '', quantity: '', revenue: '', sale_date: TODAY_DATE });
     setError('');
     fetch('/api/products').then((r) => r.json()).then((products: any[]) => {
       const flat: SkuFlat[] = (products ?? []).flatMap((p) =>

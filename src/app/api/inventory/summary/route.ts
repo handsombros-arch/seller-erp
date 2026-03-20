@@ -79,6 +79,17 @@ export async function GET() {
         .in('po_id', transitPoIds)
     : { data: [] };
 
+  // 최신 RG 재고 스냅샷 (sku_id 기준 가장 최근 1건)
+  const { data: rgSnaps } = await admin
+    .from('rg_inventory_snapshots')
+    .select('sku_id, total_orderable_qty')
+    .not('sku_id', 'is', null)
+    .order('snapshot_date', { ascending: false });
+  const rgMap = new Map<string, number>();
+  for (const snap of rgSnaps ?? []) {
+    if (snap.sku_id && !rgMap.has(snap.sku_id)) rgMap.set(snap.sku_id, snap.total_orderable_qty);
+  }
+
   // Build maps (자사창고: own/3pl/other, 쿠팡창고: coupang 분리)
   const warehouseMap = new Map<string, number>();
   const coupangWHMap = new Map<string, number>();
@@ -99,7 +110,8 @@ export async function GET() {
 
   const summary: InventorySummaryRow[] = skus.map((sku) => {
     const warehouse_stock = warehouseMap.get(sku.id) ?? 0;
-    const coupang_stock = coupangWHMap.get(sku.id) ?? 0;
+    // RG 스냅샷 우선, 없으면 쿠팡 타입 창고 재고 사용
+    const coupang_stock = rgMap.has(sku.id) ? (rgMap.get(sku.id) ?? 0) : (coupangWHMap.get(sku.id) ?? 0);
     const transit_stock = transitMap.get(sku.id) ?? 0;
     // channel_orders 실제 판매 우선, 없으면 수동 입력값
     const sales_30d = orders30Map.has(sku.id) ? (orders30Map.get(sku.id) ?? 0) : (sku.sales_30d ?? 0);

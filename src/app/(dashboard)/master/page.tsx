@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
-import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 
@@ -73,7 +73,7 @@ function SelectCell({ value, onChange, options, placeholder }: {
 
 // ─── Platform Tab ────────────────────────────────────────────────────────────
 
-interface ChannelEntry { name: string; product_id: string; price: string; }
+interface ChannelEntry { name: string; product_id: string; price: string; sku_id_return: string; }
 
 interface PlatformRow {
   sku_id: string;
@@ -85,7 +85,7 @@ interface PlatformRow {
   saving: boolean;
 }
 
-interface ChannelInfo { id: string; name: string; }
+interface ChannelInfo { id: string; name: string; type: string; }
 
 function PlatformTab({ skuOptions, channels }: {
   skuOptions: { id: string; label: string; sku_code: string; product_name: string; option_label: string }[];
@@ -96,8 +96,25 @@ function PlatformTab({ skuOptions, channels }: {
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   function toggleCollapsed(name: string) {
     setCollapsed((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
+  }
+
+  async function syncPrices() {
+    setSyncing(true); setSyncResult(null);
+    try {
+      const res = await fetch('/api/coupang/sync-platform-prices', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? '오류');
+      setSyncResult(`${d.updated}개 업데이트 (재고맵 ${d.inventoryMapped}개 · 가격맵 ${d.priceMapped}개)`);
+      load();
+    } catch (err: any) {
+      setSyncResult(`실패: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const load = useCallback(async () => {
@@ -107,13 +124,15 @@ function PlatformTab({ skuOptions, channels }: {
     const bySkuId: Record<string, Record<string, ChannelEntry>> = {};
     for (const p of platformData ?? []) {
       if (!bySkuId[p.sku_id]) bySkuId[p.sku_id] = {};
+      const isCoupang = p.channel?.type === 'coupang';
       bySkuId[p.sku_id][p.channel_id] = {
-        name:       p.platform_product_name ?? '',
-        product_id: p.platform_product_id   ?? '',
-        price:      p.price != null ? String(p.price) : '',
+        name:          p.platform_product_name ?? '',
+        product_id:    (isCoupang ? p.platform_sku_id : p.platform_product_id) ?? '',
+        price:         p.price != null ? String(p.price) : '',
+        sku_id_return: p.platform_sku_id_return ?? '',
       };
     }
-    const empty: ChannelEntry = { name: '', product_id: '', price: '' };
+    const empty: ChannelEntry = { name: '', product_id: '', price: '', sku_id_return: '' };
     const built: PlatformRow[] = skuOptions.map((s) => ({
       sku_id:       s.id,
       sku_code:     s.sku_code,
@@ -146,10 +165,20 @@ function PlatformTab({ skuOptions, channels }: {
         const product_id = e.product_id.trim() || null;
         const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
 
+        const sku_id_return = e.sku_id_return.trim() || null;
+        const isCoupang = c.type === 'coupang';
         await fetch('/api/platform-skus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sku_id: row.sku_id, channel_id: c.id, platform_product_name: name || null, platform_product_id: product_id, price }),
+          body: JSON.stringify({
+            sku_id: row.sku_id,
+            channel_id: c.id,
+            platform_product_name: name || null,
+            platform_product_id:   isCoupang ? null : product_id,
+            platform_sku_id:       isCoupang ? product_id : null,
+            price,
+            platform_sku_id_return: sku_id_return,
+          }),
         });
         if (name) {
           await fetch('/api/sku-aliases', {
@@ -197,6 +226,14 @@ function PlatformTab({ skuOptions, channels }: {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
                 className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-40" />
             </div>
+            {channels.some((c) => c.type === 'coupang') && (
+              <button onClick={syncPrices} disabled={syncing}
+                title={syncResult ?? '쿠팡 vendorItemId·판매가 자동 동기화'}
+                className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-60 transition-colors whitespace-nowrap">
+                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                쿠팡 동기화
+              </button>
+            )}
             <button onClick={() => setImportOpen(true)}
               className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
               <Upload className="h-3.5 w-3.5" /> 엑셀 업로드
@@ -215,7 +252,7 @@ function PlatformTab({ skuOptions, channels }: {
                 <tr className="bg-[#F8F9FB]">
                   <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-0 bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
                   {channels.map((c) => (
-                    <th key={c.id} colSpan={3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
+                    <th key={c.id} colSpan={c.type === 'coupang' ? 4 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
                   ))}
                   <th rowSpan={2} className="border-b border-[#F2F4F6] min-w-[52px]" />
                 </tr>
@@ -223,8 +260,11 @@ function PlatformTab({ skuOptions, channels }: {
                   {channels.map((c) => (
                     <Fragment key={c.id}>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[180px] border-l border-[#F2F4F6]">상품명</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">상품ID</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
+                      {c.type === 'coupang' && (
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[120px]">반품 옵션ID</th>
+                      )}
                     </Fragment>
                   ))}
                 </tr>
@@ -234,7 +274,7 @@ function PlatformTab({ skuOptions, channels }: {
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleCollapsed(group.name)}>
-                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={2 + channels.length * 3}>
+                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={1 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 4 : 3), 0) + 1}>
                         <div className="flex items-center gap-2">
                           {collapsed.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
@@ -258,7 +298,7 @@ function PlatformTab({ skuOptions, channels }: {
                       </div>
                     </td>
                     {channels.map((c) => {
-                      const e = row.entries[c.id] ?? { name: '', product_id: '', price: '' };
+                      const e = row.entries[c.id] ?? { name: '', product_id: '', price: '', sku_id_return: '' };
                       return (
                         <Fragment key={c.id}>
                           <td className="px-2 py-2 border-l border-[#F2F4F6]">
@@ -273,6 +313,12 @@ function PlatformTab({ skuOptions, channels }: {
                             <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value)}
                               placeholder="0" className={inputCls} />
                           </td>
+                          {c.type === 'coupang' && (
+                            <td className="px-2 py-2">
+                              <input value={e.sku_id_return} onChange={(ev) => updateEntry(row.sku_id, c.id, 'sku_id_return', ev.target.value)}
+                                placeholder="반품 vendorItemId" className={inputCls} />
+                            </td>
+                          )}
                         </Fragment>
                       );
                     })}
@@ -304,6 +350,7 @@ function PlatformTab({ skuOptions, channels }: {
         onImported={() => { setImportOpen(false); load(); }}
         title="플랫폼 상품정보 엑셀 업로드"
         templateType="platform-skus"
+        templateUrl="/api/platform-skus/template"
         importUrl="/api/platform-skus/import"
         columns={['SKU코드', '채널명', '플랫폼상품명', '플랫폼상품ID', '판매가']}
         description="SKU코드와 채널명은 필수입니다. 채널명은 설정>채널에 등록된 이름과 동일해야 합니다."
@@ -863,18 +910,105 @@ export default function MasterPage() {
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
 
+  // 검색 필터
+  const [searchQ, setSearchQ] = useState('');
+
+  // 펼침 상태: 기본 모두 닫힘, localStorage에 유지
+  const [expandedMaster, setExpandedMaster] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const saved = localStorage.getItem('master_expanded');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  function toggleMaster(name: string) {
+    setExpandedMaster((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      try { localStorage.setItem('master_expanded', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+
+  // 상품 순서 (드래그 앤 드롭, localStorage 유지)
+  const [productOrder, setProductOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('master_product_order');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // rows 변경 시 productOrder 동기화 (신규 상품 추가, 삭제된 상품 제거)
+  useEffect(() => {
+    if (!rows.length) return;
+    const names = [...new Set(rows.map((r) => r.product_name))];
+    setProductOrder((prev) => {
+      const existing = prev.filter((n) => names.includes(n));
+      const newOnes = names.filter((n) => !prev.includes(n));
+      const merged = [...existing, ...newOnes];
+      try { localStorage.setItem('master_product_order', JSON.stringify(merged)); } catch {}
+      return merged;
+    });
+  }, [rows]);
+
+  const dragGroup = useRef<string | null>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+
+  function handleDragStart(name: string) {
+    dragGroup.current = name;
+  }
+  function handleDragOver(e: React.DragEvent, name: string) {
+    e.preventDefault();
+    setDragOverGroup(name);
+  }
+  function handleDrop(name: string) {
+    const from = dragGroup.current;
+    dragGroup.current = null;
+    setDragOverGroup(null);
+    if (!from || from === name) return;
+    setProductOrder((prev) => {
+      const next = [...prev];
+      const fi = next.indexOf(from);
+      const ti = next.indexOf(name);
+      if (fi === -1 || ti === -1) return prev;
+      next.splice(fi, 1);
+      next.splice(ti, 0, from);
+      try { localStorage.setItem('master_product_order', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
   const masterGroups = (() => {
     const map = new Map<string, SkuRow[]>();
     for (const row of rows) {
       if (!map.has(row.product_name)) map.set(row.product_name, []);
       map.get(row.product_name)!.push(row);
     }
-    return Array.from(map.entries()).map(([name, skus]) => ({ name, skus }));
+    let groups = Array.from(map.entries()).map(([name, skus]) => ({ name, skus }));
+
+    // 사용자 지정 순서 적용
+    if (productOrder.length) {
+      const orderMap = new Map(productOrder.map((n, i) => [n, i]));
+      groups.sort((a, b) => {
+        const ai = orderMap.has(a.name) ? orderMap.get(a.name)! : Infinity;
+        const bi = orderMap.has(b.name) ? orderMap.get(b.name)! : Infinity;
+        return ai - bi;
+      });
+    }
+
+    // 검색 필터
+    if (searchQ.trim()) {
+      const q = searchQ.toLowerCase();
+      groups = groups.filter((g) =>
+        g.name.toLowerCase().includes(q) ||
+        g.skus.some((s) => s.sku_code.toLowerCase().includes(q) || s.option_label.toLowerCase().includes(q))
+      );
+    }
+
+    return groups;
   })();
-  const [collapsedMaster, setCollapsedMaster] = useState<Set<string>>(new Set());
-  function toggleMaster(name: string) {
-    setCollapsedMaster((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
-  }
 
   if (loading) {
     return (
@@ -903,6 +1037,15 @@ export default function MasterPage() {
           </div>
           {tab === 'master' && (
             <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+                <input
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  placeholder="상품명·SKU 검색"
+                  className="h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-44"
+                />
+              </div>
               <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
                 <RefreshCw className="h-4 w-4" /> 새로고침
               </button>
@@ -975,17 +1118,29 @@ export default function MasterPage() {
                 {masterGroups.map((group, gIdx) => (
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
-                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleMaster(group.name)}>
+                    <tr
+                      className={`bg-[#F8F9FB] border-y border-[#E5E8EB] select-none transition-colors ${dragOverGroup === group.name ? 'outline outline-2 outline-[#3182F6]' : 'hover:bg-[#F0F3FA]'}`}
+                      draggable
+                      onDragStart={() => handleDragStart(group.name)}
+                      onDragOver={(e) => handleDragOver(e, group.name)}
+                      onDrop={() => handleDrop(group.name)}
+                      onDragEnd={() => { dragGroup.current = null; setDragOverGroup(null); }}
+                    >
                       <td colSpan={10 + warehouses.length} className="px-4 py-2.5 sticky left-0 bg-inherit">
                         <div className="flex items-center gap-2">
-                          {collapsedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
+                          <GripVertical className="h-4 w-4 text-[#B0B8C1] shrink-0 cursor-grab" />
+                          <button onClick={() => toggleMaster(group.name)} className="flex items-center gap-2">
+                            {!expandedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
+                          </button>
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
-                          <span className="text-[13px] font-semibold text-[#191F28]">{group.name}</span>
+                          <button onClick={() => toggleMaster(group.name)} className="text-[13px] font-semibold text-[#191F28] hover:text-[#3182F6] transition-colors">
+                            {group.name}
+                          </button>
                           <span className="text-[11.5px] text-[#B0B8C1]">{group.skus.length}개 옵션</span>
                         </div>
                       </td>
                     </tr>
-                    {!collapsedMaster.has(group.name) && group.skus.map((row, sIdx) => {
+                    {expandedMaster.has(group.name) && group.skus.map((row, sIdx) => {
                   const dailyAvg = row.sales_30d.trim() ? Number(row.sales_30d) / 30 : null;
 
                   return (

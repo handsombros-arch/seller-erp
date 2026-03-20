@@ -22,73 +22,88 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
-  const body = await request.json();
-  const { supplier, order_date, expected_date, note, items, inbound_type } = body;
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: '요청 데이터가 올바르지 않습니다' }, { status: 400 });
+    }
 
-  const admin = await createAdminClient();
+    const { supplier, order_date, expected_date, note, items, inbound_type } = body;
 
-  // Generate PO number
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const { count } = await admin
-    .from('purchase_orders')
-    .select('*', { count: 'exact', head: true });
-  const poNumber = `PO-${dateStr}-${String((count ?? 0) + 1).padStart(3, '0')}`;
+    const admin = await createAdminClient();
 
-  // Calculate total amount
-  const totalAmount = (items ?? []).reduce(
-    (sum: number, item: { quantity: number; unit_cost: number }) =>
-      sum + (item.quantity ?? 0) * (item.unit_cost ?? 0),
-    0
-  );
+    // Generate PO number (발주일 기준, 없으면 오늘)
+    const baseDate = order_date
+      ? order_date.replace(/-/g, '')
+      : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const { count } = await admin
+      .from('purchase_orders')
+      .select('*', { count: 'exact', head: true });
+    const poNumber = `PO-${baseDate}-${String((count ?? 0) + 1).padStart(3, '0')}`;
 
-  // Insert PO
-  const { data: po, error: poError } = await admin
-    .from('purchase_orders')
-    .insert({
-      po_number: poNumber,
-      supplier: supplier ?? null,
-      status: 'draft',
-      inbound_type: inbound_type ?? 'import',
-      order_date: order_date ?? null,
-      expected_date: expected_date ?? null,
-      total_amount: totalAmount,
-      note: note ?? null,
-    })
-    .select()
-    .single();
+    // Calculate total amount
+    const totalAmount = (items ?? []).reduce(
+      (sum: number, item: { quantity: number; unit_cost: number }) =>
+        sum + (item.quantity ?? 0) * (item.unit_cost ?? 0),
+      0
+    );
 
-  if (poError) return NextResponse.json({ error: poError.message }, { status: 400 });
+    // Insert PO (과거 일자 제한 없음)
+    const { data: po, error: poError } = await admin
+      .from('purchase_orders')
+      .insert({
+        po_number: poNumber,
+        supplier: supplier ?? null,
+        status: 'draft',
+        inbound_type: inbound_type ?? 'import',
+        order_date: order_date || null,
+        expected_date: expected_date || null,
+        total_amount: totalAmount,
+        note: note ?? null,
+      })
+      .select()
+      .single();
 
-  // Insert items
-  if (items && items.length > 0) {
-    const itemRows = items.map((item: { sku_id: string; quantity: number; unit_cost: number }) => ({
-      po_id: po.id,
-      sku_id: item.sku_id,
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-      received_quantity: 0,
-    }));
+    if (poError) return NextResponse.json({ error: poError.message }, { status: 400 });
 
-    const { error: itemsError } = await admin.from('purchase_order_items').insert(itemRows);
-    if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 400 });
-  }
+    // Insert items
+    if (items && items.length > 0) {
+      const itemRows = items.map((item: { sku_id: string; quantity: number; unit_cost: number }) => ({
+        po_id: po.id,
+        sku_id: item.sku_id,
+        quantity: item.quantity,
+        unit_cost: item.unit_cost,
+        received_quantity: 0,
+      }));
 
-  // Return full PO with items
-  const { data: fullPO } = await admin
-    .from('purchase_orders')
-    .select(`
-      *,
-      items:purchase_order_items(
+      const { error: itemsError } = await admin.from('purchase_order_items').insert(itemRows);
+      if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 400 });
+    }
+
+    // Return full PO with items
+    const { data: fullPO, error: fetchError } = await admin
+      .from('purchase_orders')
+      .select(`
         *,
-        sku:skus(id, sku_code, option_values, product:products(id, name))
-      )
-    `)
-    .eq('id', po.id)
-    .single();
+        items:purchase_order_items(
+          *,
+          sku:skus(id, sku_code, option_values, product:products(id, name))
+        )
+      `)
+      .eq('id', po.id)
+      .single();
 
-  return NextResponse.json(fullPO);
+    if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    return NextResponse.json(fullPO);
+
+  } catch (err: any) {
+    console.error('[POST /api/purchase-orders]', err);
+    return NextResponse.json({ error: err?.message ?? '서버 오류가 발생했습니다' }, { status: 500 });
+  }
 }

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { useVat } from '@/components/layout/vat-provider';
 import {
   LayoutDashboard, Package, Warehouse, PackageCheck,
   PackageMinus, TrendingUp, FileSpreadsheet, Settings, Menu, LogOut, CalendarDays, Building2, ShoppingCart,
@@ -32,6 +33,7 @@ export function Header({ email }: { email?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const { vatOn, toggleVat } = useVat();
 
   const currentPage = navItems.find((item) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -86,6 +88,19 @@ export function Header({ email }: { email?: string }) {
             {currentPage?.title ?? '대시보드'}
           </h1>
         </div>
+
+        {/* VAT 토글 */}
+        <button
+          onClick={toggleVat}
+          title={vatOn ? '부가세 포함 표시 중 (클릭 시 별도로 변경)' : '원가·물류비는 부가세 별도 금액입니다 (클릭 시 포함으로 변경)'}
+          className={`h-7 px-3 rounded-lg text-[12px] font-semibold border transition-colors ${
+            vatOn
+              ? 'bg-[#3182F6] text-white border-[#3182F6]'
+              : 'bg-white text-[#6B7684] border-[#E5E8EB] hover:border-[#3182F6] hover:text-[#3182F6]'
+          }`}
+        >
+          {vatOn ? 'VAT 포함' : 'VAT 별도'}
+        </button>
 
         {/* 유저 */}
         <DropdownMenu>

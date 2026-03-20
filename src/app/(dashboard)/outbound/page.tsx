@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
-import { Plus, Loader2, Package, X, ChevronDown, Edit3, Trash2 } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Plus, Loader2, Package, X, Edit3, Trash2 } from 'lucide-react';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
 import type { OutboundRecord, Sku, Warehouse, Channel } from '@/types';
+import { SearchSelect } from '@/components/ui/search-select';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -11,14 +12,9 @@ type SkuOption = Omit<Sku, 'product'> & {
   product: { id: string; name: string };
 };
 
-// 쿠팡그로스 출고 항목 (여러 센터/SKU 동시 등록)
-interface CoupangEntry {
-  coupang_center: string;
-  sku_id: string;
-  quantity: string;
-  box_count: string;
-  arrival_date: string;
-}
+// 쿠팡그로스 출고 항목 구조 (센터별 복수 SKU)
+interface SkuRow { sku_id: string; quantity: string; box_count: string; }
+interface CoupangCenter { coupang_center: string; arrival_date: string; skus: SkuRow[]; }
 
 const TODAY = new Date().toISOString().split('T')[0];
 const THIS_MONTH = new Date().toISOString().slice(0, 7);
@@ -30,82 +26,23 @@ function SkuSelector({ skus, value, onChange }: {
   value: string;
   onChange: (id: string) => void;
 }) {
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const selected = skus.find((s) => s.id === value);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return skus.filter((s) => {
-      const name = s.product?.name ?? '';
-      const label = `${name} ${s.sku_code} ${skuOptionLabel(s.option_values ?? {})}`.toLowerCase();
-      return label.includes(q);
-    }).slice(0, 20);
-  }, [skus, search]);
-
-  // 외부 클릭 시 닫기
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  if (selected) {
-    return (
-      <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-[#EBF1FE] rounded-xl border border-[#3182F6]/20">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-[#191F28] truncate">{selected.product?.name}</p>
-          <p className="text-[11.5px] text-[#3182F6]">
-            {selected.sku_code}{skuOptionLabel(selected.option_values ?? '') ? ` · ${skuOptionLabel(selected.option_values ?? {})}` : ''}
-            {selected.cost_price > 0 && <span className="text-[#6B7684]"> · 원가 {formatCurrency(selected.cost_price)}</span>}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onChange('')}
-          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-100 text-[#B0B8C1] hover:text-red-500 transition-colors"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    );
-  }
+  const options = useMemo(() => skus.map((s) => {
+    const optLabel = skuOptionLabel(s.option_values ?? {});
+    return {
+      id: s.id,
+      label: s.product?.name ?? s.sku_code,
+      sub: s.sku_code + (optLabel ? ` · ${optLabel}` : ''),
+      extra: s.cost_price > 0 ? `원가 ${formatCurrency(s.cost_price)}` : undefined,
+    };
+  }), [skus]);
 
   return (
-    <div ref={ref} className="relative">
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="상품명 또는 SKU코드 검색..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          className="w-full h-10 pl-3 pr-8 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
-        />
-        <ChevronDown className="absolute right-2.5 top-3 h-4 w-4 text-[#B0B8C1] pointer-events-none" />
-      </div>
-      {open && filtered.length > 0 && (
-        <div className="absolute z-20 w-full mt-1 bg-white border border-[#E5E8EB] rounded-xl shadow-lg max-h-48 overflow-y-auto">
-          {filtered.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => { onChange(s.id); setOpen(false); setSearch(''); }}
-              className="w-full text-left px-3 py-2.5 hover:bg-[#F2F4F6] transition-colors first:rounded-t-xl last:rounded-b-xl"
-            >
-              <p className="text-[13px] font-medium text-[#191F28]">{s.product?.name}</p>
-              <p className="text-[11.5px] text-[#6B7684]">
-                {s.sku_code}{skuOptionLabel(s.option_values ?? '') ? ` · ${skuOptionLabel(s.option_values ?? {})}` : ''}
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <SearchSelect
+      options={options}
+      value={value}
+      onChange={onChange}
+      placeholder="상품명 또는 SKU코드 검색..."
+    />
   );
 }
 
@@ -154,9 +91,9 @@ export default function OutboundPage() {
   const [outboundDate, setOutboundDate] = useState(TODAY);
   const [note, setNote] = useState('');
 
-  // 쿠팡그로스 항목 (복수)
-  const [entries, setEntries] = useState<CoupangEntry[]>([
-    { coupang_center: '', sku_id: '', quantity: '', box_count: '', arrival_date: TODAY },
+  // 쿠팡그로스 항목 (센터별 복수 SKU)
+  const [centers, setCenters] = useState<CoupangCenter[]>([
+    { coupang_center: '', arrival_date: TODAY, skus: [{ sku_id: '', quantity: '', box_count: '' }] },
   ]);
 
   // 기타 출고 단일 폼
@@ -188,26 +125,28 @@ export default function OutboundPage() {
 
   // ── 쿠팡 항목 조작 ──────────────────────────────────────────────────────────
 
-  function addEntry() {
-    setEntries((prev) => [...prev, { coupang_center: '', sku_id: '', quantity: '', box_count: '', arrival_date: TODAY }]);
+  function addCenter() {
+    setCenters((prev) => [...prev, { coupang_center: '', arrival_date: TODAY, skus: [{ sku_id: '', quantity: '', box_count: '' }] }]);
   }
 
-  function removeEntry(i: number) {
-    setEntries((prev) => prev.filter((_, idx) => idx !== i));
+  function removeCenter(ci: number) {
+    setCenters((prev) => prev.filter((_, i) => i !== ci));
   }
 
-  function updateEntry(i: number, patch: Partial<CoupangEntry>) {
-    setEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, ...patch } : e));
+  function updateCenter(ci: number, patch: Partial<Omit<CoupangCenter, 'skus'>>) {
+    setCenters((prev) => prev.map((c, i) => i === ci ? { ...c, ...patch } : c));
   }
 
-  function handleSkuSelect(i: number, skuId: string) {
-    const sku = skus.find((s) => s.id === skuId);
-    updateEntry(i, { sku_id: skuId });
-    // 이전 센터명 자동 복사 (편의)
-    if (i > 0 && !entries[i].coupang_center && entries[i - 1].coupang_center) {
-      updateEntry(i, { sku_id: skuId, coupang_center: entries[i - 1].coupang_center });
-    }
-    void sku;
+  function addSkuRow(ci: number) {
+    setCenters((prev) => prev.map((c, i) => i === ci ? { ...c, skus: [...c.skus, { sku_id: '', quantity: '', box_count: '' }] } : c));
+  }
+
+  function removeSkuRow(ci: number, si: number) {
+    setCenters((prev) => prev.map((c, i) => i === ci ? { ...c, skus: c.skus.filter((_, j) => j !== si) } : c));
+  }
+
+  function updateSkuRow(ci: number, si: number, patch: Partial<SkuRow>) {
+    setCenters((prev) => prev.map((c, i) => i === ci ? { ...c, skus: c.skus.map((s, j) => j === si ? { ...s, ...patch } : s) } : c));
   }
 
   // ── 재고 조회 ────────────────────────────────────────────────────────────────
@@ -227,7 +166,11 @@ export default function OutboundPage() {
 
     try {
       if (outboundType === 'coupang_growth') {
-        const valid = entries.filter((en) => en.sku_id && Number(en.quantity) > 0);
+        const valid = centers.flatMap((center) =>
+          center.skus
+            .filter((s) => s.sku_id && Number(s.quantity) > 0)
+            .map((s) => ({ ...s, coupang_center: center.coupang_center, arrival_date: center.arrival_date }))
+        );
         if (valid.length === 0) { setSubmitError('출고 항목을 1개 이상 입력하세요.'); return; }
 
         // 재고 부족 체크
@@ -313,7 +256,7 @@ export default function OutboundPage() {
     setOutboundType('coupang_growth');
     setOutboundDate(TODAY);
     setNote('');
-    setEntries([{ coupang_center: '', sku_id: '', quantity: '', box_count: '', arrival_date: TODAY }]);
+    setCenters([{ coupang_center: '', arrival_date: TODAY, skus: [{ sku_id: '', quantity: '', box_count: '' }] }]);
     setOtherForm({ sku_id: '', warehouse_id: '', channel_id: '', quantity: '', outbound_date: TODAY, note: '' });
   }
 
@@ -508,87 +451,109 @@ export default function OutboundPage() {
                   </div>
                 </div>
 
-                {/* 항목 목록 */}
+                {/* 출고 항목 (센터별 그룹) */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-[13px] font-medium text-[#191F28]">출고 항목 *</label>
                     <button
                       type="button"
-                      onClick={addEntry}
+                      onClick={addCenter}
                       className="flex items-center gap-1 text-[12.5px] text-[#3182F6] font-medium hover:underline"
                     >
-                      <Plus className="h-3.5 w-3.5" /> 항목 추가
+                      <Plus className="h-3.5 w-3.5" /> 센터 추가
                     </button>
                   </div>
 
                   <div className="space-y-3">
-                    {entries.map((en, i) => {
-                      return (
-                        <div key={i} className="bg-[#F8F9FB] rounded-xl p-3 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[12px] font-semibold text-[#6B7684]">항목 {i + 1}</span>
-                            {entries.length > 1 && (
-                              <button type="button" onClick={() => removeEntry(i)} className="text-[#B0B8C1] hover:text-red-500 transition-colors">
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
+                    {centers.map((center, ci) => (
+                      <div key={ci} className="bg-[#F8F9FB] rounded-xl p-3 space-y-2.5">
+                        {/* 센터 헤더 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-semibold text-[#6B7684]">센터 {ci + 1}</span>
+                          {centers.length > 1 && (
+                            <button type="button" onClick={() => removeCenter(ci)} className="text-[#B0B8C1] hover:text-red-500 transition-colors">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
 
-                          {/* 쿠팡센터 (메인) */}
+                        {/* 센터명 + 도착예정일 */}
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="block text-[12px] font-medium text-[#6B7684] mb-1">쿠팡 센터명 *</label>
                             <input
                               type="text"
-                              placeholder="예: 쿠팡 군포, 쿠팡 인천2..."
-                              value={en.coupang_center}
-                              onChange={(e) => updateEntry(i, { coupang_center: e.target.value })}
+                              placeholder="예: 군포, 인천2..."
+                              value={center.coupang_center}
+                              onChange={(e) => updateCenter(ci, { coupang_center: e.target.value })}
                               className={inputCls}
                             />
                           </div>
-
-                          {/* SKU */}
                           <div>
-                            <label className="block text-[12px] font-medium text-[#6B7684] mb-1">상품 / SKU *</label>
-                            <SkuSelector
-                              skus={skus}
-                              value={en.sku_id}
-                              onChange={(id) => handleSkuSelect(i, id)}
+                            <label className="block text-[12px] font-medium text-[#6B7684] mb-1">쿠팡도착 예정</label>
+                            <input
+                              type="date"
+                              value={center.arrival_date}
+                              onChange={(e) => updateCenter(ci, { arrival_date: e.target.value })}
+                              className={inputCls}
                             />
                           </div>
-
-                          {/* 수량 / 박스 / 도착예정일 */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-[12px] font-medium text-[#6B7684] mb-1">수량 *</label>
-                              <input
-                                type="number" min="1" placeholder="0"
-                                value={en.quantity}
-                                onChange={(e) => updateEntry(i, { quantity: e.target.value })}
-                                className={inputCls}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[12px] font-medium text-[#6B7684] mb-1">박스수</label>
-                              <input
-                                type="number" min="1" placeholder="0"
-                                value={en.box_count}
-                                onChange={(e) => updateEntry(i, { box_count: e.target.value })}
-                                className={inputCls}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[12px] font-medium text-[#6B7684] mb-1">쿠팡도착 예정</label>
-                              <input
-                                type="date"
-                                value={en.arrival_date}
-                                onChange={(e) => updateEntry(i, { arrival_date: e.target.value })}
-                                className={inputCls}
-                              />
-                            </div>
-                          </div>
                         </div>
-                      );
-                    })}
+
+                        {/* SKU 행 헤더 */}
+                        <div className="flex items-center gap-2 px-0.5">
+                          <span className="flex-1 text-[11px] font-medium text-[#B0B8C1]">상품 / SKU</span>
+                          <span className="w-20 text-[11px] font-medium text-[#B0B8C1] text-center">수량</span>
+                          <span className="w-16 text-[11px] font-medium text-[#B0B8C1] text-center">박스</span>
+                          {center.skus.length > 1 && <span className="w-8" />}
+                        </div>
+
+                        {/* SKU 행들 */}
+                        <div className="space-y-1.5">
+                          {center.skus.map((skuRow, si) => (
+                            <div key={si} className="flex items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <SkuSelector
+                                  skus={skus}
+                                  value={skuRow.sku_id}
+                                  onChange={(id) => updateSkuRow(ci, si, { sku_id: id })}
+                                />
+                              </div>
+                              <input
+                                type="number" min="1" placeholder="수량"
+                                value={skuRow.quantity}
+                                onChange={(e) => updateSkuRow(ci, si, { quantity: e.target.value })}
+                                className="w-20 h-10 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors text-center"
+                              />
+                              <input
+                                type="number" min="1" placeholder="박스"
+                                value={skuRow.box_count}
+                                onChange={(e) => updateSkuRow(ci, si, { box_count: e.target.value })}
+                                className="w-16 h-10 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors text-center"
+                              />
+                              {center.skus.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSkuRow(ci, si)}
+                                  className="w-8 h-10 flex items-center justify-center text-[#B0B8C1] hover:text-red-500 transition-colors shrink-0"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* SKU 추가 버튼 */}
+                        <button
+                          type="button"
+                          onClick={() => addSkuRow(ci)}
+                          className="flex items-center gap-1 text-[12px] text-[#3182F6] font-medium hover:underline"
+                        >
+                          <Plus className="h-3 w-3" /> SKU 추가
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -662,7 +627,7 @@ export default function OutboundPage() {
             </button>
             <button type="submit" disabled={submitting} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {outboundType === 'coupang_growth' ? `등록 (${entries.filter(e => e.sku_id && e.quantity).length}건)` : '등록'}
+              {outboundType === 'coupang_growth' ? `등록 (${centers.reduce((sum, c) => sum + c.skus.filter(s => s.sku_id && s.quantity).length, 0)}건)` : '등록'}
             </button>
           </div>
         </form>

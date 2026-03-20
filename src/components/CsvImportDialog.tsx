@@ -9,6 +9,7 @@ interface Props {
   onImported: () => void;
   title: string;
   templateType: string;          // csv-template?type= 값
+  templateUrl?: string;          // 동적 양식 다운로드 URL (지정 시 templateType 대신 사용)
   importUrl: string;             // POST 엔드포인트
   columns: string[];             // 표시할 컬럼 목록 (미리보기용)
   description?: string;
@@ -16,7 +17,7 @@ interface Props {
 
 const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
-export default function CsvImportDialog({ open, onClose, onImported, title, templateType, importUrl, columns, description }: Props) {
+export default function CsvImportDialog({ open, onClose, onImported, title, templateType, templateUrl, importUrl, columns, description }: Props) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -129,7 +130,7 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
               {description && <p className="text-[12px] text-[#6B7684] mt-0.5">{description}</p>}
               <p className="text-[12px] text-[#B0B8C1] mt-1">필수 컬럼: {columns.slice(0, 4).join(', ')} 등</p>
             </div>
-            <a href={`/api/csv-template?type=${templateType}`} download
+            <a href={templateUrl ?? `/api/csv-template?type=${templateType}`} download
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-[#3182F6] text-[12.5px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 whitespace-nowrap">
               <Download className="h-3.5 w-3.5" /> 양식 다운로드
             </a>
