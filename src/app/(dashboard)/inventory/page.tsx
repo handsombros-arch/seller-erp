@@ -654,6 +654,40 @@ function RgInventoryTab() {
   const [rowH, setRowH] = useState<RowHeight>('normal');
   const [dragOver, setDragOver] = useState<RgCol | null>(null);
   const dragRef = useRef<RgCol | null>(null);
+  const [classifying, setClassifying] = useState<string | null>(null); // vendor_item_id
+
+  const GRADES = ['S급', 'A급', 'B급', 'C급', '최상', '상', '중', '하', '미개봉'];
+
+  async function classify(vendorItemId: string, grade: string | null) {
+    setClassifying(vendorItemId);
+    await fetch('/api/coupang/rg-return', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_item_id: vendorItemId, grade }),
+    });
+    await load();
+    setClassifying(null);
+  }
+
+  async function unclassify(vendorItemId: string) {
+    setClassifying(vendorItemId);
+    await fetch('/api/coupang/rg-return', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_item_id: vendorItemId }),
+    });
+    await load();
+    setClassifying(null);
+  }
+
+  async function updateGrade(vendorItemId: string, grade: string) {
+    await fetch('/api/coupang/rg-return', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_item_id: vendorItemId, grade }),
+    });
+    setItems((prev) => prev.map((i) => i.vendor_item_id === vendorItemId ? { ...i, grade } : i));
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -737,24 +771,44 @@ function RgInventoryTab() {
     const recentChanges = item.daily.filter((d) => d.change !== null).slice(-showDays);
     const py = ROW_PY[rowH];
 
+    const isClassifying = classifying === item.vendor_item_id;
+
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py}`}>
           {item.is_return ? (
             <>
-              <div className="flex items-center gap-1.5">
-                {item.grade ? (
-                  <span className="shrink-0 text-[11px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded-md">{item.grade}</span>
-                ) : (
-                  <span className="shrink-0 text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">반품재판매</span>
-                )}
-                <p className="text-[13px] text-[#6B7684] truncate max-w-[240px]" title={item.item_name ?? productName}>{productName}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* 등급 선택 드롭다운 */}
+                <select
+                  value={item.grade ?? ''}
+                  onChange={(e) => updateGrade(item.vendor_item_id, e.target.value)}
+                  className="text-[11px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-md border-none outline-none cursor-pointer appearance-none"
+                >
+                  <option value="">등급없음</option>
+                  {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <p className="text-[13px] text-[#6B7684] truncate max-w-[200px]">{productName}</p>
+                <button
+                  onClick={() => unclassify(item.vendor_item_id)}
+                  disabled={isClassifying}
+                  className="text-[10px] text-[#B0B8C1] hover:text-red-500 transition-colors ml-auto shrink-0"
+                  title="신상품으로 이동"
+                >해제</button>
               </div>
               <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
             </>
           ) : (
             <>
-              <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+              <div className="flex items-center gap-2 group">
+                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+                <button
+                  onClick={() => classify(item.vendor_item_id, null)}
+                  disabled={isClassifying}
+                  className="opacity-0 group-hover:opacity-100 text-[10px] text-[#B0B8C1] hover:text-orange-500 transition-all shrink-0 whitespace-nowrap"
+                  title="반품재판매로 분류"
+                >↗ 반품</button>
+              </div>
               <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
             </>
           )}
