@@ -18,14 +18,11 @@ const SHIPPED_STATUSES = [
   '배송중', '배송완료', 'PAID',
 ];
 
-// 취소/반품 완료 상태 (재고 복구 대상)
-const CANCEL_RETURN_STATUSES = [
-  'CANCELED', 'CANCEL', 'CANCELLED', 'CANCEL_DONE',
+// 반품 완료 상태만 재고 복구 (출고 후 반송된 건)
+// 취소(결제취소)는 출고 전이므로 차감된 적 없음 → 복구 불필요
+const RETURN_STATUSES = [
   'RETURN_DONE', 'RETURNED', 'RETURN_COMPLETED',
-  'EXCHANGE_DONE', 'REFUND_DONE',
-  // 스마트스토어
-  'CANCELED_BY_NOPAYMENT', 'CANCELED_BEFORE_PAY',
-  'CANCEL_REQUEST', 'RETURN_REQUEST', 'EXCHANGE_REQUEST',
+  'EXCHANGE_DONE',
 ];
 
 export interface ApplyOrdersResult {
@@ -109,7 +106,7 @@ export async function applyOrdersToInventory(
     const orderNum = order.order_number as string;
     const status = (order.order_status ?? '').toUpperCase();
     const isShipped = SHIPPED_STATUSES.some((s) => status.includes(s.toUpperCase()));
-    const isCancelled = CANCEL_RETURN_STATUSES.some((s) => status.includes(s.toUpperCase()));
+    const isReturned = RETURN_STATUSES.some((s) => status.includes(s.toUpperCase()));
 
     // 수기 기입일 이후만 (기입일 당일 주문 포함)
     const lastManual = lastManualDate.get(order.sku_id);
@@ -139,8 +136,8 @@ export async function applyOrdersToInventory(
       if (newQty < 0) negSet.add(order.sku_id);
     }
 
-    // Case B: 취소/반품 + 이미 차감됨 + 미복구 → 복구
-    if (isCancelled && deductedSet.has(orderNum) && !restoredSet.has(orderNum)) {
+    // Case B: 반품 완료 + 이미 차감됨 + 미복구 → 복구
+    if (isReturned && deductedSet.has(orderNum) && !restoredSet.has(orderNum)) {
       const newQty = currentQty + order.quantity;
       const { error } = await admin
         .from('inventory')
