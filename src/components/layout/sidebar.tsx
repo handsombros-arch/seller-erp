@@ -8,9 +8,7 @@ import {
   Package,
   Warehouse,
   PackageCheck,
-  PackageMinus,
   FileSpreadsheet,
-  CalendarDays,
   Building2,
   ShoppingCart,
   Settings,
@@ -21,11 +19,9 @@ const navItems = [
   { title: '마스터 시트',   href: '/master',          icon: FileSpreadsheet, exact: false, sub: false },
   { title: '상품 관리',     href: '/products',        icon: Package,         exact: false, sub: true  },
   { title: '공급처 관리',   href: '/suppliers',       icon: Building2,       exact: false, sub: true  },
-  { title: '재고 현황',     href: '/inventory',       icon: Warehouse,       exact: false, sub: false },
-  { title: '입고 관리',     href: '/inbound',         icon: PackageCheck,    exact: false, sub: false },
-  { title: '출고 관리',     href: '/outbound',        icon: PackageMinus,    exact: false, sub: false },
+  { title: '재고 관리',     href: '/inventory',       icon: Warehouse,       exact: false, sub: false },
+  { title: '입출고 관리',   href: '/inbound',         icon: PackageCheck,    exact: false, sub: false },
   { title: '채널 판매',     href: '/channel-sales',   icon: ShoppingCart,    exact: false, sub: false },
-  { title: '입출고 캘린더', href: '/calendar',        icon: CalendarDays,    exact: false, sub: false },
   { title: '설정',          href: '/settings',        icon: Settings,        exact: false, sub: false },
 ];
 

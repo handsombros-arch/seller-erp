@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
 import type { PurchaseOrder, PurchaseOrderItem, InboundRecord, Sku, Warehouse, Supplier } from '@/types';
 import {
-  PackageCheck, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck, Trash2,
+  PackageCheck, PackageMinus, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck, Trash2,
 } from 'lucide-react';
 import { SearchSelect } from '@/components/ui/search-select';
+import dynamic from 'next/dynamic';
+
+const OutboundTab = dynamic(() => import('@/components/logistics/OutboundTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
+const CalendarTab = dynamic(() => import('@/components/logistics/CalendarTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -942,41 +947,53 @@ function InboundRecordsTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const TABS = [
-  { id: 'po', label: '발주 관리' },
-  { id: 'inbound', label: '입고 기록' },
+const TABS: Array<{ id: string; label: string; icon: any }> = [
+  { id: 'po', label: '발주 관리', icon: Truck },
+  { id: 'inbound', label: '입고 기록', icon: PackageCheck },
+  { id: 'outbound', label: '출고 관리', icon: PackageMinus },
+  { id: 'calendar', label: '캘린더', icon: CalendarDays },
 ];
 
 export default function InboundPage() {
-  const [activeTab, setActiveTab] = useState<'po' | 'inbound'>('po');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return (t === 'inbound' || t === 'outbound' || t === 'calendar') ? t : 'po';
+  });
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입고 관리</h2>
-        <p className="mt-1 text-[13.5px] text-[#6B7684]">발주서를 생성하고 입고를 처리하세요</p>
+        <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입출고 관리</h2>
+        <p className="mt-1 text-[13.5px] text-[#6B7684]">발주, 입고, 출고를 한 곳에서 관리하세요</p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F2F4F6] p-1 rounded-xl w-fit">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'po' | 'inbound')}
-            className={`h-9 px-5 rounded-[10px] text-[13.5px] font-semibold transition-all ${
-              activeTab === tab.id
-                ? 'bg-white text-[#191F28] shadow-[0_1px_4px_rgba(0,0,0,0.08)]'
-                : 'text-[#6B7684] hover:text-[#191F28]'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 h-9 px-4 rounded-[10px] text-[13px] font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-white text-[#191F28] shadow-sm'
+                  : 'text-[#6B7684] hover:text-[#191F28]'
+              }`}
+            >
+              <Icon className="h-4 w-4" /> {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'po' ? <POManagementTab /> : <InboundRecordsTab />}
+      {activeTab === 'po' ? <POManagementTab />
+        : activeTab === 'inbound' ? <InboundRecordsTab />
+        : activeTab === 'outbound' ? <OutboundTab />
+        : <CalendarTab />}
     </div>
   );
 }
