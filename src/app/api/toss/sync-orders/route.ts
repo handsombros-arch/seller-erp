@@ -40,70 +40,84 @@ export async function POST(request: NextRequest) {
   let skipped = 0;
   const errors: string[] = [];
 
-  // 최대 31일 제한 → 필요시 분할 (단순화를 위해 한 번에 조회)
-  let nextCursor: string | null = null;
+  // 31일 제한 → 30일 단위로 자동 분할
+  const chunks: { start: string; end: string }[] = [];
+  let chunkStart = new Date(from);
+  const finalEnd = new Date(to);
+  while (chunkStart <= finalEnd) {
+    const chunkEnd = new Date(Math.min(chunkStart.getTime() + 29 * 86400000, finalEnd.getTime()));
+    chunks.push({ start: chunkStart.toISOString().slice(0, 10), end: chunkEnd.toISOString().slice(0, 10) });
+    chunkStart = new Date(chunkEnd.getTime() + 86400000);
+  }
 
-  do {
-    const params = new URLSearchParams({
-      startDate: from,
-      endDate:   to,
-      limit:     '50',
-    });
-    if (nextCursor) params.set('nextCursor', nextCursor);
+  for (const chunk of chunks) {
+    let nextCursor: string | null = null;
 
-    let json: any;
-    try {
-      json = await tossFetch(`/api/v3/shopping-fep/orders/v2?${params}`, token);
-    } catch (err: any) {
-      return NextResponse.json({ error: err.message }, { status: 502 });
-    }
+    do {
+      const params = new URLSearchParams({
+        startDate: chunk.start,
+        endDate:   chunk.end,
+        limit:     '50',
+      });
+      if (nextCursor) params.set('nextCursor', nextCursor);
 
-    const results: any[] = json?.success?.results ?? [];
-    nextCursor = json?.success?.nextCursor ?? null;
-
-    const rows = results.map((item: any) => {
-      const skuCode = item.productManagementCode ?? item.productItemManagementCode ?? '';
-      const skuId   = skuMap.get(skuCode) ?? null;
-
-      const addr = [item.address, item.detailAddress].filter(Boolean).join(' ').trim();
-      const isJeju = /제주|서귀포/.test(addr);
-
-      return {
-        channel:         'toss',
-        order_date:      (item.orderedAt ?? from).substring(0, 10),
-        order_number:    String(item.orderProductId ?? item.orderId ?? ''),
-        product_name:    item.productName ?? '',
-        option_name:     item.optionName ?? null,
-        quantity:        Number(item.quantity ?? 1),
-        recipient:       item.receiverName ?? null,
-        buyer_phone:     item.receiverPhone ?? item.ordererPhone ?? null,
-        address:         addr || null,
-        tracking_number: item.shippingTrackingNumber ?? null,
-        order_status:    item.orderProductStatus ?? null,
-        shipping_cost:   Number(item.deliveryFee ?? 0) + Number(item.jejuDeliveryFee ?? 0) + Number(item.mountainDeliveryFee ?? 0),
-        orig_shipping:   Number(item.deliveryFee ?? 0),
-        jeju_surcharge:  isJeju && Number(item.jejuDeliveryFee ?? 0) > 0,
-        sku_id:          skuId,
-      };
-    });
-
-    if (rows.length > 0) {
-      const { data: inserted, error } = await admin
-        .from('channel_orders')
-        .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: false })
-        .select('id');
-
-      if (error) {
-        errors.push(error.message);
-        skipped += rows.length;
-      } else {
-        synced  += inserted?.length ?? 0;
-        skipped += rows.length - (inserted?.length ?? 0);
+      let json: any;
+      try {
+        json = await tossFetch(`/api/v3/shopping-fep/orders/v2?${params}`, token);
+      } catch (err: any) {
+        errors.push(`[${chunk.start}~${chunk.end}] ${err.message}`);
+        break;
       }
-    }
 
-    await sleep(300);
-  } while (nextCursor);
+      const results: any[] = json?.success?.results ?? [];
+      nextCursor = json?.success?.nextCursor ?? null;
+
+      const rows = results.map((item: any) => {
+        const skuCode = item.productManagementCode ?? item.productItemManagementCode ?? '';
+        const skuId   = skuMap.get(skuCode) ?? null;
+
+        const addr = [item.address, item.detailAddress].filter(Boolean).join(' ').trim();
+        const isJeju = /제주|서귀포/.test(addr);
+
+        return {
+          channel:         'toss',
+          order_date:      (item.orderedAt ?? chunk.start).substring(0, 10),
+          order_number:    String(item.orderProductId ?? item.orderId ?? ''),
+          product_name:    item.productName ?? '',
+          option_name:     item.optionName ?? null,
+          quantity:        Number(item.quantity ?? 1),
+          recipient:       item.receiverName ?? null,
+          buyer_phone:     item.receiverPhone ?? item.ordererPhone ?? null,
+          address:         addr || null,
+          tracking_number: item.shippingTrackingNumber ?? null,
+          order_status:    item.orderProductStatus ?? null,
+          shipping_cost:   Number(item.deliveryFee ?? 0) + Number(item.jejuDeliveryFee ?? 0) + Number(item.mountainDeliveryFee ?? 0),
+          orig_shipping:   Number(item.deliveryFee ?? 0),
+          jeju_surcharge:  isJeju && Number(item.jejuDeliveryFee ?? 0) > 0,
+          sku_id:          skuId,
+        };
+      });
+
+      if (rows.length > 0) {
+        const { data: inserted, error } = await admin
+          .from('channel_orders')
+          .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: false })
+          .select('id');
+
+        if (error) {
+          errors.push(error.message);
+          skipped += rows.length;
+        } else {
+          synced  += inserted?.length ?? 0;
+          skipped += rows.length - (inserted?.length ?? 0);
+        }
+      }
+
+      await sleep(300);
+    } while (nextCursor);
+
+    await sleep(500); // 청크 간 rate limit
+  }
 
   // 재고 자동 차감/복구 (비활성 — 과거 데이터 정리 후 활성화)
   // let deductResult = null;
