@@ -1,16 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/sync-rg-inventory",
+      "path": "/api/cron/daily",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-sales",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/snapshot-inventory",
-      "schedule": "0 3 * * *"
     }
   ]
 }
