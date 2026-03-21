@@ -34,6 +34,16 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  // external_sku_id → platform_product_name 맵 (sku 미매칭 항목 상품명 표시용)
+  const extIds = [...new Set((snapshots ?? []).map((r) => r.external_sku_id).filter(Boolean))];
+  const { data: psNames } = await admin
+    .from('platform_skus')
+    .select('platform_sku_id, platform_product_name')
+    .in('platform_sku_id', extIds);
+  const platformNameMap = new Map<string, string>(
+    (psNames ?? []).map((r) => [r.platform_sku_id, r.platform_product_name ?? ''])
+  );
+
   // vendor_item_id 기준 grouping
   const byItem = new Map<string, { meta: any; dates: { date: string; qty: number }[] }>();
 
@@ -43,11 +53,12 @@ export async function GET(request: NextRequest) {
     const isReturn = RETURN_KEYWORDS.some((kw) => itemName.includes(kw));
 
     if (!byItem.has(key)) {
+      const platformName = row.external_sku_id ? (platformNameMap.get(row.external_sku_id) ?? null) : null;
       byItem.set(key, {
         meta: {
           vendor_item_id:  row.vendor_item_id,
           external_sku_id: row.external_sku_id,
-          item_name:       itemName || null,
+          item_name:       itemName || platformName || null,
           sales_last_30d:  row.sales_last_30d,
           sku_id:          row.sku_id,
           sku:             (row as any).sku,

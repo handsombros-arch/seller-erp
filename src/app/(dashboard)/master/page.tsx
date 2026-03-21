@@ -262,9 +262,7 @@ function PlatformTab({ skuOptions, channels }: {
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[180px] border-l border-[#F2F4F6]">상품명</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
-                      {c.type === 'coupang' && (
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[120px]">반품 옵션ID</th>
-                      )}
+                      {/* 반품 옵션ID 컬럼 숨김 - RG 재고에서 자동 분류 */}
                     </Fragment>
                   ))}
                 </tr>
@@ -313,12 +311,7 @@ function PlatformTab({ skuOptions, channels }: {
                             <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value)}
                               placeholder="0" className={inputCls} />
                           </td>
-                          {c.type === 'coupang' && (
-                            <td className="px-2 py-2">
-                              <input value={e.sku_id_return} onChange={(ev) => updateEntry(row.sku_id, c.id, 'sku_id_return', ev.target.value)}
-                                placeholder="반품 vendorItemId" className={inputCls} />
-                            </td>
-                          )}
+                          {/* 반품 옵션ID 입력 숨김 */}
                         </Fragment>
                       );
                     })}
