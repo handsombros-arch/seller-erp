@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
+import { useVat } from '@/components/layout/vat-provider';
 import type { PurchaseOrder, PurchaseOrderItem, InboundRecord, Sku, Warehouse, Supplier } from '@/types';
 import {
   PackageCheck, Plus, ChevronDown, ChevronUp, Loader2, X, CalendarDays, Truck, Trash2,
@@ -169,15 +170,18 @@ function AddPODialog({ open, onClose, skus, onSave }: {
     });
   }
 
+  const { vatMult, vatOn } = useVat();
+
   const skuOptions = useMemo(() => skus.map((s) => {
     const optLabel = skuOptionLabel(s.option_values ?? {});
     return {
       id: s.id,
       label: s.product.name,
       sub: s.sku_code + (optLabel ? ` · ${optLabel}` : ''),
-      extra: s.cost_price > 0 ? `원가 ${formatCurrency(s.cost_price)}` : undefined,
+      extra: s.cost_price > 0 ? `원가 ${formatCurrency(s.cost_price * vatMult)}` : undefined,
     };
-  }), [skus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [skus, vatMult]);
 
   const total = items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_cost) || 0), 0);
 
@@ -347,8 +351,8 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                   if (!sku) return null;
                   return (
                     <p className="text-[11.5px] text-[#B0B8C1] pl-1">
-                      마스터 원가 {formatCurrency(sku.cost_price)}
-                      {sku.logistics_cost > 0 && ` · 물류비 ${formatCurrency(sku.logistics_cost)}`}
+                      마스터 원가 {formatCurrency(sku.cost_price * vatMult)}{vatOn ? ' (VAT포함)' : ''}
+                      {sku.logistics_cost > 0 && ` · 물류비 ${formatCurrency(sku.logistics_cost * vatMult)}`}
                     </p>
                   );
                 })()}
@@ -357,7 +361,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
           </div>
           {total > 0 && (
             <div className="flex justify-end pt-1">
-              <span className="text-[13px] font-semibold text-[#191F28]">합계: {formatCurrency(total)}</span>
+              <span className="text-[13px] font-semibold text-[#191F28]">합계: {formatCurrency(total * vatMult)}{vatOn ? ' (VAT포함)' : ''}</span>
             </div>
           )}
         </div>
@@ -506,7 +510,9 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   const [expanded, setExpanded] = useState(false);
   const [inboundItem, setInboundItem] = useState<PORow['items'][0] | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const { vatMult, vatOn } = useVat();
 
   const status = STATUS_MAP[po.status] ?? { label: po.status, color: 'bg-gray-100 text-gray-600' };
   const canOrder    = po.status === 'draft';
@@ -517,15 +523,18 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
 
   async function updateStatus(newStatus: POStatus) {
     setStatusLoading(true);
+    setStatusError('');
     try {
       const res = await fetch(`/api/purchase-orders/${po.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) return;
       const data = await res.json();
+      if (!res.ok) { setStatusError(data?.error ?? '상태 변경 실패'); return; }
       onStatusChange(data, newStatus);
+    } catch {
+      setStatusError('네트워크 오류가 발생했습니다.');
     } finally {
       setStatusLoading(false);
     }
@@ -559,7 +568,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
             </div>
             <p className="text-[12px] text-[#B0B8C1] mt-0.5">
-              {po.supplier ?? '공급사 미지정'} · 품목 {(po.items ?? []).length}개 · {formatCurrency(po.total_amount)}
+              {po.supplier ?? '공급사 미지정'} · 품목 {(po.items ?? []).length}개 · {formatCurrency(po.total_amount * vatMult)}{vatOn ? '(VAT+)' : ''}
               {po.expected_date && ` · 입고예정 ${formatDate(po.expected_date)}`}
               {po.inbound_type === 'import' && (
                 <span className="ml-1.5 text-[10.5px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">해외수입</span>
@@ -632,6 +641,12 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
         </div>
       </div>
 
+      {statusError && (
+        <div className="px-5 py-2 bg-red-50 border-t border-red-100">
+          <p className="text-[12px] text-red-600">{statusError}</p>
+        </div>
+      )}
+
       {expanded && (
         <div className="bg-[#F8F9FB] border-t border-[#F2F4F6]">
           {(po.items ?? []).length === 0 ? (
@@ -655,8 +670,8 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-3">
                     <div className="text-right">
-                      <p className="text-[13px] font-semibold text-[#191F28]">{formatCurrency(item.unit_cost)}</p>
-                      <p className="text-[11px] text-[#B0B8C1]">단가</p>
+                      <p className="text-[13px] font-semibold text-[#191F28]">{formatCurrency(item.unit_cost * vatMult)}</p>
+                      <p className="text-[11px] text-[#B0B8C1]">{vatOn ? 'VAT포함 단가' : '단가'}</p>
                     </div>
                     {po.status !== 'cancelled' && po.status !== 'draft' && (
                       <button
@@ -792,6 +807,7 @@ function InboundRecordsTab() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
+  const { vatMult, vatOn } = useVat();
 
   useEffect(() => {
     fetch('/api/inbound')
@@ -918,8 +934,11 @@ function InboundRecordsTab() {
                 </div>
                 <div className="text-right">
                   <span className="text-[13px] text-[#6B7684] tabular-nums">
-                    {record.unit_cost != null ? formatCurrency(record.unit_cost) : '-'}
+                    {record.unit_cost != null ? formatCurrency(record.unit_cost * vatMult) : '-'}
                   </span>
+                  {vatOn && record.unit_cost != null && (
+                    <p className="text-[10.5px] text-[#B0B8C1]">VAT포함</p>
+                  )}
                 </div>
               </div>
             ))}

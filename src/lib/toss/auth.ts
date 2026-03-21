@@ -1,6 +1,20 @@
 const TOKEN_URL = 'https://oauth2.cert.toss.im/token';
 const BASE      = 'https://shopping-fep.toss.im';
 
+function proxyFetch(targetUrl: string, init: RequestInit = {}): Promise<Response> {
+  const proxyUrl    = process.env.COUPANG_PROXY_URL;
+  const proxySecret = process.env.COUPANG_PROXY_SECRET;
+  if (!proxyUrl) return fetch(targetUrl, init);
+  return fetch(proxyUrl, {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      'X-Target-URL': targetUrl,
+      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+    },
+  });
+}
+
 export interface TossCredentials {
   accessKey: string;
   secretKey: string;
@@ -16,7 +30,7 @@ export async function getTossToken(creds: TossCredentials): Promise<string> {
     scope:         'toss-shopping-fep:write',
   });
 
-  const res = await fetch(TOKEN_URL, {
+  const res = await proxyFetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: params.toString(),
@@ -40,7 +54,7 @@ export async function tossFetch(
 ): Promise<any> {
   let delay = 1000;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await proxyFetch(`${BASE}${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,

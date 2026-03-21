@@ -45,3 +45,5 @@ test-*.mjs
 *.xlsx
 *.xls
 *_sample.json
+
+.vercel

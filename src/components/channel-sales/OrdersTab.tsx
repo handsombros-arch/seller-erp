@@ -90,9 +90,21 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<Record<string, any>[]>([]);
+  const skuLogisticsRef = useRef<Map<string, number>>(new Map()); // productName.lower → logistics_cost
 
   useEffect(() => {
-    if (!open) { setRows([]); setError(''); setHeaders([]); setRawRows([]); }
+    if (!open) { setRows([]); setError(''); setHeaders([]); setRawRows([]); return; }
+    // 상품별 물류비(logistics_cost) 로드
+    fetch('/api/products').then((r) => r.json()).then((products: any[]) => {
+      const map = new Map<string, number>();
+      for (const p of products ?? []) {
+        const pname = (p.name ?? '').toLowerCase();
+        if (!pname) continue;
+        const maxCost = (p.skus ?? []).reduce((mx: number, s: any) => Math.max(mx, s.logistics_cost ?? 0), 0);
+        if (maxCost > 0) map.set(pname, maxCost);
+      }
+      skuLogisticsRef.current = map;
+    }).catch(() => {});
   }, [open]);
 
   useEffect(() => {
@@ -142,7 +154,12 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
     const parsed: ParsedOrderRow[] = raw.map((row) => {
       const product_name = String(row[cm.product_name] ?? '').trim();
       const qty = parseInt(String(row[cm.quantity] ?? '1').replace(/,/g, ''), 10) || 1;
-      const origShip = product_name.includes('그랑누보') ? 2650 : 0;
+      // 상품별 물류비 조회 (SKU 상품명이 CSV 상품명에 포함되면 매칭)
+      const pnLower = product_name.toLowerCase();
+      let origShip = 0;
+      for (const [name, cost] of skuLogisticsRef.current) {
+        if (pnLower.includes(name)) { origShip = cost; break; }
+      }
       const addr = String(row[cm.address] ?? '').trim();
       const jeju = addr ? isRemoteArea(addr) : false;
       const shipping_cost = origShip + (jeju ? JEJU_SURCHARGE : 0);

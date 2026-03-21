@@ -52,11 +52,20 @@ export async function coupangFetch(
 ): Promise<any> {
   const { authorization, url } = buildCoupangAuth('GET', path, params, creds);
 
-  const res = await fetch(url, {
+  const proxyUrl = process.env.COUPANG_PROXY_URL;
+  const proxySecret = process.env.COUPANG_PROXY_SECRET;
+
+  const fetchUrl = proxyUrl ? proxyUrl : url;
+  const extraHeaders: Record<string, string> = proxyUrl
+    ? { 'X-Target-URL': url, ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) }
+    : {};
+
+  const res = await fetch(fetchUrl, {
     headers: {
       Authorization: authorization,
       'Content-Type': 'application/json;charset=UTF-8',
       'X-Requested-By': creds.vendorId,
+      ...extraHeaders,
     },
     cache: 'no-store',
   });

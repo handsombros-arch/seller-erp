@@ -2,6 +2,20 @@ import bcrypt from 'bcryptjs';
 
 const BASE = 'https://api.commerce.naver.com';
 
+function proxyFetch(targetUrl: string, init: RequestInit = {}): Promise<Response> {
+  const proxyUrl    = process.env.COUPANG_PROXY_URL;
+  const proxySecret = process.env.COUPANG_PROXY_SECRET;
+  if (!proxyUrl) return fetch(targetUrl, init);
+  return fetch(proxyUrl, {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      'X-Target-URL': targetUrl,
+      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+    },
+  });
+}
+
 export interface NaverCredentials {
   clientId: string;
   clientSecret: string;
@@ -31,7 +45,7 @@ export async function getNaverToken(creds: NaverCredentials): Promise<string> {
     type:               'SELF',
   });
 
-  const res = await fetch(`${BASE}/external/v1/oauth2/token`, {
+  const res = await proxyFetch(`${BASE}/external/v1/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
@@ -58,7 +72,7 @@ export async function naverFetch(
 ): Promise<any> {
   let delay = 1000;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await proxyFetch(`${BASE}${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${token}`,
