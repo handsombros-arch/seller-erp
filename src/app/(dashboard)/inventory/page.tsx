@@ -860,7 +860,21 @@ function RgInventoryTab() {
   const activeColOrder = subTab === 'return' ? DEFAULT_RG_RETURN_COLS : colOrder;
   const sorted = useMemo(() => {
     const source = subTab === 'return' ? returnItems : newItems;
-    if (!sort) return source;
+    if (!sort) {
+      // 반품탭: 상품명 기준 그루핑 (같은 상품끼리 묶음)
+      if (subTab === 'return') {
+        return [...source].sort((a, b) => {
+          const an = returnDisplayName(a);
+          const bn = returnDisplayName(b);
+          if (an !== bn) return an.localeCompare(bn);
+          // 같은 상품 내에서 등급순
+          const ai = GRADE_ORDER.indexOf(a.grade ?? '');
+          const bi = GRADE_ORDER.indexOf(b.grade ?? '');
+          return ai - bi;
+        });
+      }
+      return source;
+    }
     return [...source].sort((a, b) => {
       const getV = (item: RgInventoryItem): number | string => {
         switch (sort.col) {
@@ -882,19 +896,29 @@ function RgInventoryTab() {
   const thCls = (col: RgCol) =>
     `text-left px-4 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA] ${dragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
 
-  function renderRgCell(col: RgCol, item: RgInventoryItem) {
+  // 반품 아이템의 표시명 결정 (linked_sku 우선)
+  function returnDisplayName(item: RgInventoryItem) {
+    return item.linked_sku?.product?.name ?? item.sku?.product?.name ?? item.item_name ?? '';
+  }
+  function returnOptionLabel(item: RgInventoryItem) {
+    if (item.linked_sku?.option_values) return skuOptionLabel(item.linked_sku.option_values);
+    if (item.sku?.option_values) return skuOptionLabel(item.sku.option_values);
+    return '';
+  }
+
+  function renderRgCell(col: RgCol, item: RgInventoryItem, isFirstInGroup?: boolean) {
     const dailyAvg = item.sales_last_30d > 0 ? Math.round((item.sales_last_30d / 30) * 10) / 10 : null;
     const isLow = item.days_remaining !== null && item.days_remaining <= 7;
     const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
-    const productName = item.sku?.product?.name ?? item.item_name ?? item.external_sku_id ?? item.vendor_item_id;
+    const productName = item.is_return
+      ? (returnDisplayName(item) || item.external_sku_id || item.vendor_item_id)
+      : (item.sku?.product?.name ?? item.item_name ?? item.external_sku_id ?? item.vendor_item_id);
     const recentChanges = item.daily.filter((d) => d.change !== null).slice(-showDays);
     const py = ROW_PY[rowH];
 
     const isClassifying = classifying === item.vendor_item_id;
 
-    // 옵션 라벨 (연결된 SKU 또는 linked_sku에서)
-    const optionLabel = item.sku?.option_values ? skuOptionLabel(item.sku.option_values) : '';
-    const linkedOptionLabel = item.linked_sku?.option_values ? skuOptionLabel(item.linked_sku.option_values) : '';
+    const optionLabel = item.is_return ? returnOptionLabel(item) : (item.sku?.option_values ? skuOptionLabel(item.sku.option_values) : '');
 
     switch (col) {
       case 'grade': return (
@@ -914,7 +938,8 @@ function RgInventoryTab() {
           {item.is_return ? (
             <>
               <div className="flex items-center gap-2 group">
-                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+                {isFirstInGroup !== false && <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>}
+                {isFirstInGroup === false && <p className="text-[13.5px] text-[#B0B8C1]">{''}</p>}
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
@@ -923,43 +948,36 @@ function RgInventoryTab() {
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
-                <span className="text-[11px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
-              </div>
-              {/* 신상품 연결 */}
-              <div className="flex items-center gap-1.5 mt-1 relative">
-                {item.linked_sku ? (
-                  <>
-                    <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
-                    {linkedOptionLabel && <span className="text-[10px] bg-blue-50 text-blue-500 px-1 py-0.5 rounded">{linkedOptionLabel}</span>}
-                    <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">해제</button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
-                    className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
-                  >+ 신상품 연결</button>
-                )}
-                {linkTarget === item.vendor_item_id && (
-                  <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
-                    <input
-                      autoFocus
-                      value={linkSearch}
-                      onChange={(e) => setLinkSearch(e.target.value)}
-                      placeholder="상품명 또는 SKU 검색"
-                      className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
-                    />
-                    <div className="max-h-72 overflow-y-auto space-y-0.5">
-                      {skuOptions
-                        .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
-                        .slice(0, 30)
-                        .map(o => (
-                          <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
-                            className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
-                            {o.label}
-                          </button>
-                        ))}
-                    </div>
-                    <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                <span className="text-[10.5px] text-[#D1D5DB] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+                {!item.linked_sku && (
+                  <div className="relative">
+                    <button
+                      onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
+                      className="text-[10.5px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                    >+ 연결</button>
+                    {linkTarget === item.vendor_item_id && (
+                      <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
+                        <input
+                          autoFocus
+                          value={linkSearch}
+                          onChange={(e) => setLinkSearch(e.target.value)}
+                          placeholder="상품명 또는 SKU 검색"
+                          className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                        />
+                        <div className="max-h-[28rem] overflow-y-auto space-y-0.5">
+                          {skuOptions
+                            .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
+                            .slice(0, 30)
+                            .map(o => (
+                              <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
+                                className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
+                                {o.label}
+                              </button>
+                            ))}
+                        </div>
+                        <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1195,16 +1213,22 @@ function RgInventoryTab() {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
                   const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
+                  // 동일 상품명 그루핑: 첫 번째 행만 상품명 표시
+                  const isFirstInGroup = subTab === 'return' && !sort
+                    ? (idx === 0 || returnDisplayName(sorted[idx - 1]) !== returnDisplayName(item))
+                    : undefined;
+                  // 그룹 경계선
+                  const groupBorder = subTab === 'return' && !sort && isFirstInGroup && idx > 0;
                   return (
                     <tr key={item.vendor_item_id}
-                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      className={`hover:bg-[#FAFAFA] transition-colors ${groupBorder ? 'border-t-2 border-t-[#E5E8EB]' : ''} ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
                       <td className="w-10 px-3">
                         <input type="checkbox" checked={isChecked}
                           onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
                           readOnly
                           className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
                       </td>
-                      {activeColOrder.map((col) => renderRgCell(col, item))}
+                      {activeColOrder.map((col) => renderRgCell(col, item, isFirstInGroup))}
                     </tr>
                   );
                 })}
