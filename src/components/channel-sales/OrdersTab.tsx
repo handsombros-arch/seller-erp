@@ -418,6 +418,16 @@ export default function OrdersTab() {
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [toast, setToast] = useState('');
+  // 교환 처리
+  const [exchangeOrder, setExchangeOrder] = useState<ChannelOrder | null>(null);
+  const [exchangeSkuId, setExchangeSkuId] = useState('');
+  const [exchangeSearch, setExchangeSearch] = useState('');
+  const [exchangeLoading, setExchangeLoading] = useState(false);
+  const [exchangeProcessed, setExchangeProcessed] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try { return new Set(JSON.parse(localStorage.getItem('exchange_processed') ?? '[]')); } catch { return new Set(); }
+  });
+  const [skuOptions, setSkuOptions] = useState<{ id: string; label: string }[]>([]);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
   const [colWidths, setColWidths] = useState<Record<ColKey, number>>({
@@ -462,15 +472,56 @@ export default function OrdersTab() {
   }, [allPlatformSkus]);
 
   function resolveAdminName(o: ChannelOrder): string | null {
-    // 1. sku가 매칭된 경우 master product name 사용
     if (o.sku?.product?.name) return o.sku.product.name;
-    // 2. platform_skus 맵에서 product_name + channel로 조회
     const channelType = o.channel === 'coupang_direct' ? 'coupang' : o.channel;
     return platformSkuMap.get(`${o.product_name.toLowerCase()}|${channelType}`) ?? null;
   }
 
+  function isExchangeOrder(o: ChannelOrder) {
+    const s = (o.claim_status ?? o.order_status ?? '').toUpperCase();
+    return s.includes('EXCHANGE') || s.includes('교환');
+  }
+
+  async function processExchange() {
+    if (!exchangeOrder || !exchangeSkuId) return;
+    setExchangeLoading(true);
+    try {
+      const res = await fetch('/api/inventory/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_number: exchangeOrder.order_number,
+          original_sku_id: exchangeOrder.sku?.id,
+          replacement_sku_id: exchangeSkuId,
+          quantity: exchangeOrder.quantity,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setExchangeProcessed((prev) => {
+        const next = new Set(prev);
+        next.add(exchangeOrder!.order_number!);
+        try { localStorage.setItem('exchange_processed', JSON.stringify([...next])); } catch {}
+        return next;
+      });
+      setToast(`교환 처리 완료: ${exchangeOrder.product_name} → 재고 복구, 교환품 차감`);
+      setExchangeOrder(null);
+      setExchangeSkuId('');
+      setExchangeSearch('');
+    } catch (err: any) {
+      setToast(`교환 처리 실패: ${err.message}`);
+    }
+    setExchangeLoading(false);
+  }
+
 
   useEffect(() => {
+    fetch('/api/skus').then(r => r.json()).then((data: any[]) => {
+      setSkuOptions((data ?? []).map((s: any) => ({
+        id: s.id,
+        label: `${s.product?.name ?? ''} · ${s.sku_code}${s.option_values ? ' · ' + Object.values(s.option_values).join('/') : ''}`,
+      })));
+    }).catch(() => {});
     fetch('/api/platform-skus')
       .then((r) => r.json())
       .then((data) => setAllPlatformSkus(Array.isArray(data) ? data : []))
@@ -781,6 +832,14 @@ export default function OrdersTab() {
                                 {CLAIM_LABEL[o.claim_status].label}
                               </span>
                             )}
+                            {isExchangeOrder(o) && o.sku?.id && (
+                              exchangeProcessed.has(o.order_number ?? '') ? (
+                                <span className="text-[10.5px] text-green-600 font-medium">교환 처리됨</span>
+                              ) : (
+                                <button onClick={() => { setExchangeOrder(o); setExchangeSkuId(''); setExchangeSearch(''); }}
+                                  className="text-[10.5px] text-purple-600 font-semibold hover:underline w-fit">교환 처리</button>
+                              )
+                            )}
                           </div>
                         </td>
                       );
@@ -860,6 +919,47 @@ export default function OrdersTab() {
           <div className="w-px h-4 bg-[#E5E8EB]" />
           <span className="text-[13px] text-[#6B7684]">수량 <span className="font-bold text-[#191F28]">{formatNumber(totalQty)}개</span></span>
           <span className="text-[13px] text-[#6B7684]">택배운임 <span className="font-bold text-[#191F28]">{formatCurrency(totalShip)}</span></span>
+        </div>
+      )}
+
+      {/* 교환 처리 모달 */}
+      {exchangeOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setExchangeOrder(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-96 p-6">
+            <h3 className="text-[15px] font-bold text-[#191F28] mb-2">교환 처리</h3>
+            <div className="bg-[#F8F9FB] rounded-xl p-3 mb-4 space-y-1">
+              <p className="text-[13px] font-medium text-[#191F28]">{exchangeOrder.product_name}</p>
+              <p className="text-[12px] text-[#6B7684]">주문번호: {exchangeOrder.order_number}</p>
+              <p className="text-[12px] text-[#6B7684]">수량: {exchangeOrder.quantity}개 → 원래 상품 재고 복구됨</p>
+            </div>
+            <p className="text-[13px] font-medium text-[#191F28] mb-2">교환 발송 상품 선택 (재고 차감)</p>
+            <input
+              autoFocus
+              value={exchangeSearch}
+              onChange={(e) => setExchangeSearch(e.target.value)}
+              placeholder="상품명 또는 SKU 검색..."
+              className="w-full h-10 px-3 text-[13px] border border-[#E5E8EB] rounded-xl outline-none focus:border-[#3182F6] mb-2"
+            />
+            <div className="max-h-[20rem] overflow-y-auto space-y-0.5 mb-4">
+              {skuOptions
+                .filter(o => !exchangeSearch || o.label.toLowerCase().includes(exchangeSearch.toLowerCase()))
+                .slice(0, 30)
+                .map(o => (
+                  <button key={o.id} onClick={() => setExchangeSkuId(o.id)}
+                    className={`w-full text-left px-3 py-2 text-[12.5px] rounded-lg transition-colors ${exchangeSkuId === o.id ? 'bg-[#EBF1FE] text-[#3182F6] font-medium' : 'text-[#191F28] hover:bg-[#F2F4F6]'}`}>
+                    {o.label}
+                  </button>
+                ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setExchangeOrder(null)} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">취소</button>
+              <button onClick={processExchange} disabled={!exchangeSkuId || exchangeLoading}
+                className="flex-1 h-10 rounded-xl bg-purple-500 text-white text-[13px] font-semibold hover:bg-purple-600 disabled:opacity-60">
+                {exchangeLoading ? '처리 중...' : '교환 처리'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

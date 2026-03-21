@@ -6,23 +6,23 @@ const RESTORE_NOTE_PREFIX = '__RESTORE__:';
 // 쿠팡RG는 자체 센터에서 출고 → 자사 창고 재고 불변
 const SKIP_CHANNELS = ['coupang_rg'];
 
-// 출고 반영할 상태 (배송중 = 창고에서 나간 것)
+// 출고 반영할 상태 (실제 배송 시작 이후만 — 배송준비중 제외)
 const SHIPPED_STATUSES = [
   // 스마트스토어
   'DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED',
   // 토스
   'SHIPPING', 'PURCHASE_CONFIRMED',
   // 쿠팡 Wing
-  'INSTRUCT', 'ACCEPT',
+  'DELIVERING',
   // 공통
-  '배송중', '배송완료', 'PAID',
+  '배송중', '배송완료',
 ];
 
 // 반품 완료 상태만 재고 복구 (출고 후 반송된 건)
 // 취소(결제취소)는 출고 전이므로 차감된 적 없음 → 복구 불필요
+// 교환(EXCHANGE)은 별도 수동 처리 (뭘로 교환했는지 선택 필요)
 const RETURN_STATUSES = [
   'RETURN_DONE', 'RETURNED', 'RETURN_COMPLETED',
-  'EXCHANGE_DONE',
 ];
 
 export interface ApplyOrdersResult {
