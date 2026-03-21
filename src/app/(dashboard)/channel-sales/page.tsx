@@ -1204,7 +1204,7 @@ function ReturnsTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ChannelSalesPage() {
-  const [viewMode, setViewMode] = useState<'sales' | 'orders' | 'chart' | 'returns'>('orders');
+  const [viewMode, setViewMode] = useState<'orders' | 'chart' | 'returns'>('orders');
   const [sales, setSales] = useState<ChannelSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState('all');
@@ -1273,26 +1273,12 @@ export default function ChannelSalesPage() {
               <Upload className="h-4 w-4" /> 인사이트
             </button>
           )}
-          {viewMode === 'sales' && <>
-            <button onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 쿠팡 동기화
-            </button>
-            <button onClick={() => setAddOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <Plus className="h-4 w-4" /> 수동 추가
-            </button>
-            <button onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
-              <Upload className="h-4 w-4" /> 엑셀 업로드
-            </button>
-          </>}
         </div>
       </div>
 
       {/* ── 탭바 ─────────────────────────────────────────────────────── */}
       <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
-        {([['sales', '판매 집계'], ['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
+        {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
           <button key={mode} onClick={() => setViewMode(mode)}
             className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             {label}
@@ -1305,128 +1291,7 @@ export default function ChannelSalesPage() {
       {viewMode === 'chart'  && <OrdersChartTab />}
       {viewMode === 'returns' && <ReturnsTab />}
 
-      {/* ── 판매 집계 콘텐츠 ─────────────────────────────────────────────── */}
-      {viewMode === 'sales' && <>
-
-      {/* Stats */}
-      {sales.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="bg-white rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
-            <span className="text-[12px] text-[#6B7684]">총 판매 수량</span>
-            <span className="text-[15px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
-          </div>
-          {totalRevenue > 0 && (
-            <div className="bg-white rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
-              <span className="text-[12px] text-[#6B7684]">총 매출</span>
-              <span className="text-[15px] font-bold text-[#191F28]">{formatCurrency(totalRevenue)}</span>
-            </div>
-          )}
-          {channelBreakdown.map((c) => (
-            <div key={c.value} className="bg-white rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-2">
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${CHANNEL_BADGE[c.value]?.cls}`}>{c.label}</span>
-              <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(c.qty)}개</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex gap-2">
-          {CHANNELS.map((c) => (
-            <button key={c.value} onClick={() => setChannel(c.value)}
-              className={`h-8 px-3.5 rounded-xl text-[13px] font-medium transition-colors ${channel === c.value ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors" />
-          <span className="text-[13px] text-[#B0B8C1]">~</span>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors" />
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="h-10 w-9 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6] transition-colors">
-              <X className="h-4 w-4 text-[#6B7684]" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="overflow-x-auto">
-        <div className="min-w-[580px]">
-        <div className="grid grid-cols-[1fr_1.5fr_2fr_1fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
-          {['판매일', '채널', '상품', '옵션', '수량', '매출액'].map((h) => (
-            <span key={h} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
-          </div>
-        ) : sales.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <ShoppingCart className="h-10 w-10 text-[#B0B8C1] mb-3" />
-            <p className="text-[13px] font-medium text-[#6B7684]">판매 내역이 없습니다</p>
-            <p className="text-[13px] text-[#B0B8C1] mt-1">엑셀 업로드 또는 수동 추가로 시작하세요</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#F2F4F6]">
-            {sales.map((s) => {
-              const badge = CHANNEL_BADGE[s.channel] ?? CHANNEL_BADGE.other;
-              return (
-                <div key={s.id} className="grid grid-cols-[1fr_1.5fr_2fr_1fr_1fr_1fr] gap-3 px-5 py-3.5 items-center hover:bg-[#FAFAFA] transition-colors">
-                  <span className="text-[13px] text-[#6B7684]">{formatDate(s.sale_date)}{s.sale_date_end && s.sale_date_end !== s.sale_date ? ` ~ ${formatDate(s.sale_date_end)}` : ''}</span>
-                  <span className={`inline-flex items-center w-fit text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
-                  <div className="min-w-0">
-                    {s.sku ? (() => {
-                      const platformName = resolvePlatformName(s.sku, s.channel);
-                      const displayName = platformName ?? (s.sku as any).product?.name ?? s.product_name;
-                      return (
-                        <>
-                          <p className="text-[13px] font-medium text-[#191F28] truncate">{displayName}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[11px] text-[#3182F6] font-mono">{s.sku.sku_code}</span>
-                            {s.product_name !== displayName && (
-                              <span className="text-[11px] text-[#B0B8C1] truncate max-w-[120px]" title={s.product_name}>{s.product_name}</span>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })() : (
-                      <p className="text-[13px] font-medium text-[#191F28] truncate">{s.product_name}</p>
-                    )}
-                  </div>
-                  <span className="text-[13px] text-[#6B7684] truncate">{s.option_name ?? '-'}</span>
-                  <span className="text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(s.quantity)}</span>
-                  <span className="text-[13px] text-[#6B7684] tabular-nums">{s.revenue ? formatCurrency(s.revenue) : '-'}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {sales.length > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 bg-[#F8F9FB] border-t border-[#F2F4F6]">
-            <span className="text-[12px] text-[#6B7684]">총 {formatNumber(sales.length)}건</span>
-            <div className="flex items-center gap-4">
-              <span className="text-[13px] text-[#6B7684]">합계 {formatNumber(totalQty)}개</span>
-              {totalRevenue > 0 && <span className="text-[13px] font-semibold text-[#191F28]">{formatCurrency(totalRevenue)}</span>}
-            </div>
-          </div>
-        )}
-        </div>
-        </div>
-      </div>
-      </>}
-
-      {/* Dialogs — outside viewMode conditional so they work from any tab */}
-      <AddDialog open={addOpen} onClose={() => setAddOpen(false)} onSaved={(s) => { setSales((p) => [s, ...p]); showToast('판매 내역이 추가되었습니다.'); }} />
-      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={(n) => { load(); showToast(`${n}건이 업로드되었습니다.`); }} />
+      {/* Dialogs */}
       <NaverSyncDialog open={naverOpen} onClose={() => setNaverOpen(false)} onDone={(msg) => { showToast(msg); setNaverOpen(false); load(); }} />
       <TossSyncDialog open={tossOpen} onClose={() => setTossOpen(false)} onDone={(msg) => { showToast(msg); setTossOpen(false); }} />
       <CoupangSyncDialog open={syncOpen} onClose={() => setSyncOpen(false)} onDone={(msg) => { showToast(msg); setSyncOpen(false); load(); }} />
