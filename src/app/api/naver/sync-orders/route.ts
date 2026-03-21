@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getNaverToken, naverFetch } from '@/lib/naver/auth';
 import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
+import { buildSkuMatcher } from '@/lib/inventory/matchSku';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -25,9 +26,7 @@ export async function POST(request: NextRequest) {
 
   if (!cred) return NextResponse.json({ error: '네이버 API 키를 먼저 설정하세요' }, { status: 400 });
 
-  // SKU 코드 맵 (판매자 상품코드 → sku_id)
-  const { data: skus } = await admin.from('skus').select('id, sku_code');
-  const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
+  const matcher = await buildSkuMatcher(admin);
 
   let token: string;
   try {
@@ -98,7 +97,9 @@ export async function POST(request: NextRequest) {
 
         // 판매자 설정 상품코드로 SKU 매핑 시도
         const skuCode = po.sellerProductCode ?? po.optionCode ?? '';
-        const skuId   = skuMap.get(skuCode) ?? null;
+        const skuId   = matcher.byCode(skuCode)
+                     ?? matcher.byNameOption(po.productName ?? '', po.productOption)
+                     ?? null;
 
         return {
           channel:         'smartstore',

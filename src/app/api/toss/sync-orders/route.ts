@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getTossToken, tossFetch } from '@/lib/toss/auth';
 import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
+import { buildSkuMatcher } from '@/lib/inventory/matchSku';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -25,9 +26,7 @@ export async function POST(request: NextRequest) {
 
   if (!cred) return NextResponse.json({ error: '토스 API 키를 먼저 설정하세요' }, { status: 400 });
 
-  // SKU 코드 맵
-  const { data: skus } = await admin.from('skus').select('id, sku_code');
-  const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
+  const matcher = await buildSkuMatcher(admin);
 
   let token: string;
   try {
@@ -74,7 +73,9 @@ export async function POST(request: NextRequest) {
 
       const rows = results.map((item: any) => {
         const skuCode = item.productManagementCode ?? item.productItemManagementCode ?? '';
-        const skuId   = skuMap.get(skuCode) ?? null;
+        const skuId   = matcher.byCode(skuCode)
+                     ?? matcher.byNameOption(item.productName ?? '', item.optionName)
+                     ?? null;
 
         const addr = [item.address, item.detailAddress].filter(Boolean).join(' ').trim();
         const isJeju = /제주|서귀포/.test(addr);

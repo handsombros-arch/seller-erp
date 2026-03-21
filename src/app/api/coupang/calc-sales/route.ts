@@ -17,8 +17,8 @@ export async function POST() {
   // ── 1. 쿠팡 그로스 주문 조회 (30일치)
   const { data: orders } = await admin
     .from('channel_orders')
-    .select('id, product_name, sku_id, quantity, order_date')
-    .eq('channel', 'coupang_growth')
+    .select('id, product_name, option_name, sku_id, quantity, order_date')
+    .in('channel', ['coupang_rg', 'coupang', 'coupang_growth'])
     .gte('order_date', from30)
     .lte('order_date', toDate);
 
@@ -26,30 +26,18 @@ export async function POST() {
     return NextResponse.json({ updated: 0, matched_new: 0, unmatched: 0 });
   }
 
-  // ── 2. sku_name_aliases 로드 (product_name → sku_id 매핑)
-  const { data: aliases } = await admin
-    .from('sku_name_aliases')
-    .select('channel_name, sku_id');
+  // ── 2. SKU 매칭 (옵션 포함)
+  const { buildSkuMatcher } = await import('@/lib/inventory/matchSku');
+  const matcher = await buildSkuMatcher(admin);
 
-  const aliasMap = new Map<string, string>(
-    (aliases ?? []).map((a: any) => [a.channel_name.trim().toLowerCase(), a.sku_id])
-  );
-
-  // ── 3. sku_code 직접 매칭을 위한 SKU 목록
-  const { data: skuList } = await admin.from('skus').select('id, sku_code');
-  const skuCodeMap = new Map<string, string>(
-    (skuList ?? []).map((s: any) => [s.sku_code.trim().toLowerCase(), s.id])
-  );
-
-  // ── 4. 미매칭 주문에 대해 alias 매칭 후 sku_id 업데이트
+  // ── 3. 미매칭 주문에 대해 매칭 후 sku_id 업데이트
   const toUpdate: { id: string; sku_id: string }[] = [];
   let unmatched = 0;
 
   for (const order of orders) {
-    if (order.sku_id) continue; // 이미 매칭됨
+    if (order.sku_id) continue;
 
-    const key = (order.product_name ?? '').trim().toLowerCase();
-    const matchedSkuId = aliasMap.get(key) ?? skuCodeMap.get(key) ?? null;
+    const matchedSkuId = matcher.byNameOption(order.product_name ?? '', order.option_name);
 
     if (matchedSkuId) {
       toUpdate.push({ id: order.id, sku_id: matchedSkuId });

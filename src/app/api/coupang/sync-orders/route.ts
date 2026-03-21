@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { coupangFetch } from '@/lib/coupang/auth';
 import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
+import { buildSkuMatcher } from '@/lib/inventory/matchSku';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -56,42 +57,7 @@ export async function POST(request: NextRequest) {
     vendorId:  cred.vendor_id,
   };
 
-  const { data: skus } = await admin.from('skus').select('id, sku_code');
-  const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
-
-  // sku_name_aliases: 채널 상품명 → sku_id (주문 매칭 강화)
-  const { data: aliasRows } = await admin.from('sku_name_aliases').select('channel_name, sku_id');
-  const aliasMap = new Map<string, string>(
-    (aliasRows ?? []).map((a: any) => [a.channel_name.trim().toLowerCase(), a.sku_id])
-  );
-
-  // 쿠팡그로스 vendorItemId → sku_id 매핑
-  // 1) rg_inventory_snapshots: vendor_item_id → sku_id (가장 정확)
-  const { data: rgSnapshots } = await admin
-    .from('rg_inventory_snapshots')
-    .select('vendor_item_id, sku_id')
-    .not('sku_id', 'is', null);
-  const rgSkuMap = new Map<string, string>();
-  for (const r of rgSnapshots ?? []) {
-    rgSkuMap.set(String(r.vendor_item_id), r.sku_id as string);
-  }
-  // 2) platform_skus: external_sku_id → sku_id (fallback)
-  const { data: platformSkus } = await admin
-    .from('platform_skus')
-    .select('sku_id, platform_sku_id, platform_sku_id_return, channel:channels(type)');
-  for (const ps of platformSkus ?? []) {
-    if ((ps as any).channel?.type !== 'coupang') continue;
-    if ((ps as any).platform_sku_id)        rgSkuMap.set(String((ps as any).platform_sku_id),        (ps as any).sku_id);
-    if ((ps as any).platform_sku_id_return) rgSkuMap.set(String((ps as any).platform_sku_id_return), (ps as any).sku_id);
-  }
-  // 3) rg_return_vendor_items: 반품 vendor_item_id → sku_id
-  const { data: returnItems } = await admin
-    .from('rg_return_vendor_items')
-    .select('vendor_item_id, sku_id')
-    .not('sku_id', 'is', null);
-  for (const r of returnItems ?? []) {
-    if (!rgSkuMap.has(r.vendor_item_id)) rgSkuMap.set(r.vendor_item_id, r.sku_id as string);
-  }
+  const matcher = await buildSkuMatcher(admin);
 
   let synced = 0;
   let skipped = 0;
@@ -140,8 +106,8 @@ export async function POST(request: NextRequest) {
             shipping_cost:   Number(order.shippingPrice ?? 0) + Number(order.remotePrice ?? 0),
             orig_shipping:   Number(order.shippingPrice ?? 0),
             jeju_surcharge:  order.remoteArea === true,
-            sku_id:          skuMap.get(skuCode)
-                          ?? aliasMap.get((item.sellerProductName ?? item.vendorItemName ?? '').trim().toLowerCase())
+            sku_id:          matcher.byCode(skuCode)
+                          ?? matcher.byNameOption(item.sellerProductName ?? item.vendorItemName ?? '', item.sellerProductItemName)
                           ?? null,
           });
         }
@@ -209,8 +175,8 @@ export async function POST(request: NextRequest) {
             shipping_cost:   0,
             orig_shipping:   0,
             jeju_surcharge:  false,
-            sku_id:          rgSkuMap.get(vendorItemId)
-                          ?? aliasMap.get((item.productName ?? '').trim().toLowerCase())
+            sku_id:          matcher.byVendorItemId(vendorItemId)
+                          ?? matcher.byNameOption(item.productName ?? '')
                           ?? null,
           });
         }
