@@ -166,7 +166,7 @@ export function SearchSelect({
       {open && !selected && (
         <div
           ref={listRef}
-          className="absolute z-30 w-full mt-1 bg-white border border-[#E5E8EB] rounded-xl shadow-lg max-h-52 overflow-y-auto"
+          className="absolute z-30 w-full mt-1 bg-white border border-[#E5E8EB] rounded-xl shadow-lg max-h-[28rem] overflow-y-auto"
         >
           {filtered.length === 0 ? (
             <p className="px-3 py-3 text-[12.5px] text-[#B0B8C1] text-center">검색 결과 없음</p>

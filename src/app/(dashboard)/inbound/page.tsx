@@ -151,23 +151,11 @@ function AddPODialog({ open, onClose, skus, onSave }: {
   }
   function handleSkuSelect(i: number, skuId: string) {
     const sku = skus.find((s) => s.id === skuId);
-    setItems((prev) => {
-      const next = prev.map((row, idx) => idx === i ? {
-        ...row,
-        sku_id: skuId,
-        unit_cost: sku && sku.cost_price ? String(sku.cost_price) : row.unit_cost,
-      } : row);
-      // 선택된 SKU들 중 최대 리드타임을 기본값으로 설정
-      const selectedSkus = next.map((r) => skus.find((s) => s.id === r.sku_id)).filter(Boolean) as SkuOption[];
-      const maxLead = selectedSkus.reduce((mx, s) => Math.max(mx, s.lead_time_days ?? 0), 0);
-      if (maxLead > 0) {
-        setForm((f) => {
-          const newLt = String(maxLead);
-          return { ...f, lead_time_days: newLt, expected_date: calcExpectedDate(f.order_date, newLt, f.transit_days) };
-        });
-      }
-      return next;
-    });
+    setItems((prev) => prev.map((row, idx) => idx === i ? {
+      ...row,
+      sku_id: skuId,
+      unit_cost: sku && sku.cost_price ? String(sku.cost_price) : row.unit_cost,
+    } : row));
   }
 
   const { vatMult, vatOn } = useVat();
@@ -353,6 +341,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                     <p className="text-[11.5px] text-[#B0B8C1] pl-1">
                       마스터 원가 {formatCurrency(sku.cost_price * vatMult)}{vatOn ? ' (VAT포함)' : ''}
                       {sku.logistics_cost > 0 && ` · 물류비 ${formatCurrency(sku.logistics_cost * vatMult)}`}
+                      {(sku.lead_time_days ?? 0) > 0 && <span className="text-[#6B7684]"> · 리드타임 {sku.lead_time_days}일</span>}
                     </p>
                   );
                 })()}

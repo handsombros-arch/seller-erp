@@ -617,10 +617,11 @@ function SummaryTab() {
 
 // ─── RG 그로스 재고 탭 ───────────────────────────────────────────────────────
 
-type RgCol = 'product' | 'qty' | 'daily_changes' | 's30d' | 'daily_avg' | 'days_left';
+type RgCol = 'product' | 'grade' | 'qty' | 'daily_changes' | 's30d' | 'daily_avg' | 'days_left';
 const DEFAULT_RG_COLS: RgCol[] = ['product', 'qty', 'daily_changes', 's30d', 'daily_avg', 'days_left'];
+const DEFAULT_RG_RETURN_COLS: RgCol[] = ['product', 'grade', 'qty', 'daily_changes', 's30d', 'daily_avg', 'days_left'];
 const RG_LABELS: Record<RgCol, string> = {
-  product: '상품명 / SKU', qty: '현재 재고', daily_changes: '일자별 출고',
+  product: '상품명 / SKU', grade: '등급', qty: '현재 재고', daily_changes: '일자별 출고',
   s30d: '30일 판매', daily_avg: '일평균', days_left: '예상 소진',
 };
 
@@ -856,24 +857,15 @@ function RgInventoryTab() {
   const showDays = Math.min(days, 7);
 
   const GRADE_ORDER = ['미개봉', '최상', '상', '중', ''];
+  const activeColOrder = subTab === 'return' ? DEFAULT_RG_RETURN_COLS : colOrder;
   const sorted = useMemo(() => {
     const source = subTab === 'return' ? returnItems : newItems;
-    if (!sort) {
-      // 반품탭: 등급순 기본 그루핑
-      if (subTab === 'return') {
-        return [...source].sort((a, b) => {
-          const ai = GRADE_ORDER.indexOf(a.grade ?? '');
-          const bi = GRADE_ORDER.indexOf(b.grade ?? '');
-          if (ai !== bi) return ai - bi;
-          return b.current_qty - a.current_qty;
-        });
-      }
-      return source;
-    }
+    if (!sort) return source;
     return [...source].sort((a, b) => {
       const getV = (item: RgInventoryItem): number | string => {
         switch (sort.col) {
           case 'product': return item.sku?.product?.name ?? item.external_sku_id ?? item.vendor_item_id;
+          case 'grade': return GRADE_ORDER.indexOf(item.grade ?? '');
           case 'qty': return item.current_qty;
           case 's30d': return item.sales_last_30d;
           case 'daily_avg': return item.sales_last_30d / 30;
@@ -905,20 +897,24 @@ function RgInventoryTab() {
     const linkedOptionLabel = item.linked_sku?.option_values ? skuOptionLabel(item.linked_sku.option_values) : '';
 
     switch (col) {
+      case 'grade': return (
+        <td key={col} className={`px-4 ${py}`}>
+          <select
+            value={item.grade ?? ''}
+            onChange={(e) => updateGrade(item.vendor_item_id, e.target.value)}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border-none outline-none cursor-pointer appearance-none ${gradeStyle(item.grade).bg} ${gradeStyle(item.grade).text}`}
+          >
+            <option value="">미지정</option>
+            {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </td>
+      );
       case 'product': return (
-        <td key={col} className={`px-4 ${py} ${item.is_return ? `border-l-3 ${gradeStyle(item.grade).border}` : ''}`}>
+        <td key={col} className={`px-4 ${py}`}>
           {item.is_return ? (
             <>
               <div className="flex items-center gap-2 group">
                 <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
-                <select
-                  value={item.grade ?? ''}
-                  onChange={(e) => updateGrade(item.vendor_item_id, e.target.value)}
-                  className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border-none outline-none cursor-pointer appearance-none ${gradeStyle(item.grade).bg} ${gradeStyle(item.grade).text}`}
-                >
-                  <option value="">등급없음</option>
-                  {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
@@ -1175,9 +1171,9 @@ function RgInventoryTab() {
                       onChange={subTab === 'new' ? toggleAll : toggleReturnAll}
                       className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
                   </th>
-                  {colOrder.map((col) => (
+                  {activeColOrder.map((col) => (
                     <th key={col}
-                      draggable
+                      draggable={subTab === 'new'}
                       onDragStart={() => onDragStart(col)}
                       onDragOver={(e) => onDragOver(e, col)}
                       onDragLeave={onDragLeave}
@@ -1186,9 +1182,9 @@ function RgInventoryTab() {
                       className={thCls(col)}
                     >
                       <div className={`flex items-center gap-1 py-3 ${sort?.col === col ? 'text-[#3182F6]' : ''}`}>
-                        <GripVertical className="h-3 w-3 opacity-20 group-hover:opacity-60 shrink-0 transition-opacity" />
+                        {subTab === 'new' && <GripVertical className="h-3 w-3 opacity-20 group-hover:opacity-60 shrink-0 transition-opacity" />}
                         {col === 'daily_changes' ? `일자별 출고 (최근 ${showDays}일)` : RG_LABELS[col]}
-                        {col !== 'daily_changes' && <SortIcon active={sort?.col === col} dir={sort?.dir ?? 'asc'} />}
+                        <SortIcon active={sort?.col === col} dir={sort?.dir ?? 'asc'} />
                       </div>
                     </th>
                   ))}
@@ -1199,37 +1195,17 @@ function RgInventoryTab() {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
                   const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
-                  // 등급 그룹 헤더 (반품탭, 정렬 없을 때)
-                  const prevGrade = idx > 0 ? (sorted[idx - 1].grade ?? '') : null;
-                  const curGrade = item.grade ?? '';
-                  const showGradeHeader = subTab === 'return' && !sort && (idx === 0 || curGrade !== prevGrade);
-                  const gs = gradeStyle(item.grade);
-                  const gradeLabel = item.grade || '등급 미지정';
-                  const gradeCount = sorted.filter(i => (i.grade ?? '') === curGrade).length;
-                  const gradeQty = sorted.filter(i => (i.grade ?? '') === curGrade).reduce((s, i) => s + i.current_qty, 0);
-
                   return (
-                    <React.Fragment key={item.vendor_item_id}>
-                      {showGradeHeader && (
-                        <tr className={`${gs.bg} border-b border-[#E5E8EB]`}>
-                          <td colSpan={colOrder.length + 1} className="px-4 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[12.5px] font-bold ${gs.text}`}>{gradeLabel}</span>
-                              <span className="text-[11px] text-[#6B7684]">{gradeCount}개 상품 · 재고 {gradeQty}개</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      <tr className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
-                        <td className="w-10 px-3">
-                          <input type="checkbox" checked={isChecked}
-                            onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
-                            readOnly
-                            className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
-                        </td>
-                        {colOrder.map((col) => renderRgCell(col, item))}
-                      </tr>
-                    </React.Fragment>
+                    <tr key={item.vendor_item_id}
+                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      <td className="w-10 px-3">
+                        <input type="checkbox" checked={isChecked}
+                          onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
+                          readOnly
+                          className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                      </td>
+                      {activeColOrder.map((col) => renderRgCell(col, item))}
+                    </tr>
                   );
                 })}
               </tbody>
