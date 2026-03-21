@@ -98,6 +98,11 @@ function PlatformTab({ skuOptions, channels }: {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  // 연동 상품명 (aliases)
+  const [aliases, setAliases] = useState<Record<string, { id: string; channel_name: string }[]>>({});
+  const [aliasOpen, setAliasOpen] = useState<string | null>(null);
+  const [newAlias, setNewAlias] = useState('');
+
   function toggleCollapsed(name: string) {
     setCollapsed((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; });
   }
@@ -119,8 +124,19 @@ function PlatformTab({ skuOptions, channels }: {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/platform-skus');
+    const [res, aliasRes] = await Promise.all([
+      fetch('/api/platform-skus'),
+      fetch('/api/sku-aliases'),
+    ]);
     const platformData: any[] = res.ok ? await res.json().catch(() => []) : [];
+    // aliases를 sku_id별로 그루핑
+    const aliasData: any[] = aliasRes.ok ? await aliasRes.json().catch(() => []) : [];
+    const aliasMap: Record<string, { id: string; channel_name: string }[]> = {};
+    for (const a of aliasData) {
+      if (!aliasMap[a.sku_id]) aliasMap[a.sku_id] = [];
+      aliasMap[a.sku_id].push({ id: a.id, channel_name: a.channel_name });
+    }
+    setAliases(aliasMap);
     const bySkuId: Record<string, Record<string, ChannelEntry>> = {};
     for (const p of platformData ?? []) {
       if (!bySkuId[p.sku_id]) bySkuId[p.sku_id] = {};
@@ -153,6 +169,31 @@ function PlatformTab({ skuOptions, channels }: {
       ...r,
       entries: { ...r.entries, [channelId]: { ...r.entries[channelId], [field]: value } },
       dirty: true,
+    }));
+  }
+
+  async function addAlias(skuId: string, name: string) {
+    if (!name.trim()) return;
+    await fetch('/api/sku-aliases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_name: name.trim(), sku_id: skuId }),
+    });
+    setAliases((prev) => ({
+      ...prev,
+      [skuId]: [...(prev[skuId] ?? []), { id: '', channel_name: name.trim() }],
+    }));
+    setNewAlias('');
+  }
+
+  async function removeAlias(skuId: string, aliasId: string, channelName: string) {
+    // id가 있으면 DB 삭제, 없으면 optimistic만
+    if (aliasId) {
+      await fetch(`/api/sku-aliases?id=${aliasId}`, { method: 'DELETE' });
+    }
+    setAliases((prev) => ({
+      ...prev,
+      [skuId]: (prev[skuId] ?? []).filter((a) => a.channel_name !== channelName),
     }));
   }
 
@@ -287,11 +328,46 @@ function PlatformTab({ skuOptions, channels }: {
                     <td className={`px-4 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
                       <div className="flex items-center gap-2 pl-2">
                         <span className="text-[11px] text-[#B0B8C1] tabular-nums w-7 shrink-0">{gIdx + 1}-{sIdx + 1}</span>
-                        <div>
+                        <div className="min-w-0">
                           {row.option_label
                             ? <p className="text-[13px] font-medium text-[#191F28]">{row.option_label}</p>
                             : <p className="text-[12px] text-[#B0B8C1]">기본</p>}
-                          <span className="text-[11px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setAliasOpen(aliasOpen === row.sku_id ? null : row.sku_id); }}
+                              className="text-[10.5px] text-[#3182F6] hover:underline whitespace-nowrap"
+                            >
+                              연동 {(aliases[row.sku_id] ?? []).length}개
+                            </button>
+                          </div>
+                          {aliasOpen === row.sku_id && (
+                            <div className="mt-2 p-2.5 bg-[#F8F9FB] rounded-lg space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                              <p className="text-[10.5px] font-semibold text-[#6B7684]">연동된 채널 상품명</p>
+                              {(aliases[row.sku_id] ?? []).length === 0 ? (
+                                <p className="text-[10.5px] text-[#B0B8C1]">등록된 연동 상품명 없음</p>
+                              ) : (
+                                (aliases[row.sku_id] ?? []).map((a) => (
+                                  <div key={a.channel_name} className="flex items-center gap-1 group">
+                                    <span className="text-[11px] text-[#191F28] truncate flex-1">{a.channel_name}</span>
+                                    <button onClick={() => removeAlias(row.sku_id, a.id, a.channel_name)}
+                                      className="opacity-0 group-hover:opacity-100 text-[10px] text-red-400 hover:text-red-600 shrink-0 transition-opacity">삭제</button>
+                                  </div>
+                                ))
+                              )}
+                              <div className="flex gap-1 mt-1">
+                                <input
+                                  value={newAlias}
+                                  onChange={(e) => setNewAlias(e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { addAlias(row.sku_id, newAlias); } }}
+                                  placeholder="채널 상품명 입력"
+                                  className="flex-1 h-7 px-2 text-[11px] rounded border border-[#E5E8EB] outline-none focus:border-[#3182F6]"
+                                />
+                                <button onClick={() => addAlias(row.sku_id, newAlias)}
+                                  className="h-7 px-2 rounded bg-[#3182F6] text-white text-[10.5px] font-medium hover:bg-[#1B64DA]">추가</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

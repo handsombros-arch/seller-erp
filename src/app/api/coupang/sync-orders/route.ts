@@ -59,6 +59,12 @@ export async function POST(request: NextRequest) {
   const { data: skus } = await admin.from('skus').select('id, sku_code');
   const skuMap = new Map((skus ?? []).map((s: any) => [s.sku_code, s.id]));
 
+  // sku_name_aliases: 채널 상품명 → sku_id (주문 매칭 강화)
+  const { data: aliasRows } = await admin.from('sku_name_aliases').select('channel_name, sku_id');
+  const aliasMap = new Map<string, string>(
+    (aliasRows ?? []).map((a: any) => [a.channel_name.trim().toLowerCase(), a.sku_id])
+  );
+
   // 쿠팡그로스 vendorItemId → sku_id 매핑 (신상품 + 반품재판매 옵션ID 모두 포함)
   const { data: platformSkus } = await admin
     .from('platform_skus')
@@ -117,7 +123,9 @@ export async function POST(request: NextRequest) {
             shipping_cost:   Number(order.shippingPrice ?? 0) + Number(order.remotePrice ?? 0),
             orig_shipping:   Number(order.shippingPrice ?? 0),
             jeju_surcharge:  order.remoteArea === true,
-            sku_id:          skuMap.get(skuCode) ?? null,
+            sku_id:          skuMap.get(skuCode)
+                          ?? aliasMap.get((item.sellerProductName ?? item.vendorItemName ?? '').trim().toLowerCase())
+                          ?? null,
           });
         }
       }
@@ -184,7 +192,9 @@ export async function POST(request: NextRequest) {
             shipping_cost:   0,
             orig_shipping:   0,
             jeju_surcharge:  false,
-            sku_id:          rgSkuMap.get(vendorItemId) ?? null,
+            sku_id:          rgSkuMap.get(vendorItemId)
+                          ?? aliasMap.get((item.productName ?? '').trim().toLowerCase())
+                          ?? null,
           });
         }
       }
