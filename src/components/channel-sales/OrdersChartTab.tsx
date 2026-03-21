@@ -41,10 +41,11 @@ const COLORS = [
 ];
 
 const QUICK_RANGES = [
-  { label: '7일',  days: 7 },
   { label: '30일', days: 30 },
   { label: '90일', days: 90 },
   { label: '180일', days: 180 },
+  { label: '1년', days: 365 },
+  { label: '전체', days: 9999 },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

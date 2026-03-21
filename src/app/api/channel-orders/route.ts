@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   if (statuses.length) query = query.in('order_status', statuses);
   if (q) query = query.or(`product_name.ilike.%${q}%,order_number.ilike.%${q}%,recipient.ilike.%${q}%`);
 
-  const { data, error } = await query.limit(2000);
+  const { data, error } = await query.limit(10000);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data ?? []);
 }
