@@ -214,8 +214,8 @@ export async function POST(request: NextRequest) {
     await sleep(400); // rate limit: 분당 50회
   }
 
-  // 주문 동기화 후 재고 자동 차감
-  let deductResult: { applied: number; skipped: number; negativeSkuIds: string[] } | null = null;
+  // 주문 동기화 후 재고 자동 차감/복구
+  let deductResult: { applied: number; restored: number; skipped: number; negativeSkuIds: string[] } | null = null;
   try {
     deductResult = await applyOrdersToInventory(admin, user.id);
   } catch {
@@ -227,6 +227,6 @@ export async function POST(request: NextRequest) {
     skipped,
     errors: errors.length ? errors : undefined,
     deducted: deductResult?.applied ?? 0,
-    deductNegative: deductResult?.negativeSkuIds?.length ?? 0,
+    restored: deductResult?.restored ?? 0,
   });
 }

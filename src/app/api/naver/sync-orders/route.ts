@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getNaverToken, naverFetch } from '@/lib/naver/auth';
+import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -144,5 +145,14 @@ export async function POST(request: NextRequest) {
     cursor = new Date(cursor.getTime() + 86400000);
   }
 
-  return NextResponse.json({ synced, skipped, errors: errors.length ? errors : undefined });
+  // 재고 자동 차감/복구
+  let deductResult = null;
+  try { deductResult = await applyOrdersToInventory(admin, user.id); } catch {}
+
+  return NextResponse.json({
+    synced, skipped,
+    errors: errors.length ? errors : undefined,
+    deducted: deductResult?.applied ?? 0,
+    restored: deductResult?.restored ?? 0,
+  });
 }
