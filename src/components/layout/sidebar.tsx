@@ -10,6 +10,7 @@ import {
   PackageCheck,
   PackageMinus,
   TrendingUp,
+  BarChart3,
   FileSpreadsheet,
   CalendarDays,
   Building2,
@@ -27,6 +28,7 @@ const navItems = [
   { title: '출고 관리',     href: '/outbound',        icon: PackageMinus,    exact: false, sub: false },
   { title: '채널 판매',     href: '/channel-sales',   icon: ShoppingCart,    exact: false, sub: false },
   { title: '재고 예측',     href: '/forecast',        icon: TrendingUp,      exact: false, sub: false },
+  { title: '재고·판매 추이', href: '/trends',          icon: BarChart3,       exact: false, sub: false },
   { title: '입출고 캘린더', href: '/calendar',        icon: CalendarDays,    exact: false, sub: false },
   { title: '설정',          href: '/settings',        icon: Settings,        exact: false, sub: false },
 ];
