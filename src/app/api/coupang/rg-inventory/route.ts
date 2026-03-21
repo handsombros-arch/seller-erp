@@ -33,6 +33,15 @@ export async function GET(request: NextRequest) {
     }])
   );
 
+  // platform_sku_id_return 기반 자동 분류 (MECE: external_sku_id가 return ID에 해당하면 반품)
+  const { data: returnPlatSkus } = await admin
+    .from('platform_skus')
+    .select('platform_sku_id_return')
+    .not('platform_sku_id_return', 'is', null);
+  const autoReturnExtIds = new Set<string>(
+    (returnPlatSkus ?? []).map((r: any) => r.platform_sku_id_return).filter(Boolean)
+  );
+
   // external_sku_id → platform_product_name 맵 (sku 미매칭 항목 상품명 표시용)
   const extIds = [...new Set((snapshots ?? []).map((r) => r.external_sku_id).filter(Boolean))];
   const { data: psNames } = await admin
@@ -48,7 +57,10 @@ export async function GET(request: NextRequest) {
 
   for (const row of snapshots ?? []) {
     const key = row.vendor_item_id;
-    const isReturn = returnMap.has(key);
+    // MECE: 수동 분류 OR external_sku_id가 platform_sku_id_return에 해당
+    const isManualReturn = returnMap.has(key);
+    const isAutoReturn = !isManualReturn && !!row.external_sku_id && autoReturnExtIds.has(row.external_sku_id);
+    const isReturn = isManualReturn || isAutoReturn;
 
     if (!byItem.has(key)) {
       const platformName = row.external_sku_id ? (platformNameMap.get(row.external_sku_id) ?? null) : null;
@@ -61,9 +73,9 @@ export async function GET(request: NextRequest) {
           sku_id:          row.sku_id,
           sku:             (row as any).sku,
           is_return:       isReturn,
-          grade:           isReturn ? (returnMap.get(key)?.grade ?? null) : null,
-          linked_sku_id:   isReturn ? (returnMap.get(key)?.sku_id ?? null) : null,
-          linked_sku:      isReturn ? (returnMap.get(key)?.linked_sku ?? null) : null,
+          grade:           isManualReturn ? (returnMap.get(key)?.grade ?? null) : null,
+          linked_sku_id:   isManualReturn ? (returnMap.get(key)?.sku_id ?? null) : null,
+          linked_sku:      isManualReturn ? (returnMap.get(key)?.linked_sku ?? null) : null,
         },
         dates: [],
       });

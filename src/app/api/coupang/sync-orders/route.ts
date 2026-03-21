@@ -12,6 +12,13 @@ function toYmd(dateStr: string) {
   return dateStr.replace(/-/g, '');
 }
 
+// 다음날 yyyymmdd (RG API paidDateTo는 exclusive)
+function nextDayYmd(dateStr: string) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
 // 날짜 범위를 하루씩 분할 (1000건 하드캡 회피)
 function eachDay(from: string, to: string): string[] {
   const days: string[] = [];
@@ -140,7 +147,7 @@ export async function POST(request: NextRequest) {
     do {
       const params: Record<string, string> = {
         paidDateFrom: toYmd(day),
-        paidDateTo:   toYmd(day),
+        paidDateTo:   nextDayYmd(day),  // RG API paidDateTo는 exclusive
       };
       if (nextToken) params.nextToken = nextToken;
 

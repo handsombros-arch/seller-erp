@@ -835,31 +835,21 @@ function CoupangSyncDialog({ open, onClose, onDone }: {
     setResult(null);
     setError('');
     try {
-      // 1) 주문 + 반품 동기화
-      const [ordersRes, returnsRes] = await Promise.all([
-        fetch('/api/coupang/sync-orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from, to }),
-        }),
-        fetch('/api/coupang/sync-returns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from, to }),
-        }),
-      ]);
+      // 1) 주문 동기화
+      const ordersRes = await fetch('/api/coupang/sync-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to }),
+      });
 
       const oData = await ordersRes.json();
-      const rData = returnsRes.ok ? await returnsRes.json() : { synced: 0 };
-
       if (!ordersRes.ok) throw new Error(oData.error ?? '주문 동기화 실패');
-      // 반품 API 미구독 시 무시 (오류 비치명적)
 
       // 2) 판매량 집계 + SKU 매칭 (자동)
       const calcRes = await fetch('/api/coupang/calc-sales', { method: 'POST' });
       const calcData = await calcRes.json();
 
-      const msg = `주문 ${oData.synced}건${rData.synced ? `, 반품 ${rData.synced}건` : ''} 동기화 · SKU ${calcData.updated}개 판매량 업데이트${calcData.unmatched > 0 ? ` (미매칭 ${calcData.unmatched}건)` : ''}`;
+      const msg = `주문 ${oData.synced}건 동기화 · SKU ${calcData.updated}개 판매량 업데이트${oData.errors?.length ? ` (경고 ${oData.errors.length}건)` : ''}${calcData.unmatched > 0 ? ` · 미매칭 ${calcData.unmatched}건` : ''}`;
       setResult(msg);
       onDone(msg);
     } catch (err: any) {

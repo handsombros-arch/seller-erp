@@ -661,9 +661,11 @@ function RgInventoryTab() {
   const [skuOptions, setSkuOptions] = useState<{ id: string; label: string }[]>([]);
   const [linkSearch, setLinkSearch] = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [returnChecked, setReturnChecked] = useState<Set<string>>(new Set());
   const [bulkModal, setBulkModal] = useState(false);
   const [bulkGrade, setBulkGrade] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
+  const lastCheckedIdx = useRef<number | null>(null);
 
   const GRADES = ['미개봉', '최상', '상', '중'];
 
@@ -696,11 +698,55 @@ function RgInventoryTab() {
     await load();
   }
 
-  function toggleCheck(id: string) {
-    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  function toggleCheck(id: string, idx: number, e: React.MouseEvent) {
+    if (e.shiftKey && lastCheckedIdx.current !== null) {
+      // Shift+click range selection
+      const list = sorted.map((i) => i.vendor_item_id);
+      const start = Math.min(lastCheckedIdx.current, idx);
+      const end = Math.max(lastCheckedIdx.current, idx);
+      setChecked((prev) => {
+        const n = new Set(prev);
+        for (let i = start; i <= end; i++) n.add(list[i]);
+        return n;
+      });
+    } else {
+      setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    }
+    lastCheckedIdx.current = idx;
   }
   function toggleAll() {
     setChecked((prev) => prev.size === newItems.length ? new Set() : new Set(newItems.map((i) => i.vendor_item_id)));
+  }
+  function toggleReturnCheck(id: string, idx: number, e: React.MouseEvent) {
+    if (e.shiftKey && lastCheckedIdx.current !== null) {
+      const list = sorted.map((i) => i.vendor_item_id);
+      const start = Math.min(lastCheckedIdx.current, idx);
+      const end = Math.max(lastCheckedIdx.current, idx);
+      setReturnChecked((prev) => {
+        const n = new Set(prev);
+        for (let i = start; i <= end; i++) n.add(list[i]);
+        return n;
+      });
+    } else {
+      setReturnChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    }
+    lastCheckedIdx.current = idx;
+  }
+  function toggleReturnAll() {
+    setReturnChecked((prev) => prev.size === returnItems.length ? new Set() : new Set(returnItems.map((i) => i.vendor_item_id)));
+  }
+  async function unclassifyBulk() {
+    setBulkLoading(true);
+    await Promise.all([...returnChecked].map((id) =>
+      fetch('/api/coupang/rg-return', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendor_item_id: id }),
+      })
+    ));
+    setReturnChecked(new Set());
+    setBulkLoading(false);
+    await load();
   }
 
   async function classifyBulk() {
@@ -975,7 +1021,7 @@ function RgInventoryTab() {
       {/* 서브탭 */}
       <div className="flex items-center gap-1 border-b border-[#E5E8EB]">
         {([['new', '신상품', newItems.length], ['return', '반품재판매', returnItems.length]] as const).map(([v, label, cnt]) => (
-          <button key={v} onClick={() => { setSubTab(v); setChecked(new Set()); }}
+          <button key={v} onClick={() => { setSubTab(v); setChecked(new Set()); setReturnChecked(new Set()); lastCheckedIdx.current = null; }}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-[#3182F6] text-[#3182F6]' : 'border-transparent text-[#6B7684] hover:text-[#191F28]'}`}>
             {label}
             <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-[#3182F6]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>{cnt}</span>
@@ -983,15 +1029,32 @@ function RgInventoryTab() {
         ))}
       </div>
 
-      {/* 일괄 분류 액션바 */}
+      {/* 신상품 일괄 분류 액션바 */}
       {subTab === 'new' && checked.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-[#EBF3FF] rounded-xl">
           <span className="text-[13px] font-medium text-[#3182F6]">{checked.size}개 선택됨</span>
+          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭으로 범위 선택</span>
           <button onClick={() => setBulkModal(true)}
             className="h-8 px-3 rounded-lg bg-orange-500 text-white text-[12.5px] font-semibold hover:bg-orange-600 transition-colors">
             반품재판매로 이동
           </button>
           <button onClick={() => setChecked(new Set())}
+            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
+            선택 해제
+          </button>
+        </div>
+      )}
+
+      {/* 반품재판매 → 신상품 일괄 이동 액션바 */}
+      {subTab === 'return' && returnChecked.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-orange-50 rounded-xl">
+          <span className="text-[13px] font-medium text-orange-600">{returnChecked.size}개 선택됨</span>
+          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭으로 범위 선택</span>
+          <button onClick={unclassifyBulk} disabled={bulkLoading}
+            className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+            {bulkLoading ? '처리 중...' : '신상품으로 이동'}
+          </button>
+          <button onClick={() => setReturnChecked(new Set())}
             className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
             선택 해제
           </button>
@@ -1029,11 +1092,12 @@ function RgInventoryTab() {
       )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px] text-[#6B7684] font-medium">스냅샷 조회</span>
           {[7, 14, 30].map((d) => (
             <button key={d} onClick={() => setDays(d)}
               className={`h-8 px-3 rounded-xl text-[12.5px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
-              {d}일
+              최근 {d}일
             </button>
           ))}
         </div>
@@ -1075,14 +1139,12 @@ function RgInventoryTab() {
             <table className="w-full min-w-[820px]">
               <thead>
                 <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
-                  {subTab === 'new' && (
-                    <th className="w-10 px-3">
-                      <input type="checkbox"
-                        checked={newItems.length > 0 && checked.size === newItems.length}
-                        onChange={toggleAll}
-                        className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
-                    </th>
-                  )}
+                  <th className="w-10 px-3">
+                    <input type="checkbox"
+                      checked={subTab === 'new' ? (newItems.length > 0 && checked.size === newItems.length) : (returnItems.length > 0 && returnChecked.size === returnItems.length)}
+                      onChange={subTab === 'new' ? toggleAll : toggleReturnAll}
+                      className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                  </th>
                   {colOrder.map((col) => (
                     <th key={col}
                       draggable
@@ -1103,19 +1165,19 @@ function RgInventoryTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F4F6]">
-                {sorted.map((item) => {
+                {sorted.map((item, idx) => {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
-                  const isChecked = checked.has(item.vendor_item_id);
+                  const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
                   return (
                     <tr key={item.vendor_item_id}
                       className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
-                      {subTab === 'new' && (
-                        <td className="w-10 px-3">
-                          <input type="checkbox" checked={isChecked} onChange={() => toggleCheck(item.vendor_item_id)}
-                            className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
-                        </td>
-                      )}
+                      <td className="w-10 px-3">
+                        <input type="checkbox" checked={isChecked}
+                          onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
+                          readOnly
+                          className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                      </td>
                       {colOrder.map((col) => renderRgCell(col, item))}
                     </tr>
                   );
