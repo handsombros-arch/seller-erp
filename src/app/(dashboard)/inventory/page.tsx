@@ -7,11 +7,15 @@ import { useVat } from '@/components/layout/vat-provider';
 import type { InventoryItem, Warehouse } from '@/types';
 import type { InventorySummaryRow } from '@/app/api/inventory/summary/route';
 import {
-  Warehouse as WarehouseIcon, Package, TrendingUp, SlidersHorizontal,
+  Warehouse as WarehouseIcon, Package, TrendingUp, BarChart3, SlidersHorizontal,
   Download, Upload, Loader2, X, Plus, LayoutGrid, List, RefreshCw,
   ChevronUp, ChevronDown, ChevronsUpDown, GripVertical,
 } from 'lucide-react';
 import { SearchSelect } from '@/components/ui/search-select';
+import dynamic from 'next/dynamic';
+
+const TrendsTab = dynamic(() => import('@/components/inventory/TrendsTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
+const ForecastTab = dynamic(() => import('@/components/inventory/ForecastTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1305,9 +1309,9 @@ const WH_LABELS: Record<WhCol, string> = {
 export default function InventoryPage() {
   const { vatOn, vatMult } = useVat();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<'summary' | 'warehouse' | 'rg'>(() => {
+  const [tab, setTab] = useState<'summary' | 'warehouse' | 'rg' | 'trends' | 'forecast'>(() => {
     const t = searchParams.get('tab');
-    return (t === 'warehouse' || t === 'rg') ? t : 'summary';
+    return (t === 'warehouse' || t === 'rg' || t === 'trends' || t === 'forecast') ? t : 'summary';
   });
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1519,7 +1523,7 @@ export default function InventoryPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
-        {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package]] as const).map(([value, label, Icon]) => (
+        {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package], ['trends', '추이', BarChart3], ['forecast', '예측', TrendingUp]] as const).map(([value, label, Icon]) => (
           <button key={value} onClick={() => setTab(value)}
             className={`flex items-center gap-2 h-9 px-4 rounded-[10px] text-[13px] font-medium transition-all ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             <Icon className="h-4 w-4" /> {label}
@@ -1567,6 +1571,10 @@ export default function InventoryPage() {
       {/* Tab Content */}
       {tab === 'rg' ? (
         <RgInventoryTab />
+      ) : tab === 'trends' ? (
+        <TrendsTab />
+      ) : tab === 'forecast' ? (
+        <ForecastTab />
       ) : tab === 'summary' ? (
         <SummaryTab />
       ) : (
