@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { formatNumber } from '@/lib/utils';
-import { Loader2, BarChart3 } from 'lucide-react';
+import { formatNumber, skuOptionLabel } from '@/lib/utils';
+import { Loader2, BarChart3, Search } from 'lucide-react';
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -30,19 +30,38 @@ const DAYS_OPTIONS = [30, 60, 90, 180];
 
 export default function TrendsTab() {
   const [data, setData] = useState<TrendPoint[]>([]);
+  const [skuInfo, setSkuInfo] = useState<Record<string, { sku_code: string; product_name: string; option_values: Record<string, string> }>>({});
   const [loading, setLoading] = useState(true);
   const [unit, setUnit] = useState<Unit>('day');
   const [days, setDays] = useState(90);
+  const [selectedSku, setSelectedSku] = useState('');
+  const [skuSearch, setSkuSearch] = useState('');
+  const [skuOptions, setSkuOptions] = useState<{ id: string; label: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/skus').then(r => r.json()).then((data: any[]) => {
+      setSkuOptions([
+        { id: '', label: '전체 상품' },
+        ...(data ?? []).map((s: any) => ({
+          id: s.id,
+          label: `${s.product?.name ?? ''} · ${s.sku_code}${s.option_values ? ' · ' + Object.values(s.option_values).join('/') : ''}`,
+        })),
+      ]);
+    }).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/trends/inventory-sales?unit=${unit}&days=${days}`);
+      const params = new URLSearchParams({ unit, days: String(days) });
+      if (selectedSku) params.set('sku_ids', selectedSku);
+      const res = await fetch(`/api/trends/inventory-sales?${params}`);
       const json = await res.json();
       setData(Array.isArray(json.data) ? json.data : []);
+      setSkuInfo(json.skus ?? {});
     } catch { setData([]); }
     setLoading(false);
-  }, [unit, days]);
+  }, [unit, days, selectedSku]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -78,18 +97,28 @@ export default function TrendsTab() {
         <div className="flex items-center gap-1.5">
           {(['day', 'week', 'month'] as Unit[]).map((u) => (
             <button key={u} onClick={() => setUnit(u)}
-              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {UNIT_LABELS[u]}
             </button>
           ))}
-        </div>
-        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-[#B0B8C1] mx-1">|</span>
           {DAYS_OPTIONS.map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#191F28] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#191F28] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {d}일
             </button>
           ))}
+        </div>
+        <div className="relative">
+          <select
+            value={selectedSku}
+            onChange={(e) => setSelectedSku(e.target.value)}
+            className="h-10 pl-3 pr-8 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors max-w-[280px] truncate"
+          >
+            {skuOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -44,13 +44,22 @@ export async function GET(request: NextRequest) {
   if (skuIds.length) rgQuery = rgQuery.in('sku_id', skuIds);
   const { data: rgRows } = await rgQuery;
 
-  // 2. 창고 재고 (현재값 — 일별 스냅샷 테이블 없음, 현재 수량을 전 기간 기준선으로 사용)
+  // 2. 창고 재고 스냅샷 (일별)
   let whQuery = admin
-    .from('inventory')
-    .select('sku_id, quantity');
+    .from('warehouse_inventory_snapshots')
+    .select('snapshot_date, sku_id, quantity')
+    .gte('snapshot_date', since);
   if (skuIds.length) whQuery = whQuery.in('sku_id', skuIds);
   const { data: whRows } = await whQuery;
-  const warehouseTotal = (whRows ?? []).reduce((s, r) => s + (r.quantity ?? 0), 0);
+
+  // fallback: 스냅샷 없으면 현재 inventory 값 사용
+  let whFallbackTotal = 0;
+  if (!whRows?.length) {
+    let fbQuery = admin.from('inventory').select('sku_id, quantity');
+    if (skuIds.length) fbQuery = fbQuery.in('sku_id', skuIds);
+    const { data: fbRows } = await fbQuery;
+    whFallbackTotal = (fbRows ?? []).reduce((s, r) => s + (r.quantity ?? 0), 0);
+  }
 
   // 3. 주문 (판매)
   let ordQuery = admin
@@ -89,7 +98,13 @@ export async function GET(request: NextRequest) {
     b._rgByDate.set(r.snapshot_date, dateQty + (r.total_orderable_qty ?? 0));
   }
 
-  // 창고 재고: 현재값을 모든 버킷에 동일하게 적용 (일별 스냅샷 없음)
+  // 창고 재고: 스냅샷 데이터 버킷화
+  for (const r of whRows ?? []) {
+    const key = bucketKey(r.snapshot_date, unit);
+    const b = getBucket(key);
+    const dateQty = b._whByDate.get(r.snapshot_date) ?? 0;
+    b._whByDate.set(r.snapshot_date, dateQty + (r.quantity ?? 0));
+  }
 
   // 판매: 합산
   for (const r of ordRows ?? []) {
@@ -105,7 +120,12 @@ export async function GET(request: NextRequest) {
       const latestDate = [...b._rgByDate.keys()].sort().at(-1)!;
       b.coupang_qty = b._rgByDate.get(latestDate)!;
     }
-    b.warehouse_qty = warehouseTotal;
+    if (b._whByDate.size > 0) {
+      const latestDate = [...b._whByDate.keys()].sort().at(-1)!;
+      b.warehouse_qty = b._whByDate.get(latestDate)!;
+    } else {
+      b.warehouse_qty = whFallbackTotal;
+    }
   }
 
   // SKU 정보

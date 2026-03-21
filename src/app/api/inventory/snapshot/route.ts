@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   }));
 
   const { error: upsertErr } = await admin
-    .from('inventory_snapshots')
+    .from('warehouse_inventory_snapshots')
     .upsert(rows, { onConflict: 'snapshot_date,sku_id,warehouse_id', ignoreDuplicates: false });
 
   if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 
   let query = admin
-    .from('inventory_snapshots')
+    .from('warehouse_inventory_snapshots')
     .select('snapshot_date, sku_id, warehouse_id, quantity, sku:skus(sku_code, product:products(name)), warehouse:warehouses(name)')
     .gte('snapshot_date', since)
     .order('snapshot_date', { ascending: true });
