@@ -687,24 +687,53 @@ function RgInventoryTab() {
     }).catch(() => {});
   }, []);
 
+  // 단건 연결 (optimistic, 새로고침 없음)
   async function linkSku(vendorItemId: string, skuId: string) {
-    await fetch('/api/coupang/rg-return', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: skuId }),
-    });
+    const sku = skuOptions.find((s) => s.id === skuId);
+    const skuData = sku ? { sku_code: sku.label.split(' · ')[1] ?? '', option_values: {}, product: { name: sku.label.split(' · ')[0] ?? '' } } : null;
+    setItems((prev) => prev.map((i) => i.vendor_item_id === vendorItemId ? { ...i, linked_sku_id: skuId, linked_sku: skuData as any } : i));
     setLinkTarget(null);
     setLinkSearch('');
-    await load();
+    fetch('/api/coupang/rg-return', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: skuId }) });
   }
 
+  // 단건 해제 (optimistic)
   async function unlinkSku(vendorItemId: string) {
-    await fetch('/api/coupang/rg-return', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: null }),
-    });
-    await load();
+    setItems((prev) => prev.map((i) => i.vendor_item_id === vendorItemId ? { ...i, linked_sku_id: null, linked_sku: null } : i));
+    fetch('/api/coupang/rg-return', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: null }) });
+  }
+
+  // 일괄 연결 (선택된 반품 항목을 하나의 SKU에 연결)
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
+  const [bulkLinkSearch, setBulkLinkSearch] = useState('');
+  const [bulkLinkLoading, setBulkLinkLoading] = useState(false);
+
+  async function bulkLinkSku(skuId: string) {
+    setBulkLinkLoading(true);
+    const sku = skuOptions.find((s) => s.id === skuId);
+    const skuData = sku ? { sku_code: sku.label.split(' · ')[1] ?? '', option_values: {}, product: { name: sku.label.split(' · ')[0] ?? '' } } : null;
+    const ids = [...returnChecked];
+    // optimistic update
+    setItems((prev) => prev.map((i) => ids.includes(i.vendor_item_id) ? { ...i, linked_sku_id: skuId, linked_sku: skuData as any } : i));
+    // batch API calls
+    await Promise.all(ids.map((id) =>
+      fetch('/api/coupang/rg-return', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendor_item_id: id, sku_id: skuId }) })
+    ));
+    setReturnChecked(new Set());
+    setBulkLinkOpen(false);
+    setBulkLinkSearch('');
+    setBulkLinkLoading(false);
+  }
+
+  async function bulkUnlinkSku() {
+    setBulkLinkLoading(true);
+    const ids = [...returnChecked];
+    setItems((prev) => prev.map((i) => ids.includes(i.vendor_item_id) ? { ...i, linked_sku_id: null, linked_sku: null } : i));
+    await Promise.all(ids.map((id) =>
+      fetch('/api/coupang/rg-return', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendor_item_id: id, sku_id: null }) })
+    ));
+    setReturnChecked(new Set());
+    setBulkLinkLoading(false);
   }
 
   function toggleCheck(id: string, idx: number, e: React.MouseEvent) {
@@ -1077,19 +1106,61 @@ function RgInventoryTab() {
         </div>
       )}
 
-      {/* 반품재판매 → 신상품 일괄 이동 액션바 */}
+      {/* 반품재판매 일괄 액션바 */}
       {subTab === 'return' && returnChecked.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-orange-50 rounded-xl">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 rounded-xl flex-wrap">
           <span className="text-[13px] font-medium text-orange-600">{returnChecked.size}개 선택됨</span>
-          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭으로 범위 선택</span>
-          <button onClick={unclassifyBulk} disabled={bulkLoading}
-            className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
-            {bulkLoading ? '처리 중...' : '신상품으로 이동'}
-          </button>
-          <button onClick={() => setReturnChecked(new Set())}
-            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
-            선택 해제
-          </button>
+          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭 범위선택</span>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button onClick={() => { setBulkLinkOpen(true); setBulkLinkSearch(''); }}
+              className="h-8 px-3 rounded-lg bg-blue-500 text-white text-[12.5px] font-semibold hover:bg-blue-600 transition-colors">
+              일괄 연결
+            </button>
+            <button onClick={bulkUnlinkSku} disabled={bulkLinkLoading}
+              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors disabled:opacity-60">
+              연결 해제
+            </button>
+            <button onClick={unclassifyBulk} disabled={bulkLoading}
+              className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+              {bulkLoading ? '처리 중...' : '신상품으로 이동'}
+            </button>
+            <button onClick={() => setReturnChecked(new Set())}
+              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
+              선택 해제
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 연결 모달 */}
+      {bulkLinkOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setBulkLinkOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-96 p-6">
+            <h3 className="text-[15px] font-bold text-[#191F28] mb-1">신상품 일괄 연결</h3>
+            <p className="text-[12.5px] text-[#6B7684] mb-4">{returnChecked.size}개 반품 항목을 선택한 신상품에 연결합니다.</p>
+            <input
+              autoFocus
+              value={bulkLinkSearch}
+              onChange={(e) => setBulkLinkSearch(e.target.value)}
+              placeholder="상품명 또는 SKU 검색..."
+              className="w-full h-10 px-3 text-[13px] border border-[#E5E8EB] rounded-xl outline-none focus:border-[#3182F6] mb-2"
+            />
+            <div className="max-h-[28rem] overflow-y-auto space-y-0.5">
+              {skuOptions
+                .filter(o => !bulkLinkSearch || o.label.toLowerCase().includes(bulkLinkSearch.toLowerCase()))
+                .slice(0, 50)
+                .map(o => (
+                  <button key={o.id} onClick={() => bulkLinkSku(o.id)} disabled={bulkLinkLoading}
+                    className="w-full text-left px-3 py-2 text-[13px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate disabled:opacity-60">
+                    {o.label}
+                  </button>
+                ))}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setBulkLinkOpen(false)} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">취소</button>
+            </div>
+          </div>
         </div>
       )}
 
