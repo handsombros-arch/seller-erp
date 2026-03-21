@@ -733,7 +733,7 @@ function RgInventoryTab() {
     const dailyAvg = item.sales_last_30d > 0 ? Math.round((item.sales_last_30d / 30) * 10) / 10 : null;
     const isLow = item.days_remaining !== null && item.days_remaining <= 7;
     const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
-    const productName = item.sku?.product?.name ?? item.external_sku_id ?? item.vendor_item_id;
+    const productName = item.sku?.product?.name ?? item.item_name ?? item.external_sku_id ?? item.vendor_item_id;
     const recentChanges = item.daily.filter((d) => d.change !== null).slice(-showDays);
     const py = ROW_PY[rowH];
 
