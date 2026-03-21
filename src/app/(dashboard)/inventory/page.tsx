@@ -656,12 +656,16 @@ function RgInventoryTab() {
   const [rowH, setRowH] = useState<RowHeight>('normal');
   const [dragOver, setDragOver] = useState<RgCol | null>(null);
   const dragRef = useRef<RgCol | null>(null);
-  const [classifying, setClassifying] = useState<string | null>(null); // vendor_item_id
-  const [linkTarget, setLinkTarget] = useState<string | null>(null);   // 연결 팝오버 열린 vendor_item_id
+  const [classifying, setClassifying] = useState<string | null>(null);
+  const [linkTarget, setLinkTarget] = useState<string | null>(null);
   const [skuOptions, setSkuOptions] = useState<{ id: string; label: string }[]>([]);
   const [linkSearch, setLinkSearch] = useState('');
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkModal, setBulkModal] = useState(false);
+  const [bulkGrade, setBulkGrade] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
 
-  const GRADES = ['S급', 'A급', 'B급', 'C급', '최상', '상', '중', '하', '미개봉'];
+  const GRADES = ['미개봉', '최상', '상', '중'];
 
   useEffect(() => {
     fetch('/api/skus').then(r => r.json()).then((data: any[]) => {
@@ -689,6 +693,29 @@ function RgInventoryTab() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: null }),
     });
+    await load();
+  }
+
+  function toggleCheck(id: string) {
+    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    setChecked((prev) => prev.size === newItems.length ? new Set() : new Set(newItems.map((i) => i.vendor_item_id)));
+  }
+
+  async function classifyBulk() {
+    setBulkLoading(true);
+    await Promise.all([...checked].map((id) =>
+      fetch('/api/coupang/rg-return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendor_item_id: id, grade: bulkGrade || null }),
+      })
+    ));
+    setChecked(new Set());
+    setBulkModal(false);
+    setBulkGrade('');
+    setBulkLoading(false);
     await load();
   }
 
@@ -851,7 +878,7 @@ function RgInventoryTab() {
                       placeholder="상품명 또는 SKU 검색"
                       className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
                     />
-                    <div className="max-h-48 overflow-y-auto space-y-0.5">
+                    <div className="max-h-72 overflow-y-auto space-y-0.5">
                       {skuOptions
                         .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
                         .slice(0, 30)
@@ -948,13 +975,58 @@ function RgInventoryTab() {
       {/* 서브탭 */}
       <div className="flex items-center gap-1 border-b border-[#E5E8EB]">
         {([['new', '신상품', newItems.length], ['return', '반품재판매', returnItems.length]] as const).map(([v, label, cnt]) => (
-          <button key={v} onClick={() => setSubTab(v)}
+          <button key={v} onClick={() => { setSubTab(v); setChecked(new Set()); }}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-[#3182F6] text-[#3182F6]' : 'border-transparent text-[#6B7684] hover:text-[#191F28]'}`}>
             {label}
             <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-[#3182F6]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>{cnt}</span>
           </button>
         ))}
       </div>
+
+      {/* 일괄 분류 액션바 */}
+      {subTab === 'new' && checked.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#EBF3FF] rounded-xl">
+          <span className="text-[13px] font-medium text-[#3182F6]">{checked.size}개 선택됨</span>
+          <button onClick={() => setBulkModal(true)}
+            className="h-8 px-3 rounded-lg bg-orange-500 text-white text-[12.5px] font-semibold hover:bg-orange-600 transition-colors">
+            반품재판매로 이동
+          </button>
+          <button onClick={() => setChecked(new Set())}
+            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
+            선택 해제
+          </button>
+        </div>
+      )}
+
+      {/* 일괄 분류 모달 */}
+      {bulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setBulkModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-80 p-6">
+            <h3 className="text-[15px] font-bold text-[#191F28] mb-4">반품재판매 등급 선택</h3>
+            <p className="text-[12.5px] text-[#6B7684] mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
+            <div className="grid grid-cols-2 gap-2 mb-5">
+              {GRADES.map((g) => (
+                <button key={g} onClick={() => setBulkGrade(g)}
+                  className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors ${bulkGrade === g ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-[#E5E8EB] text-[#6B7684] hover:border-orange-300'}`}>
+                  {g}
+                </button>
+              ))}
+              <button onClick={() => setBulkGrade('')}
+                className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors col-span-2 ${bulkGrade === '' ? 'border-[#3182F6] bg-[#EBF3FF] text-[#3182F6]' : 'border-[#E5E8EB] text-[#B0B8C1] hover:border-[#3182F6]'}`}>
+                등급 미지정
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setBulkModal(false)} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">취소</button>
+              <button onClick={classifyBulk} disabled={bulkLoading}
+                className="flex-1 h-10 rounded-xl bg-orange-500 text-white text-[13px] font-semibold hover:bg-orange-600 disabled:opacity-60">
+                {bulkLoading ? '처리 중...' : '이동'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1.5">
@@ -1003,6 +1075,14 @@ function RgInventoryTab() {
             <table className="w-full min-w-[820px]">
               <thead>
                 <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
+                  {subTab === 'new' && (
+                    <th className="w-10 px-3">
+                      <input type="checkbox"
+                        checked={newItems.length > 0 && checked.size === newItems.length}
+                        onChange={toggleAll}
+                        className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                    </th>
+                  )}
                   {colOrder.map((col) => (
                     <th key={col}
                       draggable
@@ -1026,9 +1106,16 @@ function RgInventoryTab() {
                 {sorted.map((item) => {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
+                  const isChecked = checked.has(item.vendor_item_id);
                   return (
                     <tr key={item.vendor_item_id}
-                      className={`hover:bg-[#FAFAFA] transition-colors ${isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      {subTab === 'new' && (
+                        <td className="w-10 px-3">
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleCheck(item.vendor_item_id)}
+                            className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                        </td>
+                      )}
                       {colOrder.map((col) => renderRgCell(col, item))}
                     </tr>
                   );
