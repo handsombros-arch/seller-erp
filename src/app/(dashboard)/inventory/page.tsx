@@ -630,14 +630,14 @@ interface RgInventoryItem {
   item_name: string | null;
   sales_last_30d: number;
   sku_id: string | null;
-  sku?: { sku_code: string; product: { name: string } } | null;
+  sku?: { sku_code: string; option_values?: Record<string, string>; product: { name: string } } | null;
   current_qty: number;
   days_remaining: number | null;
   daily: { date: string; qty: number; change: number | null }[];
   is_return: boolean;
   grade: string | null;
   linked_sku_id: string | null;
-  linked_sku: { sku_code: string; product: { name: string } } | null;
+  linked_sku: { sku_code: string; option_values?: Record<string, string>; product: { name: string } } | null;
 }
 
 function RgInventoryTab() {
@@ -900,6 +900,10 @@ function RgInventoryTab() {
 
     const isClassifying = classifying === item.vendor_item_id;
 
+    // 옵션 라벨 (연결된 SKU 또는 linked_sku에서)
+    const optionLabel = item.sku?.option_values ? skuOptionLabel(item.sku.option_values) : '';
+    const linkedOptionLabel = item.linked_sku?.option_values ? skuOptionLabel(item.linked_sku.option_values) : '';
+
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py} ${item.is_return ? `border-l-3 ${gradeStyle(item.grade).border}` : ''}`}>
@@ -921,45 +925,47 @@ function RgInventoryTab() {
                   className="opacity-0 group-hover:opacity-100 text-[10px] text-[#B0B8C1] hover:text-red-500 transition-all ml-auto shrink-0"
                 >해제</button>
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-[11.5px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</p>
-                {/* 신상품 연결 */}
-                <div className="relative">
-                  {item.linked_sku ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
-                      <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">해제</button>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
+                <span className="text-[11px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+              </div>
+              {/* 신상품 연결 */}
+              <div className="flex items-center gap-1.5 mt-1 relative">
+                {item.linked_sku ? (
+                  <>
+                    <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
+                    {linkedOptionLabel && <span className="text-[10px] bg-blue-50 text-blue-500 px-1 py-0.5 rounded">{linkedOptionLabel}</span>}
+                    <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">해제</button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
+                    className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                  >+ 신상품 연결</button>
+                )}
+                {linkTarget === item.vendor_item_id && (
+                  <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
+                    <input
+                      autoFocus
+                      value={linkSearch}
+                      onChange={(e) => setLinkSearch(e.target.value)}
+                      placeholder="상품명 또는 SKU 검색"
+                      className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                    />
+                    <div className="max-h-72 overflow-y-auto space-y-0.5">
+                      {skuOptions
+                        .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
+                        .slice(0, 30)
+                        .map(o => (
+                          <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
+                            className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
+                            {o.label}
+                          </button>
+                        ))}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
-                      className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
-                    >+ 신상품 연결</button>
-                  )}
-                  {linkTarget === item.vendor_item_id && (
-                    <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
-                      <input
-                        autoFocus
-                        value={linkSearch}
-                        onChange={(e) => setLinkSearch(e.target.value)}
-                        placeholder="상품명 또는 SKU 검색"
-                        className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
-                      />
-                      <div className="max-h-72 overflow-y-auto space-y-0.5">
-                        {skuOptions
-                          .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
-                          .slice(0, 30)
-                          .map(o => (
-                            <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
-                              className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
-                              {o.label}
-                            </button>
-                          ))}
-                      </div>
-                      <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
-                    </div>
-                  )}
-                </div>
+                    <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -973,7 +979,10 @@ function RgInventoryTab() {
                   title="반품재판매로 분류"
                 >↗ 반품</button>
               </div>
-              <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
+                <span className="text-[11px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+              </div>
             </>
           )}
         </td>

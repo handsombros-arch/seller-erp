@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const { data: snapshots, error } = await admin
     .from('rg_inventory_snapshots')
-    .select('snapshot_date, vendor_item_id, external_sku_id, item_name, total_orderable_qty, sales_last_30d, sku_id, sku:skus(sku_code, product:products(name))')
+    .select('snapshot_date, vendor_item_id, external_sku_id, item_name, total_orderable_qty, sales_last_30d, sku_id, sku:skus(sku_code, option_values, product:products(name))')
     .gte('snapshot_date', since)
     .order('snapshot_date', { ascending: true });
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   // 반품재판매로 분류된 vendor_item_id 목록
   const { data: returnRows } = await admin
     .from('rg_return_vendor_items')
-    .select('vendor_item_id, grade, sku_id, linked_sku:skus(sku_code, product:products(name))');
+    .select('vendor_item_id, grade, sku_id, linked_sku:skus(sku_code, option_values, product:products(name))');
   const returnMap = new Map<string, { grade: string | null; sku_id: string | null; linked_sku: any }>(
     (returnRows ?? []).map((r) => [r.vendor_item_id, {
       grade: r.grade,
