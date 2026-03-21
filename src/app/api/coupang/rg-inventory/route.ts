@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  // platform_sku_id_return → 반품재판매 여부 판별
+  const { data: returnPsRows } = await admin
+    .from('platform_skus')
+    .select('platform_sku_id_return')
+    .not('platform_sku_id_return', 'is', null);
+  const returnVendorItemIds = new Set(
+    (returnPsRows ?? []).map((r) => String(r.platform_sku_id_return))
+  );
+
   // vendor_item_id 기준으로 grouping → 날짜별 수량 배열 생성
   const byItem = new Map<string, { meta: any; dates: { date: string; qty: number }[] }>();
 
@@ -34,6 +43,7 @@ export async function GET(request: NextRequest) {
           sales_last_30d:  row.sales_last_30d,
           sku_id:          row.sku_id,
           sku:             (row as any).sku,
+          is_return:       returnVendorItemIds.has(row.vendor_item_id),
         },
         dates: [],
       });

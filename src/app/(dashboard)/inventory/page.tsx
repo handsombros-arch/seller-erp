@@ -633,6 +633,7 @@ interface RgInventoryItem {
   current_qty: number;
   days_remaining: number | null;
   daily: { date: string; qty: number; change: number | null }[];
+  is_return: boolean;
 }
 
 function RgInventoryTab() {
@@ -642,6 +643,7 @@ function RgInventoryTab() {
   const [days, setDays] = useState(30);
   const [error, setError] = useState('');
   const [syncMsg, setSyncMsg] = useState('');
+  const [subTab, setSubTab] = useState<'new' | 'return'>('new');
   const [colOrder, setColOrder] = useState<RgCol[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_RG_COLS;
     try { const s = localStorage.getItem('inv_rg_cols'); return s ? JSON.parse(s) : DEFAULT_RG_COLS; } catch { return DEFAULT_RG_COLS; }
@@ -697,11 +699,15 @@ function RgInventoryTab() {
     });
   }
 
+  const newItems    = useMemo(() => items.filter((i) => !i.is_return), [items]);
+  const returnItems = useMemo(() => items.filter((i) => i.is_return),  [items]);
+
   const showDays = Math.min(days, 7);
 
   const sorted = useMemo(() => {
-    if (!sort) return items;
-    return [...items].sort((a, b) => {
+    const source = subTab === 'return' ? returnItems : newItems;
+    if (!sort) return source;
+    return [...source].sort((a, b) => {
       const getV = (item: RgInventoryItem): number | string => {
         switch (sort.col) {
           case 'product': return item.sku?.product?.name ?? item.external_sku_id ?? item.vendor_item_id;
@@ -732,7 +738,12 @@ function RgInventoryTab() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py}`}>
-          <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+            {item.is_return && (
+              <span className="shrink-0 text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">반품재판매</span>
+            )}
+          </div>
           <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
         </td>
       );
@@ -797,6 +808,17 @@ function RgInventoryTab() {
 
   return (
     <div className="space-y-4">
+      {/* 서브탭 */}
+      <div className="flex items-center gap-1 border-b border-[#E5E8EB]">
+        {([['new', '신상품', newItems.length], ['return', '반품재판매', returnItems.length]] as const).map(([v, label, cnt]) => (
+          <button key={v} onClick={() => setSubTab(v)}
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-[#3182F6] text-[#3182F6]' : 'border-transparent text-[#6B7684] hover:text-[#191F28]'}`}>
+            {label}
+            <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-[#3182F6]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>{cnt}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1.5">
           {[7, 14, 30].map((d) => (
@@ -824,11 +846,20 @@ function RgInventoryTab() {
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
-        ) : items.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Package className="h-10 w-10 text-[#B0B8C1] mb-3" />
-            <p className="text-[14px] font-medium text-[#6B7684]">로켓그로스 재고 데이터가 없습니다</p>
-            <p className="text-[12.5px] text-[#B0B8C1] mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
+            {subTab === 'return' ? (
+              <>
+                <p className="text-[14px] font-medium text-[#6B7684]">반품재판매 상품이 없습니다</p>
+                <p className="text-[12.5px] text-[#B0B8C1] mt-1">마스터 시트에서 반품재판매 옵션 ID를 등록하면 자동 분류됩니다</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[14px] font-medium text-[#6B7684]">로켓그로스 재고 데이터가 없습니다</p>
+                <p className="text-[12.5px] text-[#B0B8C1] mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
