@@ -1245,63 +1245,41 @@ export default function ChannelSalesPage() {
 
   return (
     <div className="space-y-5">
-      {/* ── 고정 헤더 (탭바 항상 동일 위치) ─────────────────────────────── */}
+      {/* ── 헤더 ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">채널 판매</h2>
-          <p className="mt-1 text-[13px] text-[#6B7684]">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
+          <p className="mt-1 text-[12px] text-[#6B7684]">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
         </div>
+        {/* 뷰별 액션 버튼 */}
         <div className="flex items-center gap-2">
-          {/* 탭바 — 항상 고정 */}
-          <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl">
-            {([['sales', '판매 집계'], ['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
-              <button key={mode} onClick={() => setViewMode(mode)}
-                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* 뷰별 액션 버튼 */}
-          {(viewMode === 'orders') && <>
+          {(viewMode === 'orders' || viewMode === 'returns') && <>
+            <button onClick={() => setNaverOpen(true)}
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
+              <RefreshCw className="h-4 w-4" /> 네이버
+            </button>
+            <button onClick={() => setTossOpen(true)}
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
+              <RefreshCw className="h-4 w-4" /> 토스
+            </button>
+            <button onClick={() => setSyncOpen(true)}
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
+              <RefreshCw className="h-4 w-4" /> 쿠팡
+            </button>
+          </>}
+          {viewMode === 'orders' && (
             <button onClick={() => setInsightsOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-              <Upload className="h-4 w-4" /> 인사이트 업로드
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
+              <Upload className="h-4 w-4" /> 인사이트
             </button>
-            <button onClick={() => setNaverOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-green-700 hover:bg-green-50 transition-colors">
-              <RefreshCw className="h-4 w-4" /> 네이버 동기화
-            </button>
-            <button onClick={() => setTossOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-blue-700 hover:bg-blue-50 transition-colors">
-              <RefreshCw className="h-4 w-4" /> 토스 동기화
-            </button>
+          )}
+          {viewMode === 'sales' && <>
             <button onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 쿠팡 동기화
-            </button>
-          </>}
-          {(viewMode === 'returns') && <>
-            <button onClick={() => setNaverOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-green-700 hover:bg-green-50 transition-colors">
-              <RefreshCw className="h-4 w-4" /> 네이버 동기화
-            </button>
-            <button onClick={() => setTossOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-blue-700 hover:bg-blue-50 transition-colors">
-              <RefreshCw className="h-4 w-4" /> 토스 동기화
-            </button>
-            <button onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 쿠팡 동기화
-            </button>
-          </>}
-          {(viewMode === 'sales') && <>
-            <button onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
               <RefreshCw className="h-4 w-4" /> 쿠팡 동기화
             </button>
             <button onClick={() => setAddOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
               <Plus className="h-4 w-4" /> 수동 추가
             </button>
             <button onClick={() => setUploadOpen(true)}
@@ -1310,6 +1288,16 @@ export default function ChannelSalesPage() {
             </button>
           </>}
         </div>
+      </div>
+
+      {/* ── 탭바 ─────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+        {([['sales', '판매 집계'], ['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
+          <button key={mode} onClick={() => setViewMode(mode)}
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* ── 콘텐츠 ───────────────────────────────────────────────────────── */}
