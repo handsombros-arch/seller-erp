@@ -24,9 +24,13 @@ export async function GET(request: NextRequest) {
   // 반품재판매로 분류된 vendor_item_id 목록
   const { data: returnRows } = await admin
     .from('rg_return_vendor_items')
-    .select('vendor_item_id, grade');
-  const returnMap = new Map<string, string | null>(
-    (returnRows ?? []).map((r) => [r.vendor_item_id, r.grade])
+    .select('vendor_item_id, grade, sku_id, linked_sku:skus(sku_code, product:products(name))');
+  const returnMap = new Map<string, { grade: string | null; sku_id: string | null; linked_sku: any }>(
+    (returnRows ?? []).map((r) => [r.vendor_item_id, {
+      grade: r.grade,
+      sku_id: r.sku_id ?? null,
+      linked_sku: (r as any).linked_sku ?? null,
+    }])
   );
 
   // external_sku_id → platform_product_name 맵 (sku 미매칭 항목 상품명 표시용)
@@ -57,7 +61,9 @@ export async function GET(request: NextRequest) {
           sku_id:          row.sku_id,
           sku:             (row as any).sku,
           is_return:       isReturn,
-          grade:           isReturn ? (returnMap.get(key) ?? null) : null,
+          grade:           isReturn ? (returnMap.get(key)?.grade ?? null) : null,
+          linked_sku_id:   isReturn ? (returnMap.get(key)?.sku_id ?? null) : null,
+          linked_sku:      isReturn ? (returnMap.get(key)?.linked_sku ?? null) : null,
         },
         dates: [],
       });

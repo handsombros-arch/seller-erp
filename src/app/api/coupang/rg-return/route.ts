@@ -41,13 +41,17 @@ export async function PATCH(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
-  const { vendor_item_id, grade } = await request.json();
+  const { vendor_item_id, grade, sku_id } = await request.json();
   if (!vendor_item_id) return NextResponse.json({ error: 'vendor_item_id 필요' }, { status: 400 });
 
   const admin = await createAdminClient();
+  const patch: Record<string, any> = {};
+  if (grade !== undefined) patch.grade = grade;
+  if (sku_id !== undefined) patch.sku_id = sku_id;
+
   const { error } = await admin
     .from('rg_return_vendor_items')
-    .update({ grade })
+    .update(patch)
     .eq('vendor_item_id', vendor_item_id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

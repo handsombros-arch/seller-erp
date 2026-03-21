@@ -636,6 +636,8 @@ interface RgInventoryItem {
   daily: { date: string; qty: number; change: number | null }[];
   is_return: boolean;
   grade: string | null;
+  linked_sku_id: string | null;
+  linked_sku: { sku_code: string; product: { name: string } } | null;
 }
 
 function RgInventoryTab() {
@@ -655,8 +657,40 @@ function RgInventoryTab() {
   const [dragOver, setDragOver] = useState<RgCol | null>(null);
   const dragRef = useRef<RgCol | null>(null);
   const [classifying, setClassifying] = useState<string | null>(null); // vendor_item_id
+  const [linkTarget, setLinkTarget] = useState<string | null>(null);   // 연결 팝오버 열린 vendor_item_id
+  const [skuOptions, setSkuOptions] = useState<{ id: string; label: string }[]>([]);
+  const [linkSearch, setLinkSearch] = useState('');
 
   const GRADES = ['S급', 'A급', 'B급', 'C급', '최상', '상', '중', '하', '미개봉'];
+
+  useEffect(() => {
+    fetch('/api/skus').then(r => r.json()).then((data: any[]) => {
+      setSkuOptions((data ?? []).map((s: any) => ({
+        id: s.id,
+        label: `${s.product?.name ?? ''} · ${s.sku_code}`,
+      })));
+    }).catch(() => {});
+  }, []);
+
+  async function linkSku(vendorItemId: string, skuId: string) {
+    await fetch('/api/coupang/rg-return', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: skuId }),
+    });
+    setLinkTarget(null);
+    setLinkSearch('');
+    await load();
+  }
+
+  async function unlinkSku(vendorItemId: string) {
+    await fetch('/api/coupang/rg-return', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_item_id: vendorItemId, sku_id: null }),
+    });
+    await load();
+  }
 
   async function classify(vendorItemId: string, grade: string | null) {
     setClassifying(vendorItemId);
@@ -779,7 +813,6 @@ function RgInventoryTab() {
           {item.is_return ? (
             <>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {/* 등급 선택 드롭다운 */}
                 <select
                   value={item.grade ?? ''}
                   onChange={(e) => updateGrade(item.vendor_item_id, e.target.value)}
@@ -788,13 +821,50 @@ function RgInventoryTab() {
                   <option value="">등급없음</option>
                   {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
-                <p className="text-[13px] text-[#6B7684] truncate max-w-[200px]">{productName}</p>
+                <p className="text-[13px] text-[#6B7684] truncate max-w-[180px]">{productName}</p>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
                   className="text-[10px] text-[#B0B8C1] hover:text-red-500 transition-colors ml-auto shrink-0"
-                  title="신상품으로 이동"
                 >해제</button>
+              </div>
+              {/* 새제품 연결 */}
+              <div className="mt-1 relative">
+                {item.linked_sku ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
+                    <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">연결해제</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
+                    className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                  >+ 새제품 연결</button>
+                )}
+                {/* 연결 팝오버 */}
+                {linkTarget === item.vendor_item_id && (
+                  <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
+                    <input
+                      autoFocus
+                      value={linkSearch}
+                      onChange={(e) => setLinkSearch(e.target.value)}
+                      placeholder="상품명 또는 SKU 검색"
+                      className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                    />
+                    <div className="max-h-48 overflow-y-auto space-y-0.5">
+                      {skuOptions
+                        .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
+                        .slice(0, 30)
+                        .map(o => (
+                          <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
+                            className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
+                            {o.label}
+                          </button>
+                        ))}
+                    </div>
+                    <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                  </div>
+                )}
               </div>
               <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
             </>
