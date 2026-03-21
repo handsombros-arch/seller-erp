@@ -66,6 +66,35 @@ function parseDateStr(v: string): string {
   return s.slice(0, 10);
 }
 
+// 주문상태 한글 통일 (원본값 → 한글)
+const STATUS_KO: Record<string, { label: string; cls: string }> = {
+  // 공통
+  PAID:               { label: '결제완료',   cls: 'bg-blue-50 text-blue-600' },
+  DELIVERING:         { label: '배송중',     cls: 'bg-emerald-50 text-emerald-600' },
+  DELIVERED:          { label: '배송완료',   cls: 'bg-green-50 text-green-700' },
+  // 스마트스토어
+  PURCHASE_DECIDED:   { label: '구매확정',   cls: 'bg-green-100 text-green-700' },
+  PAYED:              { label: '결제완료',   cls: 'bg-blue-50 text-blue-600' },
+  CANCELED:           { label: '취소',       cls: 'bg-gray-100 text-gray-500' },
+  RETURNED:           { label: '반품완료',   cls: 'bg-red-100 text-red-600' },
+  EXCHANGED:          { label: '교환완료',   cls: 'bg-purple-100 text-purple-500' },
+  // 토스
+  CONFIRMED_ORDER:    { label: '주문확인',   cls: 'bg-sky-50 text-sky-600' },
+  CANCELED_PAYMENT:   { label: '결제취소',   cls: 'bg-gray-100 text-gray-500' },
+  PURCHASE_CONFIRMED: { label: '구매확정',   cls: 'bg-green-100 text-green-700' },
+  SHIPPING:           { label: '배송중',     cls: 'bg-emerald-50 text-emerald-600' },
+  // 쿠팡 Wing
+  ACCEPT:             { label: '접수',       cls: 'bg-sky-50 text-sky-600' },
+  INSTRUCT:           { label: '발송지시',   cls: 'bg-blue-50 text-blue-600' },
+  // 쿠팡 그로스
+  // PAID는 위에 공통
+};
+
+function statusLabel(raw: string | null): { label: string; cls: string } {
+  if (!raw) return { label: '-', cls: '' };
+  return STATUS_KO[raw] ?? { label: raw, cls: 'bg-[#F2F4F6] text-[#6B7684]' };
+}
+
 const CLAIM_LABEL: Record<string, { label: string; cls: string }> = {
   CANCEL_REQUEST:   { label: '취소요청',  cls: 'bg-yellow-100 text-yellow-700' },
   CANCELED:         { label: '취소완료',  cls: 'bg-gray-100 text-gray-500' },
@@ -760,8 +789,8 @@ export default function OrdersTab() {
               <span className="text-[12px] text-[#6B7684] shrink-0">주문상태:</span>
               {statusOptions.map((s) => (
                 <button key={s} onClick={() => toggleStatus(s)}
-                  className={`h-7 px-3 rounded-full text-[12px] font-medium transition-colors ${selectedStatuses.includes(s) ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
-                  {s}
+                  className={`h-8 px-3 rounded-full text-[12px] font-medium transition-colors ${selectedStatuses.includes(s) ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
+                  {statusLabel(s).label}
                 </button>
               ))}
             </div>
@@ -844,11 +873,13 @@ export default function OrdersTab() {
                           </div>
                         </td>
                       );
-                      if (c.key === 'order_status') return (
+                      if (c.key === 'order_status') {
+                        const st = statusLabel(o.order_status);
+                        return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
                           <div className="flex flex-col gap-1 overflow-hidden">
                             {o.order_status && (
-                              <span className="truncate text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#F2F4F6] text-[#6B7684] w-fit max-w-full">{o.order_status}</span>
+                              <span className={`truncate text-[11px] font-medium px-2 py-0.5 rounded-full w-fit max-w-full ${st.cls}`}>{st.label}</span>
                             )}
                             {o.claim_status && CLAIM_LABEL[o.claim_status] && (
                               <span className={`truncate text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit max-w-full ${CLAIM_LABEL[o.claim_status].cls}`}>
@@ -865,7 +896,7 @@ export default function OrdersTab() {
                             )}
                           </div>
                         </td>
-                      );
+                      );}
                       if (c.key === 'recipient') return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
                           <div className="truncate text-[13px] text-[#191F28]">
