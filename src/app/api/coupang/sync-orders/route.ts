@@ -214,14 +214,15 @@ export async function POST(request: NextRequest) {
     await sleep(400); // rate limit: 분당 50회
   }
 
-  // 주문 동기화 후 재고 자동 차감/복구 (설정에서 활성화 시에만)
-  // TODO: 설정 토글 구현 후 활성화. 현재 비활성 — 과거 데이터 정리 완료 후 켤 것
-  // let deductResult = null;
-  // try { deductResult = await applyOrdersToInventory(admin, user.id); } catch {}
+  // 주문 동기화 후 재고 자동 차감/복구
+  let deductResult = null;
+  try { deductResult = await applyOrdersToInventory(admin, user.id); } catch {}
 
   return NextResponse.json({
     synced,
     skipped,
     errors: errors.length ? errors : undefined,
+    deducted: deductResult?.applied ?? 0,
+    restored: deductResult?.restored ?? 0,
   });
 }

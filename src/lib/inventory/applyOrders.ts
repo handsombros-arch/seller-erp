@@ -111,9 +111,9 @@ export async function applyOrdersToInventory(
     const isShipped = SHIPPED_STATUSES.some((s) => status.includes(s.toUpperCase()));
     const isCancelled = CANCEL_RETURN_STATUSES.some((s) => status.includes(s.toUpperCase()));
 
-    // 수기 기입일 이후만
+    // 수기 기입일 이후만 (기입일 당일 주문 포함)
     const lastManual = lastManualDate.get(order.sku_id);
-    if (lastManual && order.order_date <= lastManual) continue;
+    if (lastManual && order.order_date < lastManual) continue;
 
     const inv = invMap.get(order.sku_id);
     const warehouseId = inv?.warehouse_id ?? defaultWhId;
