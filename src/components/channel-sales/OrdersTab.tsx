@@ -31,7 +31,8 @@ interface ParsedOrderRow {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const JEJU_KEYWORDS = ['제주특별자치도', '제주도', '제주시', '서귀포', '제주 ', '도서산간', '울릉', '독도'];
-const JEJU_SURCHARGE = 3000;
+const BASE_SHIPPING = 2650;     // 기본 배송비 (VAT 포함)
+const JEJU_SURCHARGE = 3000;    // 제주/도서산간 추가
 
 const ALL_COLS = [
   { key: 'order_date',      label: '주문일자' },
@@ -41,7 +42,7 @@ const ALL_COLS = [
   { key: 'order_number',    label: '주문번호' },
   { key: 'recipient',       label: '수하인명' },
   { key: 'quantity',        label: '수량' },
-  { key: 'shipping_cost',   label: '택배운임' },
+  { key: 'shipping_cost',   label: '배송비' },
   { key: 'tracking_number', label: '송장번호' },
   { key: 'order_status',    label: '주문상태' },
 ] as const;
@@ -167,7 +168,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
         order_number:    findCol(['주문번호', '주문 번호']),
         recipient:       findCol(['수하인', '수취인', '받는 분', '받는분', '수령인']),
         quantity:        findCol(['수량', '주문수량', '주문 수량']),
-        shipping_cost:   findCol(['택배운임', '배송비', '택배비', '배송료', '운임']),
+        shipping_cost:   findCol(['배송비', '배송비', '택배비', '배송료', '운임']),
         tracking_number: findCol(['송장번호', '운송장번호', '송장']),
         order_status:    findCol(['주문상태', '처리상태', '배송상태', '상태']),
         address:         findCol(['수취인주소', '배송지', '배송주소', '주소', '수령인주소']),
@@ -184,14 +185,10 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
     const parsed: ParsedOrderRow[] = raw.map((row) => {
       const product_name = String(row[cm.product_name] ?? '').trim();
       const qty = parseInt(String(row[cm.quantity] ?? '1').replace(/,/g, ''), 10) || 1;
-      // 상품별 물류비 조회 (SKU 상품명이 CSV 상품명에 포함되면 매칭)
-      const pnLower = product_name.toLowerCase();
-      let origShip = 0;
-      for (const [name, cost] of skuLogisticsRef.current) {
-        if (pnLower.includes(name)) { origShip = cost; break; }
-      }
+      // 고정 배송비: 2,650원 + 제주 3,000원
       const addr = String(row[cm.address] ?? '').trim();
       const jeju = addr ? isRemoteArea(addr) : false;
+      const origShip = BASE_SHIPPING;
       const shipping_cost = origShip + (jeju ? JEJU_SURCHARGE : 0);
 
       return {
@@ -258,8 +255,8 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           {/* 양식 다운로드 */}
           <div className="flex items-center justify-between bg-[#F8F9FB] rounded-xl px-4 py-3">
             <div>
-              <p className="text-[13px] font-semibold text-[#191F28]">주문일자, 상품명, 옵션명, 주문번호, 수하인명, 수량, 택배운임, 송장번호, 주문상태, 배송주소</p>
-              <p className="text-[12px] text-[#6B7684] mt-0.5">배송주소에 <strong>제주/도서산간</strong> 포함 시 택배운임 +3,000원 자동 적용</p>
+              <p className="text-[13px] font-semibold text-[#191F28]">주문일자, 상품명, 옵션명, 주문번호, 수하인명, 수량, 배송비, 송장번호, 주문상태, 배송주소</p>
+              <p className="text-[12px] text-[#6B7684] mt-0.5">배송주소에 <strong>제주/도서산간</strong> 포함 시 배송비 +3,000원 자동 적용</p>
             </div>
             <a href="/api/csv-template?type=channel-orders" download
               className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-[#3182F6] text-[12px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 ml-3">
@@ -294,7 +291,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   { key: 'order_number', label: '주문번호' },
                   { key: 'recipient', label: '수하인명' },
                   { key: 'quantity', label: '수량' },
-                  { key: 'shipping_cost', label: '택배운임' },
+                  { key: 'shipping_cost', label: '배송비' },
                   { key: 'tracking_number', label: '송장번호' },
                   { key: 'order_status', label: '주문상태' },
                   { key: 'address', label: '배송주소 (제주감지)' },
@@ -324,7 +321,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                 <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
-                <span className="text-[12px] text-[#6B7684]">택배운임 합계</span>
+                <span className="text-[12px] text-[#6B7684]">배송비 합계</span>
                 <span className="text-[13px] font-bold text-[#191F28]">{formatCurrency(totalShip)}</span>
               </div>
               {jejuCount > 0 && (
@@ -344,7 +341,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                 <table className="w-full">
                   <thead className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
                     <tr>
-                      {['주문일자', '상품명', '옵션', '수하인', '수량', '택배운임', '주문상태'].map((h) => (
+                      {['주문일자', '상품명', '옵션', '수하인', '수량', '배송비', '주문상태'].map((h) => (
                         <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -973,7 +970,7 @@ export default function OrdersTab() {
           {jejuCount > 0 && <span className="text-[11px] text-blue-600 font-medium">제주 {jejuCount}건</span>}
           <div className="w-px h-4 bg-[#E5E8EB]" />
           <span className="text-[13px] text-[#6B7684]">수량 <span className="font-bold text-[#191F28]">{formatNumber(totalQty)}개</span></span>
-          <span className="text-[13px] text-[#6B7684]">택배운임 <span className="font-bold text-[#191F28]">{formatCurrency(totalShip)}</span></span>
+          <span className="text-[13px] text-[#6B7684]">배송비 <span className="font-bold text-[#191F28]">{formatCurrency(totalShip)}</span></span>
         </div>
       )}
 

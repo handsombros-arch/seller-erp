@@ -138,8 +138,8 @@ export async function GET(request: NextRequest) {
               tracking_number: po.invoiceNo ?? null,
               order_status: po.productOrderStatus ?? null,
               claim_status: po.claimStatus ?? null, claim_type: po.claimType ?? null,
-              shipping_cost: Number(po.deliveryFeeAmount ?? 0),
-              orig_shipping: Number(po.deliveryFeeAmount ?? 0), jeju_surcharge: false,
+              shipping_cost: (() => { const a = po.shippingAddress ? `${po.shippingAddress.baseAddress ?? ''}` : ''; return 2650 + (/제주|서귀포|울릉|도서산간/.test(a) ? 3000 : 0); })(),
+              orig_shipping: 2650, jeju_surcharge: (() => { const a = po.shippingAddress ? `${po.shippingAddress.baseAddress ?? ''}` : ''; return /제주|서귀포|울릉|도서산간/.test(a); })(),
               sku_id: matcher.byCode(skuCode) ?? matcher.byNameOption(po.productName ?? '', po.productOption) ?? null,
             };
           });
@@ -190,9 +190,9 @@ export async function GET(request: NextRequest) {
             recipient: item.receiverName ?? null, buyer_phone: item.receiverPhone ?? null,
             address: addr || null, tracking_number: item.shippingTrackingNumber ?? null,
             order_status: item.orderProductStatus ?? null,
-            shipping_cost: Number(item.deliveryFee ?? 0) + Number(item.jejuDeliveryFee ?? 0) + Number(item.mountainDeliveryFee ?? 0),
-            orig_shipping: Number(item.deliveryFee ?? 0),
-            jeju_surcharge: /제주|서귀포/.test(addr) && Number(item.jejuDeliveryFee ?? 0) > 0,
+            shipping_cost: 2650 + (/제주|서귀포|울릉|도서산간/.test(addr) ? 3000 : 0),
+            orig_shipping: 2650,
+            jeju_surcharge: /제주|서귀포|울릉|도서산간/.test(addr),
             sku_id: matcher.byCode(skuCode) ?? matcher.byNameOption(item.productName ?? '', item.optionName) ?? null,
           };
         });

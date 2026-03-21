@@ -117,9 +117,9 @@ export async function POST(request: NextRequest) {
           order_status:    po.productOrderStatus ?? null,
           claim_status:    po.claimStatus ?? null,
           claim_type:      po.claimType ?? null,
-          shipping_cost:   Number(po.deliveryFeeAmount ?? 0),
-          orig_shipping:   Number(po.deliveryFeeAmount ?? 0),
-          jeju_surcharge:  false,
+          shipping_cost:   (() => { const addr = po.shippingAddress ? `${po.shippingAddress.baseAddress ?? ''} ${po.shippingAddress.detailedAddress ?? ''}` : ''; const isJeju = /제주|서귀포|울릉|도서산간/.test(addr); return 2650 + (isJeju ? 3000 : 0); })(),
+          orig_shipping:   2650,
+          jeju_surcharge:  (() => { const addr = po.shippingAddress ? `${po.shippingAddress.baseAddress ?? ''}` : ''; return /제주|서귀포|울릉|도서산간/.test(addr); })(),
           sku_id:          skuId,
         };
       });

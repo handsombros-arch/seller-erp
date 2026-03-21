@@ -92,9 +92,9 @@ export async function POST(request: NextRequest) {
           address:         addr || null,
           tracking_number: item.shippingTrackingNumber ?? null,
           order_status:    item.orderProductStatus ?? null,
-          shipping_cost:   Number(item.deliveryFee ?? 0) + Number(item.jejuDeliveryFee ?? 0) + Number(item.mountainDeliveryFee ?? 0),
-          orig_shipping:   Number(item.deliveryFee ?? 0),
-          jeju_surcharge:  isJeju && Number(item.jejuDeliveryFee ?? 0) > 0,
+          shipping_cost:   2650 + (isJeju ? 3000 : 0),
+          orig_shipping:   2650,
+          jeju_surcharge:  isJeju,
           sku_id:          skuId,
         };
       });
