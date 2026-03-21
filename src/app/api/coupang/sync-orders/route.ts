@@ -65,15 +65,32 @@ export async function POST(request: NextRequest) {
     (aliasRows ?? []).map((a: any) => [a.channel_name.trim().toLowerCase(), a.sku_id])
   );
 
-  // 쿠팡그로스 vendorItemId → sku_id 매핑 (신상품 + 반품재판매 옵션ID 모두 포함)
+  // 쿠팡그로스 vendorItemId → sku_id 매핑
+  // 1) rg_inventory_snapshots: vendor_item_id → sku_id (가장 정확)
+  const { data: rgSnapshots } = await admin
+    .from('rg_inventory_snapshots')
+    .select('vendor_item_id, sku_id')
+    .not('sku_id', 'is', null);
+  const rgSkuMap = new Map<string, string>();
+  for (const r of rgSnapshots ?? []) {
+    rgSkuMap.set(String(r.vendor_item_id), r.sku_id as string);
+  }
+  // 2) platform_skus: external_sku_id → sku_id (fallback)
   const { data: platformSkus } = await admin
     .from('platform_skus')
     .select('sku_id, platform_sku_id, platform_sku_id_return, channel:channels(type)');
-  const rgSkuMap = new Map<string, string>();
   for (const ps of platformSkus ?? []) {
     if ((ps as any).channel?.type !== 'coupang') continue;
     if ((ps as any).platform_sku_id)        rgSkuMap.set(String((ps as any).platform_sku_id),        (ps as any).sku_id);
     if ((ps as any).platform_sku_id_return) rgSkuMap.set(String((ps as any).platform_sku_id_return), (ps as any).sku_id);
+  }
+  // 3) rg_return_vendor_items: 반품 vendor_item_id → sku_id
+  const { data: returnItems } = await admin
+    .from('rg_return_vendor_items')
+    .select('vendor_item_id, sku_id')
+    .not('sku_id', 'is', null);
+  for (const r of returnItems ?? []) {
+    if (!rgSkuMap.has(r.vendor_item_id)) rgSkuMap.set(r.vendor_item_id, r.sku_id as string);
   }
 
   let synced = 0;
