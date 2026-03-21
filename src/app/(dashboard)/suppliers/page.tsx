@@ -17,7 +17,7 @@ function Dialog({ open, onClose, title, children }: {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28]">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -39,7 +39,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
 // ─── Supplier Form ────────────────────────────────────────────────────────────
 
@@ -144,7 +144,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
           <input className={inputCls} type="number" min="1" max="365" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
           <span className="text-[13px] text-[#6B7684] whitespace-nowrap">일</span>
         </div>
-        <p className="text-[11.5px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
+        <p className="text-[11px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
       </Field>
 
       <Field label="주요 상품">
@@ -158,7 +158,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
           <div key={i} className="flex items-start gap-2 bg-[#F8F9FB] rounded-xl px-3 py-2.5">
             <MapPin className="h-3.5 w-3.5 text-[#B0B8C1] mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11.5px] font-semibold text-[#6B7684]">{addr.label}</p>
+              <p className="text-[11px] font-semibold text-[#6B7684]">{addr.label}</p>
               <p className="text-[13px] text-[#191F28] break-all">{addr.address}</p>
             </div>
             <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors shrink-0">
@@ -171,18 +171,18 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
             <select
               value={addrInput.type}
               onChange={(e) => handleAddrTypeChange(e.target.value as SupplierAddress['type'])}
-              className="h-9 px-2 rounded-xl border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6] transition-colors shrink-0"
+              className="h-10 px-2 rounded-xl border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6] transition-colors shrink-0"
             >
               {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <input
-              className="flex-1 h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
               placeholder="주소 입력"
               value={addrInput.address}
               onChange={(e) => setAddrInput((a) => ({ ...a, address: e.target.value }))}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAddress(); } }}
             />
-            <button type="button" onClick={addAddress} className="h-9 w-9 flex items-center justify-center rounded-xl bg-[#EBF1FE] text-[#3182F6] hover:bg-[#3182F6] hover:text-white transition-colors shrink-0">
+            <button type="button" onClick={addAddress} className="h-10 w-9 flex items-center justify-center rounded-xl bg-[#EBF1FE] text-[#3182F6] hover:bg-[#3182F6] hover:text-white transition-colors shrink-0">
               <Plus className="h-4 w-4" />
             </button>
           </div>
@@ -191,16 +191,16 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
 
       <Field label="메모">
         <textarea
-          className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
+          className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
           rows={2} placeholder="특이사항, 계좌 정보 등"
           value={form.note} onChange={(e) => set('note', e.target.value)}
         />
       </Field>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
           취소
         </button>
-        <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           저장
         </button>
@@ -287,13 +287,13 @@ export default function SuppliersPage() {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">공급처 관리</h2>
-          <p className="mt-1 text-[13.5px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
+          <p className="mt-1 text-[13px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
             <Upload className="h-4 w-4" /> CSV 업로드
           </button>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors">
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
             <Plus className="h-4 w-4" /> 공급처 추가
           </button>
         </div>
@@ -307,7 +307,7 @@ export default function SuppliersPage() {
       ) : suppliers.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
           <Building2 className="h-10 w-10 text-[#B0B8C1] mb-3" />
-          <p className="text-[14px] font-medium text-[#6B7684]">등록된 공급처가 없습니다</p>
+          <p className="text-[13px] font-medium text-[#6B7684]">등록된 공급처가 없습니다</p>
           <p className="text-[13px] text-[#B0B8C1] mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
         </div>
       ) : (
@@ -328,26 +328,26 @@ export default function SuppliersPage() {
                     </div>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
                       {s.contact_person && (
-                        <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]">
+                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
                           <span className="text-[#B0B8C1]">담당자</span> {s.contact_person}
                         </span>
                       )}
                       {s.phone && (
-                        <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]">
+                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
                           <Phone className="h-3.5 w-3.5 text-[#B0B8C1]" />
                           {s.phone_country_code && `${s.phone_country_code} `}{s.phone}
                         </span>
                       )}
                       {s.email && (
-                        <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]">
+                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
                           <Mail className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.email}
                         </span>
                       )}
-                      <span className="flex items-center gap-1 text-[12.5px] font-medium text-[#3182F6]">
+                      <span className="flex items-center gap-1 text-[12px] font-medium text-[#3182F6]">
                         <Clock className="h-3.5 w-3.5" /> 리드타임 {s.lead_time_days}일
                       </span>
                       {s.main_products && (
-                        <span className="flex items-center gap-1 text-[12.5px] text-[#6B7684]">
+                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
                           <Package className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.main_products}
                         </span>
                       )}
@@ -436,13 +436,13 @@ export default function SuppliersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteId(null)} />
           <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
-            <h3 className="text-[16px] font-bold text-[#191F28] mb-2">공급처 삭제</h3>
-            <p className="text-[13.5px] text-[#6B7684]">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
+            <h3 className="text-[15px] font-bold text-[#191F28] mb-2">공급처 삭제</h3>
+            <p className="text-[13px] text-[#6B7684]">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
                 취소
               </button>
-              <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[14px] font-semibold hover:bg-red-600 transition-colors">
+              <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors">
                 삭제
               </button>
             </div>

@@ -97,7 +97,7 @@ function WarehouseSection() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Warehouse className="w-4 h-4 text-[#3182F6]" />
-          <h2 className="text-[14px] font-bold text-[#191F28]">창고 관리</h2>
+          <h2 className="text-[13px] font-bold text-[#191F28]">창고 관리</h2>
         </div>
         <button
           onClick={openAdd}
@@ -114,14 +114,14 @@ function WarehouseSection() {
             <Loader2 className="w-5 h-5 animate-spin text-[#3182F6]" />
           </div>
         ) : warehouses.length === 0 ? (
-          <div className="py-10 text-center text-[13.5px] text-[#B0B8C1]">등록된 창고가 없습니다</div>
+          <div className="py-10 text-center text-[13px] text-[#B0B8C1]">등록된 창고가 없습니다</div>
         ) : (
           <div className="divide-y divide-[#F2F4F6]">
             {warehouses.map((w) => (
               <div key={w.id} className="flex items-center justify-between px-5 py-4 hover:bg-[#F9FAFB] transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-[13.5px] font-medium text-[#191F28]">{w.name}</p>
+                    <p className="text-[13px] font-medium text-[#191F28]">{w.name}</p>
                     <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium ${WAREHOUSE_TYPE_BADGE[w.type] ?? 'bg-gray-100 text-gray-600'}`}>
                       {WAREHOUSE_TYPE_LABELS[w.type] ?? w.type}
                     </span>
@@ -163,7 +163,7 @@ function WarehouseSection() {
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   required
                   placeholder="창고명 입력"
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
                 />
               </div>
               <div>
@@ -171,7 +171,7 @@ function WarehouseSection() {
                 <select
                   value={form.type}
                   onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] bg-white"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] bg-white"
                 >
                   {Object.entries(WAREHOUSE_TYPE_LABELS).map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>
@@ -185,7 +185,7 @@ function WarehouseSection() {
                   value={form.location}
                   onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
                   placeholder="주소 또는 위치 설명 (선택사항)"
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
                 />
               </div>
             </div>
@@ -193,14 +193,14 @@ function WarehouseSection() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="flex-1 px-4 py-2.5 text-[13.5px] font-medium text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
+                className="flex-1 px-4 py-2.5 text-[13px] font-medium text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
               >
                 취소
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13.5px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editTarget ? '저장' : '추가'}
@@ -270,7 +270,7 @@ function ChannelSection() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Radio className="w-4 h-4 text-[#3182F6]" />
-          <h2 className="text-[14px] font-bold text-[#191F28]">채널 관리</h2>
+          <h2 className="text-[13px] font-bold text-[#191F28]">채널 관리</h2>
         </div>
         <button
           onClick={openAdd}
@@ -287,7 +287,7 @@ function ChannelSection() {
             <Loader2 className="w-5 h-5 animate-spin text-[#3182F6]" />
           </div>
         ) : channels.length === 0 ? (
-          <div className="py-10 text-center text-[13.5px] text-[#B0B8C1]">등록된 채널이 없습니다</div>
+          <div className="py-10 text-center text-[13px] text-[#B0B8C1]">등록된 채널이 없습니다</div>
         ) : (
           <div className="divide-y divide-[#F2F4F6]">
             {channels.map((c) => (
@@ -296,7 +296,7 @@ function ChannelSection() {
                   <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium ${CHANNEL_TYPE_BADGE[c.type] ?? 'bg-gray-100 text-gray-600'}`}>
                     {CHANNEL_TYPE_LABELS[c.type] ?? c.type}
                   </span>
-                  <p className="text-[13.5px] font-medium text-[#191F28]">{c.name}</p>
+                  <p className="text-[13px] font-medium text-[#191F28]">{c.name}</p>
                   {!c.is_active && (
                     <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium bg-gray-100 text-gray-500">비활성</span>
                   )}
@@ -329,7 +329,7 @@ function ChannelSection() {
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   required
                   placeholder="예: 쿠팡 공식스토어"
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
                 />
               </div>
               <div>
@@ -337,7 +337,7 @@ function ChannelSection() {
                 <select
                   value={form.type}
                   onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] bg-white"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] bg-white"
                 >
                   {Object.entries(CHANNEL_TYPE_LABELS).map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>
@@ -349,14 +349,14 @@ function ChannelSection() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="flex-1 px-4 py-2.5 text-[13.5px] font-medium text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
+                className="flex-1 px-4 py-2.5 text-[13px] font-medium text-[#6B7684] bg-[#F2F4F6] rounded-xl hover:bg-[#E5E8EB] transition-colors"
               >
                 취소
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13.5px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-[13px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editTarget ? '저장' : '추가'}
@@ -420,7 +420,7 @@ function AccountSection() {
     <section>
       <div className="flex items-center gap-2 mb-4">
         <User className="w-4 h-4 text-[#3182F6]" />
-        <h2 className="text-[14px] font-bold text-[#191F28]">계정 정보</h2>
+        <h2 className="text-[13px] font-bold text-[#191F28]">계정 정보</h2>
       </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden divide-y divide-[#F2F4F6]">
@@ -428,7 +428,7 @@ function AccountSection() {
         <div className="flex items-center justify-between px-5 py-4">
           <div>
             <p className="text-[12px] text-[#6B7684] mb-0.5">이메일</p>
-            <p className="text-[13.5px] font-medium text-[#191F28]">{email || '-'}</p>
+            <p className="text-[13px] font-medium text-[#191F28]">{email || '-'}</p>
           </div>
         </div>
 
@@ -437,7 +437,7 @@ function AccountSection() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[12px] text-[#6B7684] mb-0.5">비밀번호</p>
-              <p className="text-[13.5px] text-[#191F28]">••••••••</p>
+              <p className="text-[13px] text-[#191F28]">••••••••</p>
             </div>
             <button
               onClick={() => { setShowPwForm((v) => !v); setPwMsg(null); }}
@@ -457,7 +457,7 @@ function AccountSection() {
                   onChange={(e) => setPwForm((f) => ({ ...f, next: e.target.value }))}
                   required
                   placeholder="새 비밀번호 (6자 이상)"
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
                 />
               </div>
               <div>
@@ -468,12 +468,12 @@ function AccountSection() {
                   onChange={(e) => setPwForm((f) => ({ ...f, confirm: e.target.value }))}
                   required
                   placeholder="새 비밀번호 재입력"
-                  className="w-full px-3 py-2 text-[13.5px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
+                  className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]"
                 />
               </div>
 
               {pwMsg && (
-                <p className={`text-[12.5px] ${pwMsg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
+                <p className={`text-[12px] ${pwMsg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
                   {pwMsg.text}
                 </p>
               )}
@@ -481,7 +481,7 @@ function AccountSection() {
               <button
                 type="submit"
                 disabled={pwLoading}
-                className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13.5px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
+                className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
               >
                 {pwLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 비밀번호 변경
@@ -496,7 +496,7 @@ function AccountSection() {
 
 // ───────────────── Coupang API section ─────────────────
 
-const iCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+const iCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
 function CoupangApiSection() {
   const [connected, setConnected] = useState<{ vendor_id: string; updated_at: string } | null>(null);
@@ -538,7 +538,7 @@ function CoupangApiSection() {
     <section>
       <div className="flex items-center gap-2 mb-4">
         <Link2 className="w-4 h-4 text-[#3182F6]" />
-        <h2 className="text-[14px] font-bold text-[#191F28]">쿠팡 Open API 연동</h2>
+        <h2 className="text-[13px] font-bold text-[#191F28]">쿠팡 Open API 연동</h2>
       </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden divide-y divide-[#F2F4F6]">
@@ -557,14 +557,14 @@ function CoupangApiSection() {
               <div>
                 {connected ? (
                   <>
-                    <p className="text-[13.5px] font-medium text-[#191F28]">연동됨 · Vendor ID: {connected.vendor_id}</p>
+                    <p className="text-[13px] font-medium text-[#191F28]">연동됨 · Vendor ID: {connected.vendor_id}</p>
                     <p className="text-[12px] text-[#B0B8C1] mt-0.5">
                       마지막 업데이트 {new Date(connected.updated_at).toLocaleDateString('ko-KR')}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-[13.5px] font-medium text-[#191F28]">API 키 미등록</p>
+                    <p className="text-[13px] font-medium text-[#191F28]">API 키 미등록</p>
                     <p className="text-[12px] text-[#B0B8C1] mt-0.5">쿠팡 Wing &gt; 개발자 센터에서 API 키를 발급받으세요</p>
                   </>
                 )}
@@ -581,7 +581,7 @@ function CoupangApiSection() {
 
         {showForm && (
           <form onSubmit={handleSave} className="px-5 py-5 space-y-4">
-            <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 text-[12.5px] text-[#3182F6] space-y-1">
+            <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 text-[12px] text-[#3182F6] space-y-1">
               <p className="font-semibold">쿠팡 Wing API 키 발급 방법</p>
               <p>1. wing.coupang.com 로그인 → 상단 메뉴 &gt; 개발자 센터</p>
               <p>2. API 키 발급 → Access Key / Secret Key 복사</p>
@@ -603,10 +603,10 @@ function CoupangApiSection() {
                 onChange={(e) => setForm((f) => ({ ...f, vendor_id: e.target.value }))} required />
             </div>
             {msg && (
-              <p className={`text-[12.5px] ${msg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
+              <p className={`text-[12px] ${msg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>
             )}
             <button type="submit" disabled={saving}
-              className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13.5px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13px] font-medium text-white bg-[#3182F6] rounded-xl hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               API 키 저장
             </button>
@@ -658,7 +658,7 @@ function NaverApiSection() {
     <section>
       <div className="flex items-center gap-2 mb-4">
         <Link2 className="w-4 h-4 text-green-600" />
-        <h2 className="text-[14px] font-bold text-[#191F28]">네이버 커머스 API 연동</h2>
+        <h2 className="text-[13px] font-bold text-[#191F28]">네이버 커머스 API 연동</h2>
       </div>
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden divide-y divide-[#F2F4F6]">
         {loading ? (
@@ -676,12 +676,12 @@ function NaverApiSection() {
               <div>
                 {connected ? (
                   <>
-                    <p className="text-[13.5px] font-medium text-[#191F28]">연동됨 · Client ID: {connected.client_id}</p>
+                    <p className="text-[13px] font-medium text-[#191F28]">연동됨 · Client ID: {connected.client_id}</p>
                     <p className="text-[12px] text-[#B0B8C1] mt-0.5">마지막 업데이트 {new Date(connected.updated_at).toLocaleDateString('ko-KR')}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-[13.5px] font-medium text-[#191F28]">API 키 미등록</p>
+                    <p className="text-[13px] font-medium text-[#191F28]">API 키 미등록</p>
                     <p className="text-[12px] text-[#B0B8C1] mt-0.5">네이버 스마트스토어센터 → 판매자 정보 → API 연동에서 발급</p>
                   </>
                 )}
@@ -705,9 +705,9 @@ function NaverApiSection() {
               <input className={iCls} type="password" placeholder="Client Secret" value={form.clientSecret}
                 onChange={(e) => setForm((f) => ({ ...f, clientSecret: e.target.value }))} required />
             </div>
-            {msg && <p className={`text-[12.5px] ${msg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
+            {msg && <p className={`text-[12px] ${msg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{msg.text}</p>}
             <button type="submit" disabled={saving}
-              className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13.5px] font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-60">
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 text-[13px] font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-60">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               API 키 저장
             </button>
@@ -747,7 +747,7 @@ function DataResetSection() {
     <section>
       <div className="flex items-center gap-2 mb-4">
         <Trash2 className="w-4 h-4 text-red-500" />
-        <h2 className="text-[14px] font-bold text-[#191F28]">데이터 초기화</h2>
+        <h2 className="text-[13px] font-bold text-[#191F28]">데이터 초기화</h2>
       </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
@@ -786,7 +786,7 @@ function DataResetSection() {
           )}
 
           {result && (
-            <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] font-medium ${result.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+            <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium ${result.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
               {result.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
               {result.msg}
             </div>
@@ -804,7 +804,7 @@ export default function SettingsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-[20px] font-bold text-[#191F28]">설정</h1>
-        <p className="text-[13.5px] text-[#6B7684] mt-0.5">창고, 채널, 계정을 관리합니다</p>
+        <p className="text-[13px] text-[#6B7684] mt-0.5">창고, 채널, 계정을 관리합니다</p>
       </div>
 
       <WarehouseSection />

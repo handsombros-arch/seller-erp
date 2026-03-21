@@ -51,7 +51,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-[10px] py-[9px] text-[13.5px] font-medium transition-all duration-100',
+                'flex items-center gap-3 rounded-[10px] py-[9px] text-[13px] font-medium transition-all duration-100',
                 item.sub ? 'pl-8 pr-3 text-[13px]' : 'px-3',
                 isActive
                   ? 'bg-[#EBF1FE] text-primary'

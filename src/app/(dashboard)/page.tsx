@@ -88,7 +88,7 @@ function DailyOutboundChart() {
     <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div>
-          <h3 className="text-[14px] font-semibold text-[#191F28] tracking-[-0.02em]">일별 출고량</h3>
+          <h3 className="text-[13px] font-semibold text-[#191F28] tracking-[-0.02em]">일별 출고량</h3>
           <p className="text-[12px] text-[#B0B8C1] mt-0.5">
             {days}일간 총 <span className="font-semibold text-[#191F28]">{formatNumber(grandTotal)}개</span> 출고
             {maxDay && maxDay.total > 0 && (
@@ -99,7 +99,7 @@ function DailyOutboundChart() {
         <div className="flex rounded-xl border border-[#E5E8EB] overflow-hidden">
           {([30, 60, 90] as const).map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 text-[12.5px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 text-[12px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {d}일
             </button>
           ))}
@@ -235,7 +235,7 @@ function SalesTrendSection() {
     <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div>
-          <h3 className="text-[14px] font-semibold text-[#191F28] tracking-[-0.02em]">판매 추이</h3>
+          <h3 className="text-[13px] font-semibold text-[#191F28] tracking-[-0.02em]">판매 추이</h3>
           <p className="text-[12px] text-[#B0B8C1] mt-0.5">상품·옵션별 기간 판매량</p>
         </div>
 
@@ -244,7 +244,7 @@ function SalesTrendSection() {
           <div className="flex rounded-xl border border-[#E5E8EB] overflow-hidden">
             {(['day', 'week'] as const).map((u) => (
               <button key={u} onClick={() => setUnit(u)}
-                className={`h-8 px-3 text-[12.5px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+                className={`h-8 px-3 text-[12px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
                 {u === 'day' ? '일별' : '주별'}
               </button>
             ))}
@@ -253,10 +253,10 @@ function SalesTrendSection() {
           {/* 날짜 범위 */}
           <div className="flex items-center gap-1.5">
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-              className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
+              className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
             <span className="text-[12px] text-[#B0B8C1]">~</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-              className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
+              className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
           </div>
         </div>
       </div>
@@ -264,7 +264,7 @@ function SalesTrendSection() {
       {/* SKU 선택 */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         {selectedIds.map((id, idx) => (
-          <span key={id} className="flex items-center gap-1.5 h-7 pl-2.5 pr-1.5 rounded-full text-[12px] font-medium text-white"
+          <span key={id} className="flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-full text-[12px] font-medium text-white"
             style={{ backgroundColor: LINE_COLORS[idx % LINE_COLORS.length] }}>
             {skuOptions.find((s) => s.id === id)?.label ?? id}
             <button onClick={() => toggleSku(id)} className="hover:opacity-70">
@@ -274,7 +274,7 @@ function SalesTrendSection() {
         ))}
         <div className="relative" ref={dropRef}>
           <button onClick={() => setDropOpen((v) => !v)}
-            className="flex items-center gap-1 h-7 px-3 rounded-full border border-dashed border-[#B0B8C1] text-[12px] text-[#6B7684] hover:border-[#3182F6] hover:text-[#3182F6] transition-colors">
+            className="flex items-center gap-1 h-8 px-3 rounded-full border border-dashed border-[#B0B8C1] text-[12px] text-[#6B7684] hover:border-[#3182F6] hover:text-[#3182F6] transition-colors">
             <Plus className="h-3 w-3" /> 상품 추가
             <ChevronDown className="h-3 w-3" />
           </button>
@@ -404,7 +404,7 @@ export default function DashboardPage() {
     <div className="space-y-5">
       <div className="pt-1">
         <h2 className="text-[20px] font-bold tracking-[-0.03em] text-foreground">대시보드</h2>
-        <p className="mt-1 text-[13.5px] text-[#6B7684]">재고 현황과 발주 알림을 확인하세요</p>
+        <p className="mt-1 text-[13px] text-[#6B7684]">재고 현황과 발주 알림을 확인하세요</p>
       </div>
 
       {/* 재고 음수 경고 */}
@@ -414,8 +414,8 @@ export default function DashboardPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-[14px] font-bold text-red-700">재고 이상 감지 — {stockAlerts.length}개 SKU 재고 음수</p>
-                <p className="text-[12.5px] text-red-500 mt-0.5">주문 자동 차감으로 재고가 0 이하가 된 항목입니다. 수기 재고 기입 또는 발주를 확인하세요.</p>
+                <p className="text-[13px] font-bold text-red-700">재고 이상 감지 — {stockAlerts.length}개 SKU 재고 음수</p>
+                <p className="text-[12px] text-red-500 mt-0.5">주문 자동 차감으로 재고가 0 이하가 된 항목입니다. 수기 재고 기입 또는 발주를 확인하세요.</p>
               </div>
             </div>
             <button
@@ -428,7 +428,7 @@ export default function DashboardPage() {
           {alertsExpanded && (
             <div className="mt-3 border-t border-red-200 pt-3 space-y-1.5">
               {stockAlerts.map((a) => (
-                <div key={a.sku_id + a.warehouse_name} className="flex items-center gap-3 text-[12.5px]">
+                <div key={a.sku_id + a.warehouse_name} className="flex items-center gap-3 text-[12px]">
                   <span className="font-semibold text-red-700 w-5 text-right">{a.quantity}</span>
                   <span className="text-red-400">개</span>
                   <span className="font-medium text-[#191F28]">{a.product_name}</span>
@@ -445,15 +445,15 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map((s) => (
           <Link key={s.label} href={s.href} className="block bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-150 cursor-pointer">
-            <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
+            <div className={`w-9 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
               <s.icon className={`h-[18px] w-[18px] ${s.color}`} strokeWidth={2.5} />
             </div>
-            <p className="text-[11.5px] text-[#6B7684] font-medium mb-1">{s.label}</p>
+            <p className="text-[11px] text-[#6B7684] font-medium mb-1">{s.label}</p>
             <div className="flex items-baseline gap-1">
-              <span className={`text-[22px] font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</span>
+              <span className={`text-[24px] font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</span>
               {s.unit && <span className="text-[13px] text-[#B0B8C1] font-medium">{s.unit}</span>}
             </div>
-            {'sub' in s && s.sub && <p className="text-[10.5px] text-[#B0B8C1] mt-1">{s.sub}</p>}
+            {'sub' in s && s.sub && <p className="text-[11px] text-[#B0B8C1] mt-1">{s.sub}</p>}
           </Link>
         ))}
       </div>
@@ -465,12 +465,12 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <div>
-                <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
+                <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
                   <Calendar className="h-4 w-4 text-primary" /> 다가오는 예정
                 </h3>
                 <p className="text-[12px] text-[#B0B8C1] mt-0.5">14일 이내 입고 · 발주 권장일</p>
               </div>
-              <Link href="/calendar" className="flex items-center gap-1 text-[12.5px] text-primary font-medium">
+              <Link href="/calendar" className="flex items-center gap-1 text-[12px] text-primary font-medium">
                 캘린더 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-foreground truncate">{ev.label}</p>
-                        <p className="text-[11.5px] text-[#B0B8C1]">{ev.date}</p>
+                        <p className="text-[11px] text-[#B0B8C1]">{ev.date}</p>
                       </div>
                       <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${isInbound ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
                         {isInbound ? '입고예정' : '발주권장'}
@@ -506,7 +506,7 @@ export default function DashboardPage() {
           {/* 특이점 감지 */}
           <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
             <div className="px-5 pt-5 pb-3">
-              <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
+              <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
                 <Zap className="h-4 w-4 text-amber-500" /> 특이점 감지
               </h3>
               <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 7일 판매 급증 SKU</p>
@@ -520,9 +520,9 @@ export default function DashboardPage() {
                 {(data?.anomalies ?? []).map((a) => (
                   <Link key={a.sku_id} href="/channel-sales" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
-                      <p className="text-[13.5px] font-medium text-foreground truncate">{a.product_name}</p>
+                      <p className="text-[13px] font-medium text-foreground truncate">{a.product_name}</p>
                       <p className="text-[12px] text-[#6B7684] font-mono mt-0.5">{a.sku_code}</p>
-                      <p className="text-[11.5px] text-[#B0B8C1] mt-0.5">전주 {formatNumber(a.prev_7d)}개</p>
+                      <p className="text-[11px] text-[#B0B8C1] mt-0.5">전주 {formatNumber(a.prev_7d)}개</p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
                       <p className="text-[18px] font-bold text-foreground tabular-nums">
@@ -531,7 +531,7 @@ export default function DashboardPage() {
                       {a.change_pct !== null ? (
                         <p className="text-[12px] font-bold text-red-500">↑{a.change_pct}%</p>
                       ) : (
-                        <p className="text-[11.5px] font-semibold text-amber-500">신규 급증</p>
+                        <p className="text-[11px] font-semibold text-amber-500">신규 급증</p>
                       )}
                     </div>
                   </Link>
@@ -553,10 +553,10 @@ export default function DashboardPage() {
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div>
-              <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em]">발주 필요 SKU</h3>
+              <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em]">발주 필요 SKU</h3>
               <p className="text-[12px] text-[#B0B8C1] mt-0.5">재고점 이하 도달</p>
             </div>
-            <Link href="/forecast" className="flex items-center gap-1 text-[12.5px] text-primary font-medium">
+            <Link href="/forecast" className="flex items-center gap-1 text-[12px] text-primary font-medium">
               전체 <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -582,7 +582,7 @@ export default function DashboardPage() {
                 return (
                   <Link key={sku.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
-                      <p className="text-[13.5px] font-medium text-foreground truncate">{sku.product?.name}</p>
+                      <p className="text-[13px] font-medium text-foreground truncate">{sku.product?.name}</p>
                       <p className="text-[12px] text-[#6B7684] mt-0.5">{sku.sku_code} · {skuOptionLabel(sku.option_values ?? {})}</p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
@@ -604,10 +604,10 @@ export default function DashboardPage() {
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div>
-              <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em]">진행 중 발주</h3>
+              <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em]">진행 중 발주</h3>
               <p className="text-[12px] text-[#B0B8C1] mt-0.5">입고 예정 발주서</p>
             </div>
-            <Link href="/inbound" className="flex items-center gap-1 text-[12.5px] text-primary font-medium">
+            <Link href="/inbound" className="flex items-center gap-1 text-[12px] text-primary font-medium">
               전체 <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -629,7 +629,7 @@ export default function DashboardPage() {
                 return (
                   <Link key={po.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
                     <div className="min-w-0">
-                      <p className="text-[13.5px] font-medium text-foreground">{po.po_number}</p>
+                      <p className="text-[13px] font-medium text-foreground">{po.po_number}</p>
                       <p className="text-[12px] text-[#6B7684] mt-0.5">
                         {po.supplier ?? '공급사 미지정'} · 입고예정 {po.expected_date ? formatDate(po.expected_date) : '-'}
                       </p>
@@ -646,12 +646,12 @@ export default function DashboardPage() {
       {/* 채널별 이번 달 출고 */}
       {Object.keys(data?.channelSales ?? {}).length > 0 && (
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
-          <h3 className="text-[14px] font-semibold text-foreground tracking-[-0.02em] mb-4">이번 달 채널별 출고</h3>
+          <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em] mb-4">이번 달 채널별 출고</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(data?.channelSales ?? {}).map(([ch, qty]) => (
               <Link key={ch} href="/outbound" className="block rounded-xl bg-[#F2F4F6] p-4 text-center hover:bg-[#E8EBF0] transition-colors cursor-pointer">
                 <p className="text-[12px] text-[#6B7684] font-medium">{ch}</p>
-                <p className="text-[22px] font-bold text-foreground tracking-[-0.03em] mt-1">{formatNumber(qty)}</p>
+                <p className="text-[24px] font-bold text-foreground tracking-[-0.03em] mt-1">{formatNumber(qty)}</p>
                 <p className="text-[11px] text-[#B0B8C1]">개</p>
               </Link>
             ))}
@@ -669,11 +669,11 @@ export default function DashboardPage() {
         ].map((item) => (
           <Link key={item.href} href={item.href}>
             <div className="bg-white rounded-2xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.1)] transition-shadow cursor-pointer">
-              <div className={`w-9 h-9 rounded-xl ${item.bg} flex items-center justify-center mb-3`}>
+              <div className={`w-9 h-10 rounded-xl ${item.bg} flex items-center justify-center mb-3`}>
                 <item.icon className={`h-[18px] w-[18px] ${item.color}`} strokeWidth={2.5} />
               </div>
               <p className="text-[13px] font-semibold text-foreground">{item.label}</p>
-              <p className="text-[11.5px] text-[#B0B8C1] mt-0.5 leading-relaxed">{item.desc}</p>
+              <p className="text-[11px] text-[#B0B8C1] mt-0.5 leading-relaxed">{item.desc}</p>
             </div>
           </Link>
         ))}

@@ -74,7 +74,7 @@ function Dialog({ open, onClose, title, children, wide }: {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className={`relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -93,7 +93,7 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
       </label>
       <input
         {...props}
-        className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+        className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
       />
     </div>
   );
@@ -247,7 +247,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
             <select
               value={selectedSupplierId}
               onChange={(e) => handleSupplierSelect(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
             >
               <option value="">공급사 선택</option>
               {suppliers.map((s) => (
@@ -266,7 +266,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
               type="number" min="0" placeholder="예: 30"
               value={form.lead_time_days}
               onChange={(e) => handleLeadTimeChange(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
             />
             <p className="text-[11px] text-[#B0B8C1]">품목 최대 리드타임 자동</p>
           </div>
@@ -276,7 +276,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
               type="number" min="0" placeholder="10"
               value={form.transit_days}
               onChange={(e) => handleTransitDaysChange(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
             />
           </div>
           <div className="space-y-1.5">
@@ -285,7 +285,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
               type="date"
               value={form.expected_date}
               onChange={(e) => set('expected_date', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#3182F6] bg-[#EBF1FE] text-[14px] text-[#191F28] focus:outline-none focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-[#3182F6] bg-[#EBF1FE] text-[13px] text-[#191F28] focus:outline-none focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
             />
             {form.lead_time_days && form.transit_days && (
               <p className="text-[11px] text-[#3182F6]">리드타임 {form.lead_time_days}일 + 운송 {form.transit_days}일</p>
@@ -301,7 +301,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-[13px] font-medium text-[#191F28]">품목 <span className="text-red-500">*</span></label>
-            <button type="button" onClick={addItem} className="flex items-center gap-1 text-[12.5px] text-[#3182F6] font-medium hover:underline">
+            <button type="button" onClick={addItem} className="flex items-center gap-1 text-[12px] text-[#3182F6] font-medium hover:underline">
               <Plus className="h-3.5 w-3.5" /> 품목 추가
             </button>
           </div>
@@ -343,7 +343,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                   const sku = skus.find((s) => s.id === item.sku_id);
                   if (!sku) return null;
                   return (
-                    <p className="text-[11.5px] text-[#B0B8C1] pl-1">
+                    <p className="text-[11px] text-[#B0B8C1] pl-1">
                       마스터 원가 {formatCurrency(sku.cost_price * vatMult)}{vatOn ? ' (VAT포함)' : ''}
                       {sku.logistics_cost > 0 && ` · 물류비 ${formatCurrency(sku.logistics_cost * vatMult)}`}
                       {(sku.lead_time_days ?? 0) > 0 && <span className="text-[#6B7684]"> · 리드타임 {sku.lead_time_days}일</span>}
@@ -362,10 +362,10 @@ function AddPODialog({ open, onClose, skus, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
             취소
           </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             발주서 생성
           </button>
@@ -455,7 +455,7 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
             min="1"
             value={form.quantity}
             onChange={(e) => set('quantity', e.target.value)}
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
           />
         </div>
 
@@ -464,7 +464,7 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
           <select
             value={form.warehouse_id}
             onChange={(e) => set('warehouse_id', e.target.value)}
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
+            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
           >
             <option value="">창고 선택</option>
             {warehouses.map((w) => (
@@ -479,10 +479,10 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
             취소
           </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             입고 처리
           </button>
@@ -553,19 +553,19 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+          <div className="w-9 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
             <Truck className="h-4 w-4 text-[#FF6B00]" strokeWidth={2.5} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[14px] font-semibold text-[#191F28] tracking-[-0.02em]">{po.po_number}</span>
+              <span className="text-[13px] font-semibold text-[#191F28] tracking-[-0.02em]">{po.po_number}</span>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
             </div>
             <p className="text-[12px] text-[#B0B8C1] mt-0.5">
               {po.supplier ?? '공급사 미지정'} · 품목 {(po.items ?? []).length}개 · {formatCurrency(po.total_amount * vatMult)}{vatOn ? '(VAT+)' : ''}
               {po.expected_date && ` · 입고예정 ${formatDate(po.expected_date)}`}
               {po.inbound_type === 'import' && (
-                <span className="ml-1.5 text-[10.5px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">해외수입</span>
+                <span className="ml-1.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">해외수입</span>
               )}
             </p>
           </div>
@@ -747,10 +747,10 @@ function POManagementTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-[13.5px] text-[#6B7684]">총 {formatNumber(pos.length)}개의 발주서</p>
+        <p className="text-[13px] text-[#6B7684]">총 {formatNumber(pos.length)}개의 발주서</p>
         <button
           onClick={() => setAddOpen(true)}
-          className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors"
+          className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors"
         >
           <Plus className="h-4 w-4" />
           발주서 생성
@@ -763,7 +763,7 @@ function POManagementTab() {
             <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
               <Truck className="h-6 w-6 text-[#B0B8C1]" />
             </div>
-            <p className="text-[14px] font-medium text-[#6B7684]">발주서가 없습니다</p>
+            <p className="text-[13px] font-medium text-[#6B7684]">발주서가 없습니다</p>
             <p className="text-[13px] text-[#B0B8C1] mt-1">발주서 생성 버튼을 눌러 시작하세요</p>
           </div>
         ) : (
@@ -864,25 +864,25 @@ function InboundRecordsTab() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
             />
             <span className="text-[13px] text-[#B0B8C1]">~</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
             />
           </div>
           {(dateFrom || dateTo) && (
             <button
               onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="h-9 px-3 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors flex items-center gap-1"
+              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors flex items-center gap-1"
             >
               <X className="h-3.5 w-3.5" /> 초기화
             </button>
           )}
-          <span className="text-[12.5px] text-[#6B7684] ml-auto">{formatNumber(filtered.length)}건</span>
+          <span className="text-[12px] text-[#6B7684] ml-auto">{formatNumber(filtered.length)}건</span>
         </div>
       </div>
 
@@ -904,7 +904,7 @@ function InboundRecordsTab() {
             <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
               <PackageCheck className="h-6 w-6 text-[#B0B8C1]" />
             </div>
-            <p className="text-[14px] font-medium text-[#6B7684]">입고 기록이 없습니다</p>
+            <p className="text-[13px] font-medium text-[#6B7684]">입고 기록이 없습니다</p>
           </div>
         ) : (
           <div className="divide-y divide-[#F2F4F6]">
@@ -915,7 +915,7 @@ function InboundRecordsTab() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-[#191F28] truncate">{record.sku?.product?.name}</p>
-                  <p className="text-[11.5px] text-[#6B7684] mt-0.5">
+                  <p className="text-[11px] text-[#6B7684] mt-0.5">
                     {record.sku?.sku_code} · {skuOptionLabel(record.sku?.option_values ?? {})}
                   </p>
                 </div>
@@ -923,7 +923,7 @@ function InboundRecordsTab() {
                   <span className="text-[13px] text-[#6B7684]">{record.warehouse?.name}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[14px] font-bold text-[#191F28] tabular-nums">{formatNumber(record.quantity)}</span>
+                  <span className="text-[13px] font-bold text-[#191F28] tabular-nums">{formatNumber(record.quantity)}</span>
                   <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
                 </div>
                 <div className="text-right">
@@ -931,7 +931,7 @@ function InboundRecordsTab() {
                     {record.unit_cost != null ? formatCurrency(record.unit_cost * vatMult) : '-'}
                   </span>
                   {vatOn && record.unit_cost != null && (
-                    <p className="text-[10.5px] text-[#B0B8C1]">VAT포함</p>
+                    <p className="text-[11px] text-[#B0B8C1]">VAT포함</p>
                   )}
                 </div>
               </div>
@@ -966,7 +966,7 @@ export default function InboundPage() {
       {/* Header */}
       <div>
         <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입출고 관리</h2>
-        <p className="mt-1 text-[13.5px] text-[#6B7684]">발주, 입고, 출고를 한 곳에서 관리하세요</p>
+        <p className="mt-1 text-[13px] text-[#6B7684]">발주, 입고, 출고를 한 곳에서 관리하세요</p>
       </div>
 
       {/* Tabs */}
@@ -977,7 +977,7 @@ export default function InboundPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 h-9 px-4 rounded-[10px] text-[13px] font-medium transition-all ${
+              className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${
                 activeTab === tab.id
                   ? 'bg-white text-[#191F28] shadow-sm'
                   : 'text-[#6B7684] hover:text-[#191F28]'

@@ -53,7 +53,7 @@ export function Header({ email }: { email?: string }) {
           {/* 모바일 메뉴 */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 rounded-xl">
+              <Button variant="ghost" size="icon" className="md:hidden h-10 w-9 rounded-xl">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -72,7 +72,7 @@ export function Header({ email }: { email?: string }) {
                   return (
                     <Link key={item.href} href={item.href}
                       className={cn(
-                        'flex items-center gap-3 rounded-[10px] px-3 py-[9px] text-[13.5px] font-medium transition-all',
+                        'flex items-center gap-3 rounded-[10px] px-3 py-[9px] text-[13px] font-medium transition-all',
                         isActive ? 'bg-[#EBF1FE] text-primary' : 'text-[#6B7684] hover:bg-[#F2F4F6]'
                       )}>
                       <item.icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : 'text-[#B0B8C1]')} />
@@ -105,7 +105,7 @@ export function Header({ email }: { email?: string }) {
         {/* 유저 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-9 w-9 rounded-full p-0">
+            <Button variant="ghost" className="h-10 w-9 rounded-full p-0">
               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-[13px] font-semibold text-primary">{initials}</span>
               </div>

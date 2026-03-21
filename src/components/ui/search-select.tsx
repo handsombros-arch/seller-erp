@@ -169,7 +169,7 @@ export function SearchSelect({
           className="absolute z-30 w-full mt-1 bg-white border border-[#E5E8EB] rounded-xl shadow-lg max-h-[28rem] overflow-y-auto"
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-3 text-[12.5px] text-[#B0B8C1] text-center">검색 결과 없음</p>
+            <p className="px-3 py-3 text-[12px] text-[#B0B8C1] text-center">검색 결과 없음</p>
           ) : (
             filtered.map((opt, i) => (
               <button
@@ -183,7 +183,7 @@ export function SearchSelect({
               >
                 <p className="text-[13px] font-medium text-[#191F28]">{opt.label}</p>
                 {(opt.sub || opt.extra) && (
-                  <p className="text-[11.5px] text-[#6B7684]">
+                  <p className="text-[11px] text-[#6B7684]">
                     {opt.sub}
                     {opt.sub && opt.extra && ' · '}
                     {opt.extra}

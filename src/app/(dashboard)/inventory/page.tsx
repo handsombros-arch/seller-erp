@@ -62,7 +62,7 @@ function Dialog({ open, onClose, title, children }: {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -129,7 +129,7 @@ function EntryDialog({ open, onClose, onSave }: {
     } finally { setLoading(false); }
   }
 
-  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
   return (
     <Dialog open={open} onClose={onClose} title="재고 기입">
@@ -156,17 +156,17 @@ function EntryDialog({ open, onClose, onSave }: {
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">수량 <span className="text-red-500">*</span></label>
             <input type="number" min="0" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="0"
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">사유 <span className="text-[#B0B8C1] font-normal">(선택)</span></label>
             <input type="text" value={form.reason} onChange={(e) => set('reason', e.target.value)} placeholder="초기 재고 기입"
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
           </div>
           {error && <p className="text-[13px] text-red-500">{error}</p>}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
+            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />} 기입
             </button>
           </div>
@@ -257,13 +257,13 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
         {/* Format hint */}
         <div className="bg-[#F8F9FB] rounded-xl p-3 space-y-1">
           <p className="text-[12px] font-semibold text-[#6B7684]">CSV 형식</p>
-          <p className="text-[11.5px] text-[#B0B8C1] font-mono">SKU코드, 창고명, 수량, 사유(선택)</p>
+          <p className="text-[11px] text-[#B0B8C1] font-mono">SKU코드, 창고명, 수량, 사유(선택)</p>
           <p className="text-[11px] text-[#B0B8C1] mt-1">• 헤더 행은 자동으로 건너뜁니다 · 수량은 절대값 기입 (현재 재고를 해당 수량으로 변경)</p>
         </div>
 
         {/* File upload */}
         <div className="flex gap-2">
-          <label className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-[#E5E8EB] text-[12.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] cursor-pointer transition-colors">
+          <label className="flex items-center gap-1.5 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] cursor-pointer transition-colors">
             <Upload className="h-3.5 w-3.5" /> 파일 선택
             <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
           </label>
@@ -276,14 +276,14 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
           onChange={(e) => { setCsvText(e.target.value); parseCsv(e.target.value); }}
           rows={6}
           placeholder={"SKU001,국내창고,100,초기 기입\nSKU002,국내창고,50"}
-          className="w-full px-3 py-2.5 text-[12.5px] font-mono border border-[#E5E8EB] rounded-xl focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 resize-none placeholder:text-[#C5CAD3]"
+          className="w-full px-3 py-2.5 text-[12px] font-mono border border-[#E5E8EB] rounded-xl focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 resize-none placeholder:text-[#C5CAD3]"
         />
 
         {/* Parse preview */}
         {parsed.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[12.5px] font-medium text-[#191F28]">{parsed.length}행 인식됨</span>
+              <span className="text-[12px] font-medium text-[#191F28]">{parsed.length}행 인식됨</span>
               {validCount > 0 && <span className="text-[12px] text-green-600 font-medium">✓ {validCount}행 유효</span>}
               {invalidCount > 0 && <span className="text-[12px] text-red-500 font-medium">✗ {invalidCount}행 오류</span>}
             </div>
@@ -322,12 +322,12 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
         )}
 
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={handleClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
+          <button type="button" onClick={handleClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={loading || validCount === 0}
-            className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2 transition-colors"
+            className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2 transition-colors"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {validCount > 0 ? `${validCount}개 기입` : '기입'}
@@ -387,9 +387,9 @@ function AdjustDialog({ open, onClose, item, onSave }: {
             현재 재고: <span className="text-[#3182F6] font-bold">{formatNumber(item.quantity)}</span>개
           </label>
           <input type="number" min="0" value={newQty} onChange={(e) => setNewQty(e.target.value)} placeholder="새 재고 수량"
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
           {newQty !== '' && !isNaN(Number(newQty)) && Number(newQty) !== item.quantity && (
-            <p className={`text-[12.5px] font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`text-[12px] font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
               {diff > 0 ? '+' : ''}{formatNumber(diff)}개 조정
             </p>
           )}
@@ -397,12 +397,12 @@ function AdjustDialog({ open, onClose, item, onSave }: {
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-[#191F28]">조정 사유</label>
           <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 실물 재고 확인 후 조정"
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} 조정 저장
           </button>
         </div>
@@ -493,7 +493,7 @@ function SummaryTab() {
   }, [rows, sort]);
 
   const thCls = (col: SumCol) =>
-    `text-left px-4 text-[11.5px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA]
+    `text-left px-4 text-[11px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA]
     ${dragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
 
   if (loading) return <div className="flex items-center justify-center h-48"><Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" /></div>;
@@ -501,7 +501,7 @@ function SummaryTab() {
   if (!rows.length) return (
     <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
       <Package className="h-10 w-10 text-[#B0B8C1] mb-3" />
-      <p className="text-[14px] font-medium text-[#6B7684]">등록된 SKU가 없습니다</p>
+      <p className="text-[13px] font-medium text-[#6B7684]">등록된 SKU가 없습니다</p>
     </div>
   );
 
@@ -514,9 +514,9 @@ function SummaryTab() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py}`}>
-          <p className="text-[13.5px] font-medium text-[#191F28]">{row.product_name}</p>
+          <p className="text-[13px] font-medium text-[#191F28]">{row.product_name}</p>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11.5px] text-[#6B7684] font-mono">{row.sku_code}</span>
+            <span className="text-[11px] text-[#6B7684] font-mono">{row.sku_code}</span>
             {Object.keys(row.option_values ?? {}).length > 0 && (
               <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(row.option_values)}</span>
             )}
@@ -526,20 +526,20 @@ function SummaryTab() {
       );
       case 'warehouse': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[14px] font-semibold text-[#191F28] tabular-nums">{formatNumber(row.warehouse_stock)}</span>
+          <span className="text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(row.warehouse_stock)}</span>
           <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
         </td>
       );
       case 'coupang': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[14px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_stock)}</span>
+          <span className="text-[13px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_stock)}</span>
           <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
         </td>
       );
       case 'transit': return (
         <td key={col} className={`px-4 ${py}`}>
           {row.transit_stock > 0
-            ? <><span className="text-[14px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
+            ? <><span className="text-[13px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
             : <span className="text-[13px] text-[#B0B8C1]">-</span>}
         </td>
       );
@@ -960,21 +960,21 @@ function RgInventoryTab() {
           {item.is_return ? (
             <>
               <div className="flex items-center gap-2 group">
-                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+                <p className="text-[13px] font-medium text-[#191F28]">{productName}</p>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
-                  className="opacity-0 group-hover:opacity-100 text-[10px] text-[#B0B8C1] hover:text-red-500 transition-all ml-auto shrink-0"
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-[#B0B8C1] hover:text-red-500 transition-all ml-auto shrink-0"
                 >해제</button>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
-                <span className="text-[10.5px] text-[#D1D5DB] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+                <span className="text-[11px] text-[#D1D5DB] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
                 {!item.linked_sku && (
                   <div className="relative">
                     <button
                       onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
-                      className="text-[10.5px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                      className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
                     >+ 연결</button>
                     {linkTarget === item.vendor_item_id && (
                       <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
@@ -983,7 +983,7 @@ function RgInventoryTab() {
                           value={linkSearch}
                           onChange={(e) => setLinkSearch(e.target.value)}
                           placeholder="상품명 또는 SKU 검색"
-                          className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                          className="w-full h-8 px-3 text-[12px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
                         />
                         <div className="max-h-[28rem] overflow-y-auto space-y-0.5">
                           {skuOptions
@@ -1006,11 +1006,11 @@ function RgInventoryTab() {
           ) : (
             <>
               <div className="flex items-center gap-2 group">
-                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+                <p className="text-[13px] font-medium text-[#191F28]">{productName}</p>
                 <button
                   onClick={() => classify(item.vendor_item_id, null)}
                   disabled={isClassifying}
-                  className="opacity-0 group-hover:opacity-100 text-[10px] text-[#B0B8C1] hover:text-orange-500 transition-all shrink-0 whitespace-nowrap"
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-[#B0B8C1] hover:text-orange-500 transition-all shrink-0 whitespace-nowrap"
                   title="반품재판매로 분류"
                 >↗ 반품</button>
               </div>
@@ -1026,8 +1026,8 @@ function RgInventoryTab() {
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(item.current_qty)}</span>
           <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
-          {isLow  && <span className="ml-1.5 text-[10.5px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">부족</span>}
-          {isWarn && <span className="ml-1.5 text-[10.5px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-md font-medium">주의</span>}
+          {isLow  && <span className="ml-1.5 text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">부족</span>}
+          {isWarn && <span className="ml-1.5 text-[11px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-md font-medium">주의</span>}
         </td>
       );
       case 'daily_changes': return (
@@ -1100,11 +1100,11 @@ function RgInventoryTab() {
           <span className="text-[13px] font-medium text-[#3182F6]">{checked.size}개 선택됨</span>
           <span className="text-[11px] text-[#B0B8C1]">Shift+클릭으로 범위 선택</span>
           <button onClick={() => setBulkModal(true)}
-            className="h-8 px-3 rounded-lg bg-orange-500 text-white text-[12.5px] font-semibold hover:bg-orange-600 transition-colors">
+            className="h-8 px-3 rounded-lg bg-orange-500 text-white text-[12px] font-semibold hover:bg-orange-600 transition-colors">
             반품재판매로 이동
           </button>
           <button onClick={() => setChecked(new Set())}
-            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
+            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors">
             선택 해제
           </button>
         </div>
@@ -1117,19 +1117,19 @@ function RgInventoryTab() {
           <span className="text-[11px] text-[#B0B8C1]">Shift+클릭 범위선택</span>
           <div className="flex items-center gap-1.5 ml-auto">
             <button onClick={() => { setBulkLinkOpen(true); setBulkLinkSearch(''); }}
-              className="h-8 px-3 rounded-lg bg-blue-500 text-white text-[12.5px] font-semibold hover:bg-blue-600 transition-colors">
+              className="h-8 px-3 rounded-lg bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 transition-colors">
               일괄 연결
             </button>
             <button onClick={bulkUnlinkSku} disabled={bulkLinkLoading}
-              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors disabled:opacity-60">
+              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors disabled:opacity-60">
               연결 해제
             </button>
             <button onClick={unclassifyBulk} disabled={bulkLoading}
-              className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+              className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
               {bulkLoading ? '처리 중...' : '신상품으로 이동'}
             </button>
             <button onClick={() => setReturnChecked(new Set())}
-              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12.5px] text-[#6B7684] hover:bg-white transition-colors">
+              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors">
               선택 해제
             </button>
           </div>
@@ -1142,7 +1142,7 @@ function RgInventoryTab() {
           <div className="absolute inset-0 bg-black/30" onClick={() => setBulkLinkOpen(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-96 p-6">
             <h3 className="text-[15px] font-bold text-[#191F28] mb-1">신상품 일괄 연결</h3>
-            <p className="text-[12.5px] text-[#6B7684] mb-4">{returnChecked.size}개 반품 항목을 선택한 신상품에 연결합니다.</p>
+            <p className="text-[12px] text-[#6B7684] mb-4">{returnChecked.size}개 반품 항목을 선택한 신상품에 연결합니다.</p>
             <input
               autoFocus
               value={bulkLinkSearch}
@@ -1174,7 +1174,7 @@ function RgInventoryTab() {
           <div className="absolute inset-0 bg-black/30" onClick={() => setBulkModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-80 p-6">
             <h3 className="text-[15px] font-bold text-[#191F28] mb-4">반품재판매 등급 선택</h3>
-            <p className="text-[12.5px] text-[#6B7684] mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
+            <p className="text-[12px] text-[#6B7684] mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
             <div className="grid grid-cols-2 gap-2 mb-5">
               {GRADES.map((g) => (
                 <button key={g} onClick={() => setBulkGrade(g)}
@@ -1203,16 +1203,16 @@ function RgInventoryTab() {
           <span className="text-[12px] text-[#6B7684] font-medium">스냅샷 조회</span>
           {[7, 14, 30].map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 rounded-xl text-[12.5px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               최근 {d}일
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {syncMsg && <span className="text-[12.5px] text-green-600 font-medium">{syncMsg}</span>}
-          {error  && <span className="text-[12.5px] text-red-500">{error}</span>}
+          {syncMsg && <span className="text-[12px] text-green-600 font-medium">{syncMsg}</span>}
+          {error  && <span className="text-[12px] text-red-500">{error}</span>}
           <button onClick={handleSync} disabled={syncing}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors disabled:opacity-60">
+            className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors disabled:opacity-60">
             {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             재고 동기화
           </button>
@@ -1231,13 +1231,13 @@ function RgInventoryTab() {
             <Package className="h-10 w-10 text-[#B0B8C1] mb-3" />
             {subTab === 'return' ? (
               <>
-                <p className="text-[14px] font-medium text-[#6B7684]">반품재판매 상품이 없습니다</p>
-                <p className="text-[12.5px] text-[#B0B8C1] mt-1">마스터 시트에서 반품재판매 옵션 ID를 등록하면 자동 분류됩니다</p>
+                <p className="text-[13px] font-medium text-[#6B7684]">반품재판매 상품이 없습니다</p>
+                <p className="text-[12px] text-[#B0B8C1] mt-1">마스터 시트에서 반품재판매 옵션 ID를 등록하면 자동 분류됩니다</p>
               </>
             ) : (
               <>
-                <p className="text-[14px] font-medium text-[#6B7684]">로켓그로스 재고 데이터가 없습니다</p>
-                <p className="text-[12.5px] text-[#B0B8C1] mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
+                <p className="text-[13px] font-medium text-[#6B7684]">로켓그로스 재고 데이터가 없습니다</p>
+                <p className="text-[12px] text-[#B0B8C1] mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
               </>
             )}
           </div>
@@ -1454,9 +1454,9 @@ export default function InventoryPage() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py} min-w-0`}>
-          <p className="text-[13.5px] font-medium text-[#191F28] truncate">{item.sku?.product?.name}</p>
+          <p className="text-[13px] font-medium text-[#191F28] truncate">{item.sku?.product?.name}</p>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <span className="text-[11.5px] text-[#6B7684] font-mono">{item.sku?.sku_code}</span>
+            <span className="text-[11px] text-[#6B7684] font-mono">{item.sku?.sku_code}</span>
             {Object.keys(item.sku?.option_values ?? {}).length > 0 && (
               <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(item.sku?.option_values ?? {})}</span>
             )}
@@ -1479,7 +1479,7 @@ export default function InventoryPage() {
       case 'cost': return (
         <td key={col} className={`px-4 ${py} text-right`}>
           <span className="text-[13px] text-[#6B7684] tabular-nums">{formatCurrency(item.sku?.cost_price ?? 0)}</span>
-          {vatOn && <p className="text-[10.5px] text-[#B0B8C1]">+VAT {formatCurrency((item.sku?.cost_price ?? 0) * 0.1)}</p>}
+          {vatOn && <p className="text-[11px] text-[#B0B8C1]">+VAT {formatCurrency((item.sku?.cost_price ?? 0) * 0.1)}</p>}
         </td>
       );
       case 'value': return (
@@ -1501,20 +1501,20 @@ export default function InventoryPage() {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">재고 현황</h2>
-          <p className="mt-1 text-[13.5px] text-[#6B7684]">
+          <p className="mt-1 text-[13px] text-[#6B7684]">
             창고별 재고 및 채널별 재고를 확인하세요
             <span className="ml-2 text-[12px] text-[#B0B8C1]">· 원가·물류비는 부가세 별도 금액 기준</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setEntryOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors">
+          <button onClick={() => setEntryOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
             <Plus className="h-4 w-4" /> 재고 기입
           </button>
-          <button onClick={() => setCsvImportOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button onClick={() => setCsvImportOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
             <Upload className="h-4 w-4" /> CSV 기입
           </button>
           {tab === 'warehouse' && (
-            <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+            <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
               <Download className="h-4 w-4" /> CSV
             </button>
           )}
@@ -1525,7 +1525,7 @@ export default function InventoryPage() {
       <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
         {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package], ['trends', '추이', BarChart3], ['forecast', '예측', TrendingUp]] as const).map(([value, label, Icon]) => (
           <button key={value} onClick={() => setTab(value)}
-            className={`flex items-center gap-2 h-9 px-4 rounded-[10px] text-[13px] font-medium transition-all ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
@@ -1535,31 +1535,31 @@ export default function InventoryPage() {
       {tab === 'warehouse' && (
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div className="w-9 h-9 rounded-xl bg-[#EBF1FE] flex items-center justify-center mb-3">
+            <div className="w-9 h-10 rounded-xl bg-[#EBF1FE] flex items-center justify-center mb-3">
               <Package className="h-[18px] w-[18px] text-[#3182F6]" strokeWidth={2.5} />
             </div>
-            <p className="text-[11.5px] text-[#6B7684] font-medium mb-1">관리 SKU</p>
+            <p className="text-[11px] text-[#6B7684] font-medium mb-1">관리 SKU</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[22px] font-bold text-[#3182F6] tracking-[-0.04em]">{formatNumber(stats.totalSkus)}</span>
+              <span className="text-[24px] font-bold text-[#3182F6] tracking-[-0.04em]">{formatNumber(stats.totalSkus)}</span>
               <span className="text-[13px] text-[#B0B8C1]">개</span>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center mb-3">
+            <div className="w-9 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-3">
               <WarehouseIcon className="h-[18px] w-[18px] text-green-600" strokeWidth={2.5} />
             </div>
-            <p className="text-[11.5px] text-[#6B7684] font-medium mb-1">총 재고 수량</p>
+            <p className="text-[11px] text-[#6B7684] font-medium mb-1">총 재고 수량</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[22px] font-bold text-green-600 tracking-[-0.04em]">{formatNumber(stats.totalQty)}</span>
+              <span className="text-[24px] font-bold text-green-600 tracking-[-0.04em]">{formatNumber(stats.totalQty)}</span>
               <span className="text-[13px] text-[#B0B8C1]">개</span>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center mb-3">
+            <div className="w-9 h-10 rounded-xl bg-orange-50 flex items-center justify-center mb-3">
               <TrendingUp className="h-[18px] w-[18px] text-[#FF6B00]" strokeWidth={2.5} />
             </div>
-            <p className="text-[11.5px] text-[#6B7684] font-medium mb-1">
-              재고 원가 총액 {vatOn && <span className="text-[10.5px] text-[#3182F6] font-semibold">(VAT+10%)</span>}
+            <p className="text-[11px] text-[#6B7684] font-medium mb-1">
+              재고 원가 총액 {vatOn && <span className="text-[11px] text-[#3182F6] font-semibold">(VAT+10%)</span>}
             </p>
             <div className="flex items-baseline gap-1">
               <span className="text-[18px] font-bold text-[#FF6B00] tracking-[-0.04em]">{formatCurrency(stats.totalValue * vatMult)}</span>
@@ -1644,8 +1644,8 @@ export default function InventoryPage() {
                       <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
                         <WarehouseIcon className="h-6 w-6 text-[#B0B8C1]" />
                       </div>
-                      <p className="text-[14px] font-medium text-[#6B7684]">재고 데이터가 없습니다</p>
-                      <button onClick={() => setEntryOpen(true)} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors">
+                      <p className="text-[13px] font-medium text-[#6B7684]">재고 데이터가 없습니다</p>
+                      <button onClick={() => setEntryOpen(true)} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
                         <Plus className="h-4 w-4" /> 재고 기입
                       </button>
                     </div>
@@ -1667,7 +1667,7 @@ export default function InventoryPage() {
             </div>
             {whSorted.length > 0 && (
               <div className="flex items-center justify-between px-5 py-3 bg-[#F8F9FB] border-t border-[#F2F4F6]">
-                <span className="text-[12.5px] text-[#6B7684]">총 {formatNumber(whSorted.length)}건</span>
+                <span className="text-[12px] text-[#6B7684]">총 {formatNumber(whSorted.length)}건</span>
                 <span className="text-[13px] font-semibold text-[#191F28]">
                   합계 {formatCurrency(whSorted.reduce((s, i) => s + i.quantity * (i.sku?.cost_price ?? 0), 0) * vatMult)}
                   {vatOn && <span className="text-[11px] text-[#3182F6] ml-1">(VAT포함)</span>}

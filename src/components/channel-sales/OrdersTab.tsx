@@ -218,7 +218,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28]">주문 엑셀 업로드</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28]">주문 엑셀 업로드</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -232,7 +232,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
               <p className="text-[12px] text-[#6B7684] mt-0.5">배송주소에 <strong>제주/도서산간</strong> 포함 시 택배운임 +3,000원 자동 적용</p>
             </div>
             <a href="/api/csv-template?type=channel-orders" download
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-[#3182F6] text-[12.5px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 ml-3">
+              className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-[#3182F6] text-[12px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 ml-3">
               <Download className="h-3.5 w-3.5" /> 양식
             </a>
           </div>
@@ -270,7 +270,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   { key: 'address', label: '배송주소 (제주감지)' },
                 ].map(({ key, label }) => (
                   <div key={key} className="space-y-0.5">
-                    <p className="text-[11.5px] font-medium text-[#6B7684]">{label}</p>
+                    <p className="text-[11px] font-medium text-[#6B7684]">{label}</p>
                     <select value={colMap[key] ?? ''} onChange={(e) => setColMap((prev) => ({ ...prev, [key]: e.target.value }))}
                       className="w-full h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white focus:outline-none focus:border-[#3182F6]">
                       <option value="">선택 안 함</option>
@@ -287,15 +287,15 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
                 <span className="text-[12px] text-[#6B7684]">총 주문</span>
-                <span className="text-[14px] font-bold text-[#191F28]">{formatNumber(rows.length)}건</span>
+                <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(rows.length)}건</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
                 <span className="text-[12px] text-[#6B7684]">수량 합계</span>
-                <span className="text-[14px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
+                <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
               </div>
               <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
                 <span className="text-[12px] text-[#6B7684]">택배운임 합계</span>
-                <span className="text-[14px] font-bold text-[#191F28]">{formatCurrency(totalShip)}</span>
+                <span className="text-[13px] font-bold text-[#191F28]">{formatCurrency(totalShip)}</span>
               </div>
               {jejuCount > 0 && (
                 <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 rounded-xl">
@@ -315,24 +315,24 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   <thead className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
                     <tr>
                       {['주문일자', '상품명', '옵션', '수하인', '수량', '택배운임', '주문상태'].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-[11.5px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F2F4F6]">
                     {rows.slice(0, 5).map((r, i) => (
                       <tr key={i} className={r.jeju_surcharge ? 'bg-blue-50/60' : ''}>
-                        <td className="px-3 py-2 text-[12.5px] text-[#6B7684] whitespace-nowrap">{r.order_date}</td>
-                        <td className="px-3 py-2 text-[12.5px] text-[#191F28] max-w-[120px] truncate">{r.product_name}</td>
+                        <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.order_date}</td>
+                        <td className="px-3 py-2 text-[12px] text-[#191F28] max-w-[120px] truncate">{r.product_name}</td>
                         <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.option_name || '-'}</td>
-                        <td className="px-3 py-2 text-[12.5px] text-[#191F28] whitespace-nowrap">
+                        <td className="px-3 py-2 text-[12px] text-[#191F28] whitespace-nowrap">
                           {r.recipient || '-'}
                           {r.jeju_surcharge && <MapPin className="inline h-3 w-3 text-blue-500 ml-1" />}
                         </td>
-                        <td className="px-3 py-2 text-[12.5px] font-semibold text-[#191F28] whitespace-nowrap">{r.quantity}</td>
-                        <td className="px-3 py-2 text-[12.5px] text-[#191F28] whitespace-nowrap">
+                        <td className="px-3 py-2 text-[12px] font-semibold text-[#191F28] whitespace-nowrap">{r.quantity}</td>
+                        <td className="px-3 py-2 text-[12px] text-[#191F28] whitespace-nowrap">
                           {formatCurrency(r.shipping_cost)}
-                          {r.jeju_surcharge && <span className="text-[10.5px] text-blue-600 ml-1">(+3,000)</span>}
+                          {r.jeju_surcharge && <span className="text-[11px] text-blue-600 ml-1">(+3,000)</span>}
                         </td>
                         <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.order_status || '-'}</td>
                       </tr>
@@ -340,11 +340,11 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   </tbody>
                 </table>
                 {rows.length > 5 && (
-                  <p className="text-center text-[11.5px] text-[#B0B8C1] py-2 border-t border-[#F2F4F6]">+ {rows.length - 5}행 더</p>
+                  <p className="text-center text-[11px] text-[#B0B8C1] py-2 border-t border-[#F2F4F6]">+ {rows.length - 5}행 더</p>
                 )}
               </div>
               {jejuCount > 0 && (
-                <p className="text-[11.5px] text-blue-600 mt-1.5 flex items-center gap-1">
+                <p className="text-[11px] text-blue-600 mt-1.5 flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> 파란 행 = 제주/도서산간 +3,000원 할증 적용됨
                 </p>
               )}
@@ -359,9 +359,9 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
+            <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
             <button onClick={handleUpload} disabled={!rows.length || loading}
-              className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+              className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               업로드 ({rows.length}건)
             </button>
@@ -640,17 +640,17 @@ export default function OrdersTab() {
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-[16px] font-bold text-[#191F28]">주문 내역</h3>
+          <h3 className="text-[15px] font-bold text-[#191F28]">주문 내역</h3>
           <p className="text-[13px] text-[#6B7684] mt-0.5">스마트스토어, 토스 주문 데이터를 관리합니다</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleClearData}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl border border-red-200 text-[13.5px] font-medium text-red-500 hover:bg-red-50 transition-colors">
+            className="flex items-center gap-2 h-10 px-4 rounded-xl border border-red-200 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors">
             <Trash2 className="h-4 w-4" />
             {channel === 'all' ? '전체 초기화' : `${CHANNEL_OPTIONS.find(c => c.value === channel)?.label ?? channel} 초기화`}
           </button>
           <button onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors">
+            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
             <Upload className="h-4 w-4" /> 엑셀 업로드
           </button>
         </div>
@@ -670,7 +670,7 @@ export default function OrdersTab() {
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputCls} />
           {(dateFrom || dateTo) && (
             <button onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="h-9 w-9 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6]">
+              className="h-10 w-9 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6]">
               <X className="h-4 w-4 text-[#6B7684]" />
             </button>
           )}
@@ -681,14 +681,14 @@ export default function OrdersTab() {
             <input
               value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="상품명, 주문번호, 수하인 검색"
-              className="h-9 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors w-56"
+              className="h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors w-56"
             />
           </div>
 
           {/* 컬럼 토글 */}
           <div className="relative" ref={colPanelRef}>
             <button onClick={() => setColPanelOpen((v) => !v)}
-              className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              className="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
               <SlidersHorizontal className="h-3.5 w-3.5" /> 컬럼
             </button>
             {colPanelOpen && (
@@ -713,7 +713,7 @@ export default function OrdersTab() {
             <div className="flex items-center gap-2">
               <span className="text-[12px] text-[#6B7684] shrink-0">상품명:</span>
               <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
-                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
+                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
                 <option value="">전체</option>
                 {productOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -724,7 +724,7 @@ export default function OrdersTab() {
             <div className="flex items-center gap-2">
               <span className="text-[12px] text-[#6B7684] shrink-0">관리용:</span>
               <select value={selectedMasterName} onChange={(e) => setSelectedMasterName(e.target.value)}
-                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
+                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
                 <option value="">전체</option>
                 {masterNameOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -772,13 +772,13 @@ export default function OrdersTab() {
               ) : apiError ? (
                 <tr><td colSpan={visibleColList.length} className="text-center py-16">
                   <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-3" />
-                  <p className="text-[14px] font-medium text-[#6B7684]">데이터를 불러올 수 없습니다</p>
+                  <p className="text-[13px] font-medium text-[#6B7684]">데이터를 불러올 수 없습니다</p>
                   <p className="text-[12px] text-red-500 mt-1 font-mono">{apiError}</p>
                   <p className="text-[12px] text-[#B0B8C1] mt-2">Supabase에서 <strong>00013_channel_orders.sql</strong> 마이그레이션을 실행해 주세요.</p>
                 </td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={visibleColList.length} className="text-center py-16">
-                  <p className="text-[14px] font-medium text-[#6B7684]">주문 내역이 없습니다</p>
+                  <p className="text-[13px] font-medium text-[#6B7684]">주문 내역이 없습니다</p>
                   <p className="text-[13px] text-[#B0B8C1] mt-1">위의 엑셀 업로드 버튼으로 주문 데이터를 불러오세요</p>
                 </td></tr>
               ) : (
@@ -792,7 +792,7 @@ export default function OrdersTab() {
                       );
                       if (c.key === 'product_name') return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
-                          <p className="truncate text-[13.5px] font-medium text-[#191F28]">{o.product_name}</p>
+                          <p className="truncate text-[13px] font-medium text-[#191F28]">{o.product_name}</p>
                           {o.sku && (
                             <span className="truncate text-[11px] font-mono text-[#3182F6] mt-0.5 block">{o.sku.sku_code}</span>
                           )}
@@ -809,14 +809,14 @@ export default function OrdersTab() {
                         );
                       }
                       if (c.key === 'quantity') return (
-                        <td key={c.key} className="px-4 py-3 text-right text-[13.5px] font-semibold text-[#191F28] tabular-nums overflow-hidden">{formatNumber(o.quantity)}</td>
+                        <td key={c.key} className="px-4 py-3 text-right text-[13px] font-semibold text-[#191F28] tabular-nums overflow-hidden">{formatNumber(o.quantity)}</td>
                       );
                       if (c.key === 'shipping_cost') return (
                         <td key={c.key} className="px-4 py-3 text-right tabular-nums overflow-hidden">
                           <div className="truncate">
                             <span className="text-[13px] text-[#191F28]">{formatCurrency(o.shipping_cost)}</span>
                             {o.jeju_surcharge && (
-                              <span className="ml-1.5 text-[10.5px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">+3,000</span>
+                              <span className="ml-1.5 text-[11px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">+3,000</span>
                             )}
                           </div>
                         </td>
@@ -825,19 +825,19 @@ export default function OrdersTab() {
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
                           <div className="flex flex-col gap-1 overflow-hidden">
                             {o.order_status && (
-                              <span className="truncate text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-[#F2F4F6] text-[#6B7684] w-fit max-w-full">{o.order_status}</span>
+                              <span className="truncate text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#F2F4F6] text-[#6B7684] w-fit max-w-full">{o.order_status}</span>
                             )}
                             {o.claim_status && CLAIM_LABEL[o.claim_status] && (
-                              <span className={`truncate text-[11.5px] font-semibold px-2 py-0.5 rounded-full w-fit max-w-full ${CLAIM_LABEL[o.claim_status].cls}`}>
+                              <span className={`truncate text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit max-w-full ${CLAIM_LABEL[o.claim_status].cls}`}>
                                 {CLAIM_LABEL[o.claim_status].label}
                               </span>
                             )}
                             {isExchangeOrder(o) && o.sku?.id && (
                               exchangeProcessed.has(o.order_number ?? '') ? (
-                                <span className="text-[10.5px] text-green-600 font-medium">교환 처리됨</span>
+                                <span className="text-[11px] text-green-600 font-medium">교환 처리됨</span>
                               ) : (
                                 <button onClick={() => { setExchangeOrder(o); setExchangeSkuId(''); setExchangeSearch(''); }}
-                                  className="text-[10.5px] text-purple-600 font-semibold hover:underline w-fit">교환 처리</button>
+                                  className="text-[11px] text-purple-600 font-semibold hover:underline w-fit">교환 처리</button>
                               )
                             )}
                           </div>
@@ -880,9 +880,9 @@ export default function OrdersTab() {
         {!loading && !apiError && filtered.length > 0 && (
           <div className="px-5 py-3 border-t border-[#F2F4F6] flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-[12.5px] text-[#6B7684]">페이지당</span>
+              <span className="text-[12px] text-[#6B7684]">페이지당</span>
               <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="h-8 px-2 rounded-xl border border-[#E5E8EB] text-[12.5px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]">
+                className="h-8 px-2 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]">
                 {[20, 50, 100, 200].map((n) => <option key={n} value={n}>{n}개</option>)}
                 <option value={0}>전체</option>
               </select>
@@ -894,7 +894,7 @@ export default function OrdersTab() {
                   className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">«</button>
                 <button onClick={() => setPage((p) => p - 1)} disabled={page === 1}
                   className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
-                <span className="text-[12.5px] text-[#6B7684] px-3">{page} / {totalPages}</span>
+                <span className="text-[12px] text-[#6B7684] px-3">{page} / {totalPages}</span>
                 <button onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}
                   className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">›</button>
                 <button onClick={() => setPage(totalPages)} disabled={page >= totalPages}
@@ -914,8 +914,8 @@ export default function OrdersTab() {
       {/* 플로팅 합계 바 */}
       {filtered.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-white border border-[#E5E8EB] shadow-[0_4px_20px_rgba(0,0,0,0.12)] rounded-2xl px-5 py-3">
-          <span className="text-[12.5px] font-semibold text-[#6B7684]">합계 {formatNumber(filtered.length)}건</span>
-          {jejuCount > 0 && <span className="text-[11.5px] text-blue-600 font-medium">제주 {jejuCount}건</span>}
+          <span className="text-[12px] font-semibold text-[#6B7684]">합계 {formatNumber(filtered.length)}건</span>
+          {jejuCount > 0 && <span className="text-[11px] text-blue-600 font-medium">제주 {jejuCount}건</span>}
           <div className="w-px h-4 bg-[#E5E8EB]" />
           <span className="text-[13px] text-[#6B7684]">수량 <span className="font-bold text-[#191F28]">{formatNumber(totalQty)}개</span></span>
           <span className="text-[13px] text-[#6B7684]">택배운임 <span className="font-bold text-[#191F28]">{formatCurrency(totalShip)}</span></span>
@@ -947,7 +947,7 @@ export default function OrdersTab() {
                 .slice(0, 30)
                 .map(o => (
                   <button key={o.id} onClick={() => setExchangeSkuId(o.id)}
-                    className={`w-full text-left px-3 py-2 text-[12.5px] rounded-lg transition-colors ${exchangeSkuId === o.id ? 'bg-[#EBF1FE] text-[#3182F6] font-medium' : 'text-[#191F28] hover:bg-[#F2F4F6]'}`}>
+                    className={`w-full text-left px-3 py-2 text-[12px] rounded-lg transition-colors ${exchangeSkuId === o.id ? 'bg-[#EBF1FE] text-[#3182F6] font-medium' : 'text-[#191F28] hover:bg-[#F2F4F6]'}`}>
                     {o.label}
                   </button>
                 ))}
@@ -964,7 +964,7 @@ export default function OrdersTab() {
       )}
 
       {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13.5px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}

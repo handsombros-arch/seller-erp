@@ -15,7 +15,7 @@ interface Props {
   description?: string;
 }
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[14px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
 export default function CsvImportDialog({ open, onClose, onImported, title, templateType, templateUrl, importUrl, columns, description }: Props) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
@@ -116,7 +116,7 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
       <div className="absolute inset-0 bg-black/30" onClick={handleClose} />
       <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28]">{title}</h2>
           <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -131,7 +131,7 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
               <p className="text-[12px] text-[#B0B8C1] mt-1">필수 컬럼: {columns.slice(0, 4).join(', ')} 등</p>
             </div>
             <a href={templateUrl ?? `/api/csv-template?type=${templateType}`} download
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-[#3182F6] text-[12.5px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 whitespace-nowrap">
+              className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-[#3182F6] text-[12px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 whitespace-nowrap">
               <Download className="h-3.5 w-3.5" /> 양식 다운로드
             </a>
           </div>
@@ -159,7 +159,7 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
                   <thead className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
                     <tr>
                       {previewCols.map((c) => (
-                        <th key={c} className="text-left px-3 py-2 text-[11.5px] font-semibold text-[#6B7684] whitespace-nowrap">{c}</th>
+                        <th key={c} className="text-left px-3 py-2 text-[11px] font-semibold text-[#6B7684] whitespace-nowrap">{c}</th>
                       ))}
                     </tr>
                   </thead>
@@ -167,14 +167,14 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
                     {previewRows.map((row, i) => (
                       <tr key={i}>
                         {previewCols.map((c) => (
-                          <td key={c} className="px-3 py-2 text-[12.5px] text-[#191F28] whitespace-nowrap max-w-[160px] truncate">{String(row[c] ?? '')}</td>
+                          <td key={c} className="px-3 py-2 text-[12px] text-[#191F28] whitespace-nowrap max-w-[160px] truncate">{String(row[c] ?? '')}</td>
                         ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {rows.length > 5 && (
-                  <p className="text-center text-[11.5px] text-[#B0B8C1] py-2 border-t border-[#F2F4F6]">+ {rows.length - 5}행 더</p>
+                  <p className="text-center text-[11px] text-[#B0B8C1] py-2 border-t border-[#F2F4F6]">+ {rows.length - 5}행 더</p>
                 )}
               </div>
             </div>
@@ -190,16 +190,16 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
           {error && (
             <div className="flex items-start gap-2 bg-red-50 rounded-xl px-4 py-3">
               <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-[12.5px] text-red-700 whitespace-pre-line">{error}</p>
+              <p className="text-[12px] text-red-700 whitespace-pre-line">{error}</p>
             </div>
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={handleClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[14px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+            <button onClick={handleClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
               닫기
             </button>
             <button onClick={handleImport} disabled={!rows.length || loading}
-              className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[14px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+              className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               업로드 ({rows.length}행)
             </button>

@@ -175,7 +175,7 @@ export default function OrdersChartTab() {
   // ─── UI helpers ─────────────────────────────────────────────────────────────
 
   const seg = (active: boolean) =>
-    `h-8 px-3 rounded-lg text-[12.5px] font-medium transition-colors ${
+    `h-8 px-3 rounded-lg text-[12px] font-medium transition-colors ${
       active ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
     }`;
 
@@ -187,7 +187,7 @@ export default function OrdersChartTab() {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[16px] font-bold text-[#191F28]">주문 분석</h3>
+        <h3 className="text-[15px] font-bold text-[#191F28]">주문 분석</h3>
         <p className="text-[13px] text-[#6B7684] mt-0.5">채널·상품별 주문 추이를 비교합니다</p>
       </div>
 
@@ -197,10 +197,10 @@ export default function OrdersChartTab() {
         {/* 날짜 */}
         <div className="flex items-center gap-2 flex-wrap">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
           <span className="text-[12px] text-[#B0B8C1]">~</span>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
 
           {/* 빠른 범위 */}
           <div className="flex items-center gap-1 ml-1">
@@ -215,7 +215,7 @@ export default function OrdersChartTab() {
 
           {/* 요약 */}
           {!loading && orders.length > 0 && (
-            <div className="ml-auto flex items-center gap-3 text-[12.5px] text-[#6B7684]">
+            <div className="ml-auto flex items-center gap-3 text-[12px] text-[#6B7684]">
               <span>총 <strong className="text-[#191F28]">{totalOrders.toLocaleString()}</strong>건</span>
               <span>수량 <strong className="text-[#191F28]">{totalQty.toLocaleString()}</strong>개</span>
             </div>
@@ -226,7 +226,7 @@ export default function OrdersChartTab() {
         <div className="flex items-center gap-4 flex-wrap">
           {/* 단위 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11.5px] text-[#B0B8C1] mr-1">단위</span>
+            <span className="text-[11px] text-[#B0B8C1] mr-1">단위</span>
             {(['daily', 'weekly', 'monthly'] as const).map((g) => (
               <button key={g} onClick={() => setGranularity(g)} className={seg(granularity === g)}>
                 {g === 'daily' ? '일별' : g === 'weekly' ? '주별' : '월별'}
@@ -238,7 +238,7 @@ export default function OrdersChartTab() {
 
           {/* 그룹 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11.5px] text-[#B0B8C1] mr-1">비교</span>
+            <span className="text-[11px] text-[#B0B8C1] mr-1">비교</span>
             <button onClick={() => setGroupBy('channel')} className={seg(groupBy === 'channel')}>채널별</button>
             <button onClick={() => setGroupBy('product')} className={seg(groupBy === 'product')}>상품별</button>
           </div>
@@ -247,7 +247,7 @@ export default function OrdersChartTab() {
 
           {/* 지표 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11.5px] text-[#B0B8C1] mr-1">지표</span>
+            <span className="text-[11px] text-[#B0B8C1] mr-1">지표</span>
             <button onClick={() => setMetric('count')}    className={seg(metric === 'count')}>건수</button>
             <button onClick={() => setMetric('quantity')} className={seg(metric === 'quantity')}>수량</button>
           </div>
@@ -262,7 +262,7 @@ export default function OrdersChartTab() {
           </div>
         ) : chartData.length === 0 ? (
           <div className="h-80 flex items-center justify-center flex-col gap-2">
-            <p className="text-[14px] font-medium text-[#6B7684]">데이터가 없습니다</p>
+            <p className="text-[13px] font-medium text-[#6B7684]">데이터가 없습니다</p>
             <p className="text-[12px] text-[#B0B8C1]">날짜 범위를 조정하거나 주문을 동기화하세요</p>
           </div>
         ) : (
@@ -324,12 +324,12 @@ export default function OrdersChartTab() {
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  <th className="px-4 py-2.5 text-left text-[11.5px] font-semibold text-[#6B7684]">
+                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#6B7684]">
                     {groupBy === 'channel' ? '채널' : '상품'}
                   </th>
-                  <th className="px-4 py-2.5 text-right text-[11.5px] font-semibold text-[#6B7684]">건수</th>
-                  <th className="px-4 py-2.5 text-right text-[11.5px] font-semibold text-[#6B7684]">수량</th>
-                  <th className="px-4 py-2.5 text-right text-[11.5px] font-semibold text-[#6B7684]">비율</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">건수</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">수량</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">비율</th>
                 </tr>
               </thead>
               <tbody>

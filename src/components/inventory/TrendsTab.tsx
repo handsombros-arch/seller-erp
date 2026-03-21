@@ -67,7 +67,7 @@ export default function TrendsTab() {
           ].map((card, i) => (
             <div key={i} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4">
               <p className="text-[12px] text-[#6B7684] font-medium">{card.label}</p>
-              <p className="text-[22px] font-bold text-[#191F28] mt-1 tabular-nums">{card.value}</p>
+              <p className="text-[24px] font-bold text-[#191F28] mt-1 tabular-nums">{card.value}</p>
               <p className="text-[11px] text-[#B0B8C1] mt-0.5">{card.sub}</p>
             </div>
           ))}
@@ -78,7 +78,7 @@ export default function TrendsTab() {
         <div className="flex items-center gap-1.5">
           {(['day', 'week', 'month'] as Unit[]).map((u) => (
             <button key={u} onClick={() => setUnit(u)}
-              className={`h-8 px-3 rounded-xl text-[12.5px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {UNIT_LABELS[u]}
             </button>
           ))}
@@ -86,7 +86,7 @@ export default function TrendsTab() {
         <div className="flex items-center gap-1.5">
           {DAYS_OPTIONS.map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 rounded-xl text-[12.5px] font-medium transition-colors ${days === d ? 'bg-[#191F28] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#191F28] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {d}일
             </button>
           ))}
@@ -99,7 +99,7 @@ export default function TrendsTab() {
         ) : data.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <BarChart3 className="h-10 w-10 text-[#B0B8C1] mb-3" />
-            <p className="text-[14px] text-[#6B7684]">데이터가 없습니다</p>
+            <p className="text-[13px] text-[#6B7684]">데이터가 없습니다</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={380}>

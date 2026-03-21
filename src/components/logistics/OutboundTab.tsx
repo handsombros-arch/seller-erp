@@ -291,11 +291,11 @@ export default function OutboundTab() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[20px] font-bold text-[#191F28]">출고 관리</h1>
-          <p className="text-[13.5px] text-[#6B7684] mt-0.5">창고에서 쿠팡 및 판매처로 나가는 출고를 관리합니다</p>
+          <p className="text-[13px] text-[#6B7684] mt-0.5">창고에서 쿠팡 및 판매처로 나가는 출고를 관리합니다</p>
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#3182F6] text-white text-[13.5px] font-semibold rounded-xl hover:bg-[#1B64DA] transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#3182F6] text-white text-[13px] font-semibold rounded-xl hover:bg-[#1B64DA] transition-colors"
         >
           <Plus className="w-4 h-4" />
           출고 등록
@@ -311,7 +311,7 @@ export default function OutboundTab() {
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
             <p className="text-[13px] text-[#6B7684] mb-1">{label}</p>
-            <p className={`text-[22px] font-bold ${color}`}>{value}</p>
+            <p className={`text-[24px] font-bold ${color}`}>{value}</p>
           </div>
         ))}
       </div>
@@ -325,7 +325,7 @@ export default function OutboundTab() {
         ) : records.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-[#B0B8C1]">
             <Package className="w-10 h-10 mb-3" />
-            <p className="text-[13.5px]">출고 내역이 없습니다</p>
+            <p className="text-[13px]">출고 내역이 없습니다</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -348,7 +348,7 @@ export default function OutboundTab() {
                   {/* 센터 / 채널 */}
                   <div>
                     {isCoupang ? (
-                      <p className="text-[13.5px] font-bold text-[#191F28]">
+                      <p className="text-[13px] font-bold text-[#191F28]">
                         {record.coupang_center?.replace(/^쿠팡\s*/i, '') ?? '센터 미지정'}
                       </p>
                     ) : (
@@ -356,7 +356,7 @@ export default function OutboundTab() {
                         {(record.channel as { name?: string })?.name ?? '기타'}
                       </span>
                     )}
-                    <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-md mt-1 ${isCoupang ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`inline-block text-[11px] font-semibold px-1.5 py-0.5 rounded-md mt-1 ${isCoupang ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                       {isCoupang ? '쿠팡그로스' : '기타'}
                     </span>
                   </div>
@@ -364,21 +364,21 @@ export default function OutboundTab() {
                   {/* 상품 / SKU */}
                   <div className="min-w-0">
                     <p className="text-[13px] font-medium text-[#191F28] truncate">{productName}</p>
-                    <p className="text-[11.5px] text-[#B0B8C1] mt-0.5">
+                    <p className="text-[11px] text-[#B0B8C1] mt-0.5">
                       {skuCode}{skuOptionLabel(optVals) ? ` · ${skuOptionLabel(optVals)}` : ''}
                     </p>
                   </div>
 
-                  <span className="text-[13.5px] font-semibold text-[#191F28]">{formatNumber(record.quantity)}<span className="text-[11px] font-normal text-[#B0B8C1]">개</span></span>
+                  <span className="text-[13px] font-semibold text-[#191F28]">{formatNumber(record.quantity)}<span className="text-[11px] font-normal text-[#B0B8C1]">개</span></span>
                   <span className="text-[13px] text-[#6B7684]">{record.box_count != null ? `${record.box_count}박스` : '-'}</span>
-                  <span className="text-[12.5px] text-[#6B7684]">{formatDate(record.outbound_date)}</span>
-                  <span className="text-[12.5px] text-[#6B7684]">{record.arrival_date ? formatDate(record.arrival_date) : '-'}</span>
+                  <span className="text-[12px] text-[#6B7684]">{formatDate(record.outbound_date)}</span>
+                  <span className="text-[12px] text-[#6B7684]">{record.arrival_date ? formatDate(record.arrival_date) : '-'}</span>
 
                   {/* 수정 / 삭제 */}
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditTarget(record)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#3182F6] transition-colors"
+                      className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#3182F6] transition-colors"
                       title="수정"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
@@ -386,7 +386,7 @@ export default function OutboundTab() {
                     <button
                       onClick={() => handleDelete(record)}
                       disabled={deleting === record.id}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors disabled:opacity-40"
+                      className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors disabled:opacity-40"
                       title="삭제 (재고 복구)"
                     >
                       {deleting === record.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -403,7 +403,7 @@ export default function OutboundTab() {
       {/* ── 출고 등록 다이얼로그 ─────────────────────────────────────────────── */}
       <Dialog open={open} onClose={closeForm}>
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[16px] font-bold text-[#191F28]">출고 등록</h2>
+          <h2 className="text-[15px] font-bold text-[#191F28]">출고 등록</h2>
           <button onClick={closeForm} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
             <X className="h-4 w-4 text-[#6B7684]" />
           </button>
@@ -458,7 +458,7 @@ export default function OutboundTab() {
                     <button
                       type="button"
                       onClick={addCenter}
-                      className="flex items-center gap-1 text-[12.5px] text-[#3182F6] font-medium hover:underline"
+                      className="flex items-center gap-1 text-[12px] text-[#3182F6] font-medium hover:underline"
                     >
                       <Plus className="h-3.5 w-3.5" /> 센터 추가
                     </button>
@@ -622,10 +622,10 @@ export default function OutboundTab() {
             <p className="px-6 pb-2 text-[13px] text-red-500">{submitError}</p>
           )}
           <div className="px-6 pb-6 pt-2 flex gap-2">
-            <button type="button" onClick={closeForm} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+            <button type="button" onClick={closeForm} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
               취소
             </button>
-            <button type="submit" disabled={submitting} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+            <button type="submit" disabled={submitting} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {outboundType === 'coupang_growth' ? `등록 (${centers.reduce((sum, c) => sum + c.skus.filter(s => s.sku_id && s.quantity).length, 0)}건)` : '등록'}
             </button>
@@ -706,7 +706,7 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
   return (
     <Dialog open onClose={onClose}>
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-        <h2 className="text-[16px] font-bold text-[#191F28]">출고 수정</h2>
+        <h2 className="text-[15px] font-bold text-[#191F28]">출고 수정</h2>
         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
           <X className="h-4 w-4 text-[#6B7684]" />
         </button>
@@ -779,10 +779,10 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
         </div>
 
         <div className="px-6 pb-6 pt-2 flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13.5px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
             취소
           </button>
-          <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13.5px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} 저장
           </button>
         </div>
