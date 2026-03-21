@@ -105,14 +105,9 @@ export async function POST(request: NextRequest) {
     await sleep(300);
   } while (nextCursor);
 
-  // 재고 자동 차감/복구
-  let deductResult = null;
-  try { deductResult = await applyOrdersToInventory(admin, user.id); } catch {}
+  // 재고 자동 차감/복구 (비활성 — 과거 데이터 정리 후 활성화)
+  // let deductResult = null;
+  // try { deductResult = await applyOrdersToInventory(admin, user.id); } catch {}
 
-  return NextResponse.json({
-    synced, skipped,
-    errors: errors.length ? errors : undefined,
-    deducted: deductResult?.applied ?? 0,
-    restored: deductResult?.restored ?? 0,
-  });
+  return NextResponse.json({ synced, skipped, errors: errors.length ? errors : undefined });
 }
