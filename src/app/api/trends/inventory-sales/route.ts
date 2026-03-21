@@ -44,13 +44,13 @@ export async function GET(request: NextRequest) {
   if (skuIds.length) rgQuery = rgQuery.in('sku_id', skuIds);
   const { data: rgRows } = await rgQuery;
 
-  // 2. 창고 재고 스냅샷
+  // 2. 창고 재고 (현재값 — 일별 스냅샷 테이블 없음, 현재 수량을 전 기간 기준선으로 사용)
   let whQuery = admin
-    .from('inventory_snapshots')
-    .select('snapshot_date, sku_id, quantity')
-    .gte('snapshot_date', since);
+    .from('inventory')
+    .select('sku_id, quantity');
   if (skuIds.length) whQuery = whQuery.in('sku_id', skuIds);
   const { data: whRows } = await whQuery;
+  const warehouseTotal = (whRows ?? []).reduce((s, r) => s + (r.quantity ?? 0), 0);
 
   // 3. 주문 (판매)
   let ordQuery = admin
@@ -89,13 +89,7 @@ export async function GET(request: NextRequest) {
     b._rgByDate.set(r.snapshot_date, dateQty + (r.total_orderable_qty ?? 0));
   }
 
-  // 창고 재고: 동일
-  for (const r of whRows ?? []) {
-    const key = bucketKey(r.snapshot_date, unit);
-    const b = getBucket(key);
-    const dateQty = b._whByDate.get(r.snapshot_date) ?? 0;
-    b._whByDate.set(r.snapshot_date, dateQty + (r.quantity ?? 0));
-  }
+  // 창고 재고: 현재값을 모든 버킷에 동일하게 적용 (일별 스냅샷 없음)
 
   // 판매: 합산
   for (const r of ordRows ?? []) {
@@ -111,10 +105,7 @@ export async function GET(request: NextRequest) {
       const latestDate = [...b._rgByDate.keys()].sort().at(-1)!;
       b.coupang_qty = b._rgByDate.get(latestDate)!;
     }
-    if (b._whByDate.size > 0) {
-      const latestDate = [...b._whByDate.keys()].sort().at(-1)!;
-      b.warehouse_qty = b._whByDate.get(latestDate)!;
-    }
+    b.warehouse_qty = warehouseTotal;
   }
 
   // SKU 정보

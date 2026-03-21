@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Loader2, TrendingDown, AlertTriangle, CheckCircle2, EyeOff, Eye } from 'lucide-react';
+import { Loader2, TrendingDown, AlertTriangle, CheckCircle2, Search, XCircle } from 'lucide-react';
 import { formatNumber, formatDate, skuOptionLabel } from '@/lib/utils';
 import type { ForecastData } from '@/types';
 
-type ForecastFilter = 'all' | 'reorder' | 'normal';
+type ForecastFilter = 'all' | 'reorder' | 'discontinued' | 'normal';
 
 type ForecastItem = ForecastData & {
   cost_price: number; stock_value: number;
@@ -27,17 +27,19 @@ export default function ForecastTab() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ForecastFilter>('all');
   const [stockSort, setStockSort] = useState<'none' | 'asc' | 'desc'>('desc');
-  const [showFaded, setShowFaded] = useState(false);
-  const [fadedSkus, setFadedSkus] = useState<Set<string>>(() => {
+  const [q, setQ] = useState('');
+
+  // 단종상품 (localStorage 저장)
+  const [discontinuedSkus, setDiscontinuedSkus] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set();
-    try { const saved = localStorage.getItem('forecast_faded'); return new Set(JSON.parse(saved ?? '[]')); } catch { return new Set(); }
+    try { return new Set(JSON.parse(localStorage.getItem('forecast_discontinued') ?? '[]')); } catch { return new Set(); }
   });
 
-  function toggleFade(skuId: string) {
-    setFadedSkus((prev) => {
+  function toggleDiscontinued(skuId: string) {
+    setDiscontinuedSkus((prev) => {
       const next = new Set(prev);
       next.has(skuId) ? next.delete(skuId) : next.add(skuId);
-      try { localStorage.setItem('forecast_faded', JSON.stringify([...next])); } catch {}
+      try { localStorage.setItem('forecast_discontinued', JSON.stringify([...next])); } catch {}
       return next;
     });
   }
@@ -46,33 +48,44 @@ export default function ForecastTab() {
     fetch('/api/forecast').then((r) => r.json()).then((d) => { setForecast(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
 
-  const reorderCount = useMemo(() => forecast.filter((f) => f.needs_reorder).length, [forecast]);
+  // 단종 제외 발주필요 카운트
+  const reorderCount = useMemo(() => forecast.filter((f) => f.needs_reorder && !discontinuedSkus.has(f.sku_id)).length, [forecast, discontinuedSkus]);
+  const discontinuedCount = useMemo(() => forecast.filter((f) => discontinuedSkus.has(f.sku_id)).length, [forecast, discontinuedSkus]);
 
   const filtered = useMemo(() => {
     let result = forecast;
-    if (filter === 'reorder') result = result.filter((f) => f.needs_reorder);
-    else if (filter === 'normal') result = result.filter((f) => !f.needs_reorder);
-    if (!showFaded) result = result.filter((f) => !fadedSkus.has(f.sku_id));
+    if (filter === 'reorder') result = result.filter((f) => f.needs_reorder && !discontinuedSkus.has(f.sku_id));
+    else if (filter === 'discontinued') result = result.filter((f) => discontinuedSkus.has(f.sku_id));
+    else if (filter === 'normal') result = result.filter((f) => !f.needs_reorder && !discontinuedSkus.has(f.sku_id));
+    // 검색
+    if (q) {
+      const lower = q.toLowerCase();
+      result = result.filter((f) =>
+        f.product_name.toLowerCase().includes(lower) ||
+        f.sku_code.toLowerCase().includes(lower) ||
+        skuOptionLabel(f.option_values).toLowerCase().includes(lower)
+      );
+    }
     if (stockSort !== 'none') {
       result = [...result].sort((a, b) => stockSort === 'asc' ? a.current_stock - b.current_stock : b.current_stock - a.current_stock);
     }
     return result;
-  }, [forecast, filter, fadedSkus, showFaded, stockSort]);
+  }, [forecast, filter, discontinuedSkus, stockSort, q]);
 
   function stockColor(item: ForecastData) {
+    if (discontinuedSkus.has(item.sku_id)) return 'text-[#B0B8C1]';
     if (item.needs_reorder) return 'text-red-600';
     if (item.days_remaining !== null && item.days_remaining < item.lead_time_days * 2) return 'text-amber-600';
     return 'text-green-600';
   }
   function progressPercent(item: ForecastData) { if (item.reorder_point === 0) return 100; const max = Math.max(item.current_stock, item.reorder_point * 3); return Math.min(100, Math.round((item.current_stock / max) * 100)); }
-  function progressColor(item: ForecastData) { if (item.needs_reorder) return 'bg-red-500'; if (item.days_remaining !== null && item.days_remaining < item.lead_time_days * 2) return 'bg-amber-400'; return 'bg-[#3182F6]'; }
-
-  const fadedCount = useMemo(() => forecast.filter((f) => fadedSkus.has(f.sku_id)).length, [forecast, fadedSkus]);
+  function progressColor(item: ForecastData) { if (discontinuedSkus.has(item.sku_id)) return 'bg-gray-300'; if (item.needs_reorder) return 'bg-red-500'; if (item.days_remaining !== null && item.days_remaining < item.lead_time_days * 2) return 'bg-amber-400'; return 'bg-[#3182F6]'; }
 
   const filterTabs: Array<{ value: ForecastFilter; label: string; count?: number }> = [
     { value: 'all', label: '전체', count: forecast.length },
     { value: 'reorder', label: '발주 필요', count: reorderCount },
-    { value: 'normal', label: '정상', count: forecast.length - reorderCount },
+    { value: 'normal', label: '정상', count: forecast.length - reorderCount - discontinuedCount },
+    { value: 'discontinued', label: '단종', count: discontinuedCount },
   ];
 
   return (
@@ -80,15 +93,15 @@ export default function ForecastTab() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
           <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-red-500" /><p className="text-[13.5px] text-[#6B7684]">발주 필요</p></div>
-          <p className="text-[26px] font-bold text-red-600">{reorderCount}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">개 SKU</p>
+          <p className="text-[26px] font-bold text-red-600">{reorderCount}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">개 SKU (단종 제외)</p>
         </div>
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
           <div className="flex items-center gap-2 mb-1"><CheckCircle2 className="w-4 h-4 text-green-500" /><p className="text-[13.5px] text-[#6B7684]">정상 재고</p></div>
-          <p className="text-[26px] font-bold text-green-600">{forecast.length - reorderCount}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">개 SKU</p>
+          <p className="text-[26px] font-bold text-green-600">{forecast.length - reorderCount - discontinuedCount}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">개 SKU</p>
         </div>
         <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
-          <div className="flex items-center gap-2 mb-1"><TrendingDown className="w-4 h-4 text-[#3182F6]" /><p className="text-[13.5px] text-[#6B7684]">전체 SKU</p></div>
-          <p className="text-[26px] font-bold text-[#191F28]">{forecast.length}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">활성 SKU 수</p>
+          <div className="flex items-center gap-2 mb-1"><XCircle className="w-4 h-4 text-gray-400" /><p className="text-[13.5px] text-[#6B7684]">단종 상품</p></div>
+          <p className="text-[26px] font-bold text-[#B0B8C1]">{discontinuedCount}</p><p className="text-[12px] text-[#B0B8C1] mt-0.5">개 SKU</p>
         </div>
       </div>
 
@@ -99,12 +112,15 @@ export default function ForecastTab() {
             {tab.label}{tab.count !== undefined && <span className={`ml-1.5 text-[12px] ${filter === tab.value ? 'text-blue-200' : 'text-[#B0B8C1]'}`}>{tab.count}</span>}
           </button>
         ))}
-        {fadedCount > 0 && (
-          <button onClick={() => setShowFaded((v) => !v)}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-[13.5px] font-medium rounded-xl transition-colors ${showFaded ? 'bg-[#6B7684] text-white' : 'bg-white text-[#B0B8C1] hover:bg-[#F2F4F6] shadow-[0_1px_4px_rgba(0,0,0,0.06)]'}`}>
-            {showFaded ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />} 숨김 {fadedCount}개
-          </button>
-        )}
+        <div className="ml-auto relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#B0B8C1]" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="상품명, SKU, 옵션 검색..."
+            className="h-9 w-60 pl-9 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
@@ -115,26 +131,42 @@ export default function ForecastTab() {
         ) : (
           <div className="overflow-x-auto">
           <div className="divide-y divide-[#F2F4F6] min-w-[700px]">
-            <div className="grid grid-cols-[1fr_100px_180px_140px_100px_100px_36px] gap-4 px-5 py-3 bg-[#F9FAFB]">
+            <div className="grid grid-cols-[1fr_100px_180px_140px_100px_100px] gap-4 px-5 py-3 bg-[#F9FAFB]">
               <span className="text-[12px] font-medium text-[#6B7684]">상품 / SKU</span>
               <button onClick={() => setStockSort((s) => s === 'none' ? 'desc' : s === 'desc' ? 'asc' : 'none')} className="text-[12px] font-medium text-[#6B7684] flex items-center gap-1 hover:text-[#3182F6] transition-colors text-left">현재 재고<span className="text-[10px]">{stockSort === 'none' ? '↕' : stockSort === 'desc' ? '↓' : '↑'}</span></button>
               <span className="text-[12px] font-medium text-[#6B7684]">판매 평균</span>
               <span className="text-[12px] font-medium text-[#6B7684]">소진까지</span>
               <span className="text-[12px] font-medium text-[#6B7684]">발주 권장일</span>
               <span className="text-[12px] font-medium text-[#6B7684]">리드타임</span>
-              <span />
             </div>
             {filtered.map((item) => {
               const pct = progressPercent(item);
               const reorderPct = Math.min(100, Math.round((item.reorder_point / Math.max(item.current_stock, item.reorder_point * 3)) * 100));
+              const isDisc = discontinuedSkus.has(item.sku_id);
               return (
-                <div key={item.sku_id} className={`grid grid-cols-[1fr_100px_180px_140px_100px_100px_36px] gap-4 px-5 py-4 transition-colors items-start ${fadedSkus.has(item.sku_id) ? 'opacity-40' : 'hover:bg-[#F9FAFB]'}`}>
+                <div key={item.sku_id} className={`grid grid-cols-[1fr_100px_180px_140px_100px_100px] gap-4 px-5 py-4 transition-colors items-start ${isDisc ? 'opacity-50' : 'hover:bg-[#F9FAFB]'}`}>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-[13.5px] font-medium text-[#191F28]">{item.product_name}{Object.keys(item.option_values ?? {}).length > 0 && <span className="ml-1.5 text-[13px] font-normal text-[#6B7684]">· {skuOptionLabel(item.option_values)}</span>}</p>
-                      {item.needs_reorder && <span className="shrink-0 inline-block px-1.5 py-0.5 bg-red-100 text-red-700 text-[11px] font-medium rounded-lg">발주 필요</span>}
+                      <p className="text-[13.5px] font-medium text-[#191F28]">
+                        {item.product_name}
+                        {Object.keys(item.option_values ?? {}).length > 0 && (
+                          <span className="ml-1.5 text-[13.5px] font-medium text-[#191F28]"> · {skuOptionLabel(item.option_values)}</span>
+                        )}
+                      </p>
+                      {isDisc ? (
+                        <button onClick={() => toggleDiscontinued(item.sku_id)}
+                          className="shrink-0 inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[11px] font-medium rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
+                          단종상품
+                        </button>
+                      ) : item.needs_reorder ? (
+                        <button onClick={() => toggleDiscontinued(item.sku_id)}
+                          className="shrink-0 inline-block px-1.5 py-0.5 bg-red-100 text-red-700 text-[11px] font-medium rounded-lg hover:bg-red-200 transition-colors cursor-pointer"
+                          title="클릭하여 단종상품으로 변경">
+                          발주 필요
+                        </button>
+                      ) : null}
                     </div>
-                    <p className="text-[12px] text-[#B0B8C1] mt-0.5">{item.sku_code}{Object.keys(item.option_values ?? {}).length > 0 && ` · ${skuOptionLabel(item.option_values)}`}</p>
+                    <p className="text-[12px] text-[#B0B8C1] mt-0.5">{item.sku_code}</p>
                     <p className="text-[11.5px] text-[#B0B8C1] mt-0.5">{item.days_remaining !== null ? (() => { const d = item.days_remaining - item.lead_time_days; return d <= 0 ? <span className="text-red-500 font-semibold">지금 발주 필요</span> : <span>D-{d}일 후 발주 · 안전재고 {formatNumber(item.safety_stock)}</span>; })() : <span>발주점: {formatNumber(item.reorder_point)} · 안전재고: {formatNumber(item.safety_stock)}</span>}</p>
                   </div>
                   <div>
@@ -152,7 +184,6 @@ export default function ForecastTab() {
                   <div>{item.days_remaining !== null ? (<><p className={`text-[13.5px] font-medium ${item.days_remaining <= item.lead_time_days ? 'text-red-600' : item.days_remaining < item.lead_time_days * 2 ? 'text-amber-600' : 'text-[#191F28]'}`}>소진까지 {formatNumber(item.days_remaining)}일</p>{item.days_remaining <= item.lead_time_days && <p className="text-[11.5px] text-red-500 mt-0.5">리드타임 이내!</p>}</>) : <p className="text-[13.5px] text-[#B0B8C1]">판매 없음</p>}</div>
                   <div>{item.reorder_date ? <p className={`text-[13.5px] ${new Date(item.reorder_date) <= new Date() ? 'text-red-600 font-medium' : 'text-[#191F28]'}`}>{formatDate(item.reorder_date)}</p> : <p className="text-[13.5px] text-[#B0B8C1]">-</p>}</div>
                   <div><p className="text-[13.5px] text-[#6B7684]">{item.lead_time_days}일</p></div>
-                  <div className="flex items-start justify-center pt-1"><button onClick={() => toggleFade(item.sku_id)} title={fadedSkus.has(item.sku_id) ? '숨김 해제' : '목록에서 숨기기'} className="w-7 h-7 flex items-center justify-center rounded-lg text-[#D0D5DD] hover:text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">{fadedSkus.has(item.sku_id) ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</button></div>
                 </div>
               );
             })}
