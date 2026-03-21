@@ -860,20 +860,9 @@ function RgInventoryTab() {
   const activeColOrder = subTab === 'return' ? DEFAULT_RG_RETURN_COLS : colOrder;
   const sorted = useMemo(() => {
     const source = subTab === 'return' ? returnItems : newItems;
+    // 기본: 재고 수량 내림차순
     if (!sort) {
-      // 반품탭: 상품명 기준 그루핑 (같은 상품끼리 묶음)
-      if (subTab === 'return') {
-        return [...source].sort((a, b) => {
-          const an = returnDisplayName(a);
-          const bn = returnDisplayName(b);
-          if (an !== bn) return an.localeCompare(bn);
-          // 같은 상품 내에서 등급순
-          const ai = GRADE_ORDER.indexOf(a.grade ?? '');
-          const bi = GRADE_ORDER.indexOf(b.grade ?? '');
-          return ai - bi;
-        });
-      }
-      return source;
+      return [...source].sort((a, b) => b.current_qty - a.current_qty);
     }
     return [...source].sort((a, b) => {
       const getV = (item: RgInventoryItem): number | string => {
@@ -906,7 +895,7 @@ function RgInventoryTab() {
     return '';
   }
 
-  function renderRgCell(col: RgCol, item: RgInventoryItem, isFirstInGroup?: boolean) {
+  function renderRgCell(col: RgCol, item: RgInventoryItem) {
     const dailyAvg = item.sales_last_30d > 0 ? Math.round((item.sales_last_30d / 30) * 10) / 10 : null;
     const isLow = item.days_remaining !== null && item.days_remaining <= 7;
     const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
@@ -938,8 +927,7 @@ function RgInventoryTab() {
           {item.is_return ? (
             <>
               <div className="flex items-center gap-2 group">
-                {isFirstInGroup !== false && <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>}
-                {isFirstInGroup === false && <p className="text-[13.5px] text-[#B0B8C1]">{''}</p>}
+                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
@@ -1213,22 +1201,16 @@ function RgInventoryTab() {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
                   const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
-                  // 동일 상품명 그루핑: 첫 번째 행만 상품명 표시
-                  const isFirstInGroup = subTab === 'return' && !sort
-                    ? (idx === 0 || returnDisplayName(sorted[idx - 1]) !== returnDisplayName(item))
-                    : undefined;
-                  // 그룹 경계선
-                  const groupBorder = subTab === 'return' && !sort && isFirstInGroup && idx > 0;
                   return (
                     <tr key={item.vendor_item_id}
-                      className={`hover:bg-[#FAFAFA] transition-colors ${groupBorder ? 'border-t-2 border-t-[#E5E8EB]' : ''} ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
                       <td className="w-10 px-3">
                         <input type="checkbox" checked={isChecked}
                           onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
                           readOnly
                           className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
                       </td>
-                      {activeColOrder.map((col) => renderRgCell(col, item, isFirstInGroup))}
+                      {activeColOrder.map((col) => renderRgCell(col, item))}
                     </tr>
                   );
                 })}

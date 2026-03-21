@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  result.sort((a, b) => a.current_qty - b.current_qty);
+  result.sort((a, b) => b.current_qty - a.current_qty);
 
   return NextResponse.json(result);
 }
