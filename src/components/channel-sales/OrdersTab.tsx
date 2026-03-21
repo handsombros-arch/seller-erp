@@ -398,8 +398,9 @@ export default function OrdersTab() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState('');
   const [channel, setChannel] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [datePreset, setDatePreset] = useState('7d');
   const [q, setQ] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -664,16 +665,38 @@ export default function OrdersTab() {
             {CHANNEL_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
 
-          {/* 날짜 */}
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputCls} />
-          <span className="text-[12px] text-[#B0B8C1]">~</span>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputCls} />
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="h-10 w-9 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6]">
-              <X className="h-4 w-4 text-[#6B7684]" />
+          {/* 날짜 프리셋 */}
+          {([
+            ['7d', '최근 7일', 7, 0],
+            ['30d', '이번달', -1, 0],
+            ['last30', '지난달', -1, -1],
+            ['90d', '최근 90일', 90, 0],
+          ] as const).map(([key, label, daysOrMonth, monthOffset]) => (
+            <button key={key} onClick={() => {
+              const today = new Date();
+              let from: Date, to: Date;
+              if (key === '30d') {
+                from = new Date(today.getFullYear(), today.getMonth(), 1);
+                to = today;
+              } else if (key === 'last30') {
+                from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                to = new Date(today.getFullYear(), today.getMonth(), 0);
+              } else {
+                from = new Date(Date.now() - (daysOrMonth as number) * 86400000);
+                to = today;
+              }
+              setDateFrom(from.toISOString().slice(0, 10));
+              setDateTo(to.toISOString().slice(0, 10));
+              setDatePreset(key);
+            }}
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${datePreset === key ? 'bg-[#3182F6] text-white' : 'border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              {label}
             </button>
-          )}
+          ))}
+          <span className="text-[11px] text-[#B0B8C1] mx-1">|</span>
+          <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDatePreset(''); }} className={inputCls} />
+          <span className="text-[12px] text-[#B0B8C1]">~</span>
+          <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setDatePreset(''); }} className={inputCls} />
 
           {/* 검색 */}
           <div className="relative ml-auto">
