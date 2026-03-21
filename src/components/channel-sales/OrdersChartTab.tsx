@@ -93,6 +93,8 @@ export default function OrdersChartTab() {
   const [metric,       setMetric]       = useState<Metric>('count');
   const [dateFrom,     setDateFrom]     = useState(daysAgo(90));
   const [dateTo,       setDateTo]       = useState(today);
+  const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set());
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
 
   // platform_skus: platform_product_name+channel → master product name
   const platformSkuMap = useMemo(() => {
@@ -128,15 +130,33 @@ export default function OrdersChartTab() {
       .finally(() => setLoading(false));
   }, [dateFrom, dateTo]);
 
+  // ─── 채널/상품 옵션 ─────────────────────────────────────────────────────────
+
+  const channelOptions = useMemo(() => {
+    const set = new Set(orders.map(o => o.channel));
+    return [...set].map(ch => ({ value: ch, label: CHANNEL_LABELS[ch] ?? ch }));
+  }, [orders]);
+
+  const productOptions = useMemo(() => {
+    const set = new Set(orders.map(o => resolveAdminName(o)));
+    return [...set].sort();
+  }, [orders, platformSkuMap]);
+
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+    if (selectedChannels.size > 0) result = result.filter(o => selectedChannels.has(o.channel));
+    if (selectedProducts.size > 0) result = result.filter(o => selectedProducts.has(resolveAdminName(o)));
+    return result;
+  }, [orders, selectedChannels, selectedProducts, platformSkuMap]);
+
   // ─── 데이터 집계 ────────────────────────────────────────────────────────────
 
   const { chartData, seriesKeys } = useMemo(() => {
     const bucketSet = new Set<string>();
     const groupSet  = new Set<string>();
-    // bucket → group → value
     const countMap  = new Map<string, Map<string, number>>();
 
-    for (const o of orders) {
+    for (const o of filteredOrders) {
       const bk = bucketKey(o.order_date, granularity);
       bucketSet.add(bk);
 
@@ -179,8 +199,8 @@ export default function OrdersChartTab() {
       active ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
     }`;
 
-  const totalOrders  = orders.length;
-  const totalQty     = orders.reduce((s, o) => s + (o.quantity ?? 0), 0);
+  const totalOrders  = filteredOrders.length;
+  const totalQty     = filteredOrders.reduce((s, o) => s + (o.quantity ?? 0), 0);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -251,6 +271,41 @@ export default function OrdersChartTab() {
             <button onClick={() => setMetric('count')}    className={seg(metric === 'count')}>건수</button>
             <button onClick={() => setMetric('quantity')} className={seg(metric === 'quantity')}>수량</button>
           </div>
+        </div>
+
+        {/* 채널 필터 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-[#B0B8C1] shrink-0">채널</span>
+          <button onClick={() => setSelectedChannels(new Set())}
+            className={seg(selectedChannels.size === 0)}>전체</button>
+          {channelOptions.map((ch) => (
+            <button key={ch.value} onClick={() => setSelectedChannels((prev) => {
+              const next = new Set(prev);
+              next.has(ch.value) ? next.delete(ch.value) : next.add(ch.value);
+              return next;
+            })} className={seg(selectedChannels.has(ch.value))}>
+              {ch.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 상품 필터 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-[#B0B8C1] shrink-0">상품</span>
+          <button onClick={() => setSelectedProducts(new Set())}
+            className={seg(selectedProducts.size === 0)}>전체</button>
+          {productOptions.slice(0, 15).map((name) => (
+            <button key={name} onClick={() => setSelectedProducts((prev) => {
+              const next = new Set(prev);
+              next.has(name) ? next.delete(name) : next.add(name);
+              return next;
+            })} className={`${seg(selectedProducts.has(name))} max-w-[160px] truncate`}>
+              {name}
+            </button>
+          ))}
+          {productOptions.length > 15 && (
+            <span className="text-[11px] text-[#B0B8C1]">+{productOptions.length - 15}개</span>
+          )}
         </div>
       </div>
 
@@ -334,7 +389,7 @@ export default function OrdersChartTab() {
               </thead>
               <tbody>
                 {seriesKeys.map((key, i) => {
-                  const cnt = orders.filter((o) =>
+                  const cnt = filteredOrders.filter((o) =>
                     (groupBy === 'channel' ? (CHANNEL_LABELS[o.channel] ?? o.channel) : resolveAdminName(o)) === key
                   );
                   const count = cnt.length;
