@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
+const RETURN_KEYWORDS = ['반품재판매', '반품 재판매', '리퍼'];
+
+// 상품명에서 등급 추출 (S급/A급/B급/C급, 최상/상/중/하, 미개봉 등)
+function extractGrade(name: string): string | null {
+  if (!name) return null;
+  const m =
+    name.match(/[SABC]급/i) ??
+    name.match(/최상급|최상|미개봉|새상품/) ??
+    name.match(/(?<![가-힣])상(?!품|태|자|세|점|장|위|황|권|관|온|온라|표|면|응|자|실|계)/) ??
+    name.match(/(?<![가-힣])중(?!고|간|요|심|앙|학|독|력|량|지|단|점|부|하|류)/) ??
+    name.match(/(?<![가-힣])하(?!자|단|락|반|계|늘|루|루|지)/);
+  return m ? m[0] : null;
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -12,58 +26,55 @@ export async function GET(request: NextRequest) {
   const admin = await createAdminClient();
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 
-  // 스냅샷 목록 (날짜 오름차순)
   const { data: snapshots, error } = await admin
     .from('rg_inventory_snapshots')
-    .select('snapshot_date, vendor_item_id, external_sku_id, total_orderable_qty, sales_last_30d, sku_id, sku:skus(sku_code, product:products(name))')
+    .select('snapshot_date, vendor_item_id, external_sku_id, item_name, total_orderable_qty, sales_last_30d, sku_id, sku:skus(sku_code, product:products(name))')
     .gte('snapshot_date', since)
     .order('snapshot_date', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // platform_sku_id_return → 반품재판매 여부 판별
-  const { data: returnPsRows } = await admin
-    .from('platform_skus')
-    .select('platform_sku_id_return')
-    .not('platform_sku_id_return', 'is', null);
-  const returnVendorItemIds = new Set(
-    (returnPsRows ?? []).map((r) => String(r.platform_sku_id_return))
-  );
-
-  // vendor_item_id 기준으로 grouping → 날짜별 수량 배열 생성
+  // vendor_item_id 기준 grouping
   const byItem = new Map<string, { meta: any; dates: { date: string; qty: number }[] }>();
 
   for (const row of snapshots ?? []) {
     const key = row.vendor_item_id;
+    const itemName: string = (row as any).item_name ?? '';
+    const isReturn = RETURN_KEYWORDS.some((kw) => itemName.includes(kw));
+
     if (!byItem.has(key)) {
       byItem.set(key, {
         meta: {
           vendor_item_id:  row.vendor_item_id,
           external_sku_id: row.external_sku_id,
+          item_name:       itemName || null,
           sales_last_30d:  row.sales_last_30d,
           sku_id:          row.sku_id,
           sku:             (row as any).sku,
-          is_return:       returnVendorItemIds.has(row.vendor_item_id),
+          is_return:       isReturn,
+          grade:           isReturn ? extractGrade(itemName) : null,
         },
         dates: [],
       });
     }
     byItem.get(key)!.dates.push({ date: row.snapshot_date, qty: row.total_orderable_qty });
-    // 최신 sales_last_30d 갱신
     byItem.get(key)!.meta.sales_last_30d = row.sales_last_30d;
+    // item_name이 나중 스냅샷에 채워질 수 있으므로 최신값 유지
+    if (itemName) {
+      byItem.get(key)!.meta.item_name = itemName;
+      byItem.get(key)!.meta.is_return = RETURN_KEYWORDS.some((kw) => itemName.includes(kw));
+      byItem.get(key)!.meta.grade = byItem.get(key)!.meta.is_return ? extractGrade(itemName) : null;
+    }
   }
 
-  // 일자별 변동(diff) 계산
   const result = Array.from(byItem.values()).map(({ meta, dates }) => {
     const dailyChanges = dates.map((d, i) => ({
-      date:    d.date,
-      qty:     d.qty,
-      // 전일 대비 변동 (음수 = 출고, 양수 = 입고)
-      change:  i === 0 ? null : d.qty - dates[i - 1].qty,
+      date:   d.date,
+      qty:    d.qty,
+      change: i === 0 ? null : d.qty - dates[i - 1].qty,
     }));
 
     const latest = dates.at(-1);
-    // 일평균 출고 = 최근 30일 판매량 / 30
     const avgDailySales = meta.sales_last_30d > 0 ? meta.sales_last_30d / 30 : null;
     const daysRemaining = latest && avgDailySales ? Math.floor(latest.qty / avgDailySales) : null;
 
@@ -75,7 +86,6 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  // current_qty 기준 정렬 (재고 적은 순이 위험도 높음)
   result.sort((a, b) => a.current_qty - b.current_qty);
 
   return NextResponse.json(result);

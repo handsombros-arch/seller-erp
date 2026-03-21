@@ -627,6 +627,7 @@ const RG_LABELS: Record<RgCol, string> = {
 interface RgInventoryItem {
   vendor_item_id: string;
   external_sku_id: string | null;
+  item_name: string | null;
   sales_last_30d: number;
   sku_id: string | null;
   sku?: { sku_code: string; product: { name: string } } | null;
@@ -634,6 +635,7 @@ interface RgInventoryItem {
   days_remaining: number | null;
   daily: { date: string; qty: number; change: number | null }[];
   is_return: boolean;
+  grade: string | null;
 }
 
 function RgInventoryTab() {
@@ -738,13 +740,24 @@ function RgInventoryTab() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py}`}>
-          <div className="flex items-center gap-1.5">
-            <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
-            {item.is_return && (
-              <span className="shrink-0 text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">반품재판매</span>
-            )}
-          </div>
-          <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
+          {item.is_return ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                {item.grade ? (
+                  <span className="shrink-0 text-[11px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded-md">{item.grade}</span>
+                ) : (
+                  <span className="shrink-0 text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md">반품재판매</span>
+                )}
+                <p className="text-[13px] text-[#6B7684] truncate max-w-[240px]" title={item.item_name ?? productName}>{productName}</p>
+              </div>
+              <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
+              <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
+            </>
+          )}
         </td>
       );
       case 'qty': return (

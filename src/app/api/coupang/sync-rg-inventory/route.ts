@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
       snapshot_date:       snapshotDate,
       vendor_item_id:      String(item.vendorItemId),
       external_sku_id:     item.externalSkuId ? String(item.externalSkuId) : null,
+      item_name:           item.vendorItemName ?? item.itemName ?? item.sellerProductName ?? item.productName ?? null,
       total_orderable_qty: Number(item.inventoryDetails?.totalOrderableQuantity ?? 0),
       sales_last_30d:      Number(item.salesCountMap?.SALES_COUNT_LAST_THIRTY_DAYS ?? 0),
       sku_id: (item.externalSkuId ? platformMap.get(String(item.externalSkuId)) : undefined)
