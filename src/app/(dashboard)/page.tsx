@@ -483,9 +483,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 일별 출고량 */}
-      <DailyOutboundChart />
-
       {/* 판매 추이 그래프 (SKU별 상세) */}
       <SalesTrendSection />
 
