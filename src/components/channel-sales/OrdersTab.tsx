@@ -80,6 +80,7 @@ const STATUS_KO: Record<string, { label: string; cls: string }> = {
   EXCHANGED:          { label: '교환완료',   cls: 'bg-purple-100 text-purple-500' },
   // 토스
   CONFIRMED_ORDER:    { label: '주문확인',   cls: 'bg-sky-50 text-sky-600' },
+  PREPARING_PRODUCT:  { label: '상품준비중', cls: 'bg-amber-50 text-amber-600' },
   CANCELED_PAYMENT:   { label: '결제취소',   cls: 'bg-gray-100 text-gray-500' },
   PURCHASE_CONFIRMED: { label: '구매확정',   cls: 'bg-green-100 text-green-700' },
   SHIPPING:           { label: '배송중',     cls: 'bg-emerald-50 text-emerald-600' },
