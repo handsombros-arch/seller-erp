@@ -786,6 +786,9 @@ function InsightsUploadDialog({ open, onClose, onDone }: {
           {result && (
             <div className="bg-[#F0FDF4] rounded-xl px-4 py-3 space-y-1">
               <p className="text-[13px] font-semibold text-green-700">SKU {result.updated}개 업데이트 완료</p>
+              {result.return_count > 0 && (
+                <p className="text-[12.5px] text-blue-600">반품재판매 {result.return_count}건 제외됨 (재고예측 미반영)</p>
+              )}
               {result.unmatched_count > 0 && (
                 <>
                   <p className="text-[12.5px] text-amber-600">미매칭 {result.unmatched_count}건 — 마스터 시트 &gt; 상품명 별칭에 등록하면 다음에 자동 매칭됩니다</p>

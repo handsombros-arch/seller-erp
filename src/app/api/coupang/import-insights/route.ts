@@ -70,9 +70,12 @@ export async function POST(request: NextRequest) {
     nameMap.set(normalize(s.sku_code), s.id);
   }
 
+  const RETURN_KEYWORDS = ['반품재판매', '반품 재판매', '리퍼'];
+
   // ── Excel 행별 집계
   const salesMap: Record<string, number> = {};
   const unmatched: { optionId: string; optionName: string; productName: string; qty: number }[] = [];
+  const returnRows: { optionId: string; optionName: string; productName: string; qty: number }[] = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
@@ -83,6 +86,13 @@ export async function POST(request: NextRequest) {
     const productName = String(row[idx.productName] ?? '').trim();
     const qty = Number(row[idx.salesQty] ?? 0);
     if (!qty) continue;
+
+    // 반품재판매 행 제외
+    const combined = productName + optionName;
+    if (RETURN_KEYWORDS.some((kw) => combined.includes(kw))) {
+      returnRows.push({ optionId, optionName, productName, qty });
+      continue;
+    }
 
     const nProduct = normalize(productName);
     const nOption  = normalize(optionName);
@@ -131,6 +141,7 @@ export async function POST(request: NextRequest) {
     updated,
     unmatched_count: unmatched.length,
     unmatched: unmatched.slice(0, 20),
+    return_count: returnRows.length,
     period,
     days,
   });
