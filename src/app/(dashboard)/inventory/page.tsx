@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { formatNumber, formatCurrency, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
@@ -668,6 +668,14 @@ function RgInventoryTab() {
   const lastCheckedIdx = useRef<number | null>(null);
 
   const GRADES = ['미개봉', '최상', '상', '중'];
+  const GRADE_STYLE: Record<string, { bg: string; text: string; border: string }> = {
+    '미개봉': { bg: 'bg-blue-50',  text: 'text-blue-600',  border: 'border-l-blue-400' },
+    '최상':   { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-l-emerald-400' },
+    '상':     { bg: 'bg-amber-50',  text: 'text-amber-600',  border: 'border-l-amber-400' },
+    '중':     { bg: 'bg-rose-50',   text: 'text-rose-500',   border: 'border-l-rose-400' },
+  };
+  const GRADE_DEFAULT_STYLE = { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-l-gray-300' };
+  function gradeStyle(g: string | null) { return g ? (GRADE_STYLE[g] ?? GRADE_DEFAULT_STYLE) : GRADE_DEFAULT_STYLE; }
 
   useEffect(() => {
     fetch('/api/skus').then(r => r.json()).then((data: any[]) => {
@@ -847,9 +855,21 @@ function RgInventoryTab() {
 
   const showDays = Math.min(days, 7);
 
+  const GRADE_ORDER = ['미개봉', '최상', '상', '중', ''];
   const sorted = useMemo(() => {
     const source = subTab === 'return' ? returnItems : newItems;
-    if (!sort) return source;
+    if (!sort) {
+      // 반품탭: 등급순 기본 그루핑
+      if (subTab === 'return') {
+        return [...source].sort((a, b) => {
+          const ai = GRADE_ORDER.indexOf(a.grade ?? '');
+          const bi = GRADE_ORDER.indexOf(b.grade ?? '');
+          if (ai !== bi) return ai - bi;
+          return b.current_qty - a.current_qty;
+        });
+      }
+      return source;
+    }
     return [...source].sort((a, b) => {
       const getV = (item: RgInventoryItem): number | string => {
         switch (sort.col) {
@@ -865,7 +885,7 @@ function RgInventoryTab() {
       if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
       return sort.dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
-  }, [items, sort]);
+  }, [items, sort, subTab]);
 
   const thCls = (col: RgCol) =>
     `text-left px-4 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA] ${dragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
@@ -882,64 +902,65 @@ function RgInventoryTab() {
 
     switch (col) {
       case 'product': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} ${item.is_return ? `border-l-3 ${gradeStyle(item.grade).border}` : ''}`}>
           {item.is_return ? (
             <>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-2 group">
+                <p className="text-[13.5px] font-medium text-[#191F28]">{productName}</p>
                 <select
                   value={item.grade ?? ''}
                   onChange={(e) => updateGrade(item.vendor_item_id, e.target.value)}
-                  className="text-[11px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-md border-none outline-none cursor-pointer appearance-none"
+                  className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border-none outline-none cursor-pointer appearance-none ${gradeStyle(item.grade).bg} ${gradeStyle(item.grade).text}`}
                 >
                   <option value="">등급없음</option>
                   {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
                 </select>
-                <p className="text-[13px] text-[#6B7684] truncate max-w-[180px]">{productName}</p>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
-                  className="text-[10px] text-[#B0B8C1] hover:text-red-500 transition-colors ml-auto shrink-0"
+                  className="opacity-0 group-hover:opacity-100 text-[10px] text-[#B0B8C1] hover:text-red-500 transition-all ml-auto shrink-0"
                 >해제</button>
               </div>
-              {/* 새제품 연결 */}
-              <div className="mt-1 relative">
-                {item.linked_sku ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
-                    <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">연결해제</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
-                    className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
-                  >+ 새제품 연결</button>
-                )}
-                {/* 연결 팝오버 */}
-                {linkTarget === item.vendor_item_id && (
-                  <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
-                    <input
-                      autoFocus
-                      value={linkSearch}
-                      onChange={(e) => setLinkSearch(e.target.value)}
-                      placeholder="상품명 또는 SKU 검색"
-                      className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
-                    />
-                    <div className="max-h-72 overflow-y-auto space-y-0.5">
-                      {skuOptions
-                        .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
-                        .slice(0, 30)
-                        .map(o => (
-                          <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
-                            className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
-                            {o.label}
-                          </button>
-                        ))}
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[11.5px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</p>
+                {/* 신상품 연결 */}
+                <div className="relative">
+                  {item.linked_sku ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-blue-500 font-medium">↔ {item.linked_sku.product.name}</span>
+                      <button onClick={() => unlinkSku(item.vendor_item_id)} className="text-[10px] text-[#B0B8C1] hover:text-red-400">해제</button>
                     </div>
-                    <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
-                  </div>
-                )}
+                  ) : (
+                    <button
+                      onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
+                      className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                    >+ 신상품 연결</button>
+                  )}
+                  {linkTarget === item.vendor_item_id && (
+                    <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
+                      <input
+                        autoFocus
+                        value={linkSearch}
+                        onChange={(e) => setLinkSearch(e.target.value)}
+                        placeholder="상품명 또는 SKU 검색"
+                        className="w-full h-8 px-3 text-[12.5px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                      />
+                      <div className="max-h-72 overflow-y-auto space-y-0.5">
+                        {skuOptions
+                          .filter(o => !linkSearch || o.label.toLowerCase().includes(linkSearch.toLowerCase()))
+                          .slice(0, 30)
+                          .map(o => (
+                            <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
+                              className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
+                              {o.label}
+                            </button>
+                          ))}
+                      </div>
+                      <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="text-[11.5px] text-[#B0B8C1] font-mono mt-0.5">{item.external_sku_id ?? item.vendor_item_id}</p>
             </>
           ) : (
             <>
@@ -1169,17 +1190,37 @@ function RgInventoryTab() {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
                   const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
+                  // 등급 그룹 헤더 (반품탭, 정렬 없을 때)
+                  const prevGrade = idx > 0 ? (sorted[idx - 1].grade ?? '') : null;
+                  const curGrade = item.grade ?? '';
+                  const showGradeHeader = subTab === 'return' && !sort && (idx === 0 || curGrade !== prevGrade);
+                  const gs = gradeStyle(item.grade);
+                  const gradeLabel = item.grade || '등급 미지정';
+                  const gradeCount = sorted.filter(i => (i.grade ?? '') === curGrade).length;
+                  const gradeQty = sorted.filter(i => (i.grade ?? '') === curGrade).reduce((s, i) => s + i.current_qty, 0);
+
                   return (
-                    <tr key={item.vendor_item_id}
-                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
-                      <td className="w-10 px-3">
-                        <input type="checkbox" checked={isChecked}
-                          onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
-                          readOnly
-                          className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
-                      </td>
-                      {colOrder.map((col) => renderRgCell(col, item))}
-                    </tr>
+                    <React.Fragment key={item.vendor_item_id}>
+                      {showGradeHeader && (
+                        <tr className={`${gs.bg} border-b border-[#E5E8EB]`}>
+                          <td colSpan={colOrder.length + 1} className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[12.5px] font-bold ${gs.text}`}>{gradeLabel}</span>
+                              <span className="text-[11px] text-[#6B7684]">{gradeCount}개 상품 · 재고 {gradeQty}개</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                        <td className="w-10 px-3">
+                          <input type="checkbox" checked={isChecked}
+                            onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
+                            readOnly
+                            className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                        </td>
+                        {colOrder.map((col) => renderRgCell(col, item))}
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
