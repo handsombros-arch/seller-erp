@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from 'recharts';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +95,8 @@ export default function OrdersChartTab() {
   const [dateTo,       setDateTo]       = useState(today);
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set());
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [productSearch, setProductSearch] = useState('');
+  const [productDropOpen, setProductDropOpen] = useState(false);
 
   // platform_skus: platform_product_name+channel → master product name
   const platformSkuMap = useMemo(() => {
@@ -138,8 +140,14 @@ export default function OrdersChartTab() {
   }, [orders]);
 
   const productOptions = useMemo(() => {
-    const set = new Set(orders.map(o => resolveAdminName(o)));
-    return [...set].sort();
+    const counts = new Map<string, number>();
+    for (const o of orders) {
+      const name = resolveAdminName(o);
+      counts.set(name, (counts.get(name) ?? 0) + (o.quantity ?? 1));
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, qty]) => ({ name, qty }));
   }, [orders, platformSkuMap]);
 
   const filteredOrders = useMemo(() => {
@@ -190,7 +198,7 @@ export default function OrdersChartTab() {
     });
 
     return { chartData, seriesKeys };
-  }, [orders, granularity, groupBy, metric]);
+  }, [filteredOrders, granularity, groupBy, metric]);
 
   // ─── UI helpers ─────────────────────────────────────────────────────────────
 
@@ -294,18 +302,51 @@ export default function OrdersChartTab() {
           <span className="text-[11px] text-[#B0B8C1] shrink-0">상품</span>
           <button onClick={() => setSelectedProducts(new Set())}
             className={seg(selectedProducts.size === 0)}>전체</button>
-          {productOptions.slice(0, 15).map((name) => (
-            <button key={name} onClick={() => setSelectedProducts((prev) => {
-              const next = new Set(prev);
-              next.has(name) ? next.delete(name) : next.add(name);
-              return next;
-            })} className={`${seg(selectedProducts.has(name))} max-w-[160px] truncate`}>
-              {name}
+          {/* 선택된 상품 태그 */}
+          {[...selectedProducts].map((name) => (
+            <button key={name} onClick={() => setSelectedProducts((prev) => { const n = new Set(prev); n.delete(name); return n; })}
+              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-[#3182F6] text-white flex items-center gap-1 max-w-[180px]">
+              <span className="truncate">{name}</span>
+              <X className="h-3 w-3 shrink-0" />
             </button>
           ))}
-          {productOptions.length > 15 && (
-            <span className="text-[11px] text-[#B0B8C1]">+{productOptions.length - 15}개</span>
-          )}
+          {/* 추가 드롭다운 */}
+          <div className="relative">
+            <button onClick={() => { setProductDropOpen(v => !v); setProductSearch(''); }}
+              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB] flex items-center gap-1">
+              <Plus className="h-3 w-3" /> 상품 선택
+            </button>
+            {productDropOpen && (
+              <div className="absolute left-0 top-9 z-30 w-80 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6]">
+                <div className="p-2 border-b border-[#F2F4F6]">
+                  <input autoFocus value={productSearch} onChange={e => setProductSearch(e.target.value)}
+                    placeholder="상품명 검색..."
+                    className="w-full h-8 px-3 text-[12px] rounded-lg border border-[#E5E8EB] outline-none focus:border-[#3182F6]" />
+                </div>
+                <div className="max-h-[20rem] overflow-y-auto p-1">
+                  {productOptions
+                    .filter(p => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                    .slice(0, 30)
+                    .map((p) => {
+                      const sel = selectedProducts.has(p.name);
+                      return (
+                        <button key={p.name} onClick={() => {
+                          setSelectedProducts(prev => { const n = new Set(prev); sel ? n.delete(p.name) : n.add(p.name); return n; });
+                        }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${sel ? 'bg-[#EBF1FE]' : 'hover:bg-[#F8F9FB]'}`}>
+                          <span className="text-[13px] text-[#191F28] truncate">{p.name}</span>
+                          <span className="text-[11px] text-[#B0B8C1] shrink-0 ml-2 tabular-nums">{p.qty.toLocaleString()}개</span>
+                        </button>
+                      );
+                    })}
+                </div>
+                <div className="p-2 border-t border-[#F2F4F6]">
+                  <button onClick={() => setProductDropOpen(false)}
+                    className="w-full h-8 rounded-lg text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6]">닫기</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
