@@ -425,11 +425,136 @@ const SUM_SORTABLE: Record<SumCol, boolean> = {
   total: true, safety: true, s30d: true, s7d: true, daily: true,
 };
 
+// ─── 재고 변동 이력 모달 ─────────────────────────────────────────────────────
+
+interface HistoryEntry {
+  id: string; date: string; type: string; change: number;
+  before: number; after: number; orderNumber: string | null;
+  channel: string | null; warehouse: string | null;
+}
+
+function InventoryHistoryModal({ skuId, skuCode, productName, onClose }: {
+  skuId: string; skuCode: string; productName: string; onClose: () => void;
+}) {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [byDate, setByDate] = useState<Record<string, HistoryEntry[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/inventory/history?sku_id=${skuId}&days=30`)
+      .then(r => r.json())
+      .then(d => { setHistory(d.history ?? []); setByDate(d.byDate ?? {}); setLoading(false); });
+  }, [skuId]);
+
+  const dates = Object.keys(byDate).sort().reverse();
+  const detail = selectedDate ? (byDate[selectedDate] ?? []) : [];
+
+  function channelLabel(ch: string | null) {
+    if (ch === 'coupang') return '쿠팡 Wing';
+    if (ch === 'coupang_rg') return '쿠팡 그로스';
+    if (ch === 'smartstore') return '스마트스토어';
+    if (ch === 'toss') return '토스';
+    return ch ?? '';
+  }
+
+  function orderLink(entry: HistoryEntry) {
+    if (!entry.orderNumber) return null;
+    return `/channel-sales`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-[600px] max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+          <div>
+            <h3 className="text-[15px] font-bold text-[#191F28]">재고 변동 이력</h3>
+            <p className="text-[12px] text-[#6B7684] mt-0.5">{productName} <span className="font-mono text-[#B0B8C1]">({skuCode})</span></p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
+            <X className="h-4 w-4 text-[#6B7684]" />
+          </button>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* 날짜 목록 */}
+          <div className="w-[140px] border-r border-[#F2F4F6] overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-[#3182F6]" /></div>
+            ) : dates.length === 0 ? (
+              <p className="text-[12px] text-[#B0B8C1] text-center py-8">변동 없음</p>
+            ) : (
+              dates.map(date => {
+                const entries = byDate[date] ?? [];
+                const totalChange = entries.reduce((s, e) => s + e.change, 0);
+                return (
+                  <button key={date} onClick={() => setSelectedDate(date)}
+                    className={`w-full text-left px-4 py-3 border-b border-[#F2F4F6] transition-colors ${selectedDate === date ? 'bg-[#EBF1FE]' : 'hover:bg-[#F8F9FB]'}`}>
+                    <p className="text-[13px] font-medium text-[#191F28]">{date.slice(5)}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[11px] text-[#B0B8C1]">{entries.length}건</span>
+                      <span className={`text-[11px] font-semibold ${totalChange > 0 ? 'text-blue-500' : totalChange < 0 ? 'text-red-500' : 'text-[#B0B8C1]'}`}>
+                        {totalChange > 0 ? '+' : ''}{totalChange}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* 상세 내역 */}
+          <div className="flex-1 overflow-y-auto">
+            {!selectedDate ? (
+              <div className="flex flex-col items-center justify-center h-full py-12">
+                <p className="text-[13px] text-[#B0B8C1]">날짜를 선택하세요</p>
+              </div>
+            ) : detail.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-12">
+                <p className="text-[13px] text-[#B0B8C1]">변동 내역 없음</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#F2F4F6]">
+                {detail.map((e) => (
+                  <div key={e.id} className="px-4 py-3 hover:bg-[#FAFAFA]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[15px] font-bold tabular-nums ${e.change > 0 ? 'text-blue-500' : e.change < 0 ? 'text-red-500' : 'text-[#B0B8C1]'}`}>
+                          {e.change > 0 ? '+' : ''}{e.change}
+                        </span>
+                        <span className="text-[12px] text-[#6B7684]">{e.type}</span>
+                      </div>
+                      <span className="text-[12px] text-[#B0B8C1] tabular-nums">{e.before} → {e.after}</span>
+                    </div>
+                    {e.orderNumber && (
+                      <div className="flex items-center gap-2 mt-1">
+                        {e.channel && <span className="text-[11px] text-[#6B7684]">{channelLabel(e.channel)}</span>}
+                        <a href={orderLink(e) ?? '#'} className="text-[11px] text-[#3182F6] font-mono hover:underline">
+                          #{e.orderNumber.length > 20 ? e.orderNumber.slice(-15) : e.orderNumber}
+                        </a>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-[#B0B8C1] mt-0.5">{e.date.slice(11, 16)} · {e.warehouse ?? ''}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 종합 현황 탭 ────────────────────────────────────────────────────────────
+
 function SummaryTab() {
   const { vatOn, vatMult } = useVat();
   const [rows, setRows] = useState<InventorySummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQ, setSearchQ] = useState('');
+  const [historyModal, setHistoryModal] = useState<{ skuId: string; skuCode: string; productName: string } | null>(null);
   const [colOrder, setColOrder] = useState<SumCol[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_SUM_COLS;
     try { const s = localStorage.getItem('inv_sum_cols'); return s ? JSON.parse(s) : DEFAULT_SUM_COLS; } catch { return DEFAULT_SUM_COLS; }
@@ -521,14 +646,17 @@ function SummaryTab() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py}`}>
-          <p className="text-[13px] font-medium text-[#191F28]">{row.product_name}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] text-[#6B7684] font-mono">{row.sku_code}</span>
-            {Object.keys(row.option_values ?? {}).length > 0 && (
-              <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(row.option_values)}</span>
-            )}
-            {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">재고부족</span>}
-          </div>
+          <button onClick={() => setHistoryModal({ skuId: row.sku_id, skuCode: row.sku_code, productName: row.product_name })}
+            className="text-left group">
+            <p className="text-[13px] font-medium text-[#191F28] group-hover:text-[#3182F6] transition-colors">{row.product_name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[11px] text-[#6B7684] font-mono">{row.sku_code}</span>
+              {Object.keys(row.option_values ?? {}).length > 0 && (
+                <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(row.option_values)}</span>
+              )}
+              {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">재고부족</span>}
+            </div>
+          </button>
         </td>
       );
       case 'warehouse': return (
@@ -581,6 +709,7 @@ function SummaryTab() {
   }
 
   return (
+    <>
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="relative">
@@ -632,6 +761,16 @@ function SummaryTab() {
       </div>
     </div>
     </div>
+
+    {historyModal && (
+      <InventoryHistoryModal
+        skuId={historyModal.skuId}
+        skuCode={historyModal.skuCode}
+        productName={historyModal.productName}
+        onClose={() => setHistoryModal(null)}
+      />
+    )}
+    </>
   );
 }
 
