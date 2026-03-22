@@ -1246,19 +1246,13 @@ function ReturnsTab() {
                       <td className="px-4 py-3 text-[13px] text-[#6B7684]">{r.option_name ?? '-'}</td>
                       <td className="px-4 py-3 text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(r.quantity)}</td>
                       <td className="px-4 py-3 text-[13px] text-[#6B7684] max-w-[160px] truncate">{r.return_reason ?? '-'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-medium ${
-                          (r.return_type ?? '').includes('CANCEL') ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
-                        }`}>
-                          {(r.return_type ?? '').includes('CANCEL') ? '취소' : '반품'}
-                        </span>
+                      <td className="px-4 py-3 text-[13px] text-[#6B7684]">
+                        {getType(r) === 'exchange' ? '교환' : getType(r) === 'cancel' ? '취소' : '반품'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-[13px] text-[#191F28]">
                         {(() => {
                           const st = RETURN_STATUS_LABELS[r.status ?? ''] ?? RETURN_STATUS_LABELS[r.claim_status ?? ''];
-                          return st
-                            ? <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
-                            : <span className="text-[12px] text-[#6B7684]">{r.status ?? r.claim_status ?? '-'}</span>;
+                          return st?.label ?? r.status ?? r.claim_status ?? '-';
                         })()}
                       </td>
                     </tr>
