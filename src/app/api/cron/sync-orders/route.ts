@@ -78,9 +78,49 @@ export async function GET(request: NextRequest) {
         } while (nextToken);
         await sleep(400);
       }
+      // Wing 직배 주문 (최근 3일, 그로스와 별개)
+      const wingPath = `/v2/providers/openapi/apis/api/v4/vendors/${credentials.vendorId}/ordersheets`;
+      let wingSynced = 0;
+      for (const status of ['ACCEPT', 'INSTRUCT', 'DELIVERING', 'FINAL_DELIVERY']) {
+        let wToken: string | undefined;
+        do {
+          const params: Record<string, string> = { createdAtFrom: from3, createdAtTo: today, status };
+          if (wToken) params.nextToken = wToken;
+          const json = await coupangFetch(wingPath, params, credentials);
+          const items: any[] = Array.isArray(json?.data) ? json.data : [];
+          wToken = json?.nextToken || undefined;
+          const rows = items.flatMap((order: any) => {
+            const orderDate = (order.orderedAt ?? order.paidAt ?? from3).substring(0, 10);
+            const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
+            const isJeju = /제주|서귀포|울릉|도서산간/.test(addr);
+            return (order.orderItems ?? []).map((item: any) => ({
+              channel: 'coupang', order_date: orderDate,
+              order_number: `${order.shipmentBoxId}-${item.vendorItemId}`,
+              product_name: item.sellerProductName ?? item.vendorItemName ?? '',
+              option_name: item.sellerProductItemName ?? null,
+              quantity: Number(item.shippingCount ?? 1),
+              recipient: order.receiver?.name ?? null, buyer_phone: order.orderer?.safeNumber ?? null,
+              address: addr || null, tracking_number: order.invoiceNumber || null,
+              order_status: order.status ?? null,
+              shipping_cost: 2650 + (isJeju ? 3000 : 0), orig_shipping: 2650, jeju_surcharge: isJeju,
+              sku_id: matcher.byCode(item.externalVendorSkuCode ?? '') ?? matcher.byNameOption(item.sellerProductName ?? '', item.sellerProductItemName) ?? null,
+            }));
+          });
+          if (rows.length > 0) {
+            const { data: ins } = await admin.from('channel_orders')
+              .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: true }).select('id');
+            wingSynced += ins?.length ?? 0;
+          }
+          await sleep(300);
+        } while (wToken);
+        await sleep(300);
+      }
+
       results.coupang_rg = { synced: rgSynced };
+      results.coupang_wing = { synced: wingSynced };
     } else {
       results.coupang_rg = { skipped: 'no credentials' };
+      results.coupang_wing = { skipped: 'no credentials' };
     }
   } catch (err: any) {
     results.coupang_rg = { error: err.message };

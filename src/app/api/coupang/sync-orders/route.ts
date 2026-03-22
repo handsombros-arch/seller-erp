@@ -6,7 +6,8 @@ import { buildSkuMatcher } from '@/lib/inventory/matchSku';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const VALID_STATUSES = ['ACCEPT', 'INSTRUCT', 'DELIVERING'];
+// Wing 직배 주문 조회 상태 (그로스와 별개)
+const WING_STATUSES = ['ACCEPT', 'INSTRUCT', 'DELIVERING', 'FINAL_DELIVERY'];
 
 // yyyymmdd 형식 변환
 function toYmd(dateStr: string) {
@@ -63,55 +64,69 @@ export async function POST(request: NextRequest) {
   let skipped = 0;
   const errors: string[] = [];
 
-  // ─── 1. Wing 일반판매 주문 (ordersheets, THIRD_PARTY) ───────────────────────
+  // ─── 1. Wing 일반판매 주문 (ordersheets, 직배 — 그로스와 별개) ────────────────
   const ordersPath = `/v2/providers/openapi/apis/api/v4/vendors/${credentials.vendorId}/ordersheets`;
 
-  for (const status of VALID_STATUSES) {
-    let nextToken: string | undefined;
+  // Wing API 최대 31일 제한 → 30일 단위 분할
+  const wingChunks: { start: string; end: string }[] = [];
+  {
+    let cs = new Date(from);
+    const fe = new Date(to);
+    while (cs <= fe) {
+      const ce = new Date(Math.min(cs.getTime() + 29 * 86400000, fe.getTime()));
+      wingChunks.push({ start: cs.toISOString().slice(0, 10), end: ce.toISOString().slice(0, 10) });
+      cs = new Date(ce.getTime() + 86400000);
+    }
+  }
 
-    do {
-      const params: Record<string, string> = { createdAtFrom: from, createdAtTo: to, status };
-      if (nextToken) params.nextToken = nextToken;
+  for (const chunk of wingChunks) {
+    for (const status of WING_STATUSES) {
+      let nextToken: string | undefined;
 
-      let json: any;
-      try {
-        json = await coupangFetch(ordersPath, params, credentials);
-      } catch (err: any) {
-        errors.push(`[Wing/${status}] ${err.message}`);
-        break;
-      }
+      do {
+        const params: Record<string, string> = { createdAtFrom: chunk.start, createdAtTo: chunk.end, status };
+        if (nextToken) params.nextToken = nextToken;
 
-      const items: any[] = Array.isArray(json?.data) ? json.data : [];
-      nextToken = json?.nextToken || undefined;
-
-      const rows: any[] = [];
-      for (const order of items) {
-        const orderDate = (order.orderedAt ?? order.paidAt ?? from).substring(0, 10);
-        const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
-
-        for (const item of order.orderItems ?? []) {
-          const skuCode = item.externalVendorSkuCode ?? '';
-          rows.push({
-            channel:         'coupang',
-            order_date:      orderDate,
-            order_number:    `${order.shipmentBoxId}-${item.vendorItemId}`,
-            product_name:    item.sellerProductName ?? item.vendorItemName ?? '',
-            option_name:     item.sellerProductItemName ?? null,
-            quantity:        Number(item.shippingCount ?? 1),
-            recipient:       order.receiver?.name ?? null,
-            buyer_phone:     order.orderer?.safeNumber ?? null,
-            address:         addr || null,
-            tracking_number: order.invoiceNumber || null,
-            order_status:    order.status ?? null,
-            shipping_cost:   Number(order.shippingPrice ?? 0) + Number(order.remotePrice ?? 0),
-            orig_shipping:   Number(order.shippingPrice ?? 0),
-            jeju_surcharge:  order.remoteArea === true,
-            sku_id:          matcher.byCode(skuCode)
-                          ?? matcher.byNameOption(item.sellerProductName ?? item.vendorItemName ?? '', item.sellerProductItemName)
-                          ?? null,
-          });
+        let json: any;
+        try {
+          json = await coupangFetch(ordersPath, params, credentials);
+        } catch (err: any) {
+          errors.push(`[Wing/${status}/${chunk.start}] ${err.message}`);
+          break;
         }
-      }
+
+        const items: any[] = Array.isArray(json?.data) ? json.data : [];
+        nextToken = json?.nextToken || undefined;
+
+        const rows: any[] = [];
+        for (const order of items) {
+          const orderDate = (order.orderedAt ?? order.paidAt ?? chunk.start).substring(0, 10);
+          const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
+          const isJeju = /제주|서귀포|울릉|도서산간/.test(addr);
+
+          for (const item of order.orderItems ?? []) {
+            const skuCode = item.externalVendorSkuCode ?? '';
+            rows.push({
+              channel:         'coupang',
+              order_date:      orderDate,
+              order_number:    `${order.shipmentBoxId}-${item.vendorItemId}`,
+              product_name:    item.sellerProductName ?? item.vendorItemName ?? '',
+              option_name:     item.sellerProductItemName ?? null,
+              quantity:        Number(item.shippingCount ?? 1),
+              recipient:       order.receiver?.name ?? null,
+              buyer_phone:     order.orderer?.safeNumber ?? null,
+              address:         addr || null,
+              tracking_number: order.invoiceNumber || null,
+              order_status:    order.status ?? null,
+              shipping_cost:   2650 + (isJeju ? 3000 : 0),
+              orig_shipping:   2650,
+              jeju_surcharge:  isJeju,
+              sku_id:          matcher.byCode(skuCode)
+                            ?? matcher.byNameOption(item.sellerProductName ?? item.vendorItemName ?? '', item.sellerProductItemName)
+                            ?? null,
+            });
+          }
+        }
 
       if (rows.length > 0) {
         const { data: inserted, error } = await admin
@@ -125,8 +140,10 @@ export async function POST(request: NextRequest) {
       await sleep(300);
     } while (nextToken);
 
+      await sleep(300);
+    } // status loop
     await sleep(300);
-  }
+  } // wingChunks loop
 
   // ─── 2. 로켓그로스 주문 (rg_open_api, 1일 단위 순회 — 1000건 하드캡 회피) ──
   const rgPath = `/v2/providers/rg_open_api/apis/api/v1/vendors/${credentials.vendorId}/rg/orders`;
