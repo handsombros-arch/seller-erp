@@ -100,7 +100,7 @@ function PlatformTab({ skuOptions, channels }: {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   // 연동 상품명 (aliases)
   const [aliases, setAliases] = useState<Record<string, { id: string; channel_name: string }[]>>({});
-  const [aliasOpen, setAliasOpen] = useState<string | null>(null);
+  const [aliasModal, setAliasModal] = useState<{ skuId: string; productName: string; optionLabel: string; skuCode: string } | null>(null);
   const [newAlias, setNewAlias] = useState('');
 
   function toggleCollapsed(name: string) {
@@ -335,39 +335,12 @@ function PlatformTab({ skuOptions, channels }: {
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[11px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setAliasOpen(aliasOpen === row.sku_id ? null : row.sku_id); }}
+                              onClick={(e) => { e.stopPropagation(); setAliasModal({ skuId: row.sku_id, productName: row.product_name, optionLabel: row.option_label, skuCode: row.sku_code }); setNewAlias(''); }}
                               className="text-[11px] text-[#3182F6] hover:underline whitespace-nowrap"
                             >
                               연동 {(aliases[row.sku_id] ?? []).length}개
                             </button>
                           </div>
-                          {aliasOpen === row.sku_id && (
-                            <div className="mt-2 p-2.5 bg-[#F8F9FB] rounded-lg space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                              <p className="text-[11px] font-semibold text-[#6B7684]">연동된 채널 상품명</p>
-                              {(aliases[row.sku_id] ?? []).length === 0 ? (
-                                <p className="text-[11px] text-[#B0B8C1]">등록된 연동 상품명 없음</p>
-                              ) : (
-                                (aliases[row.sku_id] ?? []).map((a) => (
-                                  <div key={a.channel_name} className="flex items-center gap-1 group">
-                                    <span className="text-[11px] text-[#191F28] truncate flex-1">{a.channel_name}</span>
-                                    <button onClick={() => removeAlias(row.sku_id, a.id, a.channel_name)}
-                                      className="opacity-0 group-hover:opacity-100 text-[11px] text-red-400 hover:text-red-600 shrink-0 transition-opacity">삭제</button>
-                                  </div>
-                                ))
-                              )}
-                              <div className="flex gap-1 mt-1">
-                                <input
-                                  value={newAlias}
-                                  onChange={(e) => setNewAlias(e.target.value)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') { addAlias(row.sku_id, newAlias); } }}
-                                  placeholder="채널 상품명 입력"
-                                  className="flex-1 h-8 px-2 text-[11px] rounded border border-[#E5E8EB] outline-none focus:border-[#3182F6]"
-                                />
-                                <button onClick={() => addAlias(row.sku_id, newAlias)}
-                                  className="h-8 px-2 rounded bg-[#3182F6] text-white text-[11px] font-medium hover:bg-[#1B64DA]">추가</button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -412,6 +385,53 @@ function PlatformTab({ skuOptions, channels }: {
           </div>
         )}
       </div>
+
+      {/* 연동 상품명 모달 */}
+      {aliasModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setAliasModal(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-[480px] max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#191F28]">연동 상품명 관리</h3>
+                <p className="text-[12px] text-[#6B7684] mt-0.5">{aliasModal.productName} · {aliasModal.optionLabel || '기본'} <span className="text-[#B0B8C1] font-mono">({aliasModal.skuCode})</span></p>
+              </div>
+              <button onClick={() => setAliasModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
+                <XIcon className="h-4 w-4 text-[#6B7684]" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+              {(aliases[aliasModal.skuId] ?? []).length === 0 ? (
+                <p className="text-[13px] text-[#B0B8C1] text-center py-6">등록된 연동 상품명이 없습니다</p>
+              ) : (
+                (aliases[aliasModal.skuId] ?? []).map((a, i) => (
+                  <div key={a.channel_name} className="flex items-center gap-3 px-3 py-2.5 bg-[#F8F9FB] rounded-xl group">
+                    <span className="text-[11px] text-[#B0B8C1] w-5 shrink-0 tabular-nums">{i + 1}</span>
+                    <span className="text-[13px] text-[#191F28] flex-1 break-all">{a.channel_name}</span>
+                    <button onClick={() => removeAlias(aliasModal.skuId, a.id, a.channel_name)}
+                      className="opacity-0 group-hover:opacity-100 text-[12px] text-red-400 hover:text-red-600 shrink-0 transition-opacity">삭제</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-[#F2F4F6]">
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  value={newAlias}
+                  onChange={(e) => setNewAlias(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && newAlias.trim()) addAlias(aliasModal.skuId, newAlias); }}
+                  placeholder="채널에서 사용하는 상품명 입력"
+                  className="flex-1 h-10 px-3 text-[13px] rounded-xl border border-[#E5E8EB] outline-none focus:border-[#3182F6]"
+                />
+                <button onClick={() => { if (newAlias.trim()) addAlias(aliasModal.skuId, newAlias); }}
+                  className="h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA]">추가</button>
+              </div>
+              <p className="text-[11px] text-[#B0B8C1] mt-2">플랫폼에서 사용하는 상품명을 등록하면 주문 동기화 시 자동 매칭됩니다.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CsvImportDialog
         open={importOpen}
