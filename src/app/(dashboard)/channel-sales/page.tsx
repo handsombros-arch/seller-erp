@@ -1048,6 +1048,7 @@ interface ChannelReturn {
   status: string | null;
   claim_status: string | null;
   order_number: string | null;
+  recipient: string | null;
   sku_id: string | null;
   sku?: { id: string; sku_code: string; product: { name: string } } | null;
 }
@@ -1184,7 +1185,7 @@ function ReturnsTab() {
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  {['반품일', '채널', '주문번호', '상품명', '옵션', '수량', '반품사유', '유형', '상태'].map((h) => (
+                  {['반품일', '채널', '주문상품번호', '구매자', '상품명', '옵션', '수량', '사유', '유형', '상태'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1199,6 +1200,7 @@ function ReturnsTab() {
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
                       </td>
                       <td className="px-4 py-3 text-[12px] text-[#6B7684] font-mono">{r.order_number ?? '-'}</td>
+                      <td className="px-4 py-3 text-[13px] text-[#191F28]">{r.recipient ?? '-'}</td>
                       <td className="px-4 py-3">
                         <p className="text-[13px] font-medium text-[#191F28]">{r.product_name}</p>
                         {r.sku && (

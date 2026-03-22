@@ -20,16 +20,18 @@ export async function GET(request: NextRequest) {
   if (needOrders) {
     let q2 = admin
       .from('channel_orders')
-      .select('id, channel, order_date, claim_date, order_number, product_name, option_name, quantity, order_status, claim_status, claim_type, sku_id, sku:skus(id, sku_code, product:products(name))')
+      .select('id, channel, order_date, claim_date, order_number, product_name, option_name, quantity, order_status, claim_status, claim_type, recipient, sku_id, sku:skus(id, sku_code, product:products(name))')
+      .order('claim_date', { ascending: false, nullsFirst: false })
       .order('order_date', { ascending: false })
-      .limit(500);
+      .limit(1000);
 
     if (channel === 'smartstore') q2 = q2.eq('channel', 'smartstore');
     else if (channel === 'toss')  q2 = q2.eq('channel', 'toss');
     else                           q2 = q2.in('channel', ['smartstore', 'toss']);
 
-    if (from) q2 = q2.gte('order_date', from);
-    if (to)   q2 = q2.lte('order_date', to);
+    // 날짜 필터: claim_date 또는 order_date 기준
+    if (from) q2 = q2.or(`claim_date.gte.${from},order_date.gte.${from}`);
+    if (to)   q2 = q2.or(`claim_date.lte.${to},order_date.lte.${to}`);
     if (q)    q2 = q2.ilike('product_name', `%${q}%`);
 
     // 클레임이 있거나, 취소/반품 상태 코드인 것만
@@ -50,6 +52,7 @@ export async function GET(request: NextRequest) {
         status:        row.claim_status ?? row.order_status,
         claim_status:  row.claim_status,
         order_number:  row.order_number,
+        recipient:     row.recipient,
         sku_id:        row.sku_id,
         sku:           row.sku,
       });
@@ -82,6 +85,7 @@ export async function GET(request: NextRequest) {
         status:        row.status,
         claim_status:  row.status,
         order_number:  row.order_id ? String(row.order_id) : null,
+        recipient:     null,
         sku_id:        row.sku_id,
         sku:           row.sku,
       });
