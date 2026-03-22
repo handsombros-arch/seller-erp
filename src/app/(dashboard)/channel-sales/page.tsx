@@ -979,14 +979,15 @@ function TossSyncDialog({ open, onClose, onDone }: {
   async function handleSync() {
     setSyncing(true); setResult(null); setError('');
     try {
-      const res = await fetch('/api/toss/sync-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? '동기화 실패');
-      const msg = `토스 주문 ${d.synced}건 동기화 완료${d.skipped ? ` (중복 ${d.skipped}건 제외)` : ''}`;
+      // 주문 + 클레임 동시 동기화
+      const [ordRes, claimRes] = await Promise.all([
+        fetch('/api/toss/sync-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to }) }),
+        fetch('/api/toss/sync-claims', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to }) }),
+      ]);
+      const d = await ordRes.json();
+      const cd = claimRes.ok ? await claimRes.json() : { synced: 0 };
+      if (!ordRes.ok) throw new Error(d.error ?? '동기화 실패');
+      const msg = `토스 주문 ${d.synced}건${cd.synced ? ` · 클레임 ${cd.synced}건` : ''} 동기화 완료`;
       setResult(msg);
       onDone(msg);
     } catch (err: any) {
