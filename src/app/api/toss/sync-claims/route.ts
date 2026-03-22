@@ -36,7 +36,14 @@ export async function POST(request: NextRequest) {
   let synced = 0;
   let updated = 0;
   const errors: string[] = [];
-  const processed = new Set<string>(); // orderProductId 중복 방지
+
+  // 상태 우선순위 (높을수록 최종)
+  const STATUS_PRIORITY: Record<string, number> = {
+    CREATED: 1, REQUESTED: 2, REJECTED_REQUEST: 3, REVOKED_REQUEST: 3,
+    COLLECTED: 4, COMPLETED: 5,
+  };
+  // orderProductId별 최신(최우선) 클레임만 수집
+  const bestClaims = new Map<string, { type: string; status: string; date: string | null; priority: number }>();
 
   let nextToken: string | null = null;
   do {
@@ -55,37 +62,44 @@ export async function POST(request: NextRequest) {
     nextToken = json?.success?.hasNext ? (json?.success?.nextToken ?? null) : null;
 
     for (const claim of items) {
-      const orderProductId = String(claim.order?.orderProductId ?? '');
-      if (!orderProductId || processed.has(orderProductId)) continue;
-      processed.add(orderProductId);
-
-      const claimType = claim.type ?? 'RETURN';
-      const claimStatus = `${claimType}_${claim.status ?? 'REQUESTED'}`;
-      const claimDate = claim.requestedDt ? claim.requestedDt.substring(0, 10) : null;
-
-      // 기존 주문 매칭 (orderProductId = order_number)
-      const { data: existing } = await admin
-        .from('channel_orders')
-        .select('id')
-        .eq('order_number', orderProductId)
-        .eq('channel', 'toss')
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        await admin.from('channel_orders').update({
-          claim_status: claimStatus,
-          claim_type: claimType,
-          claim_date: claimDate,
-        }).eq('id', existing.id);
-        updated++;
+      const opId = String(claim.order?.orderProductId ?? '');
+      if (!opId) continue;
+      const priority = STATUS_PRIORITY[claim.status] ?? 0;
+      const existing = bestClaims.get(opId);
+      if (!existing || priority > existing.priority) {
+        bestClaims.set(opId, {
+          type: claim.type ?? 'RETURN',
+          status: claim.status ?? 'REQUESTED',
+          date: claim.requestedDt ? claim.requestedDt.substring(0, 10) : null,
+          priority,
+        });
       }
-      // 기존 주문이 없으면 무시 (주문 동기화에서 먼저 들어와야 함)
     }
 
     synced += items.length;
     await sleep(300);
   } while (nextToken);
+
+  // DB 업데이트 (최종 상태만)
+  for (const [opId, best] of bestClaims) {
+    const claimStatus = `${best.type}_${best.status}`;
+    const { data: existing } = await admin
+      .from('channel_orders')
+      .select('id')
+      .eq('order_number', opId)
+      .eq('channel', 'toss')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      await admin.from('channel_orders').update({
+        claim_status: claimStatus,
+        claim_type: best.type,
+        claim_date: best.date,
+      }).eq('id', existing.id);
+      updated++;
+    }
+  }
 
   return NextResponse.json({ synced, updated, errors: errors.length ? errors : undefined });
 }
