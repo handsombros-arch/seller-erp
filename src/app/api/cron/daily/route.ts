@@ -51,5 +51,39 @@ export async function GET(request: NextRequest) {
   }
 
   console.log('[cron/daily]', JSON.stringify(results));
+
+  // Slack 알림
+  const slackUrl = process.env.SLACK_WEBHOOK_URL;
+  if (slackUrl) {
+    const syncOrders = results.syncOrders ?? {};
+    const lines = [
+      `*ERP 일일 동기화 완료* (${new Date().toISOString().slice(0, 10)})`,
+      '',
+      `*주문 동기화*`,
+      `  쿠팡 그로스: ${syncOrders.coupang_rg?.synced ?? 0}건`,
+      `  스마트스토어: ${syncOrders.smartstore?.synced ?? 0}건`,
+      `  토스: ${syncOrders.toss?.synced ?? 0}건`,
+      `  재고 차감: ${syncOrders.inventory?.deducted ?? 0}건 · 복구: ${syncOrders.inventory?.restored ?? 0}건`,
+      '',
+      `*RG 재고*: ${results.syncRgInventory?.synced ?? 0}개`,
+      `*판매량 갱신*: ${results.refreshSales?.sku_count ?? 0}개 SKU`,
+      `*창고 스냅샷*: ${results.snapshotInventory?.saved ?? 0}개`,
+    ];
+    // 에러 있으면 표시
+    const errors: string[] = [];
+    if (syncOrders.coupang_rg?.error) errors.push(`쿠팡: ${syncOrders.coupang_rg.error}`);
+    if (syncOrders.smartstore?.error) errors.push(`네이버: ${syncOrders.smartstore.error}`);
+    if (syncOrders.toss?.error) errors.push(`토스: ${syncOrders.toss.error}`);
+    if (errors.length) lines.push('', `⚠️ *오류*: ${errors.join(' / ')}`);
+
+    try {
+      await fetch(slackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: lines.join('\n') }),
+      });
+    } catch {}
+  }
+
   return NextResponse.json({ ok: true, ...results });
 }
