@@ -7,17 +7,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * 토스 클레임(취소/반품/교환) 동기화
- * - 주문 API에는 반품 정보가 없음 → 별도 claims API 사용
- * - 7일 단위 조회 제한 → 자동 분할
- * - channel_orders의 claim_status, claim_type, claim_date 업데이트
+ * - 전체 클레임 페이지네이션으로 조회
+ * - orderProductId로 기존 주문 매칭 → claim_status/claim_type/claim_date 업데이트
+ * - COMPLETED 상태의 최신 클레임만 반영 (같은 주문에 여러 클레임이 있을 수 있음)
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
-
-  const { from, to } = await request.json() as { from: string; to: string };
-  if (!from || !to) return NextResponse.json({ error: 'from, to 날짜 필요' }, { status: 400 });
 
   const admin = await createAdminClient();
   const matcher = await buildSkuMatcher(admin);
@@ -37,101 +34,58 @@ export async function POST(request: NextRequest) {
   }
 
   let synced = 0;
+  let updated = 0;
   const errors: string[] = [];
+  const processed = new Set<string>(); // orderProductId 중복 방지
 
-  // 7일 단위 분할
-  const chunks: { start: string; end: string }[] = [];
-  let chunkStart = new Date(from);
-  const finalEnd = new Date(to);
-  while (chunkStart <= finalEnd) {
-    const chunkEnd = new Date(Math.min(chunkStart.getTime() + 6 * 86400000, finalEnd.getTime()));
-    chunks.push({ start: chunkStart.toISOString().slice(0, 10), end: chunkEnd.toISOString().slice(0, 10) });
-    chunkStart = new Date(chunkEnd.getTime() + 86400000);
-  }
+  let nextToken: string | null = null;
+  do {
+    const params = new URLSearchParams({ size: '100' });
+    if (nextToken) params.set('nextToken', nextToken);
 
-  for (const chunk of chunks) {
-    // 전체 클레임 조회 (type/status 필터 없이 — 모든 상태 포함)
-    {
-      let nextToken: string | null = null;
-
-      do {
-        const params = new URLSearchParams({
-          size: '100',
-        });
-        if (nextToken) params.set('nextToken', nextToken);
-
-        let json: any;
-        try {
-          json = await tossFetch(`/api/v3/shopping-fep/claims?${params}`, token);
-        } catch (err: any) {
-          errors.push(`[${chunk.start}] ${err.message}`);
-          break;
-        }
-
-        const items: any[] = json?.success?.items ?? [];
-        nextToken = json?.success?.hasNext ? (json?.success?.nextToken ?? null) : null;
-
-        for (const claim of items) {
-          const orderProductId = String(claim.order?.orderProductId ?? '');
-          const claimDate = claim.requestedDt ? claim.requestedDt.substring(0, 10) : null;
-          const claimType = claim.type ?? 'RETURN';
-          const claimStatus = `${claimType}_${claim.status ?? 'REQUESTED'}`;
-          const productName = claim.product?.name ?? '';
-          const optionName = claim.product?.optionName ?? null;
-          const quantity = claim.product?.quantity ?? 1;
-          const reason = claim.requestReason ?? null;
-
-          // channel_orders에서 해당 주문 찾기
-          if (orderProductId) {
-            const { data: existing } = await admin
-              .from('channel_orders')
-              .select('id')
-              .eq('order_number', orderProductId)
-              .eq('channel', 'toss')
-              .limit(1)
-              .maybeSingle();
-
-            if (existing) {
-              // 기존 주문 업데이트
-              await admin.from('channel_orders').update({
-                claim_status: claimStatus,
-                claim_type: claimType,
-                claim_date: claimDate,
-              }).eq('id', existing.id);
-              synced++;
-            } else {
-              // 주문이 없으면 새로 생성
-              const skuId = matcher.byNameOption(productName, optionName);
-              await admin.from('channel_orders').upsert({
-                channel: 'toss',
-                order_date: claimDate ?? chunk.start,
-                order_number: orderProductId,
-                product_name: productName,
-                option_name: optionName,
-                quantity,
-                order_status: claimStatus,
-                claim_status: claimStatus,
-                claim_type: claimType,
-                claim_date: claimDate,
-                shipping_cost: 0,
-                orig_shipping: 0,
-                jeju_surcharge: false,
-                sku_id: skuId,
-                recipient: claim.order?.receiverName ?? null,
-                buyer_phone: claim.order?.receiverPhoneNumber ?? null,
-                address: claim.order?.address ?? null,
-              }, { onConflict: 'order_number,channel', ignoreDuplicates: false });
-              synced++;
-            }
-          }
-        }
-
-        await sleep(300);
-      } while (nextToken);
+    let json: any;
+    try {
+      json = await tossFetch(`/api/v3/shopping-fep/claims?${params}`, token);
+    } catch (err: any) {
+      errors.push(err.message);
+      break;
     }
 
-    await sleep(500);
-  }
+    const items: any[] = json?.success?.items ?? [];
+    nextToken = json?.success?.hasNext ? (json?.success?.nextToken ?? null) : null;
 
-  return NextResponse.json({ synced, errors: errors.length ? errors : undefined });
+    for (const claim of items) {
+      const orderProductId = String(claim.order?.orderProductId ?? '');
+      if (!orderProductId || processed.has(orderProductId)) continue;
+      processed.add(orderProductId);
+
+      const claimType = claim.type ?? 'RETURN';
+      const claimStatus = `${claimType}_${claim.status ?? 'REQUESTED'}`;
+      const claimDate = claim.requestedDt ? claim.requestedDt.substring(0, 10) : null;
+
+      // 기존 주문 매칭 (orderProductId = order_number)
+      const { data: existing } = await admin
+        .from('channel_orders')
+        .select('id')
+        .eq('order_number', orderProductId)
+        .eq('channel', 'toss')
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        await admin.from('channel_orders').update({
+          claim_status: claimStatus,
+          claim_type: claimType,
+          claim_date: claimDate,
+        }).eq('id', existing.id);
+        updated++;
+      }
+      // 기존 주문이 없으면 무시 (주문 동기화에서 먼저 들어와야 함)
+    }
+
+    synced += items.length;
+    await sleep(300);
+  } while (nextToken);
+
+  return NextResponse.json({ synced, updated, errors: errors.length ? errors : undefined });
 }
