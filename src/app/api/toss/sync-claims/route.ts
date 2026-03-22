@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
     await sleep(300);
   } while (nextToken);
 
-  // DB 업데이트 (최종 상태만)
+  // DB 업데이트 (CREATED만 있는 건 무시 — 미완료 요청)
   for (const [opId, best] of bestClaims) {
+    if (best.status === 'CREATED') continue; // 미완료 요청 skip
     const claimStatus = `${best.type}_${best.status}`;
     const { data: existing } = await admin
       .from('channel_orders')
