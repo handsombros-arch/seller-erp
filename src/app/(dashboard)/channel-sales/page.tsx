@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
 import type { ChannelSale } from '@/types';
 import {
@@ -1047,6 +1047,7 @@ interface ChannelReturn {
   return_type: string | null;
   status: string | null;
   claim_status: string | null;
+  claim_type: string | null;
   order_number: string | null;
   recipient: string | null;
   sku_id: string | null;
@@ -1099,7 +1100,8 @@ function ReturnsTab() {
   const [to, setTo] = useState('');
   const [q, setQ] = useState('');
   const [ch, setCh] = useState('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'return' | 'cancel'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'return' | 'cancel' | 'exchange'>('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1115,10 +1117,33 @@ function ReturnsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const isCancel = (r: ChannelReturn) => (r.return_type ?? '').toUpperCase().includes('CANCEL') || (r.status ?? '').toUpperCase().includes('CANCEL');
-  const cancelCount = returns.filter(isCancel).length;
-  const returnCount = returns.length - cancelCount;
-  const filtered = typeFilter === 'all' ? returns : typeFilter === 'cancel' ? returns.filter(isCancel) : returns.filter(r => !isCancel(r));
+  const getType = (r: ChannelReturn) => {
+    const t = (r.return_type ?? r.claim_type ?? '').toUpperCase();
+    const s = (r.status ?? r.claim_status ?? '').toUpperCase();
+    if (t.includes('EXCHANGE') || s.includes('EXCHANGE')) return 'exchange';
+    if (t.includes('CANCEL') || s.includes('CANCEL')) return 'cancel';
+    return 'return';
+  };
+  const cancelCount = returns.filter(r => getType(r) === 'cancel').length;
+  const returnCount = returns.filter(r => getType(r) === 'return').length;
+  const exchangeCount = returns.filter(r => getType(r) === 'exchange').length;
+
+  // 상태 목록 (실제 데이터 기반)
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of returns) {
+      const s = r.status ?? r.claim_status;
+      if (s) set.add(s);
+    }
+    return [...set].sort();
+  }, [returns]);
+
+  const filtered = useMemo(() => {
+    let result = returns;
+    if (typeFilter !== 'all') result = result.filter(r => getType(r) === typeFilter);
+    if (statusFilter !== 'all') result = result.filter(r => (r.status ?? r.claim_status) === statusFilter);
+    return result;
+  }, [returns, typeFilter, statusFilter]);
   const totalQty = filtered.reduce((a, r) => a + r.quantity, 0);
 
   return (
@@ -1151,19 +1176,30 @@ function ReturnsTab() {
           className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
       </div>
 
-      {/* 유형 필터 + 통계 */}
+      {/* 유형 필터 + 상태 필터 + 통계 */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1.5">
-          {([['all', '전체', returns.length], ['return', '반품', returnCount], ['cancel', '취소', cancelCount]] as const).map(([v, label, cnt]) => (
-            <button key={v} onClick={() => setTypeFilter(v)}
+          {([['all', '전체', returns.length], ['return', '반품', returnCount], ['cancel', '취소', cancelCount], ['exchange', '교환', exchangeCount]] as const).map(([v, label, cnt]) => (
+            <button key={v} onClick={() => { setTypeFilter(v); setStatusFilter('all'); }}
               className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${typeFilter === v ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
               {label} <span className={`ml-1 ${typeFilter === v ? 'text-blue-200' : 'text-[#B0B8C1]'}`}>{cnt}</span>
             </button>
           ))}
         </div>
+        {/* 상태 필터 */}
+        {statusOptions.length > 0 && (
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6]">
+            <option value="all">상태 전체</option>
+            {statusOptions.map((s) => {
+              const st = RETURN_STATUS_LABELS[s];
+              return <option key={s} value={s}>{st?.label ?? s}</option>;
+            })}
+          </select>
+        )}
         {filtered.length > 0 && (
-          <div className="bg-white rounded-xl px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
-            <span className="text-[12px] text-[#6B7684]">수량</span>
+          <div className="bg-white rounded-xl px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3 ml-auto">
+            <span className="text-[12px] text-[#6B7684]">{filtered.length}건</span>
             <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
           </div>
         )}
