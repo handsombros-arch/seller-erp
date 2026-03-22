@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useVat } from '@/components/layout/vat-provider';
+import { useState } from 'react';
 import {
   LayoutDashboard, Package, Warehouse, PackageCheck,
-  PackageMinus, TrendingUp, FileSpreadsheet, Settings, Menu, LogOut, CalendarDays, Building2, ShoppingCart,
+  PackageMinus, TrendingUp, FileSpreadsheet, Settings, Menu, LogOut, CalendarDays, Building2, ShoppingCart, RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -89,6 +90,16 @@ export function Header({ email }: { email?: string }) {
           </h1>
         </div>
 
+        <div className="flex items-center gap-2">
+        {/* 새로고침 */}
+        <button
+          onClick={() => { router.refresh(); }}
+          title="페이지 데이터 새로고침"
+          className="h-8 w-8 flex items-center justify-center rounded-xl border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6] hover:text-[#3182F6] transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+
         {/* VAT 토글 */}
         <button
           onClick={toggleVat}
@@ -101,6 +112,7 @@ export function Header({ email }: { email?: string }) {
         >
           {vatOn ? 'VAT 포함' : 'VAT 별도'}
         </button>
+        </div>
 
         {/* 유저 */}
         <DropdownMenu>
