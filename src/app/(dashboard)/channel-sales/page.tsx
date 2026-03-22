@@ -1081,6 +1081,7 @@ function ReturnsTab() {
   const [to, setTo] = useState('');
   const [q, setQ] = useState('');
   const [ch, setCh] = useState('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'return' | 'cancel'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1096,7 +1097,11 @@ function ReturnsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const totalQty = returns.reduce((a, r) => a + r.quantity, 0);
+  const isCancel = (r: ChannelReturn) => (r.return_type ?? '').toUpperCase().includes('CANCEL') || (r.status ?? '').toUpperCase().includes('CANCEL');
+  const cancelCount = returns.filter(isCancel).length;
+  const returnCount = returns.length - cancelCount;
+  const filtered = typeFilter === 'all' ? returns : typeFilter === 'cancel' ? returns.filter(isCancel) : returns.filter(r => !isCancel(r));
+  const totalQty = filtered.reduce((a, r) => a + r.quantity, 0);
 
   return (
     <div className="space-y-4">
@@ -1128,25 +1133,30 @@ function ReturnsTab() {
           className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
       </div>
 
-      {returns.length > 0 && (
-        <div className="flex items-center gap-3">
-          <div className="bg-white rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
-            <span className="text-[12px] text-[#6B7684]">반품/취소 건수</span>
-            <span className="text-[15px] font-bold text-[#191F28]">{formatNumber(returns.length)}건</span>
-          </div>
-          <div className="bg-white rounded-xl px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
-            <span className="text-[12px] text-[#6B7684]">수량</span>
-            <span className="text-[15px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
-          </div>
+      {/* 유형 필터 + 통계 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1.5">
+          {([['all', '전체', returns.length], ['return', '반품', returnCount], ['cancel', '취소', cancelCount]] as const).map(([v, label, cnt]) => (
+            <button key={v} onClick={() => setTypeFilter(v)}
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${typeFilter === v ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              {label} <span className={`ml-1 ${typeFilter === v ? 'text-blue-200' : 'text-[#B0B8C1]'}`}>{cnt}</span>
+            </button>
+          ))}
         </div>
-      )}
+        {filtered.length > 0 && (
+          <div className="bg-white rounded-xl px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3">
+            <span className="text-[12px] text-[#6B7684]">수량</span>
+            <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" />
           </div>
-        ) : returns.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <RotateCcw className="h-8 w-8 text-[#D0D5DD] mb-3" />
             <p className="text-[13px] font-medium text-[#6B7684]">반품/취소 데이터가 없습니다</p>
@@ -1163,7 +1173,7 @@ function ReturnsTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F2F4F6]">
-                {returns.map((r) => {
+                {filtered.map((r) => {
                   const badge = RETURN_CHANNEL_BADGE[r.channel] ?? { label: r.channel, cls: 'bg-[#F2F4F6] text-[#6B7684]' };
                   return (
                     <tr key={r.id} className="hover:bg-[#FAFAFA] transition-colors">

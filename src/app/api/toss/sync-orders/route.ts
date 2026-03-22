@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
           address:         addr || null,
           tracking_number: item.shippingTrackingNumber ?? null,
           order_status:    item.orderProductStatus ?? null,
+          claim_date:      item.canceledAt ? item.canceledAt.substring(0, 10) : (item.returnedAt ? item.returnedAt.substring(0, 10) : null),
           shipping_cost:   2650 + (isJeju ? 3000 : 0),
           orig_shipping:   2650,
           jeju_surcharge:  isJeju,

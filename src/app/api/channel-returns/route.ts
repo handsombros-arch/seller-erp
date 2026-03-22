@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (needOrders) {
     let q2 = admin
       .from('channel_orders')
-      .select('id, channel, order_date, order_number, product_name, option_name, quantity, order_status, claim_status, claim_type, sku_id, sku:skus(id, sku_code, product:products(name))')
+      .select('id, channel, order_date, claim_date, order_number, product_name, option_name, quantity, order_status, claim_status, claim_type, sku_id, sku:skus(id, sku_code, product:products(name))')
       .order('order_date', { ascending: false })
       .limit(500);
 
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       results.push({
         id:            row.id,
         channel:       row.channel,
-        returned_at:   row.order_date,
+        returned_at:   row.claim_date ?? row.order_date,
         product_name:  row.product_name,
         option_name:   row.option_name,
         quantity:      row.quantity,
