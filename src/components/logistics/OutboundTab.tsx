@@ -330,8 +330,8 @@ export default function OutboundTab() {
         ) : (
           <div className="overflow-x-auto">
           <div className="divide-y divide-[#F2F4F6] min-w-[620px]">
-            <div className="grid grid-cols-[1fr_1.4fr_80px_70px_100px_90px_72px] gap-3 px-5 py-3 bg-[#F9FAFB]">
-              {['센터 / 채널', '상품 / SKU', '수량', '박스', '출고일', '쿠팡도착', ''].map((h, i) => (
+            <div className="grid grid-cols-[1fr_1.4fr_80px_70px_90px_80px_100px_72px] gap-3 px-5 py-3 bg-[#F9FAFB]">
+              {['센터 / 채널', '상품 / SKU', '수량', '박스', '출고일', '도착일', '상태', ''].map((h, i) => (
                 <span key={i} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
               ))}
             </div>
@@ -343,7 +343,7 @@ export default function OutboundTab() {
               return (
                 <div
                   key={record.id}
-                  className="grid grid-cols-[1fr_1.4fr_80px_70px_100px_90px_72px] gap-3 px-5 py-4 hover:bg-[#F9FAFB] transition-colors items-center"
+                  className="grid grid-cols-[1fr_1.4fr_80px_70px_90px_80px_100px_72px] gap-3 px-5 py-4 hover:bg-[#F9FAFB] transition-colors items-center"
                 >
                   {/* 센터 / 채널 */}
                   <div>
@@ -373,6 +373,31 @@ export default function OutboundTab() {
                   <span className="text-[13px] text-[#6B7684]">{record.box_count != null ? `${record.box_count}박스` : '-'}</span>
                   <span className="text-[12px] text-[#6B7684]">{formatDate(record.outbound_date)}</span>
                   <span className="text-[12px] text-[#6B7684]">{record.arrival_date ? formatDate(record.arrival_date) : '-'}</span>
+
+                  {/* 상태 */}
+                  <div>
+                    {record.status === 'selling' ? (
+                      <div>
+                        <span className="text-[11px] font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">판매개시</span>
+                        {record.selling_started_at && <p className="text-[11px] text-[#B0B8C1] mt-0.5">{formatDate(record.selling_started_at)}</p>}
+                      </div>
+                    ) : record.status === 'returned' ? (
+                      <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">회송</span>
+                    ) : isCoupang ? (
+                      <div className="flex gap-1">
+                        <button onClick={async () => {
+                          const res = await fetch(`/api/outbound/${record.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'selling' }) });
+                          if (res.ok) { const d = await res.json(); setRecords(prev => prev.map(r => r.id === record.id ? d : r)); }
+                        }} className="text-[11px] font-semibold text-white bg-green-500 hover:bg-green-600 px-2 py-1 rounded-lg transition-colors">판매개시</button>
+                        <button onClick={async () => {
+                          const res = await fetch(`/api/outbound/${record.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'returned' }) });
+                          if (res.ok) { const d = await res.json(); setRecords(prev => prev.map(r => r.id === record.id ? d : r)); }
+                        }} className="text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-lg transition-colors">회송</button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[#B0B8C1]">출고완료</span>
+                    )}
+                  </div>
 
                   {/* 수정 / 삭제 */}
                   <div className="flex items-center gap-1">

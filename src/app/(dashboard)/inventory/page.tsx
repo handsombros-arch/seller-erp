@@ -413,15 +413,15 @@ function AdjustDialog({ open, onClose, item, onSave }: {
 
 // ─── Summary Tab (종합 현황) ─────────────────────────────────────────────────
 
-type SumCol = 'product' | 'warehouse' | 'coupang' | 'transit' | 'total' | 'safety' | 's30d' | 's7d' | 'daily';
-const DEFAULT_SUM_COLS: SumCol[] = ['product', 'warehouse', 'coupang', 'transit', 'total', 'safety', 's30d', 's7d', 'daily'];
+type SumCol = 'product' | 'warehouse' | 'coupang' | 'transit' | 'outbound' | 'total' | 'safety' | 's30d' | 's7d' | 'daily';
+const DEFAULT_SUM_COLS: SumCol[] = ['product', 'warehouse', 'coupang', 'transit', 'outbound', 'total', 'safety', 's30d', 's7d', 'daily'];
 const SUM_LABELS: Record<SumCol, string> = {
   product: '상품 / SKU', warehouse: '자사창고', coupang: '쿠팡그로스',
-  transit: '수입중', total: '총 재고', safety: '안전재고',
+  transit: '수입중', outbound: '출고중', total: '총 재고', safety: '안전재고',
   s30d: '30일판매', s7d: '7일판매', daily: '일평균',
 };
 const SUM_SORTABLE: Record<SumCol, boolean> = {
-  product: true, warehouse: true, coupang: true, transit: true,
+  product: true, warehouse: true, coupang: true, transit: true, outbound: true,
   total: true, safety: true, s30d: true, s7d: true, daily: true,
 };
 
@@ -611,6 +611,7 @@ function SummaryTab() {
           case 'warehouse': return r.warehouse_stock;
           case 'coupang': return r.coupang_stock;
           case 'transit': return r.transit_stock;
+          case 'outbound': return r.outbound_stock;
           case 'total': return r.total_stock;
           case 'safety': return r.safety_stock;
           case 's30d': return r.sales_30d;
@@ -676,6 +677,13 @@ function SummaryTab() {
         <td key={col} className={`px-4 ${py}`}>
           {row.transit_stock > 0
             ? <><span className="text-[13px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
+            : <span className="text-[13px] text-[#B0B8C1]">-</span>}
+        </td>
+      );
+      case 'outbound': return (
+        <td key={col} className={`px-4 ${py}`}>
+          {row.outbound_stock > 0
+            ? <><span className="text-[13px] font-semibold text-blue-500 tabular-nums">{formatNumber(row.outbound_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
             : <span className="text-[13px] text-[#B0B8C1]">-</span>}
         </td>
       );

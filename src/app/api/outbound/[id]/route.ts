@@ -6,11 +6,11 @@ type Ctx = { params: Promise<{ id: string }> };
 async function getOldRecord(admin: any, id: string) {
   const { data, error } = await admin
     .from('outbound_records')
-    .select('sku_id, warehouse_id, quantity')
+    .select('sku_id, warehouse_id, quantity, status, outbound_type')
     .eq('id', id)
     .single();
   if (error || !data) return null;
-  return data as { sku_id: string; warehouse_id: string; quantity: number };
+  return data as { sku_id: string; warehouse_id: string; quantity: number; status: string; outbound_type: string };
 }
 
 async function adjustInventory(admin: any, skuId: string, warehouseId: string, delta: number) {
@@ -41,18 +41,34 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
   if (!old) return NextResponse.json({ error: '레코드 없음' }, { status: 404 });
 
   const body = await request.json();
+
+  // 판매개시: shipped → selling (쿠팡 재고에 추가)
+  if (body.status === 'selling' && old.status === 'shipped') {
+    body.selling_started_at = body.selling_started_at ?? new Date().toISOString().slice(0, 10);
+
+    // 쿠팡그로스 출고인 경우 → RG 재고 스냅샷에는 자동 반영 (API 동기화)
+    // 여기서는 상태만 변경
+  }
+
+  // 회송: shipped → returned (자사 창고에 복구)
+  if (body.status === 'returned' && old.status === 'shipped') {
+    await adjustInventory(admin, old.sku_id, old.warehouse_id, old.quantity);
+  }
+
   const { data, error } = await admin
     .from('outbound_records')
     .update(body)
     .eq('id', id)
-    .select()
+    .select('*, sku:skus(sku_code, option_values, product:products(name)), warehouse:warehouses(name), channel:channels(name, type)')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // 수량이 바뀌었으면 재고 역산: 기존 수량 복구 후 새 수량 차감
-  const newQty = body.quantity ?? old.quantity;
-  const qtyDelta = old.quantity - newQty; // 양수 = 재고 증가, 음수 = 재고 감소
-  await adjustInventory(admin, old.sku_id, old.warehouse_id, qtyDelta);
+  // 일반 수량 변경 (판매개시/회송이 아닌 경우)
+  if (!body.status && body.quantity != null) {
+    const newQty = body.quantity ?? old.quantity;
+    const qtyDelta = old.quantity - newQty;
+    await adjustInventory(admin, old.sku_id, old.warehouse_id, qtyDelta);
+  }
 
   return NextResponse.json(data);
 }

@@ -13,7 +13,8 @@ export interface InventorySummaryRow {
   warehouse_stock: number;   // 자사창고 합계
   coupang_stock: number;     // 쿠팡그로스 출고 - 쿠팡 Wing 판매
   transit_stock: number;     // 발주 중 (ordered/transiting) — 표시용, total_stock에 미포함
-  total_stock: number;       // warehouse_stock + coupang_stock (transit 제외)
+  outbound_stock: number;    // 출고중 (shipped 상태, 판매개시 전)
+  total_stock: number;       // warehouse_stock + coupang_stock (transit/outbound 제외)
 }
 
 export async function GET() {
@@ -79,6 +80,16 @@ export async function GET() {
         .in('po_id', transitPoIds)
     : { data: [] };
 
+  // 5. 출고중 수량 (shipped 상태 — 판매개시 전)
+  const { data: outboundItems } = await admin
+    .from('outbound_records')
+    .select('sku_id, quantity, status')
+    .eq('status', 'shipped');
+  const outboundMap = new Map<string, number>();
+  for (const o of outboundItems ?? []) {
+    if (o.sku_id) outboundMap.set(o.sku_id, (outboundMap.get(o.sku_id) ?? 0) + o.quantity);
+  }
+
   // 최신 RG 재고 스냅샷 (sku_id 기준 가장 최근 1건)
   const { data: rgSnaps } = await admin
     .from('rg_inventory_snapshots')
@@ -129,6 +140,7 @@ export async function GET() {
       warehouse_stock,
       coupang_stock,
       transit_stock,
+      outbound_stock: outboundMap.get(sku.id) ?? 0,
       total_stock: warehouse_stock + coupang_stock,
     };
   });
