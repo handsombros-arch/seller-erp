@@ -30,7 +30,7 @@ type Metric     = 'count' | 'quantity';
 const CHANNEL_LABELS: Record<string, string> = {
   smartstore: '스마트스토어',
   toss:        '토스',
-  coupang:     '쿠팡(직배)',
+  coupang:     '쿠팡 Wing',
   coupang_rg:  '쿠팡(그로스)',
   other:       '기타',
 };

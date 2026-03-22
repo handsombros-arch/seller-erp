@@ -11,7 +11,7 @@ export interface InventorySummaryRow {
   sales_30d: number;
   sales_7d: number;
   warehouse_stock: number;   // 자사창고 합계
-  coupang_stock: number;     // 쿠팡그로스 출고 - 쿠팡직접 판매
+  coupang_stock: number;     // 쿠팡그로스 출고 - 쿠팡 Wing 판매
   transit_stock: number;     // 발주 중 (ordered/transiting) — 표시용, total_stock에 미포함
   total_stock: number;       // warehouse_stock + coupang_stock (transit 제외)
 }

@@ -405,7 +405,7 @@ const CHANNEL_OPTIONS = [
   { value: 'all',        label: '전체 채널' },
   { value: 'smartstore', label: '스마트스토어' },
   { value: 'toss',       label: '토스' },
-  { value: 'coupang',    label: '쿠팡(직배)' },
+  { value: 'coupang',    label: '쿠팡 Wing' },
   { value: 'coupang_rg', label: '쿠팡(그로스)' },
   { value: 'other',      label: '기타' },
 ];

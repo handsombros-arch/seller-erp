@@ -16,14 +16,14 @@ const CHANNELS = [
   { value: 'all',            label: '전체' },
   { value: 'smartstore',     label: '스마트스토어' },
   { value: 'toss',           label: '토스' },
-  { value: 'coupang_direct', label: '쿠팡직접' },
+  { value: 'coupang_direct', label: '쿠팡 Wing' },
   { value: 'other',          label: '기타' },
 ] as const;
 
 const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
   smartstore:     { label: '스마트스토어', cls: 'bg-green-50 text-green-700' },
   toss:           { label: '토스',         cls: 'bg-blue-50 text-blue-700' },
-  coupang_direct: { label: '쿠팡직접',     cls: 'bg-yellow-50 text-yellow-700' },
+  coupang_direct: { label: '쿠팡 Wing',     cls: 'bg-yellow-50 text-yellow-700' },
   other:          { label: '기타',         cls: 'bg-[#F2F4F6] text-[#6B7684]' },
 };
 
@@ -546,7 +546,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
               <CheckCircle2 className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-[13px] font-semibold text-yellow-800">쿠팡 Seller Insights 파일 감지됨</p>
-                <p className="text-[12px] text-yellow-700 mt-0.5">판매방식에 따라 자동 분류됩니다: 로켓그로스 → 쿠팡직접 / 판매자배송 → 기타</p>
+                <p className="text-[12px] text-yellow-700 mt-0.5">판매방식에 따라 자동 분류됩니다: 로켓그로스 → 쿠팡 Wing / 판매자배송 → 기타</p>
               </div>
             </div>
           )}
@@ -1065,13 +1065,13 @@ const RETURN_CHANNELS = [
   { value: 'all',         label: '전체' },
   { value: 'smartstore',  label: '스마트스토어' },
   { value: 'toss',        label: '토스' },
-  { value: 'coupang',     label: '쿠팡' },
+  { value: 'coupang',     label: '쿠팡 Wing' },
 ] as const;
 
 const RETURN_CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
   smartstore: { label: '스마트스토어', cls: 'bg-green-50 text-green-700' },
   toss:       { label: '토스',         cls: 'bg-blue-50 text-blue-700' },
-  coupang:    { label: '쿠팡',         cls: 'bg-yellow-50 text-yellow-700' },
+  coupang:    { label: '쿠팡 Wing',    cls: 'bg-yellow-50 text-yellow-700' },
 };
 
 const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
@@ -1094,6 +1094,12 @@ const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   REFUND_REQUEST:          { label: '환불요청',   cls: 'bg-orange-50 text-orange-600' },
   REFUND_DONE:             { label: '환불완료',   cls: 'bg-red-100 text-red-700' },
   COLLECT_DONE:            { label: '수거완료',   cls: 'bg-emerald-50 text-emerald-700' },
+  // 쿠팡 Wing
+  RETURNS_UNCHECKED:       { label: '반품접수',   cls: 'bg-orange-50 text-orange-700' },
+  RETURNS_COMPLETED:       { label: '반품완료',   cls: 'bg-red-100 text-red-700' },
+  RELEASE_STOP_UNCHECKED:  { label: '출고중지요청', cls: 'bg-amber-50 text-amber-700' },
+  VENDOR_WAREHOUSE_CONFIRM:{ label: '입고완료',   cls: 'bg-emerald-50 text-emerald-700' },
+  REQUEST_COUPANG_CHECK:   { label: '쿠팡확인요청', cls: 'bg-sky-50 text-sky-600' },
   // 교환
   EXCHANGE_CREATED:        { label: '교환접수',   cls: 'bg-purple-50 text-purple-600' },
   EXCHANGE_COMPLETED:      { label: '교환완료',   cls: 'bg-purple-100 text-purple-700' },
