@@ -92,13 +92,18 @@ export function Header({ email }: { email?: string }) {
 
         <div className="flex items-center gap-2">
         {/* 새로고침 */}
-        <button
-          onClick={() => { router.refresh(); }}
-          title="페이지 데이터 새로고침"
-          className="h-8 w-8 flex items-center justify-center rounded-xl border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6] hover:text-[#3182F6] transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        {(() => {
+          const [spinning, setSpinning] = useState(false);
+          return (
+            <button
+              onClick={() => { setSpinning(true); router.refresh(); setTimeout(() => setSpinning(false), 1000); }}
+              title="페이지 데이터 새로고침"
+              className="h-8 w-8 flex items-center justify-center rounded-xl border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6] hover:text-[#3182F6] transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 transition-transform ${spinning ? 'animate-spin' : ''}`} />
+            </button>
+          );
+        })()}
 
         {/* VAT 토글 */}
         <button
