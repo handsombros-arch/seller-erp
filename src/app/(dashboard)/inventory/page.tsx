@@ -595,11 +595,12 @@ function SummaryTab() {
     });
   }
 
-  const filtered = useMemo(() => {
-    if (!searchQ) return rows;
-    const q = searchQ.toLowerCase();
-    return rows.filter(r => r.product_name.toLowerCase().includes(q) || (r.sku_code ?? '').toLowerCase().includes(q) || Object.values(r.option_values ?? {}).join(' ').toLowerCase().includes(q));
-  }, [rows, searchQ]);
+  const filtered = searchQ
+    ? rows.filter(r => {
+        const q = searchQ.toLowerCase();
+        return r.product_name.toLowerCase().includes(q) || (r.sku_code ?? '').toLowerCase().includes(q) || Object.values(r.option_values ?? {}).join(' ').toLowerCase().includes(q);
+      })
+    : rows;
 
   const sorted = useMemo(() => {
     if (!sort) return filtered;
@@ -622,7 +623,7 @@ function SummaryTab() {
       if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
       return sort.dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
-  }, [rows, sort]);
+  }, [filtered, sort]);
 
   const thCls = (col: SumCol) =>
     `text-left px-4 text-[11px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA]
