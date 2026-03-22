@@ -209,38 +209,38 @@ export async function GET(request: NextRequest) {
 
       // 토스 클레임 (반품/교환) 동기화
       let tossClaims = 0;
-      const from7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      for (const type of ['RETURN', 'EXCHANGE', 'CANCEL'] as const) {
-        let claimNext: string | null = null;
-        do {
-          const cp = new URLSearchParams({ type, status: 'REQUESTED', fromRequestDate: from7, toRequestDate: today, size: '100' });
-          if (claimNext) cp.set('nextToken', claimNext);
-          const cj = await tossFetch(`/api/v3/shopping-fep/claims?${cp}`, token);
-          const citems: any[] = cj?.success?.items ?? [];
-          claimNext = cj?.success?.hasNext ? (cj?.success?.nextToken ?? null) : null;
-          for (const c of citems) {
-            const opId = String(c.order?.orderProductId ?? '');
-            const cDate = c.requestedDt ? c.requestedDt.substring(0, 10) : null;
-            if (opId) {
-              const { data: ex } = await admin.from('channel_orders').select('id').eq('order_number', opId).eq('channel', 'toss').limit(1).maybeSingle();
-              if (ex) {
-                await admin.from('channel_orders').update({ claim_status: `${type}_REQUESTED`, claim_type: type, claim_date: cDate }).eq('id', ex.id);
-              } else {
-                await admin.from('channel_orders').upsert({
-                  channel: 'toss', order_date: cDate ?? from7, order_number: opId,
-                  product_name: c.product?.name ?? '', option_name: c.product?.optionName ?? null,
-                  quantity: c.product?.quantity ?? 1, order_status: `${type}_REQUESTED`,
-                  claim_status: `${type}_REQUESTED`, claim_type: type, claim_date: cDate,
-                  shipping_cost: 0, orig_shipping: 0, jeju_surcharge: false,
-                  sku_id: matcher.byNameOption(c.product?.name ?? '', c.product?.optionName) ?? null,
-                }, { onConflict: 'order_number,channel', ignoreDuplicates: false });
-              }
-              tossClaims++;
+      // 전체 클레임 조회 (type/status 필터 없이)
+      let claimNext: string | null = null;
+      do {
+        const cp = new URLSearchParams({ size: '100' });
+        if (claimNext) cp.set('nextToken', claimNext);
+        const cj = await tossFetch(`/api/v3/shopping-fep/claims?${cp}`, token);
+        const citems: any[] = cj?.success?.items ?? [];
+        claimNext = cj?.success?.hasNext ? (cj?.success?.nextToken ?? null) : null;
+        for (const c of citems) {
+          const opId = String(c.order?.orderProductId ?? '');
+          const cDate = c.requestedDt ? c.requestedDt.substring(0, 10) : null;
+          const cType = c.type ?? 'RETURN';
+          const cStatus = `${cType}_${c.status ?? 'REQUESTED'}`;
+          if (opId) {
+            const { data: ex } = await admin.from('channel_orders').select('id').eq('order_number', opId).eq('channel', 'toss').limit(1).maybeSingle();
+            if (ex) {
+              await admin.from('channel_orders').update({ claim_status: cStatus, claim_type: cType, claim_date: cDate }).eq('id', ex.id);
+            } else {
+              await admin.from('channel_orders').upsert({
+                channel: 'toss', order_date: cDate ?? today, order_number: opId,
+                product_name: c.product?.name ?? '', option_name: c.product?.optionName ?? null,
+                quantity: c.product?.quantity ?? 1, order_status: cStatus,
+                claim_status: cStatus, claim_type: cType, claim_date: cDate,
+                shipping_cost: 0, orig_shipping: 0, jeju_surcharge: false,
+                sku_id: matcher.byNameOption(c.product?.name ?? '', c.product?.optionName) ?? null,
+              }, { onConflict: 'order_number,channel', ignoreDuplicates: false });
             }
+            tossClaims++;
           }
-          await sleep(300);
-        } while (claimNext);
-      }
+        }
+        await sleep(300);
+      } while (claimNext);
 
       results.toss = { synced: tossSynced, claims: tossClaims };
     } else {

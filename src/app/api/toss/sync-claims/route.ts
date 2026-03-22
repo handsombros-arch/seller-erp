@@ -50,16 +50,12 @@ export async function POST(request: NextRequest) {
   }
 
   for (const chunk of chunks) {
-    // 각 유형별 조회
-    for (const type of ['CANCEL', 'RETURN', 'EXCHANGE'] as const) {
+    // 전체 클레임 조회 (type/status 필터 없이 — 모든 상태 포함)
+    {
       let nextToken: string | null = null;
 
       do {
         const params = new URLSearchParams({
-          type,
-          status: 'REQUESTED',
-          fromRequestDate: chunk.start,
-          toRequestDate: chunk.end,
           size: '100',
         });
         if (nextToken) params.set('nextToken', nextToken);
@@ -68,7 +64,7 @@ export async function POST(request: NextRequest) {
         try {
           json = await tossFetch(`/api/v3/shopping-fep/claims?${params}`, token);
         } catch (err: any) {
-          errors.push(`[${type}/${chunk.start}] ${err.message}`);
+          errors.push(`[${chunk.start}] ${err.message}`);
           break;
         }
 
@@ -78,8 +74,8 @@ export async function POST(request: NextRequest) {
         for (const claim of items) {
           const orderProductId = String(claim.order?.orderProductId ?? '');
           const claimDate = claim.requestedDt ? claim.requestedDt.substring(0, 10) : null;
-          const claimType = type;
-          const claimStatus = `${type}_REQUESTED`;
+          const claimType = claim.type ?? 'RETURN';
+          const claimStatus = `${claimType}_${claim.status ?? 'REQUESTED'}`;
           const productName = claim.product?.name ?? '';
           const optionName = claim.product?.optionName ?? null;
           const quantity = claim.product?.quantity ?? 1;
