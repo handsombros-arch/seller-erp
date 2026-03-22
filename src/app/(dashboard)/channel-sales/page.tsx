@@ -845,11 +845,18 @@ function CoupangSyncDialog({ open, onClose, onDone }: {
       const oData = await ordersRes.json();
       if (!ordersRes.ok) throw new Error(oData.error ?? '주문 동기화 실패');
 
-      // 2) 판매량 집계 + SKU 매칭 (자동)
+      // 2) Wing 반품/취소 동기화
+      const retRes = await fetch('/api/coupang/sync-wing-returns', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to }),
+      });
+      const retData = retRes.ok ? await retRes.json() : { synced: 0 };
+
+      // 3) 판매량 집계 + SKU 매칭 (자동)
       const calcRes = await fetch('/api/coupang/calc-sales', { method: 'POST' });
       const calcData = await calcRes.json();
 
-      const msg = `주문 ${oData.synced}건 동기화 · SKU ${calcData.updated}개 판매량 업데이트${oData.errors?.length ? ` (경고 ${oData.errors.length}건)` : ''}${calcData.unmatched > 0 ? ` · 미매칭 ${calcData.unmatched}건` : ''}`;
+      const msg = `주문 ${oData.synced}건${retData.synced ? ` · 반품/취소 ${retData.synced}건` : ''} 동기화 · SKU ${calcData.updated}개 업데이트`;
       setResult(msg);
       onDone(msg);
     } catch (err: any) {

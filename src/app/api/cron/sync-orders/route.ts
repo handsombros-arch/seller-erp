@@ -116,8 +116,41 @@ export async function GET(request: NextRequest) {
         await sleep(300);
       }
 
+      // Wing 반품/취소 동기화
+      let wingReturns = 0;
+      const returnPath = `/v2/providers/openapi/apis/api/v6/vendors/${credentials.vendorId}/returnRequests`;
+      for (const cancelType of ['RETURN', 'CANCEL'] as const) {
+        try {
+          const rp: Record<string, string> = { searchType: 'timeFrame', createdAtFrom: `${from3}T00:00`, createdAtTo: `${today}T23:59` };
+          if (cancelType === 'CANCEL') rp.cancelType = 'CANCEL';
+          const rj = await coupangFetch(returnPath, rp, credentials);
+          for (const ret of rj?.data ?? []) {
+            for (const item of ret.returnItems ?? []) {
+              const vid = item.vendorItemId ? String(item.vendorItemId) : null;
+              const shipKey = item.shipmentBoxId ? `${item.shipmentBoxId}-${vid}` : null;
+              if (shipKey) {
+                const { data: ex } = await admin.from('channel_orders').select('id').eq('order_number', shipKey).eq('channel', 'coupang').limit(1).maybeSingle();
+                if (ex) await admin.from('channel_orders').update({ claim_type: cancelType, claim_status: ret.receiptStatus, claim_date: ret.createdAt?.substring(0, 10) }).eq('id', ex.id);
+              }
+              await admin.from('coupang_returns').upsert({
+                return_id: ret.receiptId, order_id: ret.orderId ?? null,
+                sku_id: vid ? (matcher.byVendorItemId(vid) ?? null) : null,
+                vendor_item_id: vid ? Number(vid) : null,
+                product_name: item.sellerProductName ?? '', option_name: item.vendorItemName ?? null,
+                quantity: Number(item.cancelCount ?? 1),
+                return_reason: ret.reasonCodeText ?? ret.cancelReason ?? null,
+                return_type: cancelType, status: ret.receiptStatus,
+                returned_at: ret.createdAt?.substring(0, 10) ?? today,
+              }, { onConflict: 'return_id', ignoreDuplicates: false });
+              wingReturns++;
+            }
+          }
+        } catch { /* wing return error — non-critical */ }
+        await sleep(400);
+      }
+
       results.coupang_rg = { synced: rgSynced };
-      results.coupang_wing = { synced: wingSynced };
+      results.coupang_wing = { synced: wingSynced, returns: wingReturns };
     } else {
       results.coupang_rg = { skipped: 'no credentials' };
       results.coupang_wing = { skipped: 'no credentials' };
