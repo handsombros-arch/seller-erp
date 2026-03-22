@@ -1046,6 +1046,7 @@ interface ChannelReturn {
   return_reason: string | null;
   return_type: string | null;
   status: string | null;
+  claim_status: string | null;
   order_number: string | null;
   sku_id: string | null;
   sku?: { id: string; sku_code: string; product: { name: string } } | null;
@@ -1064,15 +1065,30 @@ const RETURN_CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
   coupang:    { label: '쿠팡',         cls: 'bg-yellow-50 text-yellow-700' },
 };
 
-const RETURN_STATUS_LABELS: Record<string, string> = {
-  CANCEL_REQUEST:     '취소요청',
-  CANCEL_DONE:        '취소완료',
-  REFUND_REQUEST:     '반품요청',
-  REFUND_PROCESSING:  '반품처리중',
-  REFUND_DONE:        '반품완료',
-  RETURN_REQUEST:     '반품요청',
-  RETURN_PROCESSING:  '반품처리중',
-  RETURN_DONE:        '반품완료',
+const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  // 취소
+  CANCEL_COMPLETED:        { label: '취소완료',   cls: 'bg-gray-100 text-gray-600' },
+  CANCEL_DONE:             { label: '취소완료',   cls: 'bg-gray-100 text-gray-600' },
+  CANCEL_REQUEST:          { label: '취소요청',   cls: 'bg-yellow-50 text-yellow-700' },
+  CANCEL_REVOKED_REQUEST:  { label: '취소철회',   cls: 'bg-gray-50 text-gray-500' },
+  CANCEL_REJECTED_REQUEST: { label: '취소거절',   cls: 'bg-red-50 text-red-600' },
+  CANCELED_PAYMENT:        { label: '결제취소',   cls: 'bg-gray-100 text-gray-600' },
+  // 반품
+  RETURN_CREATED:          { label: '반품접수',   cls: 'bg-orange-50 text-orange-700' },
+  RETURN_COMPLETED:        { label: '반품완료',   cls: 'bg-red-100 text-red-700' },
+  RETURN_REQUEST:          { label: '반품요청',   cls: 'bg-orange-50 text-orange-600' },
+  RETURN_DONE:             { label: '반품완료',   cls: 'bg-red-100 text-red-700' },
+  RETURN_PROCESSING:       { label: '반품처리중', cls: 'bg-orange-50 text-orange-600' },
+  RETURN_REJECTED_REQUEST: { label: '반품거절',   cls: 'bg-red-50 text-red-500' },
+  RETURN_REVOKED_REQUEST:  { label: '반품철회',   cls: 'bg-gray-50 text-gray-500' },
+  RETURN_REJECT:           { label: '반품거절',   cls: 'bg-red-50 text-red-500' },
+  REFUND_REQUEST:          { label: '환불요청',   cls: 'bg-orange-50 text-orange-600' },
+  REFUND_DONE:             { label: '환불완료',   cls: 'bg-red-100 text-red-700' },
+  COLLECT_DONE:            { label: '수거완료',   cls: 'bg-emerald-50 text-emerald-700' },
+  // 교환
+  EXCHANGE_CREATED:        { label: '교환접수',   cls: 'bg-purple-50 text-purple-600' },
+  EXCHANGE_COMPLETED:      { label: '교환완료',   cls: 'bg-purple-100 text-purple-700' },
+  EXCHANGE_REVOKED_REQUEST:{ label: '교환철회',   cls: 'bg-gray-50 text-gray-500' },
 };
 
 function ReturnsTab() {
@@ -1199,8 +1215,13 @@ function ReturnsTab() {
                           {(r.return_type ?? '').includes('CANCEL') ? '취소' : '반품'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-[12px] text-[#6B7684]">
-                        {RETURN_STATUS_LABELS[r.status ?? ''] ?? r.status ?? '-'}
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const st = RETURN_STATUS_LABELS[r.status ?? ''] ?? RETURN_STATUS_LABELS[r.claim_status ?? ''];
+                          return st
+                            ? <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${st.cls}`}>{st.label}</span>
+                            : <span className="text-[12px] text-[#6B7684]">{r.status ?? r.claim_status ?? '-'}</span>;
+                        })()}
                       </td>
                     </tr>
                   );
