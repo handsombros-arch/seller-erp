@@ -224,6 +224,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
             {[
               { value: 'import', label: '해외수입 (중국 등)' },
               { value: 'local',  label: '국내구매' },
+              { value: 'export', label: '반출' },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -566,6 +567,9 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
               {po.expected_date && ` · 입고예정 ${formatDate(po.expected_date)}`}
               {po.inbound_type === 'import' && (
                 <span className="ml-1.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">해외수입</span>
+              )}
+              {po.inbound_type === 'export' && (
+                <span className="ml-1.5 text-[11px] font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-md">반출</span>
               )}
             </p>
           </div>

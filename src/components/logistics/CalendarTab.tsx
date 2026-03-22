@@ -12,6 +12,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const INBOUND_SUBTYPES: Record<string, string> = {
   import: '수입입고',
   local:  '국내입고',
+  export: '반출',
 };
 
 const OUTBOUND_SUBTYPES: Record<string, string> = {
@@ -19,7 +20,7 @@ const OUTBOUND_SUBTYPES: Record<string, string> = {
   other:          '기타출고',
 };
 
-type FilterType = 'all' | 'inbound_import' | 'inbound_local' | 'outbound_coupang_growth' | 'outbound_other' | 'reorder_reorder' | 'order_order';
+type FilterType = 'all' | 'inbound_import' | 'inbound_local' | 'inbound_export' | 'outbound_coupang_growth' | 'outbound_other' | 'reorder_reorder' | 'order_order';
 
 // ─── Event Pill Style ────────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ export default function CalendarTab() {
     { value: 'order_order',             label: '발주일',    color: 'bg-violet-600 text-white' },
     { value: 'inbound_import',          label: '수입입고',  color: 'bg-emerald-600 text-white' },
     { value: 'inbound_local',           label: '국내입고',  color: 'bg-teal-600 text-white' },
+    { value: 'inbound_export',          label: '반출',      color: 'bg-purple-600 text-white' },
     { value: 'outbound_coupang_growth', label: '쿠팡그로스', color: 'bg-blue-600 text-white' },
     { value: 'outbound_other',          label: '기타출고',  color: 'bg-gray-500 text-white' },
     { value: 'reorder_reorder',         label: '발주권장',  color: 'bg-orange-500 text-white' },

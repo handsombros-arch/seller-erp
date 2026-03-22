@@ -100,7 +100,7 @@ export interface PurchaseOrder {
   po_number: string | null;
   supplier: string | null;
   status: 'draft' | 'ordered' | 'transiting' | 'partial' | 'completed' | 'cancelled';
-  inbound_type: 'import' | 'local';
+  inbound_type: 'import' | 'local' | 'export';
   order_date: string | null;
   expected_date: string | null;
   total_amount: number;
