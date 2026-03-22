@@ -1157,7 +1157,7 @@ function ReturnsTab() {
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  {['반품일', '채널', '상품명', '수량', '반품사유', '유형', '상태'].map((h) => (
+                  {['반품일', '채널', '주문번호', '상품명', '옵션', '수량', '반품사유', '유형', '상태'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1171,12 +1171,14 @@ function ReturnsTab() {
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
                       </td>
+                      <td className="px-4 py-3 text-[12px] text-[#6B7684] font-mono">{r.order_number ?? '-'}</td>
                       <td className="px-4 py-3">
                         <p className="text-[13px] font-medium text-[#191F28]">{r.product_name}</p>
                         {r.sku && (
                           <p className="text-[11px] text-[#B0B8C1] font-mono mt-0.5">{r.sku.sku_code}</p>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-[13px] text-[#6B7684]">{r.option_name ?? '-'}</td>
                       <td className="px-4 py-3 text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(r.quantity)}</td>
                       <td className="px-4 py-3 text-[13px] text-[#6B7684] max-w-[160px] truncate">{r.return_reason ?? '-'}</td>
                       <td className="px-4 py-3">
