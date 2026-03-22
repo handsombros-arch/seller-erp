@@ -59,10 +59,10 @@ export async function applyOrdersToInventory(
     if (reason.startsWith(RESTORE_NOTE_PREFIX)) restoredSet.add(reason.slice(RESTORE_NOTE_PREFIX.length));
   }
 
-  // 2. 전체 주문 조회
+  // 2. 전체 주문 조회 (order_status + claim_status 둘 다)
   const { data: orders } = await admin
     .from('channel_orders')
-    .select('order_number, channel, sku_id, quantity, order_date, order_status');
+    .select('order_number, channel, sku_id, quantity, order_date, order_status, claim_status');
 
   // 3. SKU별 마지막 수기 기입일
   const { data: manualAdj } = await admin
@@ -104,9 +104,11 @@ export async function applyOrdersToInventory(
     if (!order.sku_id || SKIP_CHANNELS.includes(order.channel)) continue;
 
     const orderNum = order.order_number as string;
-    const status = (order.order_status ?? '').toUpperCase();
-    const isShipped = SHIPPED_STATUSES.some((s) => status.includes(s.toUpperCase()));
-    const isReturned = RETURN_STATUSES.some((s) => status.includes(s.toUpperCase()));
+    const orderStatus = (order.order_status ?? '').toUpperCase();
+    const claimStatus = (order.claim_status ?? '').toUpperCase();
+    // order_status 또는 claim_status 중 하나라도 해당하면 매칭
+    const isShipped = SHIPPED_STATUSES.some((s) => orderStatus.includes(s.toUpperCase()));
+    const isReturned = RETURN_STATUSES.some((s) => orderStatus.includes(s.toUpperCase()) || claimStatus.includes(s.toUpperCase()));
 
     // 수기 기입일 이후만 (기입일 당일 주문 포함)
     const lastManual = lastManualDate.get(order.sku_id);
