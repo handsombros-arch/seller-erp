@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     try {
       await fetch(slackUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify({ text: lines.join('\n') }),
       });
     } catch {}
