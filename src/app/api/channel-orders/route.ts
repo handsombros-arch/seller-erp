@@ -26,9 +26,18 @@ export async function GET(request: NextRequest) {
   if (statuses.length) query = query.in('order_status', statuses);
   if (q) query = query.or(`product_name.ilike.%${q}%,order_number.ilike.%${q}%,recipient.ilike.%${q}%`);
 
-  const { data, error } = await query.limit(10000);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json(data ?? []);
+  // Supabase 기본 1000건 제한 → 페이지네이션으로 전체 조회
+  const allData: any[] = [];
+  const PAGE = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await query.range(offset, offset + PAGE - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    allData.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return NextResponse.json(allData);
 }
 
 export async function DELETE(request: NextRequest) {
