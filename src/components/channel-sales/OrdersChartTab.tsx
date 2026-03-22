@@ -71,8 +71,17 @@ function formatLabel(key: string, gran: Granularity): string {
     return `${y}.${m}`;
   }
   if (gran === 'weekly') {
+    // ISO week → 월+주차 (예: 26년3월2주)
     const [y, w] = key.split('-W');
-    return `${y}년 ${Number(w)}주`;
+    const wn = Number(w);
+    // ISO week → 대략적인 월 계산
+    const jan4 = new Date(Number(y), 0, 4);
+    const d = new Date(jan4.getTime() + (wn - 1) * 7 * 86400000);
+    const mon = d.getMonth() + 1;
+    // 해당 월의 몇 주차인지
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+    const weekInMonth = Math.ceil((d.getDate() + monthStart.getDay()) / 7);
+    return `${String(Number(y)).slice(-2)}년${mon}월${weekInMonth}주`;
   }
   return key.slice(5).replace('-', '/');
 }

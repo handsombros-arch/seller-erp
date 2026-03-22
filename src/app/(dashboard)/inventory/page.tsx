@@ -429,6 +429,7 @@ function SummaryTab() {
   const { vatOn, vatMult } = useVat();
   const [rows, setRows] = useState<InventorySummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQ, setSearchQ] = useState('');
   const [colOrder, setColOrder] = useState<SumCol[]>(() => {
     if (typeof window === 'undefined') return DEFAULT_SUM_COLS;
     try { const s = localStorage.getItem('inv_sum_cols'); return s ? JSON.parse(s) : DEFAULT_SUM_COLS; } catch { return DEFAULT_SUM_COLS; }
@@ -469,9 +470,15 @@ function SummaryTab() {
     });
   }
 
+  const filtered = useMemo(() => {
+    if (!searchQ) return rows;
+    const q = searchQ.toLowerCase();
+    return rows.filter(r => r.product_name.toLowerCase().includes(q) || (r.sku_code ?? '').toLowerCase().includes(q) || Object.values(r.option_values ?? {}).join(' ').toLowerCase().includes(q));
+  }, [rows, searchQ]);
+
   const sorted = useMemo(() => {
-    if (!sort) return rows;
-    return [...rows].sort((a, b) => {
+    if (!sort) return filtered;
+    return [...filtered].sort((a, b) => {
       const getV = (r: InventorySummaryRow): number | string => {
         switch (sort.col) {
           case 'product': return r.product_name;
@@ -574,6 +581,14 @@ function SummaryTab() {
   }
 
   return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="상품명, SKU, 옵션 검색..."
+            className="h-10 w-64 pl-3 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors" />
+        </div>
+        {searchQ && <span className="text-[12px] text-[#6B7684]">{filtered.length}개 결과</span>}
+      </div>
     <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F2F4F6]">
         <span className="text-[12px] text-[#B0B8C1]">헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬</span>
@@ -615,6 +630,7 @@ function SummaryTab() {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   );
 }
