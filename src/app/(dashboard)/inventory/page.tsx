@@ -647,51 +647,48 @@ function SummaryTab() {
 
     switch (col) {
       case 'product': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} max-w-[200px]`}>
           <button onClick={() => setHistoryModal({ skuId: row.sku_id, skuCode: row.sku_code, productName: row.product_name })}
-            className="text-left group">
-            <p className="text-[13px] font-medium text-[#191F28] group-hover:text-[#3182F6] transition-colors">{row.product_name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[11px] text-[#6B7684] font-mono">{row.sku_code}</span>
+            className="text-left group w-full">
+            <p className="text-[13px] font-medium text-[#191F28] group-hover:text-[#3182F6] transition-colors truncate">{row.product_name}</p>
+            <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
+              <span className="text-[11px] text-[#6B7684] font-mono shrink-0">{row.sku_code}</span>
               {Object.keys(row.option_values ?? {}).length > 0 && (
-                <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(row.option_values)}</span>
+                <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md truncate">{skuOptionLabel(row.option_values)}</span>
               )}
-              {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">재고부족</span>}
+              {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium shrink-0">부족</span>}
             </div>
           </button>
         </td>
       );
       case 'warehouse': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           <span className="text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(row.warehouse_stock)}</span>
-          <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
         </td>
       );
       case 'coupang': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           <span className="text-[13px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_stock)}</span>
-          <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
         </td>
       );
       case 'transit': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           {row.transit_stock > 0
-            ? <><span className="text-[13px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
-            : <span className="text-[13px] text-[#B0B8C1]">-</span>}
+            ? <span className="text-[13px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span>
+            : <span className="text-[13px] text-[#D1D5DB]">-</span>}
         </td>
       );
       case 'outbound': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           {row.outbound_stock > 0
-            ? <><span className="text-[13px] font-semibold text-blue-500 tabular-nums">{formatNumber(row.outbound_stock)}</span><span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span></>
-            : <span className="text-[13px] text-[#B0B8C1]">-</span>}
+            ? <span className="text-[13px] font-semibold text-blue-500 tabular-nums">{formatNumber(row.outbound_stock)}</span>
+            : <span className="text-[13px] text-[#D1D5DB]">-</span>}
         </td>
       );
       case 'total': return (
-        <td key={col} className={`px-4 ${py}`}>
+        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(row.total_stock)}</span>
-          <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
-          {daysLeft !== null && <p className="text-[11px] text-[#B0B8C1] mt-0.5">{daysLeft}일치</p>}
+          {daysLeft !== null && <span className="text-[11px] text-[#B0B8C1] ml-1">{daysLeft}일</span>}
         </td>
       );
       case 'safety': return (
