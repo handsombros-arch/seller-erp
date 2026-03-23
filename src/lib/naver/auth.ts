@@ -95,4 +95,5 @@ export async function naverFetch(
 
     return res.json();
   }
+  throw new Error('네이버 API: 최대 재시도 초과 (429)');
 }

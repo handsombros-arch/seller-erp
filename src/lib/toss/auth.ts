@@ -77,4 +77,5 @@ export async function tossFetch(
 
     return res.json();
   }
+  throw new Error('토스 API: 최대 재시도 초과 (429)');
 }

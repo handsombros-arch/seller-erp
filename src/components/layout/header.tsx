@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useVat } from '@/components/layout/vat-provider';
+import { LVLogoText } from '@/components/ui/lv-logo';
+import { PresenceIndicator } from '@/components/layout/presence';
 import { useState } from 'react';
 import {
   LayoutDashboard, Package, Warehouse, PackageCheck,
@@ -60,12 +62,7 @@ export function Header({ email }: { email?: string }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-[220px] p-0 bg-white border-r border-[#F2F4F6]">
               <div className="flex items-center h-[60px] px-5">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-[10px] bg-primary flex items-center justify-center">
-                    <Warehouse className="h-4 w-4 text-white" strokeWidth={2.5} />
-                  </div>
-                  <span className="font-bold text-[15px] tracking-tight">셀러 ERP</span>
-                </div>
+                <LVLogoText size={32} />
               </div>
               <nav className="px-3 pt-2 space-y-0.5">
                 {navItems.map((item) => {
@@ -91,6 +88,9 @@ export function Header({ email }: { email?: string }) {
         </div>
 
         <div className="flex items-center gap-2">
+        {/* 동시 접속 표시 */}
+        <PresenceIndicator currentEmail={email} />
+
         {/* 새로고침 */}
         {(() => {
           const [spinning, setSpinning] = useState(false);

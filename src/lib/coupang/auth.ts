@@ -70,12 +70,23 @@ export async function coupangFetch(
     cache: 'no-store',
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Coupang API ${res.status}: ${text.slice(0, 400)}`);
   }
 
-  const json = await res.json();
+  // HTML 응답 감지 (Fly.io 프록시 또는 게이트웨이 에러 페이지)
+  if (text.trimStart().startsWith('<')) {
+    throw new Error(`Coupang API: HTML 응답 수신 (프록시/게이트웨이 오류) - ${text.slice(0, 200)}`);
+  }
+
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Coupang API: JSON 파싱 실패 - ${text.slice(0, 200)}`);
+  }
   // Coupang API는 code: 200 (숫자) 또는 "200" (문자열) 모두 사용
   if (json.code && String(json.code) !== '200') {
     throw new Error(`Coupang API 오류: ${json.message ?? json.code}`);
