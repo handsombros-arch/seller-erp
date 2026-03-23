@@ -386,16 +386,14 @@ export default function HomePage() {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-[800px] mx-auto">
             {[
-              { name: '쿠팡 Wing', sub: '직배송 · 셀러 관리', letter: 'C' },
-              { name: '쿠팡 그로스', sub: '로켓그로스 · RG', letter: 'RG' },
-              { name: '네이버', sub: '스마트스토어', letter: 'N' },
-              { name: '토스', sub: '토스쇼핑', letter: 'T' },
+              { name: '쿠팡 Wing', sub: '직배송 · 셀러 관리', logo: '/logo-coupang.svg' },
+              { name: '쿠팡 그로스', sub: '로켓그로스 · RG', logo: '/logo-coupang-rg.svg' },
+              { name: '네이버', sub: '스마트스토어', logo: '/logo-naver.svg' },
+              { name: '토스', sub: '토스쇼핑', logo: '/logo-toss.svg' },
             ].map((ch, i) => (
               <FadeIn key={ch.name} delay={i * 80}>
                 <div className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 hover:bg-white/[0.04] hover:border-white/[0.12] transition-all duration-500 cursor-default">
-                  <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center mx-auto mb-4">
-                    <span className="text-[16px] font-bold text-white/30 group-hover:text-white/60 transition-colors">{ch.letter}</span>
-                  </div>
+                  <img src={ch.logo} alt={ch.name} className="w-12 h-12 rounded-xl mx-auto mb-4 group-hover:scale-105 transition-transform duration-300" />
                   <p className="text-[14px] font-medium text-white/70">{ch.name}</p>
                   <p className="text-[11px] text-white/25 mt-1">{ch.sub}</p>
                 </div>
