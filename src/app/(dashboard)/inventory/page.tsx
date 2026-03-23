@@ -76,21 +76,24 @@ function Dialog({ open, onClose, title, children }: {
 // ─── Entry Dialog ────────────────────────────────────────────────────────────
 
 interface SkuOption { id: string; label: string; }
+interface EntryRow { sku_id: string; quantity: string; }
 
 function EntryDialog({ open, onClose, onSave }: {
   open: boolean; onClose: () => void; onSave: () => void;
 }) {
   const [skuOptions, setSkuOptions] = useState<SkuOption[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
-  const [form, setForm] = useState({ sku_id: '', warehouse_id: '', quantity: '', reason: '' });
+  const [warehouseId, setWarehouseId] = useState('');
+  const [reason, setReason] = useState('');
+  const [rows, setRows] = useState<EntryRow[]>([{ sku_id: '', quantity: '' }]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setForm({ sku_id: '', warehouse_id: '', quantity: '', reason: '' });
-    setError('');
+    setWarehouseId(''); setReason(''); setError('');
+    setRows([{ sku_id: '', quantity: '' }]);
     setFetching(true);
     Promise.all([
       fetch('/api/products').then((r) => r.json()),
@@ -107,22 +110,37 @@ function EntryDialog({ open, onClose, onSave }: {
     }).finally(() => setFetching(false));
   }, [open]);
 
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const updateRow = (idx: number, key: keyof EntryRow, value: string) => {
+    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, [key]: value } : r));
+  };
+  const addRow = () => setRows((prev) => [...prev, { sku_id: '', quantity: '' }]);
+  const removeRow = (idx: number) => setRows((prev) => prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx));
+
+  // 이미 선택된 SKU 제외
+  const usedSkuIds = new Set(rows.map((r) => r.sku_id).filter(Boolean));
+  const availableOptions = (currentSkuId: string) =>
+    skuOptions.filter((o) => o.id === currentSkuId || !usedSkuIds.has(o.id));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.sku_id) { setError('상품(SKU)을 선택해주세요.'); return; }
-    if (!form.warehouse_id) { setError('창고를 선택해주세요.'); return; }
-    const qty = Number(form.quantity);
-    if (isNaN(qty) || qty < 0) { setError('올바른 수량을 입력해주세요.'); return; }
+    if (!warehouseId) { setError('창고를 선택해주세요.'); return; }
+    const validRows = rows.filter((r) => r.sku_id);
+    if (validRows.length === 0) { setError('상품을 1개 이상 선택해주세요.'); return; }
+    for (let i = 0; i < validRows.length; i++) {
+      const qty = Number(validRows[i].quantity);
+      if (isNaN(qty) || qty < 0) { setError(`${i + 1}번째 상품의 수량을 확인해주세요.`); return; }
+    }
     setLoading(true); setError('');
     try {
-      const res = await fetch('/api/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku_id: form.sku_id, warehouse_id: form.warehouse_id, new_quantity: qty, reason: form.reason.trim() || '초기 재고 기입' }),
-      });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      const reasonText = reason.trim() || '초기 재고 기입';
+      for (const row of validRows) {
+        const res = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sku_id: row.sku_id, warehouse_id: warehouseId, new_quantity: Number(row.quantity), reason: reasonText }),
+        });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      }
       onSave();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
@@ -138,36 +156,55 @@ function EntryDialog({ open, onClose, onSave }: {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">상품 (SKU) <span className="text-red-500">*</span></label>
-            <SearchSelect
-              options={skuOptions}
-              value={form.sku_id}
-              onChange={(id) => set('sku_id', id)}
-              placeholder="상품명 또는 SKU코드 검색..."
-            />
-          </div>
-          <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">창고 <span className="text-red-500">*</span></label>
-            <select value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)} className={selectCls}>
+            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}>
               <option value="">창고를 선택하세요</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">수량 <span className="text-red-500">*</span></label>
-            <input type="number" min="0" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="0"
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[13px] font-medium text-[#191F28]">상품 / 수량 <span className="text-red-500">*</span></label>
+              <button type="button" onClick={addRow}
+                className="text-[12px] font-medium text-[#3182F6] hover:text-[#1B64DA] transition-colors">
+                + 상품 추가
+              </button>
+            </div>
+            <div className="space-y-2 max-h-[280px] overflow-y-auto">
+              {rows.map((row, idx) => (
+                <div key={idx} className="flex gap-2 items-start">
+                  <div className="flex-1 min-w-0">
+                    <SearchSelect
+                      options={availableOptions(row.sku_id)}
+                      value={row.sku_id}
+                      onChange={(id) => updateRow(idx, 'sku_id', id)}
+                      placeholder="상품 검색..."
+                    />
+                  </div>
+                  <input type="number" min="0" value={row.quantity} onChange={(e) => updateRow(idx, 'quantity', e.target.value)} placeholder="수량"
+                    className="w-[90px] h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors text-right" />
+                  {rows.length > 1 && (
+                    <button type="button" onClick={() => removeRow(idx)}
+                      className="h-11 w-9 flex items-center justify-center rounded-xl text-[#B0B8C1] hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
+
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">사유 <span className="text-[#B0B8C1] font-normal">(선택)</span></label>
-            <input type="text" value={form.reason} onChange={(e) => set('reason', e.target.value)} placeholder="초기 재고 기입"
+            <input lang="ko" type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="초기 재고 기입"
               className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
           </div>
           {error && <p className="text-[13px] text-red-500">{error}</p>}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
             <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />} 기입
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />} {rows.filter((r) => r.sku_id).length > 1 ? `${rows.filter((r) => r.sku_id).length}건 기입` : '기입'}
             </button>
           </div>
         </form>
@@ -272,6 +309,7 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
 
         {/* Textarea */}
         <textarea
+          lang="ko"
           value={csvText}
           onChange={(e) => { setCsvText(e.target.value); parseCsv(e.target.value); }}
           rows={6}
@@ -396,7 +434,7 @@ function AdjustDialog({ open, onClose, item, onSave }: {
         </div>
         <div className="space-y-1.5">
           <label className="text-[13px] font-medium text-[#191F28]">조정 사유</label>
-          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 실물 재고 확인 후 조정"
+          <input lang="ko" type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 실물 재고 확인 후 조정"
             className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
@@ -719,7 +757,7 @@ function SummaryTab() {
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="relative">
-          <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="상품명, SKU, 옵션 검색..."
+          <input lang="ko" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="상품명, SKU, 옵션 검색..."
             className="h-10 w-64 pl-3 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors" />
         </div>
         {searchQ && <span className="text-[12px] text-[#6B7684]">{filtered.length}개 결과</span>}
@@ -1329,7 +1367,7 @@ function RgInventoryTab() {
               </div>
             </div>
             <div className="px-6 py-2">
-              <input autoFocus value={bulkLinkSearch} onChange={(e) => setBulkLinkSearch(e.target.value)}
+              <input lang="ko" autoFocus value={bulkLinkSearch} onChange={(e) => setBulkLinkSearch(e.target.value)}
                 placeholder="상품명 또는 SKU 검색..."
                 className="w-full h-10 px-3 text-[13px] border border-[#E5E8EB] rounded-xl outline-none focus:border-[#3182F6]" />
             </div>
@@ -1359,7 +1397,7 @@ function RgInventoryTab() {
           <div className="relative bg-white rounded-2xl shadow-xl w-80 p-6">
             <h3 className="text-[15px] font-bold text-[#191F28] mb-4">반품재판매 등급 선택</h3>
             <p className="text-[12px] text-[#6B7684] mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
-            <div className="grid grid-cols-2 gap-2 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
               {GRADES.map((g) => (
                 <button key={g} onClick={() => setBulkGrade(g)}
                   className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors ${bulkGrade === g ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-[#E5E8EB] text-[#6B7684] hover:border-orange-300'}`}>
@@ -1682,34 +1720,36 @@ export default function InventoryPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">재고 현황</h2>
-          <p className="mt-1 text-[13px] text-[#6B7684]">
-            창고별 재고 및 채널별 재고를 확인하세요
-            <span className="ml-2 text-[12px] text-[#B0B8C1]">· 원가·물류비는 부가세 별도 금액 기준</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setEntryOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
-            <Plus className="h-4 w-4" /> 재고 기입
-          </button>
-          <button onClick={() => setCsvImportOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-            <Upload className="h-4 w-4" /> CSV 기입
-          </button>
-          {tab === 'warehouse' && (
-            <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-              <Download className="h-4 w-4" /> CSV
+      <div className="space-y-3">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">재고 현황</h2>
+            <p className="mt-1 text-[13px] text-[#6B7684]">
+              창고별 재고 및 채널별 재고를 확인하세요
+              <span className="ml-2 text-[12px] text-[#B0B8C1]">· 원가·물류비는 부가세 별도 금액 기준</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => setEntryOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
+              <Plus className="h-4 w-4" /> 재고 기입
             </button>
-          )}
+            <button onClick={() => setCsvImportOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <Upload className="h-4 w-4" /> CSV 기입
+            </button>
+            {tab === 'warehouse' && (
+              <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                <Download className="h-4 w-4" /> CSV
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
         {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package], ['trends', '추이', BarChart3], ['forecast', '예측', TrendingUp]] as const).map(([value, label, Icon]) => (
           <button key={value} onClick={() => setTab(value)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
@@ -1717,7 +1757,7 @@ export default function InventoryPage() {
 
       {/* Summary Cards (창고별 탭에서만) */}
       {tab === 'warehouse' && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="w-9 h-10 rounded-xl bg-[#EBF1FE] flex items-center justify-center mb-3">
               <Package className="h-[18px] w-[18px] text-[#3182F6]" strokeWidth={2.5} />
