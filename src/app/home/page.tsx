@@ -54,7 +54,7 @@ function MetricCard({ label, value, sub, delay }: { label: string; value: string
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl border border-white/[0.08]" />
         <div className="relative p-6">
           <p className="text-[11px] uppercase tracking-[0.15em] text-white/40 mb-3">{label}</p>
-          <p className="text-[32px] sm:text-[36px] font-extralight text-white tracking-[-0.03em] leading-none">{value}</p>
+          <p className="text-[32px] sm:text-[36px] font-semibold text-white tracking-[-0.03em] leading-none">{value}</p>
           <p className="text-[12px] text-white/30 mt-2">{sub}</p>
         </div>
       </div>
@@ -147,7 +147,7 @@ export default function HomePage() {
 
             {/* Heading */}
             {mounted && (
-              <h1 className="home-hero-enter home-hero-enter-d2 text-[44px] sm:text-[64px] lg:text-[76px] font-extralight leading-[1.05] tracking-[-0.04em] mb-8">
+              <h1 className="home-hero-enter home-hero-enter-d2 text-[44px] sm:text-[64px] lg:text-[76px] font-bold leading-[1.05] tracking-[-0.04em] mb-8">
                 재고부터 손익까지
                 <br />
                 <span className="bg-gradient-to-r from-[#3182F6] via-[#6C9BF6] to-[#3182F6] bg-clip-text text-transparent">
@@ -158,7 +158,7 @@ export default function HomePage() {
 
             {/* Subtitle */}
             {mounted && (
-              <p className="home-hero-enter home-hero-enter-d3 text-[16px] sm:text-[18px] text-white/35 leading-[1.7] max-w-[480px] mb-12 font-light">
+              <p className="home-hero-enter home-hero-enter-d3 text-[16px] sm:text-[18px] text-white/40 leading-[1.7] max-w-[480px] mb-12 font-normal">
                 쿠팡, 네이버, 토스 — 흩어진 데이터를 하나로 모아
                 <br className="hidden sm:block" />
                 자동화된 재고 · 발주 · 분석 워크플로우를 경험하세요.
@@ -245,7 +245,7 @@ export default function HomePage() {
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10">
           <FadeIn>
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Features</p>
-            <h2 className="text-[32px] sm:text-[44px] font-extralight tracking-[-0.03em] leading-[1.15] mb-20">
+            <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-[1.15] mb-20">
               복잡한 운영을<br />
               <span className="text-white/40">단순하게</span>
             </h2>
@@ -293,7 +293,7 @@ export default function HomePage() {
               <FadeIn key={feat.num} delay={i * 80}>
                 <div className="group bg-[#0A0A0B] p-8 sm:p-10 hover:bg-white/[0.02] transition-colors duration-500 h-full">
                   <span className="text-[11px] font-mono tracking-wider mb-6 block" style={{ color: feat.accent }}>{feat.num}</span>
-                  <h3 className="text-[18px] font-medium text-white/90 mb-3 tracking-[-0.01em]">{feat.title}</h3>
+                  <h3 className="text-[18px] font-semibold text-white/90 mb-3 tracking-[-0.01em]">{feat.title}</h3>
                   <p className="text-[13px] text-white/30 leading-[1.7]">{feat.desc}</p>
                   <div className="mt-6 h-px w-8 group-hover:w-16 transition-all duration-500" style={{ background: feat.accent, opacity: 0.4 }} />
                 </div>
@@ -310,7 +310,7 @@ export default function HomePage() {
             <div>
               <FadeIn>
                 <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Workflow</p>
-                <h2 className="text-[32px] sm:text-[44px] font-extralight tracking-[-0.03em] leading-[1.15] mb-6">
+                <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-[1.15] mb-6">
                   매일 아침,<br />
                   <span className="text-white/40">자동으로 완료됩니다</span>
                 </h2>
@@ -334,7 +334,7 @@ export default function HomePage() {
                       </div>
                       <div className="pb-8">
                         <span className="text-[11px] font-mono text-white/20">{step.time}</span>
-                        <h4 className="text-[15px] font-medium text-white/80 mt-1">{step.title}</h4>
+                        <h4 className="text-[15px] font-semibold text-white/80 mt-1">{step.title}</h4>
                         <p className="text-[13px] text-white/25 mt-1">{step.desc}</p>
                       </div>
                     </div>
@@ -379,7 +379,7 @@ export default function HomePage() {
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10 text-center">
           <FadeIn>
             <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Integrations</p>
-            <h2 className="text-[32px] sm:text-[44px] font-extralight tracking-[-0.03em] mb-16">
+            <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] mb-16">
               연동된 채널
             </h2>
           </FadeIn>
@@ -416,10 +416,10 @@ export default function HomePage() {
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-px bg-gradient-to-r from-transparent via-[#3182F6]/30 to-transparent" />
 
               <div className="relative px-10 py-20 sm:py-28 text-center">
-                <h2 className="text-[32px] sm:text-[48px] font-extralight tracking-[-0.03em] mb-5">
+                <h2 className="text-[32px] sm:text-[48px] font-bold tracking-[-0.03em] mb-5">
                   지금 시작하세요
                 </h2>
-                <p className="text-[14px] sm:text-[16px] text-white/30 mb-10 max-w-[360px] mx-auto leading-[1.7]">
+                <p className="text-[14px] sm:text-[16px] text-white/35 mb-10 max-w-[360px] mx-auto leading-[1.7] font-normal">
                   로그인 한 번이면 전 채널 통합 관리가 시작됩니다.
                 </p>
                 <Link href="/login"
