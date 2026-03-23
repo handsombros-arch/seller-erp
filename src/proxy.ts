@@ -26,9 +26,9 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  // 로그인 페이지는 통과
-  if (pathname.startsWith('/login')) {
-    if (user) {
+  // 홈(랜딩) · 로그인 페이지는 통과
+  if (pathname === '/home' || pathname.startsWith('/login')) {
+    if (user && pathname.startsWith('/login')) {
       return NextResponse.redirect(new URL('/', request.url));
     }
     return supabaseResponse;
@@ -39,9 +39,9 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // 미인증 → 로그인 페이지
+  // 미인증 → 홈 랜딩 페이지
   if (!user) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/home', request.url));
   }
 
   return supabaseResponse;
