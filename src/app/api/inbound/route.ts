@@ -15,7 +15,10 @@ export async function GET() {
         id, sku_code, option_values,
         product:products(id, name)
       ),
-      warehouse:warehouses(id, name)
+      warehouse:warehouses(id, name),
+      po_item:purchase_order_items(
+        po:purchase_orders(inbound_type)
+      )
     `)
     .order('inbound_date', { ascending: false })
     .order('created_at', { ascending: false });

@@ -92,6 +92,7 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <input
+        lang="ko"
         {...props}
         className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
       />
@@ -242,7 +243,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">공급사</label>
             <select
@@ -260,7 +261,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
         </div>
 
         {/* 리드타임 + 운송기간 → 입고 예정일 자동 계산 */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">리드타임 (일)</label>
             <input
@@ -294,7 +295,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <InputField label="비고" placeholder="메모" value={form.note} onChange={(e) => set('note', e.target.value)} />
         </div>
 
@@ -845,6 +846,7 @@ function InboundRecordsTab() {
         <div className="relative">
           <input
             type="text"
+            lang="ko"
             placeholder="상품명, SKU코드, 창고명으로 검색..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -895,10 +897,11 @@ function InboundRecordsTab() {
         <div className="overflow-x-auto">
         <div className="min-w-[560px]">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
+        <div className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
           <span className="text-[12px] font-semibold text-[#6B7684]">입고일</span>
           <span className="text-[12px] font-semibold text-[#6B7684]">상품 / SKU</span>
           <span className="text-[12px] font-semibold text-[#6B7684]">창고</span>
+          <span className="text-[12px] font-semibold text-[#6B7684]">유형</span>
           <span className="text-[12px] font-semibold text-[#6B7684] text-right">수량</span>
           <span className="text-[12px] font-semibold text-[#6B7684] text-right">단가</span>
         </div>
@@ -913,7 +916,7 @@ function InboundRecordsTab() {
         ) : (
           <div className="divide-y divide-[#F2F4F6]">
             {filtered.map((record) => (
-              <div key={record.id} className="grid grid-cols-[1fr_1.5fr_1fr_1fr_1fr] gap-3 px-5 py-3.5 items-center hover:bg-[#FAFAFA] transition-colors">
+              <div key={record.id} className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3.5 items-center hover:bg-[#FAFAFA] transition-colors">
                 <div>
                   <span className="text-[13px] text-[#191F28]">{formatDate(record.inbound_date)}</span>
                 </div>
@@ -925,6 +928,22 @@ function InboundRecordsTab() {
                 </div>
                 <div>
                   <span className="text-[13px] text-[#6B7684]">{record.warehouse?.name}</span>
+                </div>
+                <div>
+                  {(() => {
+                    const t = (record as any).po_item?.po?.inbound_type;
+                    const map: Record<string, { label: string; color: string }> = {
+                      import: { label: '해외수입', color: 'bg-[#EBF1FE] text-[#3182F6]' },
+                      local:  { label: '국내구매', color: 'bg-[#E8F5E9] text-[#2E7D32]' },
+                      export: { label: '반출',     color: 'bg-[#FFF3E0] text-[#E65100]' },
+                    };
+                    const info = t ? map[t] : null;
+                    return info ? (
+                      <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${info.color}`}>{info.label}</span>
+                    ) : (
+                      <span className="text-[11px] text-[#B0B8C1]">-</span>
+                    );
+                  })()}
                 </div>
                 <div className="text-right">
                   <span className="text-[13px] font-bold text-[#191F28] tabular-nums">{formatNumber(record.quantity)}</span>
@@ -974,14 +993,14 @@ export default function InboundPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#F2F4F6] p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-[#F2F4F6] p-1 rounded-xl overflow-x-auto">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${
+              className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-white text-[#191F28] shadow-sm'
                   : 'text-[#6B7684] hover:text-[#191F28]'
