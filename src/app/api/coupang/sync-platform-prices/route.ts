@@ -126,23 +126,32 @@ export async function POST(request: NextRequest) {
 
   const { data: platformSkus } = await admin
     .from('platform_skus')
-    .select('sku_id, channel_id, platform_sku_id')
+    .select('sku_id, channel_id, platform_sku_id, price')
     .in('channel_id', coupangChannelIds)
     .not('platform_sku_id', 'is', null);
 
-  // Step 5: 매핑 후 업데이트 (8자리 → 11자리 vendorItemId + salePrice)
+  // Step 5: 매핑 후 업데이트
+  // - platform_sku_id: 항상 11자리 vendorItemId로 갱신
+  // - price: DB에 값이 없을 때만 API 가격 입력 (수기 입력 우선)
   let updatedCount = 0;
+  let priceFilledCount = 0;
   let notFoundCount = 0;
 
   for (const ps of platformSkus ?? []) {
     const currentId = String(ps.platform_sku_id);
     // externalSkuId(8자리) → vendorItemId(11자리) 변환
     const vendorItemId = extToVendor.get(currentId) ?? currentId;
-    const price = vendorItemPriceMap.get(vendorItemId);
+    const apiPrice = vendorItemPriceMap.get(vendorItemId);
 
-    if (!price) { notFoundCount++; continue; }
+    if (!apiPrice) { notFoundCount++; continue; }
 
-    const row: any = { platform_sku_id: vendorItemId, price };
+    const row: any = { platform_sku_id: vendorItemId };
+    // price가 비어있을 때만 API 가격 채움 (수기 입력 보호)
+    if (ps.price == null || ps.price === 0) {
+      row.price = apiPrice;
+      priceFilledCount++;
+    }
+
     const { error } = await admin
       .from('platform_skus')
       .update(row)
@@ -157,6 +166,7 @@ export async function POST(request: NextRequest) {
     productsScanned: sellerProductIds.length,
     priceMapped: vendorItemPriceMap.size,
     updated: updatedCount,
+    priceFilled: priceFilledCount,
     notFound: notFoundCount,
   });
 }
