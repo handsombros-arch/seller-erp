@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
-import { formatNumber, formatCurrency } from '@/lib/utils';
+import { useState, useMemo, useCallback, useRef, Fragment } from 'react';
+import { formatNumber } from '@/lib/utils';
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
@@ -189,7 +189,9 @@ const DEFAULT_METRICS: MetricKey[] = ['cost', 'revenue14d', 'roas14d'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const pct = (n: number) => (n * 100).toFixed(2) + '%';
+const pct = (n: number) => (n * 100).toFixed(1) + '%';
+// 원 기호 없는 금액 포맷
+const fmtW = (n: number) => Math.round(n).toLocaleString('ko-KR');
 
 type SortKey = 'cost' | 'clicks' | 'impressions' | 'orders14d' | 'revenue14d' | 'ctr' | 'cpc' | 'cvr' | 'roas14d';
 
@@ -208,27 +210,27 @@ interface KpiDef {
 
 const KPI_DEFS: KpiDef[] = [
   { key: 'cost', label: '광고비 (VAT포함)', icon: DollarSign, color: 'bg-red-50 text-red-600',
-    getValue: (t) => formatCurrency(t.cost) },
+    getValue: (t) => fmtW(t.cost) },
   { key: 'roas', label: 'ROAS (14일)', icon: TrendingUp, color: 'bg-green-50 text-green-600',
     getValue: (t) => `${(t.cost > 0 ? t.revenue14d / t.cost * 100 : 0).toFixed(0)}%` },
   { key: 'revenue', label: '전환매출 (14일)', icon: Target, color: 'bg-blue-50 text-blue-600',
-    getValue: (t) => formatCurrency(t.revenue14d) },
+    getValue: (t) => fmtW(t.revenue14d) },
   { key: 'orders', label: '주문수 (14일)', icon: Megaphone, color: 'bg-purple-50 text-purple-600',
     getValue: (t) => `${t.orders14d}건` },
   { key: 'cpc', label: 'CPC', icon: MousePointerClick, color: 'bg-cyan-50 text-cyan-600',
-    getValue: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-',
+    getValue: (t) => t.clicks > 0 ? fmtW(Math.round(t.cost / t.clicks)) : '-',
     getSub: (t) => `클릭 ${formatNumber(t.clicks)}` },
   { key: 'ctr', label: 'CTR', icon: MousePointerClick, color: 'bg-sky-50 text-sky-600',
     getValue: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
   { key: 'cvr', label: 'CVR (14일)', icon: Eye, color: 'bg-amber-50 text-amber-600',
     getValue: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-' },
   { key: 'cpm', label: 'CPM', icon: Eye, color: 'bg-teal-50 text-teal-600',
-    getValue: (t) => t.impressions > 0 ? formatCurrency(Math.round(t.cost / t.impressions * 1000)) : '-',
+    getValue: (t) => t.impressions > 0 ? fmtW(Math.round(t.cost / t.impressions * 1000)) : '-',
     getSub: (t) => `노출 ${formatNumber(t.impressions)}` },
   { key: 'cpa', label: 'CPA (건당 광고비)', icon: DollarSign, color: 'bg-orange-50 text-orange-600',
-    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-' },
+    getValue: (t) => t.orders14d > 0 ? fmtW(Math.round(t.cost / t.orders14d)) : '-' },
   { key: 'aov', label: 'AOV (평균 주문가)', icon: Target, color: 'bg-indigo-50 text-indigo-600',
-    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.revenue14d / t.orders14d)) : '-' },
+    getValue: (t) => t.orders14d > 0 ? fmtW(Math.round(t.revenue14d / t.orders14d)) : '-' },
   { key: 'adRatio', label: '광고비율', icon: TrendingDown, color: 'bg-rose-50 text-rose-600',
     getValue: (t) => t.revenue14d > 0 ? pct(t.cost / t.revenue14d) : '-',
     getSub: () => '광고비 ÷ 매출' },
@@ -357,6 +359,12 @@ export default function AdAnalysisPage() {
   const [pivotSortAsc, setPivotSortAsc] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [prodMetric, setProdMetric] = useState<string>('cost');
+  const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
+  const [pivotSearch, setPivotSearch] = useState('');
+  const [kwOnlyOrders, setKwOnlyOrders] = useState(false);
+  const [placeGran, setPlaceGran] = useState<Granularity | 'total'>('total');
+  const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
+  const [placeSearch, setPlaceSearch] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -397,17 +405,17 @@ export default function AdAnalysisPage() {
       render: (d) => d.impressions > 0 ? pct(d.clicks / d.impressions) : '-',
       renderTotal: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
     { key: 'cpc', label: 'CPC',
-      render: (d) => d.clicks > 0 ? formatCurrency(Math.round(d.cost / d.clicks)) : '-',
-      renderTotal: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-' },
+      render: (d) => d.clicks > 0 ? fmtW(Math.round(d.cost / d.clicks)) : '-',
+      renderTotal: (t) => t.clicks > 0 ? fmtW(Math.round(t.cost / t.clicks)) : '-' },
     { key: 'cost', label: '광고비(VAT)',
-      render: (d) => formatCurrency(d.cost),
-      renderTotal: (t) => formatCurrency(t.cost), className: 'text-[#F43F5E] font-medium' },
+      render: (d) => fmtW(d.cost),
+      renderTotal: (t) => fmtW(t.cost), className: 'text-[#F43F5E] font-medium' },
     { key: 'orders14d', label: '주문(14d)',
       render: (d) => d.orders14d,
       renderTotal: (t) => t.orders14d },
     { key: 'revenue14d', label: '매출(14d)',
-      render: (d) => formatCurrency(d.revenue14d),
-      renderTotal: (t) => formatCurrency(t.revenue14d), className: 'text-[#3182F6] font-medium' },
+      render: (d) => fmtW(d.revenue14d),
+      renderTotal: (t) => fmtW(t.revenue14d), className: 'text-[#3182F6] font-medium' },
     { key: 'roas', label: 'ROAS(14d)',
       render: (d) => { const r = d.cost > 0 ? d.revenue14d / d.cost : 0; return <span className={r >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{d.cost > 0 ? `${(r * 100).toFixed(0)}%` : '-'}</span>; },
       renderTotal: (t) => { const r = t.cost > 0 ? t.revenue14d / t.cost : 0; return <span className={r >= 1 ? 'text-green-600' : 'text-red-500'}>{(r * 100).toFixed(0)}%</span>; } },
@@ -415,20 +423,20 @@ export default function AdAnalysisPage() {
       render: (d) => d.clicks > 0 ? pct(d.orders14d / d.clicks) : '-',
       renderTotal: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-' },
     { key: 'cpm', label: 'CPM',
-      render: (d) => d.impressions > 0 ? formatCurrency(Math.round(d.cost / d.impressions * 1000)) : '-',
-      renderTotal: (t) => t.impressions > 0 ? formatCurrency(Math.round(t.cost / t.impressions * 1000)) : '-' },
+      render: (d) => d.impressions > 0 ? fmtW(Math.round(d.cost / d.impressions * 1000)) : '-',
+      renderTotal: (t) => t.impressions > 0 ? fmtW(Math.round(t.cost / t.impressions * 1000)) : '-' },
     { key: 'cpa', label: 'CPA',
-      render: (d) => d.orders14d > 0 ? formatCurrency(Math.round(d.cost / d.orders14d)) : '-',
-      renderTotal: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-' },
+      render: (d) => d.orders14d > 0 ? fmtW(Math.round(d.cost / d.orders14d)) : '-',
+      renderTotal: (t) => t.orders14d > 0 ? fmtW(Math.round(t.cost / t.orders14d)) : '-' },
     { key: 'aov', label: 'AOV',
-      render: (d) => d.orders14d > 0 ? formatCurrency(Math.round(d.revenue14d / d.orders14d)) : '-',
-      renderTotal: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.revenue14d / t.orders14d)) : '-' },
+      render: (d) => d.orders14d > 0 ? fmtW(Math.round(d.revenue14d / d.orders14d)) : '-',
+      renderTotal: (t) => t.orders14d > 0 ? fmtW(Math.round(t.revenue14d / t.orders14d)) : '-' },
     { key: 'adRatio', label: '광고비율',
       render: (d) => d.revenue14d > 0 ? pct(d.cost / d.revenue14d) : '-',
       renderTotal: (t) => t.revenue14d > 0 ? pct(t.cost / t.revenue14d) : '-' },
     { key: 'profit', label: '순이익(14d)',
-      render: (d) => { const p = d.revenue14d - (d.cogs14d ?? 0) - (d.commission14d ?? 0) - d.cost; return <span className={p >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{formatCurrency(p)}</span>; },
-      renderTotal: (t) => { const p = t.revenue14d - t.cogs14d - (t.commission14d ?? 0) - t.cost; return <span className={p >= 0 ? 'text-green-600' : 'text-red-500'}>{formatCurrency(p)}</span>; } },
+      render: (d) => { const p = d.revenue14d - (d.cogs14d ?? 0) - (d.commission14d ?? 0) - d.cost; return <span className={p >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{fmtW(p)}</span>; },
+      renderTotal: (t) => { const p = t.revenue14d - t.cogs14d - (t.commission14d ?? 0) - t.cost; return <span className={p >= 0 ? 'text-green-600' : 'text-red-500'}>{fmtW(p)}</span>; } },
     { key: 'keywordCount', label: '키워드수',
       render: (d) => formatNumber(d.keywordCount ?? 0),
       renderTotal: () => '-', className: 'text-[#8B5CF6] font-medium' },
@@ -908,6 +916,7 @@ export default function AdAnalysisPage() {
   const sortedKeywords = useMemo(() => {
     if (!filtered.keywords.length) return [];
     let list = filtered.keywords;
+    if (kwOnlyOrders) list = list.filter((k) => k.orders14d > 0);
     if (kwSearch) {
       const q = kwSearch.toLowerCase();
       list = list.filter((k) => k.keyword.toLowerCase().includes(q));
@@ -918,7 +927,7 @@ export default function AdAnalysisPage() {
       return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
     return sorted.slice(0, kwLimit);
-  }, [filtered.keywords, sortKey, sortAsc, kwSearch, kwLimit]);
+  }, [filtered.keywords, sortKey, sortAsc, kwSearch, kwLimit, kwOnlyOrders]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -982,7 +991,7 @@ export default function AdAnalysisPage() {
   const tabs = [
     { key: 'daily' as const, label: '기간별 추이' },
     { key: 'keywords' as const, label: '키워드 분석' },
-    { key: 'placements' as const, label: '노출지면별' },
+    { key: 'placements' as const, label: '지면별' },
     { key: 'products' as const, label: '상품별' },
   ];
 
@@ -997,7 +1006,7 @@ export default function AdAnalysisPage() {
     const m = activeDefs.find((d) => d.label === name);
     if (!m) return [String(value), name];
     if (m.unit === 'pct') return [`${(value * 100).toFixed(1)}%`, name];
-    if (m.unit === 'won') return [formatCurrency(Math.round(value)), name];
+    if (m.unit === 'won') return [fmtW(Math.round(value)), name];
     return [formatNumber(Math.round(value)), name];
   };
 
@@ -1154,11 +1163,11 @@ export default function AdAnalysisPage() {
               <span className="font-semibold">매출 보정 적용됨</span>
               {data.priceInfo.map((p) => (
                 <span key={p.optionId} className="ml-3">
-                  {p.sku_code} · 판매가 {formatCurrency(p.price)} · 원가 {formatCurrency(p.cost_price)}{p.commission_rate ? ` · 수수료 ${p.commission_rate}%` : ''}
+                  {p.sku_code} · 판매가 {fmtW(p.price)} · 원가 {fmtW(p.cost_price)}{p.commission_rate ? ` · 수수료 ${p.commission_rate}%` : ''}
                 </span>
               ))}
               <span className="ml-3 text-[11px] text-[#4ADE80]">
-                (광고 원본 매출 {formatCurrency(t.revenue14d_raw)} → 보정 {formatCurrency(t.revenue14d)})
+                (광고 원본 매출 {fmtW(t.revenue14d_raw)} → 보정 {fmtW(t.revenue14d)})
               </span>
             </div>
           )}
@@ -1286,23 +1295,23 @@ export default function AdAnalysisPage() {
                 <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
                   <p className="text-[12px] text-[#6B7684]">광고 순이익 (14일) = 매출 − 원가 − 수수료 − 광고비</p>
                   <p className={`text-[20px] font-bold mt-1 ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(netProfit)}
+                    {fmtW(netProfit)}
                   </p>
                   <p className="text-[11px] text-[#B0B8C1]">
-                    매출 {formatCurrency(t.revenue14d)} − 원가 {formatCurrency(t.cogs14d)}{commission > 0 ? ` − 수수료 ${formatCurrency(Math.round(commission))}` : ''} − 광고비 {formatCurrency(t.cost)}
+                    매출 {fmtW(t.revenue14d)} − 원가 {fmtW(t.cogs14d)}{commission > 0 ? ` − 수수료 ${fmtW(Math.round(commission))}` : ''} − 광고비 {fmtW(t.cost)}
                   </p>
                 </div>
                 <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
                   <p className="text-[12px] text-[#6B7684]">건당 광고비</p>
                   <p className="text-[20px] font-bold mt-1 text-[#191F28]">
-                    {perOrderCost ? formatCurrency(perOrderCost) : '-'}
+                    {perOrderCost ? fmtW(perOrderCost) : '-'}
                   </p>
                   <p className="text-[11px] text-[#B0B8C1]">광고비 ÷ 주문수(14일)</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
                   <p className="text-[12px] text-[#6B7684]">건당 순이익</p>
                   <p className={`text-[20px] font-bold mt-1 ${perOrderProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {perOrderProfit ? formatCurrency(perOrderProfit) : '-'}
+                    {perOrderProfit ? fmtW(perOrderProfit) : '-'}
                   </p>
                   <p className="text-[11px] text-[#B0B8C1]">(매출 − 원가 − 수수료 − 광고비) ÷ 주문수</p>
                 </div>
@@ -1333,7 +1342,7 @@ export default function AdAnalysisPage() {
             else if (roas >= 3) insights.push({ type: 'good', text: `전체 ROAS ${roas.toFixed(2)} — 양호. 광고비 증액 여지 있음` });
 
             // Profit
-            if (t.cogs14d > 0 && profit < 0) insights.push({ type: 'danger', text: `순이익 ${formatCurrency(profit)} 적자 — 광고비(${formatCurrency(t.cost)}) 또는 원가 구조 점검 필요` });
+            if (t.cogs14d > 0 && profit < 0) insights.push({ type: 'danger', text: `순이익 ${fmtW(profit)} 적자 — 광고비(${fmtW(t.cost)}) 또는 원가 구조 점검 필요` });
 
             // CTR
             if (ctr > 0 && ctr < 0.005) insights.push({ type: 'warn', text: `CTR ${(ctr*100).toFixed(2)}% 낮음 — 광고 소재(썸네일/타이틀) 개선 권장` });
@@ -1357,7 +1366,7 @@ export default function AdAnalysisPage() {
             if (worstKws.length > 0) {
               const names = worstKws.slice(0, 3).map(k => `"${k.keyword}"(ROAS ${k.cost > 0 ? (k.revenue14d / k.cost).toFixed(1) : '0'})`).join(', ');
               const totalWaste = worstKws.reduce((s, k) => s + k.cost, 0);
-              insights.push({ type: 'danger', text: `비효율 키워드: ${names} → 광고비 ${formatCurrency(totalWaste)} 낭비. 중단 또는 입찰가 조정 권장` });
+              insights.push({ type: 'danger', text: `비효율 키워드: ${names} → 광고비 ${fmtW(totalWaste)} 낭비. 중단 또는 입찰가 조정 권장` });
             }
 
             // Best keywords (ROAS > 3, has orders)
@@ -1371,7 +1380,7 @@ export default function AdAnalysisPage() {
             }
 
             // High CPC warning
-            if (cpc > 500 && roas < 2) insights.push({ type: 'warn', text: `CPC ${formatCurrency(cpc)} 높음 + ROAS 낮음 — 경쟁 키워드 대신 롱테일 키워드 활용 고려` });
+            if (cpc > 500 && roas < 2) insights.push({ type: 'warn', text: `CPC ${fmtW(cpc)} 높음 + ROAS 낮음 — 경쟁 키워드 대신 롱테일 키워드 활용 고려` });
 
             // Product-level insight
             const prodMap = new Map<string, { cost: number; revenue: number; orders: number }>();
@@ -1568,7 +1577,12 @@ export default function AdAnalysisPage() {
                         ))}
                       </tr>
                     ))}
-                    <tr className="bg-[#F8FAFC] font-bold">
+                  </tbody>
+                </table>
+                {/* 플로팅 합계 */}
+                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-[#E5E8EB]">
+                  <table className="w-full text-[12px]"><tbody>
+                    <tr className="font-bold">
                       <td className="px-3 py-2.5 text-[#191F28]">합계</td>
                       {visibleCols.map((col) => (
                         <td key={col.key} className="px-3 py-2.5 text-right">
@@ -1576,8 +1590,8 @@ export default function AdAnalysisPage() {
                         </td>
                       ))}
                     </tr>
-                  </tbody>
-                </table>
+                  </tbody></table>
+                </div>
               </div>
             </div>
           )}
@@ -1631,6 +1645,10 @@ export default function AdAnalysisPage() {
                     className="w-full h-10 pl-9 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10"
                   />
                 </div>
+                <button onClick={() => setKwOnlyOrders(!kwOnlyOrders)}
+                  className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-all ${kwOnlyOrders ? 'border-[#3182F6] bg-[#EBF1FE] text-[#3182F6]' : 'border-[#E5E8EB] text-[#6B7684]'}`}>
+                  구매 키워드만
+                </button>
                 <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
                   <Download className="h-3.5 w-3.5" /> xlsx
                 </button>
@@ -1664,11 +1682,11 @@ export default function AdAnalysisPage() {
                         <td className="px-3 py-2 font-medium text-[#191F28] max-w-[260px] truncate">{k.keyword}</td>
                         <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(k.impressions)}</td>
                         <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(k.clicks)}</td>
-                        <td className="px-3 py-2 text-right text-[#F43F5E]">{formatCurrency(k.cost)}</td>
+                        <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(k.cost)}</td>
                         <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.ctr)}</td>
-                        <td className="px-3 py-2 text-right text-[#6B7684]">{formatCurrency(k.cpc)}</td>
+                        <td className="px-3 py-2 text-right text-[#6B7684]">{fmtW(k.cpc)}</td>
                         <td className="px-3 py-2 text-right text-[#191F28]">{k.orders14d}</td>
-                        <td className="px-3 py-2 text-right text-[#3182F6]">{formatCurrency(k.revenue14d)}</td>
+                        <td className="px-3 py-2 text-right text-[#3182F6]">{fmtW(k.revenue14d)}</td>
                         <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.cvr)}</td>
                         <td className={`px-3 py-2 text-right font-bold ${k.roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                           {k.cost > 0 ? `${(k.roas14d * 100).toFixed(0)}%` : '-'}
@@ -1692,76 +1710,126 @@ export default function AdAnalysisPage() {
             </div>
           )}
 
-          {/* ─── Tab: Placements ───────────────────────────────────────── */}
-          {tab === 'placements' && (
+          {/* ─── Tab: Placements (지면별) ──────────────────────────────── */}
+          {tab === 'placements' && (() => {
+            // 지면 × 기간 집계
+            const placeData = (() => {
+              const map = new Map<string, any>();
+              for (const r of filtered.rows) {
+                // rows에 placement가 없으므로 placements 데이터 사용
+              }
+              // 합산 데이터
+              const totals = new Map<string, any>();
+              for (const p of filtered.placements) {
+                totals.set(p.placement, { ...p });
+              }
+              // 기간별은 _rawRows에서 직접 집계
+              if (placeGran !== 'total' && data?._rawRows) {
+                for (const r of data._rawRows) {
+                  const dateStr = String(r['날짜'] ?? '');
+                  const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+                  const period = placeGran === 'daily' ? date : placeGran === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
+                  const pl = r['광고 노출 지면'] || '기타';
+                  const key = `${pl}||${period}`;
+                  if (!map.has(key)) map.set(key, { placement: pl, period, periodLabel: placeGran === 'daily' ? period.slice(5) : placeGran === 'monthly' ? period : bucketLabel(period, 'weekly'), impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+                  const m = map.get(key)!;
+                  m.impressions += Number(r['노출수']) || 0;
+                  m.clicks += Number(r['클릭수']) || 0;
+                  m.cost += Math.round((Number(r['광고비']) || 0) * 1.1);
+                  m.orders14d += Number(r['총 주문수(14일)']) || 0;
+                }
+              }
+              return { totals: [...totals.values()], byPeriod: [...map.values()] };
+            })();
+
+            const plFiltered = placeSearch ? placeData.totals.filter((p: any) => p.placement.toLowerCase().includes(placeSearch.toLowerCase())) : placeData.totals;
+            const plNames = plFiltered.map((p: any) => p.placement);
+
+            const renderMetricRow = (r: any, indent = false) => {
+              const ctr = r.impressions > 0 ? r.clicks / r.impressions : 0;
+              const roas = r.cost > 0 ? r.revenue14d / r.cost : 0;
+              return (<>
+                <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(r.impressions)}</td>
+                <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(r.clicks)}</td>
+                <td className="px-3 py-2 text-right text-[#6B7684]">{pct(ctr)}</td>
+                <td className="px-3 py-2 text-right text-[#F43F5E] font-medium">{fmtW(r.cost)}</td>
+                <td className="px-3 py-2 text-right text-[#191F28]">{r.orders14d}</td>
+                <td className="px-3 py-2 text-right text-[#3182F6] font-medium">{fmtW(r.revenue14d)}</td>
+                <td className={`px-3 py-2 text-right font-bold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>{r.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}</td>
+              </>);
+            };
+
+            return (
             <div className="space-y-4">
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">노출지면별 광고비 · 매출</h3>
-                  <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
-                    <Download className="h-3.5 w-3.5" /> xlsx
-                  </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[160px] max-w-[300px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+                  <input value={placeSearch} onChange={(e) => setPlaceSearch(e.target.value)} placeholder="지면 검색"
+                    className="w-full h-9 pl-8 pr-3 rounded-lg border border-[#E5E8EB] text-[12px] focus:outline-none focus:border-[#3182F6]" />
                 </div>
-                <div className="h-[260px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={filtered.placements} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="placement" tick={{ fontSize: 11 }} width={160} />
-                      <Tooltip formatter={(v: number, name: string) => [formatCurrency(Math.round(v)), name]} />
-                      <Legend />
-                      <Bar dataKey="cost" name="광고비" fill="#F43F5E" opacity={0.7} radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="revenue14d" name="매출(14일)" fill="#3182F6" opacity={0.7} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                  {([['total', '합산'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setPlaceGran(k)}
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeGran === k ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>{l}</button>
+                  ))}
                 </div>
               </div>
-
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto relative">
                 <table className="w-full text-[12px]">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
-                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684]">노출지면</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684]">지면</th>
                       <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">노출</th>
                       <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">클릭</th>
                       <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CTR</th>
                       <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">광고비</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">주문(14d)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">매출(14d)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">ROAS(14d)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">비중</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">주문</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">매출</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">ROAS</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.placements.map((p) => {
-                      const pCtr = p.impressions > 0 ? p.clicks / p.impressions : 0;
-                      const pRoas = p.cost > 0 ? p.revenue14d / p.cost : 0;
-                      const costShare = t.cost > 0 ? p.cost / t.cost : 0;
+                    {plFiltered.map((p: any) => {
+                      const isExp = expandedPlaces.has(p.placement);
+                      const subRows = placeData.byPeriod.filter((r: any) => r.placement === p.placement).sort((a: any, b: any) => a.period.localeCompare(b.period));
                       return (
-                        <tr key={p.placement} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
-                          <td className="px-3 py-2.5 font-medium text-[#191F28]">{p.placement}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(p.impressions)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(p.clicks)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCtr)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(p.cost)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{p.orders14d}</td>
-                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(p.revenue14d)}</td>
-                          <td className={`px-3 py-2.5 text-right font-bold ${pRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
-                            {p.cost > 0 ? `${(pRoas * 100).toFixed(0)}%` : '-'}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(costShare)}</td>
-                        </tr>
+                        <Fragment key={p.placement}>
+                          <tr className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC] cursor-pointer"
+                            onClick={() => setExpandedPlaces((prev) => { const n = new Set(prev); n.has(p.placement) ? n.delete(p.placement) : n.add(p.placement); return n; })}>
+                            <td className="px-3 py-2.5 font-medium text-[#191F28]">
+                              {placeGran !== 'total' && (isExp ? <ChevronDown className="h-3 w-3 inline mr-1" /> : <ChevronUp className="h-3 w-3 inline mr-1 rotate-90" />)}
+                              {p.placement}
+                            </td>
+                            {renderMetricRow(p)}
+                          </tr>
+                          {isExp && subRows.map((sr: any) => (
+                            <tr key={`${p.placement}||${sr.period}`} className="border-b border-[#F2F4F6] bg-[#FAFBFF]">
+                              <td className="px-3 py-2 pl-8 text-[11px] text-[#6B7684]">{sr.periodLabel}</td>
+                              {renderMetricRow(sr, true)}
+                            </tr>
+                          ))}
+                        </Fragment>
                       );
                     })}
                   </tbody>
                 </table>
+                {/* 플로팅 합계 */}
+                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-[#E5E8EB]">
+                  <table className="w-full text-[12px]"><tbody>
+                    <tr className="font-bold">
+                      <td className="px-3 py-2.5 text-[#191F28]">합계</td>
+                      {renderMetricRow(t)}
+                    </tr>
+                  </tbody></table>
+                </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ─── Tab: Products (피벗 분석) ─────────────────────────────── */}
           {tab === 'products' && (() => {
-            const COLORS = ['#3182F6', '#F43F5E', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316'];
+            const COLORS: string[] = ['#3182F6', '#F43F5E', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316'];
             const metricOpts = [
               { key: 'cost', label: '광고비(VAT)' }, { key: 'revenue14d', label: '매출' },
               { key: 'orders14d', label: '주문' }, { key: 'roas', label: 'ROAS' },
@@ -1889,16 +1957,16 @@ export default function AdAnalysisPage() {
               { key: 'impressions', label: '노출', get: (r: any) => r.impressions, fmt: (v: number) => formatNumber(v) },
               { key: 'clicks', label: '클릭', get: (r: any) => r.clicks, fmt: (v: number) => formatNumber(v), cls: 'text-[#191F28]' },
               { key: 'ctr', label: 'CTR', get: (r: any) => r.impressions > 0 ? r.clicks / r.impressions : 0, fmt: (v: number) => pct(v) },
-              { key: 'cpc', label: 'CPC', get: (r: any) => r.clicks > 0 ? r.cost / r.clicks : 0, fmt: (v: number) => formatCurrency(Math.round(v)) },
-              { key: 'cost', label: '광고비', get: (r: any) => r.cost, fmt: (v: number) => formatCurrency(v), cls: 'text-[#F43F5E] font-medium' },
+              { key: 'cpc', label: 'CPC', get: (r: any) => r.clicks > 0 ? r.cost / r.clicks : 0, fmt: (v: number) => fmtW(Math.round(v)) },
+              { key: 'cost', label: '광고비', get: (r: any) => r.cost, fmt: (v: number) => fmtW(v), cls: 'text-[#F43F5E] font-medium' },
               { key: 'orders14d', label: '주문', get: (r: any) => r.orders14d, fmt: (v: number) => String(v) },
-              { key: 'revenue14d', label: '매출', get: (r: any) => r.revenue14d, fmt: (v: number) => formatCurrency(v), cls: 'text-[#3182F6] font-medium' },
-              { key: 'aov', label: 'AOV', get: (r: any) => r.orders14d > 0 ? r.revenue14d / r.orders14d : 0, fmt: (v: number) => v > 0 ? formatCurrency(Math.round(v)) : '-' },
+              { key: 'revenue14d', label: '매출', get: (r: any) => r.revenue14d, fmt: (v: number) => fmtW(v), cls: 'text-[#3182F6] font-medium' },
+              { key: 'aov', label: 'AOV', get: (r: any) => r.orders14d > 0 ? r.revenue14d / r.orders14d : 0, fmt: (v: number) => v > 0 ? fmtW(Math.round(v)) : '-' },
               { key: 'cvr', label: 'CVR', get: (r: any) => r.clicks > 0 ? r.orders14d / r.clicks : 0, fmt: (v: number) => pct(v) },
               { key: 'roas', label: 'ROAS', get: (r: any) => r.cost > 0 ? r.revenue14d / r.cost : 0,
                 render: (r: any) => { const v = r.cost > 0 ? r.revenue14d / r.cost : 0; return <span className={v >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{r.cost > 0 ? `${(v * 100).toFixed(0)}%` : '-'}</span>; } },
               { key: 'profit', label: '순이익', get: (r: any) => r.revenue14d - (r.cogs14d ?? 0) - (r.commission14d ?? 0) - r.cost,
-                render: (r: any) => { const v = r.revenue14d - (r.cogs14d ?? 0) - (r.commission14d ?? 0) - r.cost; return <span className={v >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{formatCurrency(v)}</span>; } },
+                render: (r: any) => { const v = r.revenue14d - (r.cogs14d ?? 0) - (r.commission14d ?? 0) - r.cost; return <span className={v >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{fmtW(v)}</span>; } },
             ];
 
             const sorted = [...pivotRows].sort((a, b) => {
@@ -1935,7 +2003,7 @@ export default function AdAnalysisPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => prodMetric === 'roas' ? `${(v * 100).toFixed(0)}%` : v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v))} />
-                        <Tooltip formatter={(v: number, name: string) => [prodMetric === 'roas' ? `${(v * 100).toFixed(0)}%` : formatCurrency(Math.round(v)), name]} />
+                        <Tooltip formatter={(v: number, name: string) => [prodMetric === 'roas' ? `${(v * 100).toFixed(0)}%` : fmtW(Math.round(v)), name]} />
                         <Legend />
                         {selArr.map((dim, i) => (
                           <Line key={dim} dataKey={dim} name={dim.length > 15 ? dim.slice(0, 15) + '…' : dim}
@@ -1962,34 +2030,35 @@ export default function AdAnalysisPage() {
                 </div>
               </div>
 
-              {/* 피벗 테이블 */}
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+              {/* 엑셀 피벗 스타일 테이블 */}
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto relative">
                 <div className="flex flex-wrap items-center gap-3 px-4 pt-3 pb-2">
                   <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
                     {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => { setPivotDim(k); setSelectedProducts(new Set()); }}
+                      <button key={k} onClick={() => { setPivotDim(k); setSelectedProducts(new Set()); setExpandedDims(new Set()); }}
                         className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotDim === k ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
-                  <span className="text-[11px] text-[#B0B8C1]">×</span>
                   <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
-                    {([['total', '합산'], ['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
+                    {([['weekly', '주'], ['monthly', '월'], ['daily', '일']] as const).map(([k, l]) => (
                       <button key={k} onClick={() => setPivotGran(k)}
                         className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotGran === k ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
-                  <span className="text-[11px] text-[#8B95A1] ml-auto">{sorted.length}행</span>
+                  <div className="relative flex-1 min-w-[140px] max-w-[260px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+                    <input value={pivotSearch} onChange={(e) => setPivotSearch(e.target.value)} placeholder={`${dimLabel} 검색`}
+                      className="w-full h-8 pl-8 pr-3 rounded-lg border border-[#E5E8EB] text-[12px] focus:outline-none focus:border-[#3182F6]" />
+                  </div>
+                  <span className="text-[11px] text-[#8B95A1] ml-auto">{allDims.length}개</span>
                 </div>
                 <table className="w-full text-[12px]">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
-                      {pivotGran !== 'total' && (
-                        <th onClick={() => togglePSort('period')} className="text-left px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none">기간{si('period')}</th>
-                      )}
                       <th onClick={() => togglePSort('dim')} className="text-left px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none">{dimLabel}{si('dim')}</th>
                       {metricCols.map((col) => (
                         <th key={col.key} onClick={() => togglePSort(col.key)} className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none">{col.label}{si(col.key)}</th>
@@ -1997,24 +2066,75 @@ export default function AdAnalysisPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((r: any, i: number) => (
-                      <tr key={`${r.period}||${r.dim}||${i}`}
-                        className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] ${sel.has(r.dim) ? 'bg-[#F8FAFF]' : ''}`}
-                        onClick={() => toggleProduct(r.dim)} style={{ cursor: 'pointer' }}>
-                        {pivotGran !== 'total' && <td className="px-3 py-2.5 text-[#6B7684] whitespace-nowrap">{r.periodLabel}</td>}
-                        <td className="px-3 py-2.5 font-medium text-[#191F28] max-w-[240px] truncate" title={r.dim}>
-                          {sel.has(r.dim) && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: COLORS[allDims.indexOf(r.dim) % COLORS.length] }} />}
-                          {r.dim}
-                        </td>
-                        {metricCols.map((col) => (
-                          <td key={col.key} className={`px-3 py-2.5 text-right ${col.cls ?? 'text-[#6B7684]'}`}>
-                            {col.render ? col.render(r) : col.fmt!(col.get(r))}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {(() => {
+                      // 차원별 합산 (정렬용)
+                      const dimTotals = new Map<string, any>();
+                      for (const r of pivotRows) {
+                        if (!dimTotals.has(r.dim)) dimTotals.set(r.dim, { dim: r.dim, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+                        const m = dimTotals.get(r.dim)!;
+                        m.impressions += r.impressions; m.clicks += r.clicks; m.cost += r.cost;
+                        m.orders14d += r.orders14d; m.revenue14d += r.revenue14d;
+                        m.cogs14d += r.cogs14d; m.commission14d += r.commission14d;
+                      }
+                      let dims = [...dimTotals.values()];
+                      if (pivotSearch) dims = dims.filter((d) => d.dim.toLowerCase().includes(pivotSearch.toLowerCase()));
+                      // 정렬
+                      dims.sort((a, b) => {
+                        if (pivotSortKey === 'dim') return pivotSortAsc ? a.dim.localeCompare(b.dim) : b.dim.localeCompare(a.dim);
+                        const col = metricCols.find(c => c.key === pivotSortKey);
+                        if (!col) return 0;
+                        return pivotSortAsc ? col.get(a) - col.get(b) : col.get(b) - col.get(a);
+                      });
+
+                      return dims.map((dt) => {
+                        const isExp = expandedDims.has(dt.dim);
+                        const subRows = pivotRows.filter((r: any) => r.dim === dt.dim && r.period !== 'total').sort((a: any, b: any) => a.period.localeCompare(b.period));
+                        const isSel = sel.has(dt.dim);
+                        const dimColor = COLORS[allDims.indexOf(dt.dim) % COLORS.length];
+                        return (
+                          <Fragment key={dt.dim}>
+                            <tr className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] cursor-pointer ${isSel ? 'bg-[#F8FAFF]' : ''}`}
+                              onClick={() => { toggleProduct(dt.dim); setExpandedDims((prev) => { const n = new Set(prev); n.has(dt.dim) ? n.delete(dt.dim) : n.add(dt.dim); return n; }); }}>
+                              <td className="px-3 py-2.5 font-semibold text-[#191F28] max-w-[260px] truncate" title={dt.dim}>
+                                {isExp ? <ChevronDown className="h-3 w-3 inline mr-1.5 text-[#6B7684]" /> : <ChevronUp className="h-3 w-3 inline mr-1.5 text-[#B0B8C1] rotate-90" />}
+                                {isSel && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: dimColor }} />}
+                                {dt.dim}
+                              </td>
+                              {metricCols.map((col) => (
+                                <td key={col.key} className={`px-3 py-2.5 text-right font-semibold ${col.cls ?? 'text-[#6B7684]'}`}>
+                                  {col.render ? col.render(dt) : col.fmt!(col.get(dt))}
+                                </td>
+                              ))}
+                            </tr>
+                            {isExp && subRows.map((sr: any) => (
+                              <tr key={`${sr.dim}||${sr.period}`} className="border-b border-[#F2F4F6] bg-[#FAFBFF]">
+                                <td className="px-3 py-2 pl-8 text-[11px] text-[#6B7684]">{sr.periodLabel}</td>
+                                {metricCols.map((col) => (
+                                  <td key={col.key} className={`px-3 py-2 text-right text-[11px] ${col.cls ?? 'text-[#8B95A1]'}`}>
+                                    {col.render ? col.render(sr) : col.fmt!(col.get(sr))}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </Fragment>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
+                {/* 플로팅 합계 */}
+                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-[#E5E8EB]">
+                  <table className="w-full text-[12px]"><tbody>
+                    <tr className="font-bold">
+                      <td className="px-3 py-2.5 text-[#191F28]">합계</td>
+                      {metricCols.map((col) => (
+                        <td key={col.key} className="px-3 py-2.5 text-right">
+                          {col.render ? col.render(t) : col.fmt!(col.get(t))}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody></table>
+                </div>
               </div>
             </div>
             );
