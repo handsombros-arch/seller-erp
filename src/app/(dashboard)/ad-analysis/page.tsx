@@ -297,8 +297,26 @@ function loadAdData(): AnalysisData | null {
   if (typeof window === 'undefined') return null;
   try {
     const saved = localStorage.getItem(AD_DATA_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch {}
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    // 구조 호환성 체크: 필수 필드가 없으면 캐시 무효화
+    if (!parsed?.daily?.length || parsed.daily[0]?.orders1d !== undefined) {
+      localStorage.removeItem(AD_DATA_KEY);
+      localStorage.removeItem(AD_DATA_KEY + '-raw');
+      return null;
+    }
+    // _rawRows 복원 (별도 키)
+    if (!parsed._rawRows) {
+      try {
+        const rawSaved = localStorage.getItem(AD_DATA_KEY + '-raw');
+        if (rawSaved) parsed._rawRows = JSON.parse(rawSaved);
+      } catch {}
+    }
+    return parsed;
+  } catch {
+    localStorage.removeItem(AD_DATA_KEY);
+    localStorage.removeItem(AD_DATA_KEY + '-raw');
+  }
   return null;
 }
 
@@ -580,12 +598,19 @@ export default function AdAnalysisPage() {
   // ─── 결과 저장 ─────────────────────────────────────────────────
   const saveResult = useCallback((result: AnalysisData) => {
     setData(result);
+    // _rawRows는 별도 키로 저장 (용량 분리)
     try {
-      localStorage.setItem(AD_DATA_KEY, JSON.stringify(result));
+      if (result._rawRows) {
+        localStorage.setItem(AD_DATA_KEY + '-raw', JSON.stringify(result._rawRows));
+      }
+    } catch {}
+    try {
+      const { _rawRows, ...forStorage } = result;
+      localStorage.setItem(AD_DATA_KEY, JSON.stringify(forStorage));
     } catch {
       try {
-        const { _rawRows, ...forStorage } = result;
-        localStorage.setItem(AD_DATA_KEY, JSON.stringify(forStorage));
+        const { _rawRows, rows, ...minimal } = result;
+        localStorage.setItem(AD_DATA_KEY, JSON.stringify(minimal));
       } catch {}
     }
   }, []);
@@ -1001,7 +1026,7 @@ export default function AdAnalysisPage() {
                 기간 추가
               </button>
               <button
-                onClick={() => { setData(null); localStorage.removeItem(AD_DATA_KEY); }}
+                onClick={() => { setData(null); localStorage.removeItem(AD_DATA_KEY); localStorage.removeItem(AD_DATA_KEY + '-raw'); }}
                 className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[#6B7684] text-[13px] font-medium hover:bg-[#F8F9FA] transition-colors"
               >
                 초기화
