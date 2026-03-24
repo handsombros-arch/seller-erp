@@ -11,19 +11,18 @@ export async function GET(request: NextRequest) {
 
   const { data: platformSkus } = await admin
     .from('platform_skus')
-    .select('platform_sku_id, price, commission_rate, sku:sku_id(sku_code, cost_price, product:product_id(name))')
+    .select('platform_sku_id, price, coupon_discount, commission_rate, sku:sku_id(sku_code, cost_price, product:product_id(name))')
     .not('platform_sku_id', 'is', null);
 
   const prices: Record<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number }> = {};
-  // 상품명 → 가격 매핑 (옵션ID 매칭 실패 시 폴백용)
-  // 광고 CSV는 11자리 옵션ID, DB는 8자리 → 상품명 폴백 필요
   const pricesByName: Record<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number }> = {};
 
   for (const ps of platformSkus ?? []) {
     if (ps.platform_sku_id && ps.price != null) {
       const sku = ps.sku as any;
+      const couponDiscount = Number((ps as any).coupon_discount ?? 0);
       const info = {
-        price: Number(ps.price),
+        price: Number(ps.price) - couponDiscount,
         cost_price: Number(sku?.cost_price ?? 0),
         product_name: sku?.product?.name ?? '',
         sku_code: sku?.sku_code ?? '',

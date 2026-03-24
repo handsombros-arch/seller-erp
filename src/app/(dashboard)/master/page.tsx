@@ -73,7 +73,7 @@ function SelectCell({ value, onChange, options, placeholder }: {
 
 // ─── Platform Tab ────────────────────────────────────────────────────────────
 
-interface ChannelEntry { name: string; product_id: string; price: string; sku_id_return: string; }
+interface ChannelEntry { name: string; product_id: string; price: string; coupon_discount: string; sku_id_return: string; }
 
 interface PlatformRow {
   sku_id: string;
@@ -113,7 +113,7 @@ function PlatformTab({ skuOptions, channels }: {
       const res = await fetch('/api/coupang/sync-platform-prices', { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? '오류');
-      setSyncResult(`${d.updated}개 업데이트 (재고맵 ${d.inventoryMapped}개 · 가격맵 ${d.priceMapped}개)`);
+      setSyncResult(`${d.updated}개 업데이트 (상품 ${d.productsScanned ?? '?'}개 스캔 · 가격맵 ${d.priceMapped}개)`);
       load();
     } catch (err: any) {
       setSyncResult(`실패: ${err.message}`);
@@ -145,10 +145,11 @@ function PlatformTab({ skuOptions, channels }: {
         name:          p.platform_product_name ?? '',
         product_id:    (isCoupang ? p.platform_sku_id : p.platform_product_id) ?? '',
         price:         p.price != null ? String(p.price) : '',
+        coupon_discount: p.coupon_discount != null ? String(p.coupon_discount) : '',
         sku_id_return: p.platform_sku_id_return ?? '',
       };
     }
-    const empty: ChannelEntry = { name: '', product_id: '', price: '', sku_id_return: '' };
+    const empty: ChannelEntry = { name: '', product_id: '', price: '', coupon_discount: '', sku_id_return: '' };
     const built: PlatformRow[] = skuOptions.map((s) => ({
       sku_id:       s.id,
       sku_code:     s.sku_code,
@@ -205,6 +206,7 @@ function PlatformTab({ skuOptions, channels }: {
         const name       = e.name.trim();
         const product_id = e.product_id.trim() || null;
         const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
+        const coupon_discount = e.coupon_discount?.trim() ? Number(e.coupon_discount.replace(/,/g, '')) : 0;
 
         const sku_id_return = e.sku_id_return.trim() || null;
         const isCoupang = c.type === 'coupang';
@@ -218,6 +220,7 @@ function PlatformTab({ skuOptions, channels }: {
             platform_product_id:   isCoupang ? null : product_id,
             platform_sku_id:       isCoupang ? product_id : null,
             price,
+            coupon_discount,
             platform_sku_id_return: sku_id_return,
           }),
         });
@@ -264,7 +267,7 @@ function PlatformTab({ skuOptions, channels }: {
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
+              <input lang="ko" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
                 className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-40" />
             </div>
             {channels.some((c) => c.type === 'coupang') && (
@@ -293,7 +296,7 @@ function PlatformTab({ skuOptions, channels }: {
                 <tr className="bg-[#F8F9FB]">
                   <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-0 bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
                   {channels.map((c) => (
-                    <th key={c.id} colSpan={c.type === 'coupang' ? 4 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
+                    <th key={c.id} colSpan={c.type === 'coupang' ? 5 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
                   ))}
                   <th rowSpan={2} className="border-b border-[#F2F4F6] min-w-[52px]" />
                 </tr>
@@ -303,6 +306,7 @@ function PlatformTab({ skuOptions, channels }: {
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[180px] border-l border-[#F2F4F6]">상품명</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
+                      {c.type === 'coupang' && <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[80px]">쿠폰할인</th>}
                       {/* 반품 옵션ID 컬럼 숨김 - RG 재고에서 자동 분류 */}
                     </Fragment>
                   ))}
@@ -313,7 +317,7 @@ function PlatformTab({ skuOptions, channels }: {
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleCollapsed(group.name)}>
-                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={1 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 4 : 3), 0) + 1}>
+                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={1 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 5 : 3), 0) + 1}>
                         <div className="flex items-center gap-2">
                           {collapsed.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
@@ -345,21 +349,27 @@ function PlatformTab({ skuOptions, channels }: {
                       </div>
                     </td>
                     {channels.map((c) => {
-                      const e = row.entries[c.id] ?? { name: '', product_id: '', price: '', sku_id_return: '' };
+                      const e = row.entries[c.id] ?? { name: '', product_id: '', price: '', coupon_discount: '', sku_id_return: '' };
                       return (
                         <Fragment key={c.id}>
                           <td className="px-2 py-2 border-l border-[#F2F4F6]">
-                            <input value={e.name} onChange={(ev) => updateEntry(row.sku_id, c.id, 'name', ev.target.value)}
+                            <input lang="ko" value={e.name} onChange={(ev) => updateEntry(row.sku_id, c.id, 'name', ev.target.value)}
                               placeholder="플랫폼 상품명" className={inputCls} />
                           </td>
                           <td className="px-2 py-2">
-                            <input value={e.product_id} onChange={(ev) => updateEntry(row.sku_id, c.id, 'product_id', ev.target.value)}
+                            <input lang="ko" value={e.product_id} onChange={(ev) => updateEntry(row.sku_id, c.id, 'product_id', ev.target.value)}
                               placeholder="상품ID" className={inputCls} />
                           </td>
                           <td className="px-2 py-2">
                             <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value)}
                               placeholder="0" className={inputCls} />
                           </td>
+                          {c.type === 'coupang' && (
+                            <td className="px-2 py-2">
+                              <input type="number" min="0" value={e.coupon_discount} onChange={(ev) => updateEntry(row.sku_id, c.id, 'coupon_discount', ev.target.value)}
+                                placeholder="0" className={inputCls} />
+                            </td>
+                          )}
                           {/* 반품 옵션ID 입력 숨김 */}
                         </Fragment>
                       );
@@ -526,17 +536,17 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
       <SfField label="회사명 / 제조사명" required>
-        <input className={sfInputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+        <input lang="ko" className={sfInputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
       </SfField>
       <SfField label="별칭">
-        <input className={sfInputCls} placeholder="예: 선전공장, 중국A업체 (짧게 부르는 이름)" value={form.alias} onChange={(e) => set('alias', e.target.value)} />
+        <input lang="ko" className={sfInputCls} placeholder="예: 선전공장, 중국A업체 (짧게 부르는 이름)" value={form.alias} onChange={(e) => set('alias', e.target.value)} />
       </SfField>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <SfField label="담당자">
-          <input className={sfInputCls} placeholder="담당자 이름" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
+          <input lang="ko" className={sfInputCls} placeholder="담당자 이름" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
         </SfField>
         <SfField label="국가">
-          <input className={sfInputCls} placeholder="중국" value={form.country} onChange={(e) => set('country', e.target.value)} />
+          <input lang="ko" className={sfInputCls} placeholder="중국" value={form.country} onChange={(e) => set('country', e.target.value)} />
         </SfField>
       </div>
       <SfField label="연락처">
@@ -545,7 +555,7 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
             className="h-11 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors shrink-0">
             {COUNTRY_CODES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
           </select>
-          <input className={sfInputCls} placeholder="010-1234-5678" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+          <input lang="ko" className={sfInputCls} placeholder="010-1234-5678" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
         </div>
       </SfField>
       <SfField label="이메일">
@@ -559,7 +569,7 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
         <p className="text-[11px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
       </SfField>
       <SfField label="주요 상품">
-        <input className={sfInputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
+        <input lang="ko" className={sfInputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
       </SfField>
       <div className="space-y-2">
         <label className="text-[13px] font-medium text-[#191F28]">주소</label>
@@ -582,6 +592,7 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
               {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <input
+              lang="ko"
               className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
               placeholder="주소 입력" value={addrInput.address}
               onChange={(e) => setAddrInput((a) => ({ ...a, address: e.target.value }))}
@@ -594,7 +605,7 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
         </div>
       </div>
       <SfField label="메모">
-        <textarea className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
+        <textarea lang="ko" className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
           rows={2} placeholder="특이사항, 계좌 정보 등" value={form.note} onChange={(e) => set('note', e.target.value)} />
       </SfField>
       <div className="flex gap-2 pt-1">
@@ -1110,43 +1121,44 @@ export default function MasterPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="sticky top-[60px] z-20 bg-[#F2F4F6] pb-3 -mb-2 flex items-start justify-between">
-        <div>
-          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">마스터 시트</h2>
-          <p className="mt-1 text-[13px] text-[#6B7684]">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl">
+      <div className="sticky top-[60px] z-20 bg-[#F2F4F6] pb-3 -mb-2 space-y-3">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">마스터 시트</h2>
+            <p className="mt-1 text-[13px] text-[#6B7684]">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
+          </div>
+          <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl shrink-0">
             {([['master', '마스터 시트'], ['platform', '플랫폼 상품명']] as const).map(([t, label]) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors ${tab === t ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
+                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
                 {label}
               </button>
             ))}
           </div>
-          {tab === 'master' && (
-            <>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
-                <input
-                  value={searchQ}
-                  onChange={(e) => setSearchQ(e.target.value)}
-                  placeholder="상품명·SKU 검색"
-                  className="h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-44"
-                />
-              </div>
-              <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
-                <RefreshCw className="h-4 w-4" /> 새로고침
-              </button>
-              {dirtyCount > 0 && (
-                <button onClick={saveAll} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
-                  {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  저장 ({dirtyCount})
-                </button>
-              )}
-            </>
-          )}
         </div>
+        {tab === 'master' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[140px] max-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+              <input
+                lang="ko"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder="상품명·SKU 검색"
+                className="w-full h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]"
+              />
+            </div>
+            <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <RefreshCw className="h-4 w-4" /> 새로고침
+            </button>
+            {dirtyCount > 0 && (
+              <button onClick={saveAll} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 whitespace-nowrap">
+                {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                저장 ({dirtyCount})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 플랫폼 상품명 탭 */}

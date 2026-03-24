@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     vendorId:  cred.vendor_id,
   };
 
-  // Step 1: RG inventory → externalSkuId → vendorItemId 맵
+  // Step 1: RG inventory (전체 페이징) → externalSkuId(8자리) → vendorItemId(11자리) 맵
   const extToVendor = new Map<string, string>();
   const inventoryPath = `/v2/providers/rg_open_api/apis/api/v1/vendors/${cred.vendor_id}/rg/inventory/summaries`;
   let nextToken: string | undefined;
@@ -54,43 +54,66 @@ export async function POST(request: NextRequest) {
     if (nextToken) await sleep(300);
   } while (nextToken);
 
-  // Step 2: seller-products → vendorItemId → salePrice 맵
-  const vendorItemPriceMap = new Map<string, number>();
+  // Step 2: seller-products 목록 → sellerProductId 수집
+  const sellerProductIds: number[] = [];
   const sellerPath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products`;
   let spNextToken: string | undefined;
 
   do {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { vendorId: cred.vendor_id, maxPerPage: '50' };
     if (spNextToken) params.nextToken = spNextToken;
 
     let json: any;
     try {
       json = await coupangFetch(sellerPath, params, credentials);
     } catch (err: any) {
-      return NextResponse.json({ error: `상품 조회 실패: ${err.message}` }, { status: 502 });
+      return NextResponse.json({ error: `상품 목록 조회 실패: ${err.message}` }, { status: 502 });
     }
 
     const products: any[] = Array.isArray(json?.data) ? json.data : [];
     spNextToken = json?.nextToken ?? undefined;
 
     for (const product of products) {
-      // 상품 하위 items 배열 형태
-      const items: any[] = Array.isArray(product.items) ? product.items : [product];
-      for (const item of items) {
-        const rgData = item.rocketGrowthItemData;
-        if (!rgData) continue;
-        const vid = String(item.vendorItemId ?? rgData.vendorItemId ?? '');
-        const price = rgData?.priceData?.salePrice ?? rgData?.salePrice;
-        if (vid && price != null) {
-          vendorItemPriceMap.set(vid, Number(price));
-        }
+      if (product.sellerProductId) {
+        sellerProductIds.push(product.sellerProductId);
       }
     }
 
     if (spNextToken) await sleep(300);
   } while (spNextToken);
 
-  // Step 3: 쿠팡 채널 platform_skus 조회
+  // Step 3: 각 상품 상세 조회 → vendorItemId + salePrice 수집
+  const vendorItemPriceMap = new Map<string, number>();
+
+  for (const spId of sellerProductIds) {
+    const detailPath = `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${spId}`;
+    try {
+      const detail = await coupangFetch(detailPath, {}, credentials);
+      const d = detail.data ?? detail;
+      const items: any[] = d.items ?? [];
+
+      for (const item of items) {
+        // RG 상품: rocketGrowthItemData 안에 vendorItemId + salePrice
+        const rgData = item.rocketGrowthItemData;
+        if (rgData) {
+          const vid = String(rgData.vendorItemId ?? '');
+          const price = rgData.salePrice ?? rgData.priceData?.salePrice;
+          if (vid && price != null) {
+            vendorItemPriceMap.set(vid, Number(price));
+          }
+        }
+        // Wing 상품: item 직접 vendorItemId + salePrice
+        else if (item.vendorItemId && item.salePrice != null) {
+          vendorItemPriceMap.set(String(item.vendorItemId), Number(item.salePrice));
+        }
+      }
+    } catch {
+      // 개별 상품 조회 실패는 무시
+    }
+    await sleep(300);
+  }
+
+  // Step 4: 쿠팡 채널 platform_skus 조회
   const { data: coupangChannels } = await admin
     .from('channels')
     .select('id')
@@ -107,13 +130,13 @@ export async function POST(request: NextRequest) {
     .in('channel_id', coupangChannelIds)
     .not('platform_sku_id', 'is', null);
 
-  // Step 4: 매핑 후 업데이트
+  // Step 5: 매핑 후 업데이트 (8자리 → 11자리 vendorItemId + salePrice)
   let updatedCount = 0;
   let notFoundCount = 0;
 
   for (const ps of platformSkus ?? []) {
     const currentId = String(ps.platform_sku_id);
-    // externalSkuId(8자리)인 경우 → vendorItemId로 변환
+    // externalSkuId(8자리) → vendorItemId(11자리) 변환
     const vendorItemId = extToVendor.get(currentId) ?? currentId;
     const price = vendorItemPriceMap.get(vendorItemId);
 
@@ -131,6 +154,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     inventoryMapped: extToVendor.size,
+    productsScanned: sellerProductIds.length,
     priceMapped: vendorItemPriceMap.size,
     updated: updatedCount,
     notFound: notFoundCount,
