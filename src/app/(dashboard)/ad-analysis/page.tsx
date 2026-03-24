@@ -570,7 +570,9 @@ export default function AdAnalysisPage() {
   }, []);
 
   // ─── Upload handler ────────────────────────────────────────────
-  const handleUpload = useCallback(async (file: File, accumulate = false) => {
+  const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+
+  const handleUpload = useCallback(async (files: File[], accumulate = false) => {
     setLoading(true);
     setError('');
     try {
@@ -593,21 +595,32 @@ export default function AdAnalysisPage() {
         };
       }
 
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array' });
-      let raw: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      if (!raw.length) throw new Error('데이터가 없습니다');
+      // 여러 파일 동시 읽기
+      const allRows: any[] = [];
+      for (const file of files) {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        allRows.push(...rows);
+      }
+      if (!allRows.length) throw new Error('데이터가 없습니다');
 
-      // 누적 모드
+      // 중복 제거 (파일 간 + 기존 데이터 포함)
+      const seen = new Set<string>();
+      let raw: any[] = [];
+
+      // 누적 모드: 기존 데이터 먼저 넣기
       if (accumulate && data?._rawRows) {
-        const existingKeys = new Set(data._rawRows.map((r: any) =>
-          `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`
-        ));
-        const newRows = raw.filter((r: any) => {
-          const key = `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
-          return !existingKeys.has(key);
-        });
-        raw = [...data._rawRows, ...newRows];
+        for (const r of data._rawRows) {
+          const key = dedupKey(r);
+          if (!seen.has(key)) { seen.add(key); raw.push(r); }
+        }
+      }
+
+      // 새 데이터 추가 (중복 건너뜀)
+      for (const r of allRows) {
+        const key = dedupKey(r);
+        if (!seen.has(key)) { seen.add(key); raw.push(r); }
       }
 
       // 전환 발생 상품명 추출 (옵션ID로 매칭 안 되고 저장된 매핑도 없는 것만)
@@ -696,9 +709,9 @@ export default function AdAnalysisPage() {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) handleUpload(file);
-  }, [handleUpload]);
+    const files = [...e.dataTransfer.files].filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+    if (files.length) handleUpload(files, !!data);
+  }, [handleUpload, data]);
 
   // ── Filtered & re-aggregated data ──────────────────────────────────────
   const filtered = useMemo(() => {
@@ -965,12 +978,12 @@ export default function AdAnalysisPage() {
           ref={fileRef}
           type="file"
           accept=".xlsx,.xls,.csv"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              const isAccumulate = !!data;
-              handleUpload(f, isAccumulate);
+            const files = e.target.files ? [...e.target.files] : [];
+            if (files.length) {
+              handleUpload(files, !!data);
             }
             e.target.value = '';
           }}
@@ -987,7 +1000,7 @@ export default function AdAnalysisPage() {
         >
           <Upload className="h-10 w-10 mx-auto text-[#B0B8C1] mb-3" />
           <p className="text-[15px] font-semibold text-[#333D4B]">쿠팡 광고 데이터 (xlsx) 를 드래그하거나 클릭하세요</p>
-          <p className="text-[12px] text-[#8B95A1] mt-1">PA 일별 키워드 리포트 지원</p>
+          <p className="text-[12px] text-[#8B95A1] mt-1">PA 일별 키워드 리포트 · 여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
         </div>
       )}
 
