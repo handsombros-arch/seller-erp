@@ -98,6 +98,10 @@ function PlatformTab({ skuOptions, channels }: {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  // 체크박스 선택 + 일괄 쿠폰할인
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDiscount, setBulkDiscount] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
   // 연동 상품명 (aliases)
   const [aliases, setAliases] = useState<Record<string, { id: string; channel_name: string }[]>>({});
   const [aliasModal, setAliasModal] = useState<{ skuId: string; productName: string; optionLabel: string; skuCode: string } | null>(null);
@@ -120,6 +124,48 @@ function PlatformTab({ skuOptions, channels }: {
     } finally {
       setSyncing(false);
     }
+  }
+
+  function toggleSelect(skuId: string) {
+    setSelected((prev) => { const next = new Set(prev); next.has(skuId) ? next.delete(skuId) : next.add(skuId); return next; });
+  }
+
+  const coupangChannel = channels.find((c) => c.type === 'coupang');
+
+  async function applyBulkDiscount() {
+    if (!bulkDiscount.trim() || !coupangChannel || selected.size === 0) return;
+    const val = bulkDiscount.trim();
+    setBulkSaving(true);
+    // 로컬 상태 업데이트
+    setRows((prev) => prev.map((r) => {
+      if (!selected.has(r.sku_id)) return r;
+      return { ...r, entries: { ...r.entries, [coupangChannel.id]: { ...r.entries[coupangChannel.id], coupon_discount: val } }, dirty: false };
+    }));
+    // 서버 일괄 저장
+    await Promise.all(
+      rows.filter((r) => selected.has(r.sku_id)).map(async (row) => {
+        const e = row.entries[coupangChannel.id];
+        if (!e) return;
+        const price = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
+        await fetch('/api/platform-skus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku_id: row.sku_id,
+            channel_id: coupangChannel.id,
+            platform_product_name: e.name.trim() || null,
+            platform_product_id: null,
+            platform_sku_id: e.product_id.trim() || null,
+            price,
+            coupon_discount: Number(val.replace(/,/g, '')) || 0,
+            platform_sku_id_return: e.sku_id_return?.trim() || null,
+          }),
+        });
+      })
+    );
+    setBulkSaving(false);
+    setSelected(new Set());
+    setBulkDiscount('');
   }
 
   const load = useCallback(async () => {
@@ -249,6 +295,12 @@ function PlatformTab({ skuOptions, channels }: {
     return Array.from(map.entries()).map(([name, skus]) => ({ name, skus }));
   })();
 
+  const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.sku_id));
+  function toggleSelectAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map((r) => r.sku_id)));
+  }
+
   const inputCls = 'w-full h-10 px-2.5 rounded-lg border border-[#E5E8EB] text-[12px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
 
   return (
@@ -285,6 +337,24 @@ function PlatformTab({ skuOptions, channels }: {
           </div>
         </div>
 
+        {/* 일괄 쿠폰할인 바 */}
+        {selected.size > 0 && coupangChannel && (
+          <div className="flex items-center gap-3 px-5 py-2.5 bg-[#EBF1FE] border-b border-[#D4E2FC]">
+            <span className="text-[12px] font-semibold text-[#3182F6]">{selected.size}개 선택</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] text-[#6B7684]">쿠폰할인 일괄:</span>
+              <input type="number" min="0" value={bulkDiscount} onChange={(e) => setBulkDiscount(e.target.value)}
+                placeholder="금액" className="h-8 w-24 px-2.5 rounded-lg border border-[#D4E2FC] text-[12px] focus:outline-none focus:border-[#3182F6]" />
+              <button onClick={applyBulkDiscount} disabled={bulkSaving || !bulkDiscount.trim()}
+                className="h-8 px-3.5 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50 whitespace-nowrap">
+                {bulkSaving ? '저장중...' : '일괄 적용'}
+              </button>
+            </div>
+            <button onClick={() => { setSelected(new Set()); setBulkDiscount(''); }}
+              className="text-[12px] text-[#6B7684] hover:text-[#191F28] ml-auto">취소</button>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
         ) : channels.length === 0 ? (
@@ -294,7 +364,11 @@ function PlatformTab({ skuOptions, channels }: {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[#F8F9FB]">
-                  <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-0 bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
+                  <th rowSpan={2} className="w-10 px-2 py-2 border-b border-[#F2F4F6] sticky left-0 bg-[#F8F9FB]">
+                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
+                      className="w-3.5 h-3.5 rounded border-[#D0D5DD] text-[#3182F6] focus:ring-[#3182F6]/20 cursor-pointer" />
+                  </th>
+                  <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-[40px] bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
                   {channels.map((c) => (
                     <th key={c.id} colSpan={c.type === 'coupang' ? 5 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
                   ))}
@@ -317,7 +391,7 @@ function PlatformTab({ skuOptions, channels }: {
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleCollapsed(group.name)}>
-                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={1 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 5 : 3), 0) + 1}>
+                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={2 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 5 : 3), 0) + 1}>
                         <div className="flex items-center gap-2">
                           {collapsed.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
@@ -328,8 +402,12 @@ function PlatformTab({ skuOptions, channels }: {
                       <td className="bg-inherit" />
                     </tr>
                     {!collapsed.has(group.name) && group.skus.map((row, sIdx) => (
-                  <tr key={row.sku_id} className={`transition-colors border-b border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
-                    <td className={`px-4 py-3 sticky left-0 border-r border-[#F2F4F6] ${row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                  <tr key={row.sku_id} className={`transition-colors border-b border-[#F2F4F6] ${selected.has(row.sku_id) ? 'bg-[#EBF1FE]/30' : row.dirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
+                    <td className={`w-10 px-2 py-3 sticky left-0 ${selected.has(row.sku_id) ? 'bg-[#EBF1FE]/40' : row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      <input type="checkbox" checked={selected.has(row.sku_id)} onChange={() => toggleSelect(row.sku_id)}
+                        className="w-3.5 h-3.5 rounded border-[#D0D5DD] text-[#3182F6] focus:ring-[#3182F6]/20 cursor-pointer" />
+                    </td>
+                    <td className={`px-4 py-3 sticky left-[40px] border-r border-[#F2F4F6] ${selected.has(row.sku_id) ? 'bg-[#EBF1FE]/40' : row.dirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
                       <div className="flex items-center gap-2 pl-2">
                         <span className="text-[11px] text-[#B0B8C1] tabular-nums w-7 shrink-0">{gIdx + 1}-{sIdx + 1}</span>
                         <div className="min-w-0">
