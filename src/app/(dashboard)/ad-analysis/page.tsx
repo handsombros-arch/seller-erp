@@ -333,6 +333,9 @@ export default function AdAnalysisPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [kwSearch, setKwSearch] = useState('');
   const [kwLimit, setKwLimit] = useState(50);
+  const [prodView, setProdView] = useState<'product' | 'campaign'>('campaign'); // 상품별 or 캠페인×상품
+  const [prodSortKey, setProdSortKey] = useState<string>('cost');
+  const [prodSortAsc, setProdSortAsc] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -783,14 +786,26 @@ export default function AdAnalysisPage() {
     }
     const placements = [...pMap.values()].sort((a, b) => b.cost - a.cost);
 
-    // Aggregate by product
-    const prodMap = new Map<string, any>();
+    // Aggregate by campaign × product
+    const cpMap = new Map<string, any>();
     for (const r of rows) {
-      if (!prodMap.has(r.product)) prodMap.set(r.product, { product: r.product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
-      const m = prodMap.get(r.product)!;
+      const cpKey = `${r.campaign}||${r.product}`;
+      if (!cpMap.has(cpKey)) cpMap.set(cpKey, { campaign: r.campaign, product: r.product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+      const m = cpMap.get(cpKey)!;
       m.impressions += r.impressions; m.clicks += r.clicks; m.cost += r.cost;
       m.orders14d += r.orders14d; m.revenue14d += r.revenue14d;
       m.cogs14d += r.cogs14d; m.commission14d += r.commission14d;
+    }
+    const campaignProducts = [...cpMap.values()].sort((a, b) => b.cost - a.cost);
+
+    // Aggregate by product only (cross-campaign)
+    const prodMap = new Map<string, any>();
+    for (const cp of campaignProducts) {
+      if (!prodMap.has(cp.product)) prodMap.set(cp.product, { product: cp.product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+      const m = prodMap.get(cp.product)!;
+      m.impressions += cp.impressions; m.clicks += cp.clicks; m.cost += cp.cost;
+      m.orders14d += cp.orders14d; m.revenue14d += cp.revenue14d;
+      m.cogs14d += cp.cogs14d; m.commission14d += cp.commission14d;
     }
     const products = [...prodMap.values()].sort((a, b) => b.cost - a.cost);
 
@@ -802,7 +817,7 @@ export default function AdAnalysisPage() {
       return acc;
     }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow);
 
-    return { rows, daily, keywords, placements, products, totals };
+    return { rows, daily, keywords, placements, products, campaignProducts, totals };
   }, [data, filterCampaign, filterProduct]);
 
   // Aggregated chart data
@@ -1717,82 +1732,98 @@ export default function AdAnalysisPage() {
           )}
 
           {/* ─── Tab: Products ──────────────────────────────────────────── */}
-          {tab === 'products' && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">상품별 광고비 · 매출</h3>
-                </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={filtered.products} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="product" tick={{ fontSize: 10 }} width={200} />
-                      <Tooltip formatter={(v: number, name: string) => [formatCurrency(Math.round(v)), name]} />
-                      <Legend />
-                      <Bar dataKey="cost" name="광고비(VAT)" fill="#F43F5E" opacity={0.7} radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="revenue14d" name="매출(14일)" fill="#3182F6" opacity={0.7} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+          {tab === 'products' && (() => {
+            const prodCols = [
+              { key: 'impressions', label: '노출', get: (p: any) => p.impressions, fmt: (v: number) => formatNumber(v) },
+              { key: 'clicks', label: '클릭', get: (p: any) => p.clicks, fmt: (v: number) => formatNumber(v), cls: 'text-[#191F28]' },
+              { key: 'ctr', label: 'CTR', get: (p: any) => p.impressions > 0 ? p.clicks / p.impressions : 0, fmt: (v: number) => pct(v) },
+              { key: 'cpc', label: 'CPC', get: (p: any) => p.clicks > 0 ? p.cost / p.clicks : 0, fmt: (v: number) => formatCurrency(Math.round(v)) },
+              { key: 'cost', label: '광고비(VAT)', get: (p: any) => p.cost, fmt: (v: number) => formatCurrency(v), cls: 'text-[#F43F5E] font-medium' },
+              { key: 'orders14d', label: '주문', get: (p: any) => p.orders14d, fmt: (v: number) => String(v) },
+              { key: 'revenue14d', label: '매출', get: (p: any) => p.revenue14d, fmt: (v: number) => formatCurrency(v), cls: 'text-[#3182F6] font-medium' },
+              { key: 'aov', label: 'AOV', get: (p: any) => p.orders14d > 0 ? p.revenue14d / p.orders14d : 0, fmt: (v: number) => v > 0 ? formatCurrency(Math.round(v)) : '-' },
+              { key: 'cvr', label: 'CVR', get: (p: any) => p.clicks > 0 ? p.orders14d / p.clicks : 0, fmt: (v: number) => pct(v) },
+              { key: 'roas', label: 'ROAS', get: (p: any) => p.cost > 0 ? p.revenue14d / p.cost : 0,
+                render: (p: any) => { const r = p.cost > 0 ? p.revenue14d / p.cost : 0; return <span className={r >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{p.cost > 0 ? `${(r * 100).toFixed(0)}%` : '-'}</span>; } },
+              { key: 'profit', label: '순이익', get: (p: any) => p.revenue14d - (p.cogs14d ?? 0) - (p.commission14d ?? 0) - p.cost,
+                render: (p: any) => { const v = p.revenue14d - (p.cogs14d ?? 0) - (p.commission14d ?? 0) - p.cost; return <span className={v >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{formatCurrency(v)}</span>; } },
+              { key: 'share', label: '비중', get: (p: any) => t.cost > 0 ? p.cost / t.cost : 0, fmt: (v: number) => pct(v) },
+            ];
 
+            const sourceData = prodView === 'campaign' ? filtered.campaignProducts : filtered.products;
+            const sorted = [...sourceData].sort((a, b) => {
+              if (prodSortKey === 'campaign' || prodSortKey === 'product') {
+                const av = String(a[prodSortKey] ?? ''), bv = String(b[prodSortKey] ?? '');
+                return prodSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+              }
+              const col = prodCols.find(c => c.key === prodSortKey);
+              if (!col) return 0;
+              const av = col.get(a), bv = col.get(b);
+              return prodSortAsc ? av - bv : bv - av;
+            });
+
+            const toggleProdSort = (key: string) => {
+              if (prodSortKey === key) setProdSortAsc(!prodSortAsc);
+              else { setProdSortKey(key); setProdSortAsc(false); }
+            };
+
+            return (
+            <div className="space-y-4">
               <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+                <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                  <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                    <button onClick={() => setProdView('campaign')}
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${prodView === 'campaign' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                      캠페인×상품
+                    </button>
+                    <button onClick={() => setProdView('product')}
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${prodView === 'product' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                      상품 합산
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-[#8B95A1]">{sorted.length}개 · 헤더 클릭 정렬</span>
+                </div>
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
-                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684]">상품명</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">노출</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">클릭</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CTR</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CPC</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">광고비(VAT)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">주문(14d)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">매출(14d)</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">AOV</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CVR</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">ROAS</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">순이익</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">비중</th>
+                      {prodView === 'campaign' && (
+                        <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] whitespace-nowrap cursor-pointer hover:text-[#191F28]"
+                          onClick={() => toggleProdSort('campaign')}>
+                          캠페인 {prodSortKey === 'campaign' ? (prodSortAsc ? '↑' : '↓') : ''}
+                        </th>
+                      )}
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] whitespace-nowrap cursor-pointer hover:text-[#191F28]"
+                        onClick={() => toggleProdSort('product')}>
+                        상품명 {prodSortKey === 'product' ? (prodSortAsc ? '↑' : '↓') : ''}
+                      </th>
+                      {prodCols.map((col) => (
+                        <th key={col.key} onClick={() => toggleProdSort(col.key)}
+                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] whitespace-nowrap cursor-pointer hover:text-[#191F28] select-none">
+                          {col.label} {prodSortKey === col.key ? (prodSortAsc ? '↑' : '↓') : ''}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.products.map((p: any) => {
-                      const pCtr = p.impressions > 0 ? p.clicks / p.impressions : 0;
-                      const pCpc = p.clicks > 0 ? Math.round(p.cost / p.clicks) : 0;
-                      const pRoas = p.cost > 0 ? p.revenue14d / p.cost : 0;
-                      const pCvr = p.clicks > 0 ? p.orders14d / p.clicks : 0;
-                      const pAov = p.orders14d > 0 ? Math.round(p.revenue14d / p.orders14d) : 0;
-                      const pProfit = p.revenue14d - (p.cogs14d ?? 0) - (p.commission14d ?? 0) - p.cost;
-                      const costShare = t.cost > 0 ? p.cost / t.cost : 0;
-                      return (
-                        <tr key={p.product} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
-                          <td className="px-3 py-2.5 font-medium text-[#191F28] max-w-[200px] truncate" title={p.product}>{p.product}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(p.impressions)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(p.clicks)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCtr)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatCurrency(pCpc)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(p.cost)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{p.orders14d}</td>
-                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(p.revenue14d)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pAov ? formatCurrency(pAov) : '-'}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCvr)}</td>
-                          <td className={`px-3 py-2.5 text-right font-bold ${pRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
-                            {p.cost > 0 ? `${(pRoas * 100).toFixed(0)}%` : '-'}
+                    {sorted.map((p: any, i: number) => (
+                      <tr key={prodView === 'campaign' ? `${p.campaign}||${p.product}` : p.product} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                        {prodView === 'campaign' && (
+                          <td className="px-3 py-2.5 text-[#6B7684] max-w-[160px] truncate" title={p.campaign}>{p.campaign}</td>
+                        )}
+                        <td className="px-3 py-2.5 font-medium text-[#191F28] max-w-[220px] truncate" title={p.product}>{p.product}</td>
+                        {prodCols.map((col) => (
+                          <td key={col.key} className={`px-3 py-2.5 text-right ${col.cls ?? 'text-[#6B7684]'}`}>
+                            {col.render ? col.render(p) : col.fmt!(col.get(p))}
                           </td>
-                          <td className={`px-3 py-2.5 text-right font-medium ${pProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {formatCurrency(pProfit)}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(costShare)}</td>
-                        </tr>
-                      );
-                    })}
+                        ))}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          )}
+            );
+          })()}
         </>
       )}
     </div>
