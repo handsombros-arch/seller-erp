@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 
-// GET /api/cron/refresh-sales
-// 매일 channel_orders 기반으로 skus.sales_7d / sales_30d 갱신
-// vercel.json cron: "0 2 * * *" (매일 02:00 KST = 17:00 UTC 전날)
-export async function GET(request: NextRequest) {
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+/**
+ * 판매량 갱신 핵심 로직 (직접 호출용)
+ */
+export async function runRefreshSales(): Promise<Record<string, any>> {
   const admin = await createAdminClient();
 
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -30,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[cron/refresh-sales]', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return { error: error.message };
   }
 
   const bySkuId: Record<string, { s7: number; s30: number }> = {};
@@ -63,5 +58,17 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(`[cron/refresh-sales] updated ${updated} SKUs`);
-  return NextResponse.json({ ok: true, updated, sku_count: skuIds.length });
+  return { ok: true, updated, sku_count: skuIds.length };
+}
+
+/**
+ * HTTP 엔드포인트 (수동 트리거용)
+ */
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get('authorization');
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const result = await runRefreshSales();
+  return NextResponse.json(result);
 }

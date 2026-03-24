@@ -7,15 +7,9 @@ import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * 전 채널 주문 자동 동기화 (cron용)
- * 최근 3일치 주문을 가져와 upsert (중복 무시)
+ * 전 채널 주문 동기화 핵심 로직 (직접 호출용)
  */
-export async function GET(request: NextRequest) {
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function runSyncOrders(): Promise<Record<string, any>> {
   const admin = await createAdminClient();
   const matcher = await buildSkuMatcher(admin);
 
@@ -53,11 +47,13 @@ export async function GET(request: NextRequest) {
           nextToken = json?.nextToken || undefined;
 
           const rows = items.flatMap((order: any) => {
-            const orderDate = new Date(Number(order.paidAt)).toISOString().slice(0, 10);
+            const orderIso = new Date(Number(order.paidAt)).toISOString();
+            const orderDate = orderIso.slice(0, 10);
+            const orderTime = orderIso.slice(11, 19);
             return (order.orderItems ?? []).map((item: any) => {
               const vid = String(item.vendorItemId ?? '');
               return {
-                channel: 'coupang_rg', order_date: orderDate,
+                channel: 'coupang_rg', order_date: orderDate, order_time: orderTime,
                 order_number: `${order.orderId}-${vid}`,
                 product_name: item.productName ?? '', option_name: null,
                 quantity: Number(item.salesQuantity ?? 1),
@@ -90,11 +86,13 @@ export async function GET(request: NextRequest) {
           const items: any[] = Array.isArray(json?.data) ? json.data : [];
           wToken = json?.nextToken || undefined;
           const rows = items.flatMap((order: any) => {
-            const orderDate = (order.orderedAt ?? order.paidAt ?? from3).substring(0, 10);
+            const orderRaw = order.orderedAt ?? order.paidAt ?? from3;
+            const orderDate = orderRaw.substring(0, 10);
+            const orderTime = orderRaw.length > 10 ? orderRaw.substring(11, 19) : null;
             const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
             const isJeju = /제주|서귀포|울릉|도서산간/.test(addr);
             return (order.orderItems ?? []).map((item: any) => ({
-              channel: 'coupang', order_date: orderDate,
+              channel: 'coupang', order_date: orderDate, order_time: orderTime,
               order_number: `${order.shipmentBoxId}-${item.vendorItemId}`,
               product_name: item.sellerProductName ?? item.vendorItemName ?? '',
               option_name: item.sellerProductItemName ?? null,
@@ -202,6 +200,7 @@ export async function GET(request: NextRequest) {
             return {
               channel: 'smartstore',
               order_date: (ord.orderDate ?? po.placeOrderDate ?? from3).substring(0, 10),
+              order_time: (() => { const raw = ord.orderDate ?? po.placeOrderDate ?? ''; return raw.length > 10 ? raw.substring(11, 19) : null; })(),
               order_number: po.productOrderId ?? null,
               product_name: po.productName ?? '', option_name: po.productOption ?? null,
               quantity: Number(po.quantity ?? 1),
@@ -258,6 +257,7 @@ export async function GET(request: NextRequest) {
           const addr = [item.address, item.detailAddress].filter(Boolean).join(' ').trim();
           return {
             channel: 'toss', order_date: (item.orderedAt ?? from3).substring(0, 10),
+            order_time: (() => { const raw = item.orderedAt ?? ''; return raw.length > 10 ? raw.substring(11, 19) : null; })(),
             order_number: String(item.orderProductId ?? item.orderId ?? ''),
             product_name: item.productName ?? '', option_name: item.optionName ?? null,
             quantity: Number(item.quantity ?? 1),
@@ -333,5 +333,17 @@ export async function GET(request: NextRequest) {
   }
 
   console.log('[cron/sync-orders]', JSON.stringify(results));
-  return NextResponse.json({ ok: true, ...results });
+  return { ok: true, ...results };
+}
+
+/**
+ * HTTP 엔드포인트 (수동 트리거용)
+ */
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get('authorization');
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const result = await runSyncOrders();
+  return NextResponse.json(result);
 }

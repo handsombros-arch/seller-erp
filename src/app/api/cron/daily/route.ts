@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
+import { runSyncOrders } from '../sync-orders/route';
+import { runSyncRgInventory } from '../sync-rg-inventory/route';
+import { runRefreshSales } from '../refresh-sales/route';
+import { runSnapshotInventory } from '../snapshot-inventory/route';
 
 /**
  * 통합 일일 cron (Vercel Hobby 무료 플랜: cron 1개 제한)
@@ -8,6 +12,8 @@ import { createAdminClient } from '@/lib/supabase/server';
  * 2. 쿠팡 RG 재고 동기화
  * 3. 판매량 갱신 (7d/30d)
  * 4. 창고 재고 스냅샷
+ *
+ * 직접 함수 호출 방식 — Vercel Deployment Protection 우회
  */
 export async function GET(request: NextRequest) {
   const auth = request.headers.get('authorization');
@@ -15,44 +21,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const baseUrl = request.nextUrl.origin;
-  const headers = { Authorization: `Bearer ${process.env.CRON_SECRET}` };
   const results: Record<string, any> = {};
-
-  async function safeFetch(url: string): Promise<any> {
-    const res = await fetch(url, { headers });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { error: `비정상 응답 (${res.status}): ${text.slice(0, 200)}` };
-    }
-  }
 
   // 1. 전 채널 주문 동기화 + 재고 차감 (가장 중요)
   try {
-    results.syncOrders = await safeFetch(`${baseUrl}/api/cron/sync-orders`);
+    results.syncOrders = await runSyncOrders();
   } catch (err: any) {
     results.syncOrders = { error: err.message };
   }
 
   // 2. 쿠팡 RG 재고 동기화
   try {
-    results.syncRgInventory = await safeFetch(`${baseUrl}/api/cron/sync-rg-inventory`);
+    results.syncRgInventory = await runSyncRgInventory();
   } catch (err: any) {
     results.syncRgInventory = { error: err.message };
   }
 
   // 3. 판매량 갱신
   try {
-    results.refreshSales = await safeFetch(`${baseUrl}/api/cron/refresh-sales`);
+    results.refreshSales = await runRefreshSales();
   } catch (err: any) {
     results.refreshSales = { error: err.message };
   }
 
   // 4. 창고 재고 스냅샷
   try {
-    results.snapshotInventory = await safeFetch(`${baseUrl}/api/cron/snapshot-inventory`);
+    results.snapshotInventory = await runSnapshotInventory();
   } catch (err: any) {
     results.snapshotInventory = { error: err.message };
   }

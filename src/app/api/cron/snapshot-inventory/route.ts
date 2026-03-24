@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 
-export async function GET(request: NextRequest) {
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+/**
+ * 창고 재고 스냅샷 핵심 로직 (직접 호출용)
+ */
+export async function runSnapshotInventory(): Promise<Record<string, any>> {
   const admin = await createAdminClient();
   const snapshotDate = new Date().toISOString().slice(0, 10);
 
@@ -16,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   if (!invRows?.length) {
     console.log(`[cron/snapshot-inventory] ${snapshotDate} - no inventory rows`);
-    return NextResponse.json({ ok: true, saved: 0 });
+    return { ok: true, saved: 0 };
   }
 
   const rows = invRows.map((r: any) => ({
@@ -32,9 +30,21 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error(`[cron/snapshot-inventory] error:`, error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return { error: error.message };
   }
 
   console.log(`[cron/snapshot-inventory] ${snapshotDate} - ${rows.length}개 저장`);
-  return NextResponse.json({ ok: true, saved: rows.length, snapshot_date: snapshotDate });
+  return { ok: true, saved: rows.length, snapshot_date: snapshotDate };
+}
+
+/**
+ * HTTP 엔드포인트 (수동 트리거용)
+ */
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get('authorization');
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const result = await runSnapshotInventory();
+  return NextResponse.json(result);
 }

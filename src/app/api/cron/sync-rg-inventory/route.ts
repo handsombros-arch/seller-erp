@@ -4,13 +4,10 @@ import { coupangFetch } from '@/lib/coupang/auth';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function GET(request: NextRequest) {
-  // Vercel Cron 인증 (CRON_SECRET 환경변수와 일치해야 함)
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+/**
+ * RG 재고 동기화 핵심 로직 (직접 호출용)
+ */
+export async function runSyncRgInventory(): Promise<Record<string, any>> {
   const admin = await createAdminClient();
 
   const { data: cred } = await admin
@@ -22,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   if (!cred) {
     console.error('[cron/sync-rg-inventory] 쿠팡 자격증명 없음');
-    return NextResponse.json({ error: '쿠팡 API 키 없음' }, { status: 400 });
+    return { error: '쿠팡 API 키 없음' };
   }
 
   const credentials = {
@@ -72,7 +69,7 @@ export async function GET(request: NextRequest) {
       json = await coupangFetch(path, params, credentials);
     } catch (err: any) {
       console.error('[cron/sync-rg-inventory]', err.message);
-      return NextResponse.json({ error: err.message }, { status: 502 });
+      return { error: err.message };
     }
 
     const items: any[] = Array.isArray(json?.data) ? json.data : [];
@@ -130,5 +127,17 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(`[cron/sync-rg-inventory] ${snapshotDate} - ${synced}개 동기화, ${autoClassified}개 반품 자동분류`);
-  return NextResponse.json({ ok: true, synced, snapshot_date: snapshotDate, auto_classified: autoClassified });
+  return { ok: true, synced, snapshot_date: snapshotDate, auto_classified: autoClassified };
+}
+
+/**
+ * HTTP 엔드포인트 (수동 트리거용)
+ */
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get('authorization');
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const result = await runSyncRgInventory();
+  return NextResponse.json(result);
 }

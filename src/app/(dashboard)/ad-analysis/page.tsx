@@ -1,0 +1,1441 @@
+'use client';
+
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { formatNumber, formatCurrency } from '@/lib/utils';
+import {
+  Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
+  MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
+  ChevronDown, ChevronUp, Search, Download,
+} from 'lucide-react';
+import {
+  ComposedChart, Bar, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart,
+} from 'recharts';
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface DailyRow {
+  date: string;
+  impressions: number; clicks: number; cost: number;
+  orders1d: number; revenue1d: number; revenue1d_raw: number;
+  orders14d: number; revenue14d: number; revenue14d_raw: number;
+  cogs1d: number; cogs14d: number; // 매출원가 (주문수 × 원가)
+  commission1d: number; commission14d: number; // 판매수수료 (매출 × 수수료율)
+}
+
+interface KeywordRow {
+  campaign?: string; product?: string;
+  keyword: string;
+  impressions: number; clicks: number; cost: number;
+  orders1d: number; revenue1d: number;
+  orders14d: number; revenue14d: number;
+  ctr: number; cpc: number; cvr: number; roas14d: number;
+}
+
+interface PlacementRow {
+  campaign?: string; product?: string;
+  placement: string;
+  impressions: number; clicks: number; cost: number;
+  orders1d: number; revenue1d: number;
+  orders14d: number; revenue14d: number;
+}
+
+interface PriceInfo {
+  optionId: string; price: number; cost_price: number;
+  product_name: string; sku_code: string;
+  commission_rate: number; // 판매대행수수료율 (VAT/전자결제수수료 제외)
+}
+
+interface ParsedRow {
+  date: string; campaign: string; product: string;
+  impressions: number; clicks: number; cost: number;
+  orders1d: number; revenue1d: number; revenue1d_raw: number;
+  orders14d: number; revenue14d: number; revenue14d_raw: number;
+  cogs1d: number; cogs14d: number;
+  commission1d: number; commission14d: number;
+  keywordCount: number;
+}
+
+interface AnalysisData {
+  totalRows: number;
+  dateRange: { from: string; to: string };
+  priceInfo: PriceInfo[];
+  unmatchedOptionIds: string[];
+  campaigns: string[];
+  products: string[];
+  rows: ParsedRow[];
+  totals: DailyRow & { revenue1d_raw: number; revenue14d_raw: number };
+  daily: DailyRow[];
+  keywords: KeywordRow[];
+  placements: PlacementRow[];
+  _rawRows?: any[]; // 누적 업로드용 원본 데이터
+}
+
+// ─── Granularity helpers ────────────────────────────────────────────────────
+
+type Granularity = 'daily' | 'weekly' | 'monthly';
+
+function isoWeekKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const w1 = new Date(d.getFullYear(), 0, 4);
+  const wn = 1 + Math.round(((d.getTime() - w1.getTime()) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+  return `${d.getFullYear()}-W${String(wn).padStart(2, '0')}`;
+}
+
+function bucketKey(dateStr: string, gran: Granularity): string {
+  if (gran === 'daily') return dateStr;
+  if (gran === 'monthly') return dateStr.slice(0, 7);
+  return isoWeekKey(dateStr);
+}
+
+function bucketLabel(key: string, gran: Granularity): string {
+  if (gran === 'daily') return key.slice(5); // 03-09
+  if (gran === 'monthly') return key; // 2026-03
+  // weekly: 2026-W11 → "3월 2주차"
+  const [yearStr, weekPart] = key.split('-W');
+  const wn = Number(weekPart);
+  const year = Number(yearStr);
+  // ISO week → approximate date
+  const jan4 = new Date(year, 0, 4);
+  const dayOfWeek = (jan4.getDay() + 6) % 7; // Mon=0
+  const weekStart = new Date(jan4.getTime() + ((wn - 1) * 7 - dayOfWeek) * 86400000);
+  const month = weekStart.getMonth() + 1;
+  // Week-of-month: count which week of the month this is
+  const firstOfMonth = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+  const firstMonday = new Date(firstOfMonth.getTime() + ((8 - (firstOfMonth.getDay() || 7)) % 7) * 86400000);
+  const weekOfMonth = Math.floor((weekStart.getTime() - firstMonday.getTime()) / (7 * 86400000)) + 1;
+  const wom = weekOfMonth < 1 ? 1 : weekOfMonth;
+  return `${month}월 ${wom}주차`;
+}
+
+interface BucketRow extends DailyRow {
+  label: string;
+  keywordCount: number;
+}
+
+function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRows?: ParsedRow[]): BucketRow[] {
+  const map = new Map<string, BucketRow>();
+
+  for (const d of daily) {
+    const key = bucketKey(d.date, gran);
+    if (!map.has(key)) {
+      map.set(key, {
+        date: key, label: bucketLabel(key, gran),
+        impressions: 0, clicks: 0, cost: 0,
+        orders1d: 0, revenue1d: 0, revenue1d_raw: 0,
+        orders14d: 0, revenue14d: 0, revenue14d_raw: 0,
+        cogs1d: 0, cogs14d: 0,
+        commission1d: 0, commission14d: 0,
+        keywordCount: 0,
+      });
+    }
+    const b = map.get(key)!;
+    b.impressions += d.impressions;
+    b.clicks += d.clicks;
+    b.cost += d.cost;
+    b.orders1d += d.orders1d;
+    b.revenue1d += d.revenue1d;
+    b.revenue1d_raw += d.revenue1d_raw;
+    b.orders14d += d.orders14d;
+    b.revenue14d += d.revenue14d;
+    b.revenue14d_raw += d.revenue14d_raw;
+    b.cogs1d += d.cogs1d;
+    b.cogs14d += d.cogs14d;
+    b.commission1d += d.commission1d;
+    b.commission14d += d.commission14d;
+  }
+
+  // Sum keyword counts from compact rows per bucket
+  // Note: when daily bucket == compactRow date, keywordCount is per date+campaign+product
+  // For daily gran this is exact; for weekly/monthly it's an approximation (may overcount if same keyword appears in different campaign/product combos)
+  if (compactRows) {
+    const kwMap = new Map<string, number>();
+    for (const r of compactRows) {
+      const key = bucketKey(r.date, gran);
+      kwMap.set(key, (kwMap.get(key) ?? 0) + (r.keywordCount ?? 0));
+    }
+    for (const [key, count] of kwMap) {
+      const b = map.get(key);
+      if (b) b.keywordCount = count;
+    }
+  }
+
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── Chart metric config ────────────────────────────────────────────────────
+
+type MetricKey = 'cost' | 'revenue1d' | 'revenue14d' | 'roas1d' | 'roas14d' |
+  'impressions' | 'clicks' | 'orders1d' | 'orders14d' | 'ctr' | 'cvr' | 'cpc' | 'cpm' | 'cpa' | 'profit';
+
+interface MetricDef {
+  key: MetricKey;
+  label: string;
+  type: 'bar' | 'line';       // default chart type
+  unit: 'won' | 'pct' | 'cnt';
+  color: string;
+  getValue: (d: any) => number;
+}
+
+const METRICS: MetricDef[] = [
+  { key: 'cost',       label: '광고비',      type: 'line', unit: 'won', color: '#F43F5E', getValue: (d) => d.cost },
+  { key: 'revenue14d', label: '매출(14일)',   type: 'line', unit: 'won', color: '#3182F6', getValue: (d) => d.revenue14d },
+  { key: 'revenue1d',  label: '매출(1일)',    type: 'line', unit: 'won', color: '#93C5FD', getValue: (d) => d.revenue1d },
+  { key: 'roas14d',    label: 'ROAS(14일)',   type: 'bar',  unit: 'pct', color: '#10B981', getValue: (d) => d.cost > 0 ? d.revenue14d / d.cost : 0 },
+  { key: 'roas1d',     label: 'ROAS(1일)',    type: 'bar',  unit: 'pct', color: '#6EE7B7', getValue: (d) => d.cost > 0 ? d.revenue1d / d.cost : 0 },
+  { key: 'impressions',label: '노출',         type: 'line', unit: 'cnt', color: '#8B95A1', getValue: (d) => d.impressions },
+  { key: 'clicks',     label: '클릭',         type: 'line', unit: 'cnt', color: '#8B5CF6', getValue: (d) => d.clicks },
+  { key: 'orders14d',  label: '주문(14일)',   type: 'bar',  unit: 'cnt', color: '#F97316', getValue: (d) => d.orders14d },
+  { key: 'orders1d',   label: '주문(1일)',    type: 'bar',  unit: 'cnt', color: '#FDBA74', getValue: (d) => d.orders1d },
+  { key: 'ctr',        label: 'CTR',          type: 'line', unit: 'pct', color: '#06B6D4', getValue: (d) => d.impressions > 0 ? d.clicks / d.impressions : 0 },
+  { key: 'cvr',        label: 'CVR(14일)',    type: 'line', unit: 'pct', color: '#EAB308', getValue: (d) => d.clicks > 0 ? d.orders14d / d.clicks : 0 },
+  { key: 'cpc',        label: 'CPC',          type: 'line', unit: 'won', color: '#A855F7', getValue: (d) => d.clicks > 0 ? d.cost / d.clicks : 0 },
+  { key: 'cpm',        label: 'CPM',          type: 'line', unit: 'won', color: '#0EA5E9', getValue: (d) => d.impressions > 0 ? d.cost / d.impressions * 1000 : 0 },
+  { key: 'cpa',        label: 'CPA',          type: 'line', unit: 'won', color: '#F97316', getValue: (d) => d.orders14d > 0 ? d.cost / d.orders14d : 0 },
+  { key: 'profit',     label: '순이익(14일)', type: 'bar',  unit: 'won', color: '#22C55E', getValue: (d) => d.revenue14d - d.cogs14d - (d.commission14d ?? 0) - d.cost },
+];
+
+const DEFAULT_METRICS: MetricKey[] = ['cost', 'revenue14d', 'roas14d'];
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const pct = (n: number) => (n * 100).toFixed(2) + '%';
+
+type SortKey = 'cost' | 'clicks' | 'impressions' | 'orders14d' | 'revenue14d' | 'ctr' | 'cpc' | 'cvr' | 'roas14d';
+
+// ─── KPI Definitions ────────────────────────────────────────────────────────
+
+type KpiKey = 'cost' | 'roas' | 'revenue' | 'orders' | 'cpc' | 'ctr' | 'cvr' | 'cpm' | 'cpa' | 'aov' | 'adRatio' | 'impressions' | 'clicks';
+
+interface KpiDef {
+  key: KpiKey;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  getValue: (t: any, extra: any) => string;
+  getSub?: (t: any, extra: any) => string;
+}
+
+const KPI_DEFS: KpiDef[] = [
+  { key: 'cost', label: '광고비 (VAT포함)', icon: DollarSign, color: 'bg-red-50 text-red-600',
+    getValue: (t) => formatCurrency(t.cost) },
+  { key: 'roas', label: 'ROAS (14일)', icon: TrendingUp, color: 'bg-green-50 text-green-600',
+    getValue: (t) => `${(t.cost > 0 ? t.revenue14d / t.cost * 100 : 0).toFixed(0)}%`,
+    getSub: (t) => `1일: ${(t.cost > 0 ? t.revenue1d / t.cost * 100 : 0).toFixed(0)}%` },
+  { key: 'revenue', label: '전환매출 (14일)', icon: Target, color: 'bg-blue-50 text-blue-600',
+    getValue: (t) => formatCurrency(t.revenue14d),
+    getSub: (t) => `1일: ${formatCurrency(t.revenue1d)}` },
+  { key: 'orders', label: '주문수 (14일)', icon: Megaphone, color: 'bg-purple-50 text-purple-600',
+    getValue: (t) => `${t.orders14d}건`,
+    getSub: (t) => `1일: ${t.orders1d}건` },
+  { key: 'cpc', label: 'CPC', icon: MousePointerClick, color: 'bg-cyan-50 text-cyan-600',
+    getValue: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-',
+    getSub: (t) => `클릭 ${formatNumber(t.clicks)}` },
+  { key: 'ctr', label: 'CTR', icon: MousePointerClick, color: 'bg-sky-50 text-sky-600',
+    getValue: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
+  { key: 'cvr', label: 'CVR (14일)', icon: Eye, color: 'bg-amber-50 text-amber-600',
+    getValue: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-',
+    getSub: (t) => `1일: ${t.clicks > 0 ? pct(t.orders1d / t.clicks) : '-'}` },
+  { key: 'cpm', label: 'CPM', icon: Eye, color: 'bg-teal-50 text-teal-600',
+    getValue: (t) => t.impressions > 0 ? formatCurrency(Math.round(t.cost / t.impressions * 1000)) : '-',
+    getSub: (t) => `노출 ${formatNumber(t.impressions)}` },
+  { key: 'cpa', label: 'CPA (건당 광고비)', icon: DollarSign, color: 'bg-orange-50 text-orange-600',
+    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-',
+    getSub: (t) => `1일: ${t.orders1d > 0 ? formatCurrency(Math.round(t.cost / t.orders1d)) : '-'}` },
+  { key: 'aov', label: 'AOV (평균 주문가)', icon: Target, color: 'bg-indigo-50 text-indigo-600',
+    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.revenue14d / t.orders14d)) : '-' },
+  { key: 'adRatio', label: '광고비율', icon: TrendingDown, color: 'bg-rose-50 text-rose-600',
+    getValue: (t) => t.revenue14d > 0 ? pct(t.cost / t.revenue14d) : '-',
+    getSub: () => '광고비 ÷ 매출' },
+  { key: 'impressions', label: '노출수', icon: Eye, color: 'bg-gray-50 text-gray-600',
+    getValue: (t) => formatNumber(t.impressions) },
+  { key: 'clicks', label: '클릭수', icon: MousePointerClick, color: 'bg-violet-50 text-violet-600',
+    getValue: (t) => formatNumber(t.clicks) },
+];
+
+const DEFAULT_KPIS: KpiKey[] = ['cost', 'roas', 'revenue', 'orders', 'cpc', 'ctr', 'cvr', 'cpm'];
+const KPI_STORAGE_KEY = 'lv-erp-ad-kpis';
+
+function loadKpis(): KpiKey[] {
+  if (typeof window === 'undefined') return DEFAULT_KPIS;
+  try {
+    const saved = localStorage.getItem(KPI_STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return DEFAULT_KPIS;
+}
+
+// ─── KPI Card ───────────────────────────────────────────────────────────────
+
+function KPI({ label, value, sub, icon: Icon, color }: {
+  label: string; value: string; sub?: string;
+  icon: React.ElementType; color: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4 flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${color}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <span className="text-[12px] text-[#6B7684] font-medium">{label}</span>
+      </div>
+      <p className="text-[20px] font-bold text-[#191F28] mt-1">{value}</p>
+      {sub && <p className="text-[11px] text-[#B0B8C1]">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Metric Chip ────────────────────────────────────────────────────────────
+
+function MetricChip({ m, active, onClick }: { m: MetricDef; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
+        active
+          ? 'border-[#191F28] bg-white text-[#191F28] shadow-sm'
+          : 'border-[#E5E8EB] bg-[#F8F9FA] text-[#8B95A1] hover:border-[#B0B8C1]'
+      }`}
+    >
+      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: m.color, opacity: active ? 1 : 0.4 }} />
+      {m.label}
+      <span className="text-[10px] opacity-60">{m.type === 'bar' ? '■' : '─'}</span>
+    </button>
+  );
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────
+
+const AD_DATA_KEY = 'lv-erp-ad-data';
+
+function loadAdData(): AnalysisData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(AD_DATA_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return null;
+}
+
+export default function AdAnalysisPage() {
+  const [data, setData] = useState<AnalysisData | null>(loadAdData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements'>('daily');
+  const [gran, setGran] = useState<Granularity>('daily');
+  const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
+  const [filterCampaign, setFilterCampaign] = useState('all');
+  const [filterProduct, setFilterProduct] = useState('all');
+  const [activeKpis, setActiveKpis] = useState<KpiKey[]>(loadKpis);
+  const [kpiEditOpen, setKpiEditOpen] = useState(false);
+  const [trendSortKey, setTrendSortKey] = useState<string>('date');
+  const [trendSortAsc, setTrendSortAsc] = useState(true);
+  const [sortKey, setSortKey] = useState<SortKey>('cost');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [kwSearch, setKwSearch] = useState('');
+  const [kwLimit, setKwLimit] = useState(50);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Toggle KPI
+  const toggleKpi = (key: KpiKey) => {
+    setActiveKpis((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try { localStorage.setItem(KPI_STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  // Toggle metric
+  const toggleMetric = (key: MetricKey) => {
+    setActiveMetrics((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  // Upload handler — xlsx 파싱 + 집계 전부 클라이언트, 가격만 API
+  // accumulate=true면 기존 데이터에 추가
+  const handleUpload = useCallback(async (file: File, accumulate = false) => {
+    setLoading(true);
+    setError('');
+    try {
+      const [XLSX, pricesRes] = await Promise.all([
+        import('xlsx'),
+        fetch('/api/ad-analysis'),
+      ]);
+      if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
+      const { prices } = await pricesRes.json() as { prices: Record<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number }> };
+
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      let raw: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      if (!raw.length) throw new Error('데이터가 없습니다');
+
+      // 누적 모드: 기존 raw 데이터가 있으면 합치기 (날짜+키워드+옵션ID 기준 중복 제거)
+      if (accumulate && data?._rawRows) {
+        const existingKeys = new Set(data._rawRows.map((r: any) =>
+          `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`
+        ));
+        const newRows = raw.filter((r: any) => {
+          const key = `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+          return !existingKeys.has(key);
+        });
+        raw = [...data._rawRows, ...newRows];
+      }
+
+      // Process
+      const matchedIds = new Set<string>();
+      const unmatchedIds = new Set<string>();
+      const dailyMap = new Map<string, any>();
+      const kwMap = new Map<string, any>();
+      const plMap = new Map<string, any>();
+      const compactMap = new Map<string, any>();
+
+      for (const r of raw) {
+        const dateStr = String(r['날짜']);
+        const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+        const keyword = r['키워드'] || '-';
+        const placement = r['광고 노출 지면'] || '기타';
+        const campaign = r['캠페인명'] || '기타';
+        const rawProduct = String(r['광고집행 상품명'] ?? '');
+        const product = rawProduct.split(',')[0].trim() || '기타';
+        const convOptionId = String(r['광고전환매출발생 옵션ID'] ?? '');
+
+        const impressions = Number(r['노출수']) || 0;
+        const clicks = Number(r['클릭수']) || 0;
+        const cost = Math.round((Number(r['광고비']) || 0) * 1.1);
+        const orders1d = Number(r['총 주문수(1일)']) || 0;
+        const revenue1d_raw = Number(r['총 전환매출액(1일)']) || 0;
+        const orders14d = Number(r['총 주문수(14일)']) || 0;
+        const revenue14d_raw = Number(r['총 전환매출액(14일)']) || 0;
+
+        const matched = prices[convOptionId];
+        if (matched && (orders1d > 0 || orders14d > 0)) matchedIds.add(convOptionId);
+        else if (!matched && (orders1d > 0 || orders14d > 0)) unmatchedIds.add(convOptionId);
+
+        const actualPrice = matched?.price ?? 0;
+        const costPrice = matched?.cost_price ?? 0;
+        const commissionRate = matched?.commission_rate ?? 0;
+        const revenue1d = actualPrice ? orders1d * actualPrice : revenue1d_raw;
+        const revenue14d = actualPrice ? orders14d * actualPrice : revenue14d_raw;
+        const cogs1d = costPrice ? orders1d * costPrice : 0;
+        const cogs14d = costPrice ? orders14d * costPrice : 0;
+        const commission1d = commissionRate ? revenue1d * (commissionRate / 100) : 0;
+        const commission14d = commissionRate ? revenue14d * (commissionRate / 100) : 0;
+
+        // Daily
+        if (!dailyMap.has(date)) dailyMap.set(date, { date, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+        const d = dailyMap.get(date)!;
+        d.impressions += impressions; d.clicks += clicks; d.cost += cost;
+        d.orders1d += orders1d; d.revenue1d += revenue1d; d.revenue1d_raw += revenue1d_raw;
+        d.orders14d += orders14d; d.revenue14d += revenue14d; d.revenue14d_raw += revenue14d_raw;
+        d.cogs1d += cogs1d; d.cogs14d += cogs14d;
+        d.commission1d += commission1d; d.commission14d += commission14d;
+
+        // Keywords by campaign+product
+        if (keyword !== '-') {
+          const kwKey = `${campaign}||${product}||${keyword}`;
+          if (!kwMap.has(kwKey)) kwMap.set(kwKey, { campaign, product, keyword, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+          const k = kwMap.get(kwKey)!;
+          k.impressions += impressions; k.clicks += clicks; k.cost += cost;
+          k.orders1d += orders1d; k.revenue1d += revenue1d; k.orders14d += orders14d; k.revenue14d += revenue14d;
+        }
+
+        // Placements by campaign+product
+        const plKey = `${campaign}||${product}||${placement}`;
+        if (!plMap.has(plKey)) plMap.set(plKey, { campaign, product, placement, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+        const p = plMap.get(plKey)!;
+        p.impressions += impressions; p.clicks += clicks; p.cost += cost;
+        p.orders1d += orders1d; p.revenue1d += revenue1d; p.orders14d += orders14d; p.revenue14d += revenue14d;
+
+        // Compact rows (date+campaign+product)
+        const cKey = `${date}|${campaign}|${product}`;
+        if (!compactMap.has(cKey)) compactMap.set(cKey, { date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0, _kw: new Set<string>() });
+        const c = compactMap.get(cKey)!;
+        c.impressions += impressions; c.clicks += clicks; c.cost += cost;
+        c.orders1d += orders1d; c.revenue1d += revenue1d; c.revenue1d_raw += revenue1d_raw;
+        c.orders14d += orders14d; c.revenue14d += revenue14d; c.revenue14d_raw += revenue14d_raw;
+        c.cogs1d += cogs1d; c.cogs14d += cogs14d;
+        c.commission1d += commission1d; c.commission14d += commission14d;
+        if (keyword !== '-' && impressions > 0) c._kw.add(keyword);
+      }
+
+      const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const keywords = [...kwMap.values()].sort((a, b) => b.cost - a.cost).map((k: any) => ({
+        ...k, ctr: k.impressions > 0 ? k.clicks / k.impressions : 0, cpc: k.clicks > 0 ? Math.round(k.cost / k.clicks) : 0,
+        cvr: k.clicks > 0 ? k.orders14d / k.clicks : 0, roas14d: k.cost > 0 ? k.revenue14d / k.cost : 0,
+      }));
+      const placements = [...plMap.values()].sort((a, b) => b.cost - a.cost);
+      const rows = [...compactMap.values()].map(({ _kw, ...rest }: any) => ({ ...rest, keywordCount: _kw.size }));
+
+      const totals = daily.reduce((acc: any, d: any) => {
+        acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
+        acc.orders1d += d.orders1d; acc.revenue1d += d.revenue1d; acc.revenue1d_raw += d.revenue1d_raw;
+        acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
+        acc.cogs1d += d.cogs1d; acc.cogs14d += d.cogs14d;
+        acc.commission1d += d.commission1d; acc.commission14d += d.commission14d;
+        return acc;
+      }, { impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+
+      const campaigns = [...new Set(rows.map((r: any) => r.campaign))].sort();
+      const products = [...new Set(rows.map((r: any) => r.product))].sort();
+
+      const priceInfo = [...matchedIds].map((id) => ({ optionId: id, ...prices[id] }));
+
+      const result: AnalysisData = {
+        totalRows: raw.length,
+        dateRange: { from: daily[0]?.date, to: daily[daily.length - 1]?.date },
+        priceInfo,
+        unmatchedOptionIds: [...unmatchedIds],
+        campaigns,
+        products,
+        rows,
+        totals,
+        daily,
+        keywords,
+        placements,
+        _rawRows: raw,
+      };
+      setData(result);
+      try {
+        localStorage.setItem(AD_DATA_KEY, JSON.stringify(result));
+      } catch {
+        // 용량 초과 시 _rawRows 제외하고 저장
+        try {
+          const { _rawRows, ...forStorage } = result;
+          localStorage.setItem(AD_DATA_KEY, JSON.stringify(forStorage));
+        } catch {}
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleUpload(file);
+  }, [handleUpload]);
+
+  // ── Filtered & re-aggregated data ──────────────────────────────────────
+  const filtered = useMemo(() => {
+    if (!data) return { rows: [] as ParsedRow[], daily: [] as DailyRow[], keywords: [] as KeywordRow[], placements: [] as PlacementRow[], totals: null as any };
+
+    const fc = filterCampaign;
+    const fp = filterProduct;
+    const matchRow = (r: { campaign: string; product: string }) =>
+      (fc === 'all' || r.campaign === fc) && (fp === 'all' || r.product === fp);
+
+    // Filter compact rows → re-aggregate daily
+    const rows = data.rows.filter(matchRow);
+    const dMap = new Map<string, DailyRow>();
+    for (const r of rows) {
+      if (!dMap.has(r.date)) {
+        dMap.set(r.date, { date: r.date, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+      }
+      const d = dMap.get(r.date)!;
+      d.impressions += r.impressions; d.clicks += r.clicks; d.cost += r.cost;
+      d.orders1d += r.orders1d; d.revenue1d += r.revenue1d; d.revenue1d_raw += r.revenue1d_raw;
+      d.orders14d += r.orders14d; d.revenue14d += r.revenue14d; d.revenue14d_raw += r.revenue14d_raw;
+      d.cogs1d += r.cogs1d; d.cogs14d += r.cogs14d;
+      d.commission1d += r.commission1d; d.commission14d += r.commission14d;
+    }
+    const daily = [...dMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Filter keywords (server-aggregated by campaign+product+keyword)
+    const fkw = data.keywords.filter(matchRow);
+    // Re-aggregate by keyword (merge across campaign/product if both 'all')
+    const kMap = new Map<string, any>();
+    for (const k of fkw) {
+      if (!kMap.has(k.keyword)) kMap.set(k.keyword, { keyword: k.keyword, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+      const m = kMap.get(k.keyword)!;
+      m.impressions += k.impressions; m.clicks += k.clicks; m.cost += k.cost;
+      m.orders1d += k.orders1d; m.revenue1d += k.revenue1d; m.orders14d += k.orders14d; m.revenue14d += k.revenue14d;
+    }
+    const keywords: KeywordRow[] = [...kMap.values()].sort((a, b) => b.cost - a.cost).map((k) => ({
+      ...k,
+      ctr: k.impressions > 0 ? k.clicks / k.impressions : 0,
+      cpc: k.clicks > 0 ? Math.round(k.cost / k.clicks) : 0,
+      cvr: k.clicks > 0 ? k.orders14d / k.clicks : 0,
+      roas14d: k.cost > 0 ? k.revenue14d / k.cost : 0,
+    }));
+
+    // Filter placements
+    const fpl = data.placements.filter(matchRow);
+    const pMap = new Map<string, any>();
+    for (const p of fpl) {
+      if (!pMap.has(p.placement)) pMap.set(p.placement, { placement: p.placement, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+      const m = pMap.get(p.placement)!;
+      m.impressions += p.impressions; m.clicks += p.clicks; m.cost += p.cost;
+      m.orders1d += p.orders1d; m.revenue1d += p.revenue1d; m.orders14d += p.orders14d; m.revenue14d += p.revenue14d;
+    }
+    const placements = [...pMap.values()].sort((a, b) => b.cost - a.cost);
+
+    const totals = daily.reduce((acc, d) => {
+      acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
+      acc.orders1d += d.orders1d; acc.revenue1d += d.revenue1d; acc.revenue1d_raw += d.revenue1d_raw;
+      acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
+      acc.cogs1d += d.cogs1d; acc.cogs14d += d.cogs14d;
+      acc.commission1d += d.commission1d; acc.commission14d += d.commission14d;
+      return acc;
+    }, { impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 } as DailyRow);
+
+    return { rows, daily, keywords, placements, totals };
+  }, [data, filterCampaign, filterProduct]);
+
+  // Aggregated chart data
+  const chartData = useMemo(() => {
+    if (!filtered.daily.length) return [];
+    const buckets = aggregateByGranularity(filtered.daily, gran, filtered.rows);
+    return buckets.map((b) => {
+      const row: any = { ...b };
+      for (const m of METRICS) {
+        row[`__${m.key}`] = m.getValue(b);
+      }
+      return row;
+    });
+  }, [filtered.daily, filtered.rows, gran]);
+
+  // Sorted trend table data
+  const sortedTrendData = useMemo(() => {
+    if (!chartData.length) return chartData;
+    return [...chartData].sort((a: any, b: any) => {
+      const key = trendSortKey;
+      let av = a[key] ?? 0;
+      let bv = b[key] ?? 0;
+      // Compute derived values
+      if (key === 'ctr') { av = a.impressions > 0 ? a.clicks / a.impressions : 0; bv = b.impressions > 0 ? b.clicks / b.impressions : 0; }
+      if (key === 'cpc') { av = a.clicks > 0 ? a.cost / a.clicks : 0; bv = b.clicks > 0 ? b.cost / b.clicks : 0; }
+      if (key === 'roas') { av = a.cost > 0 ? a.revenue14d / a.cost : 0; bv = b.cost > 0 ? b.revenue14d / b.cost : 0; }
+      if (typeof av === 'string') return trendSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+      return trendSortAsc ? av - bv : bv - av;
+    });
+  }, [chartData, trendSortKey, trendSortAsc]);
+
+  const toggleTrendSort = (key: string) => {
+    if (trendSortKey === key) setTrendSortAsc(!trendSortAsc);
+    else { setTrendSortKey(key); setTrendSortAsc(key === 'date'); }
+  };
+
+  const TrendSortIcon = ({ k }: { k: string }) => (
+    trendSortKey === k
+      ? (trendSortAsc ? <ChevronUp className="h-3 w-3 inline" /> : <ChevronDown className="h-3 w-3 inline" />)
+      : <ArrowUpDown className="h-3 w-3 inline opacity-30" />
+  );
+
+  // Active metric defs
+  const activeDefs = useMemo(
+    () => METRICS.filter((m) => activeMetrics.includes(m.key)),
+    [activeMetrics],
+  );
+
+  // Determine Y-axis needs
+  const needsWon = activeDefs.some((m) => m.unit === 'won');
+  const needsPct = activeDefs.some((m) => m.unit === 'pct');
+  const needsCnt = activeDefs.some((m) => m.unit === 'cnt');
+
+  // Map unit → yAxisId (max 2 axes, won gets left, pct/cnt get right)
+  const leftUnit = needsWon ? 'won' : needsCnt ? 'cnt' : 'pct';
+  const rightUnit = needsPct && leftUnit !== 'pct' ? 'pct' : needsCnt && leftUnit !== 'cnt' ? 'cnt' : null;
+  const unitToAxis = (u: string) => u === leftUnit ? 'left' : 'right';
+
+  // Sorted keywords
+  const sortedKeywords = useMemo(() => {
+    if (!filtered.keywords.length) return [];
+    let list = filtered.keywords;
+    if (kwSearch) {
+      const q = kwSearch.toLowerCase();
+      list = list.filter((k) => k.keyword.toLowerCase().includes(q));
+    }
+    const sorted = [...list].sort((a, b) => {
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
+      return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+    return sorted.slice(0, kwLimit);
+  }, [filtered.keywords, sortKey, sortAsc, kwSearch, kwLimit]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) => (
+    sortKey === k
+      ? (sortAsc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)
+      : <ArrowUpDown className="h-3 w-3 opacity-30" />
+  );
+
+  // xlsx download
+  const downloadXlsx = useCallback((sheetData: Record<string, any>[], filename: string) => {
+    import('xlsx').then((XLSX) => {
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      XLSX.writeFile(wb, filename);
+    });
+  }, []);
+
+  const handleDownload = useCallback(() => {
+    if (tab === 'daily') {
+      const rows = chartData.map((d: any) => ({
+        [gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월']: d.label,
+        노출: d.impressions, 클릭: d.clicks,
+        CTR: d.impressions > 0 ? +(d.clicks / d.impressions * 100).toFixed(2) : 0,
+        CPC: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
+        CPM: d.impressions > 0 ? Math.round(d.cost / d.impressions * 1000) : 0,
+        광고비: d.cost, '주문(14일)': d.orders14d, '매출(14일)': d.revenue14d,
+        'ROAS(14일)': d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0,
+        ...(d.keywordCount !== undefined ? { '노출 키워드수': d.keywordCount } : {}),
+      }));
+      downloadXlsx(rows, `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } else if (tab === 'keywords') {
+      const rows = sortedKeywords.map((k) => ({
+        키워드: k.keyword, 노출: k.impressions, 클릭: k.clicks, 광고비: k.cost,
+        CTR: +(k.ctr * 100).toFixed(2), CPC: k.cpc,
+        '주문(14일)': k.orders14d, '매출(14일)': k.revenue14d,
+        CVR: +(k.cvr * 100).toFixed(2), 'ROAS(14일)': +(k.roas14d * 100).toFixed(1),
+      }));
+      downloadXlsx(rows, `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } else if (tab === 'placements') {
+      const rows = filtered.placements.map((p) => ({
+        노출지면: p.placement, 노출: p.impressions, 클릭: p.clicks,
+        CTR: p.impressions > 0 ? +(p.clicks / p.impressions * 100).toFixed(2) : 0,
+        광고비: p.cost, '주문(14일)': p.orders14d, '매출(14일)': p.revenue14d,
+        'ROAS(14일)': p.cost > 0 ? +(p.revenue14d / p.cost * 100).toFixed(1) : 0,
+      }));
+      downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+  }, [tab, gran, chartData, sortedKeywords, filtered.placements, downloadXlsx]);
+
+  // ─── Render ─────────────────────────────────────────────────────────────
+
+  const t = filtered.totals;
+  const hasData = data && t && (t.cost > 0 || t.impressions > 0);
+  const roas14d = t && t.cost > 0 ? t.revenue14d / t.cost : 0;
+
+  const tabs = [
+    { key: 'daily' as const, label: '기간별 추이' },
+    { key: 'keywords' as const, label: '키워드 분석' },
+    { key: 'placements' as const, label: '노출지면별' },
+  ];
+
+  const granOptions: { key: Granularity; label: string }[] = [
+    { key: 'daily', label: '일' },
+    { key: 'weekly', label: '주' },
+    { key: 'monthly', label: '월' },
+  ];
+
+  // Tooltip formatter
+  const tooltipFormatter = (value: number, name: string) => {
+    const m = activeDefs.find((d) => d.label === name);
+    if (!m) return [String(value), name];
+    if (m.unit === 'pct') return [`${(value * 100).toFixed(1)}%`, name];
+    if (m.unit === 'won') return [formatCurrency(Math.round(value)), name];
+    return [formatNumber(Math.round(value)), name];
+  };
+
+  const yAxisFormatter = (unit: string) => (v: number) => {
+    if (unit === 'pct') return `${(v * 100).toFixed(0)}%`;
+    if (unit === 'won') return v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}k`;
+    return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Megaphone className="h-5 w-5 text-[#3182F6]" />
+          <h1 className="text-[20px] font-bold text-[#191F28]">광고 분석</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {data && (
+            <>
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={loading}
+                data-mode="accumulate"
+                className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B6AE5] disabled:opacity-60 transition-colors"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                기간 추가
+              </button>
+              <button
+                onClick={() => { setData(null); localStorage.removeItem(AD_DATA_KEY); }}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[#6B7684] text-[13px] font-medium hover:bg-[#F8F9FA] transition-colors"
+              >
+                초기화
+              </button>
+            </>
+          )}
+          {!data && (
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={loading}
+              className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B6AE5] disabled:opacity-60 transition-colors"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              광고 데이터 업로드
+            </button>
+          )}
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) {
+              const isAccumulate = !!data;
+              handleUpload(f, isAccumulate);
+            }
+            e.target.value = '';
+          }}
+        />
+      </div>
+
+      {/* Upload zone (no data) */}
+      {!data && !loading && (
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          className="border-2 border-dashed border-[#D1D6DB] rounded-2xl p-12 text-center hover:border-[#3182F6] hover:bg-[#F8FAFF] transition-colors cursor-pointer"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="h-10 w-10 mx-auto text-[#B0B8C1] mb-3" />
+          <p className="text-[15px] font-semibold text-[#333D4B]">쿠팡 광고 데이터 (xlsx) 를 드래그하거나 클릭하세요</p>
+          <p className="text-[12px] text-[#8B95A1] mt-1">PA 일별 키워드 리포트 지원</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-[#3182F6]" />
+          <span className="ml-3 text-[15px] text-[#6B7684]">데이터 처리 중...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
+      )}
+
+      {/* Results */}
+      {hasData && (
+        <>
+          {/* Price info */}
+          {data.priceInfo.length > 0 && (
+            <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl px-4 py-3 text-[12px] text-[#166534]">
+              <span className="font-semibold">매출 보정 적용됨</span>
+              {data.priceInfo.map((p) => (
+                <span key={p.optionId} className="ml-3">
+                  {p.sku_code} · 판매가 {formatCurrency(p.price)} · 원가 {formatCurrency(p.cost_price)}{p.commission_rate ? ` · 수수료 ${p.commission_rate}%` : ''}
+                </span>
+              ))}
+              <span className="ml-3 text-[11px] text-[#4ADE80]">
+                (광고 원본 매출 {formatCurrency(t.revenue14d_raw)} → 보정 {formatCurrency(t.revenue14d)})
+              </span>
+            </div>
+          )}
+
+          {/* Campaign / Product filter */}
+          {(data.campaigns.length > 1 || data.products.length > 1) && (() => {
+            // 캠페인 선택 시 해당 캠페인의 상품만, 상품 선택 시 해당 상품의 캠페인만
+            const productsForCampaign = filterCampaign === 'all'
+              ? data.products
+              : [...new Set(data.rows.filter((r) => r.campaign === filterCampaign).map((r) => r.product))].sort();
+            const campaignsForProduct = filterProduct === 'all'
+              ? data.campaigns
+              : [...new Set(data.rows.filter((r) => r.product === filterProduct).map((r) => r.campaign))].sort();
+
+            return (
+            <div className="flex flex-wrap items-center gap-3">
+              {data.campaigns.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[#6B7684]">캠페인</label>
+                  <select
+                    value={filterCampaign}
+                    onChange={(e) => {
+                      setFilterCampaign(e.target.value);
+                      // 캠페인 변경 시, 현재 상품이 새 캠페인에 없으면 초기화
+                      if (filterProduct !== 'all') {
+                        const nextProducts = e.target.value === 'all'
+                          ? data.products
+                          : [...new Set(data.rows.filter((r) => r.campaign === e.target.value).map((r) => r.product))];
+                        if (!nextProducts.includes(filterProduct)) setFilterProduct('all');
+                      }
+                    }}
+                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]"
+                  >
+                    <option value="all">전체 ({campaignsForProduct.length})</option>
+                    {campaignsForProduct.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
+              {data.products.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[#6B7684]">상품</label>
+                  <select
+                    value={filterProduct}
+                    onChange={(e) => setFilterProduct(e.target.value)}
+                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] max-w-[300px] truncate"
+                  >
+                    <option value="all">전체 ({productsForCampaign.length})</option>
+                    {productsForCampaign.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+              {(filterCampaign !== 'all' || filterProduct !== 'all') && (
+                <button
+                  onClick={() => { setFilterCampaign('all'); setFilterProduct('all'); }}
+                  className="text-[12px] text-[#3182F6] font-medium hover:underline"
+                >
+                  필터 초기화
+                </button>
+              )}
+            </div>
+            );
+          })()}
+
+          {/* KPI Cards */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[12px] text-[#8B95A1]">핵심 지표</span>
+              <button
+                onClick={() => setKpiEditOpen(!kpiEditOpen)}
+                className="text-[12px] text-[#3182F6] font-medium hover:underline"
+              >
+                {kpiEditOpen ? '완료' : '편집'}
+              </button>
+            </div>
+            {kpiEditOpen && (
+              <div className="flex flex-wrap gap-2 mb-3 p-3 bg-[#F8F9FA] rounded-xl border border-[#E5E8EB]">
+                {KPI_DEFS.map((kd) => (
+                  <button
+                    key={kd.key}
+                    onClick={() => toggleKpi(kd.key)}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                      activeKpis.includes(kd.key)
+                        ? 'border-[#3182F6] bg-[#EBF1FE] text-[#3182F6]'
+                        : 'border-[#E5E8EB] bg-white text-[#8B95A1] hover:border-[#B0B8C1]'
+                    }`}
+                  >
+                    {kd.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {KPI_DEFS.filter((kd) => activeKpis.includes(kd.key)).map((kd) => {
+                // Dynamic icon/color for ROAS
+                let icon = kd.icon;
+                let color = kd.color;
+                if (kd.key === 'roas') {
+                  const roasVal = t.cost > 0 ? t.revenue14d / t.cost : 0;
+                  icon = roasVal >= 1 ? TrendingUp : TrendingDown;
+                  color = roasVal >= 1 ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600';
+                }
+                return (
+                  <KPI
+                    key={kd.key}
+                    label={kd.label}
+                    value={kd.getValue(t, null)}
+                    sub={kd.getSub?.(t, null)}
+                    icon={icon}
+                    color={color}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Profit summary — only show when cogs data exists */}
+          {(() => {
+            const hasCogs = t.cogs14d > 0;
+            const commission = t.commission14d ?? 0;
+            const netProfit = t.revenue14d - t.cogs14d - commission - t.cost;
+            const perOrderCost = t.orders14d > 0 ? Math.round(t.cost / t.orders14d) : 0;
+            const perOrderProfit = t.orders14d > 0 ? Math.round(netProfit / t.orders14d) : 0;
+            return hasCogs ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
+                  <p className="text-[12px] text-[#6B7684]">광고 순이익 (14일) = 매출 − 원가 − 수수료 − 광고비</p>
+                  <p className={`text-[20px] font-bold mt-1 ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(netProfit)}
+                  </p>
+                  <p className="text-[11px] text-[#B0B8C1]">
+                    매출 {formatCurrency(t.revenue14d)} − 원가 {formatCurrency(t.cogs14d)}{commission > 0 ? ` − 수수료 ${formatCurrency(Math.round(commission))}` : ''} − 광고비 {formatCurrency(t.cost)}
+                  </p>
+                </div>
+                <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
+                  <p className="text-[12px] text-[#6B7684]">건당 광고비</p>
+                  <p className="text-[20px] font-bold mt-1 text-[#191F28]">
+                    {perOrderCost ? formatCurrency(perOrderCost) : '-'}
+                  </p>
+                  <p className="text-[11px] text-[#B0B8C1]">광고비 ÷ 주문수(14일)</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4">
+                  <p className="text-[12px] text-[#6B7684]">건당 순이익</p>
+                  <p className={`text-[20px] font-bold mt-1 ${perOrderProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {perOrderProfit ? formatCurrency(perOrderProfit) : '-'}
+                  </p>
+                  <p className="text-[11px] text-[#B0B8C1]">(매출 − 원가 − 수수료 − 광고비) ÷ 주문수</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[12px] text-amber-700">
+                순이익 계산 불가 — 마스터시트 &gt; 플랫폼 탭에서 해당 상품의 <strong>원가(cost_price)</strong>를 입력하세요.
+                {data.unmatchedOptionIds.length > 0 && (
+                  <span className="ml-2">매칭 실패 옵션ID: {data.unmatchedOptionIds.join(', ')}</span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Rule-based Insights */}
+          {(() => {
+            const insights: { type: 'danger' | 'warn' | 'good'; text: string }[] = [];
+            const ctr = t.impressions > 0 ? t.clicks / t.impressions : 0;
+            const cvr = t.clicks > 0 ? t.orders14d / t.clicks : 0;
+            const roas = t.cost > 0 ? t.revenue14d / t.cost : 0;
+            const cpc = t.clicks > 0 ? Math.round(t.cost / t.clicks) : 0;
+            const commission = t.commission14d ?? 0;
+            const profit = t.revenue14d - t.cogs14d - commission - t.cost;
+
+            // Overall ROAS
+            if (roas > 0 && roas < 1) insights.push({ type: 'danger', text: `전체 ROAS ${roas.toFixed(2)} — 광고비 대비 매출 적자. 저효율 키워드 정리 필요` });
+            else if (roas >= 1 && roas < 2) insights.push({ type: 'warn', text: `전체 ROAS ${roas.toFixed(2)} — 원가/수수료 고려 시 실질 수익 미미. 키워드 최적화 권장` });
+            else if (roas >= 3) insights.push({ type: 'good', text: `전체 ROAS ${roas.toFixed(2)} — 양호. 광고비 증액 여지 있음` });
+
+            // Profit
+            if (t.cogs14d > 0 && profit < 0) insights.push({ type: 'danger', text: `순이익 ${formatCurrency(profit)} 적자 — 광고비(${formatCurrency(t.cost)}) 또는 원가 구조 점검 필요` });
+
+            // CTR
+            if (ctr > 0 && ctr < 0.005) insights.push({ type: 'warn', text: `CTR ${(ctr*100).toFixed(2)}% 낮음 — 광고 소재(썸네일/타이틀) 개선 권장` });
+            else if (ctr >= 0.02) insights.push({ type: 'good', text: `CTR ${(ctr*100).toFixed(2)}% 우수 — 소재 경쟁력 양호` });
+
+            // CVR
+            if (cvr > 0 && cvr < 0.01) insights.push({ type: 'warn', text: `CVR ${(cvr*100).toFixed(2)}% 저조 — 상세페이지/가격/리뷰 점검 필요` });
+
+            // Per-keyword insights
+            const topKw = filtered.keywords.filter(k => k.cost > 0).sort((a, b) => {
+              const ra = a.cost > 0 ? a.revenue14d / a.cost : 0;
+              const rb = b.cost > 0 ? b.revenue14d / b.cost : 0;
+              return ra - rb;
+            });
+
+            // Worst keywords (ROAS < 0.5, cost > 5% of total)
+            const worstKws = topKw.filter(k => {
+              const r = k.cost > 0 ? k.revenue14d / k.cost : 0;
+              return r < 0.5 && k.cost > t.cost * 0.05;
+            });
+            if (worstKws.length > 0) {
+              const names = worstKws.slice(0, 3).map(k => `"${k.keyword}"(ROAS ${k.cost > 0 ? (k.revenue14d / k.cost).toFixed(1) : '0'})`).join(', ');
+              const totalWaste = worstKws.reduce((s, k) => s + k.cost, 0);
+              insights.push({ type: 'danger', text: `비효율 키워드: ${names} → 광고비 ${formatCurrency(totalWaste)} 낭비. 중단 또는 입찰가 조정 권장` });
+            }
+
+            // Best keywords (ROAS > 3, has orders)
+            const bestKws = topKw.filter(k => {
+              const r = k.cost > 0 ? k.revenue14d / k.cost : 0;
+              return r > 3 && k.orders14d > 0;
+            }).reverse();
+            if (bestKws.length > 0) {
+              const names = bestKws.slice(0, 3).map(k => `"${k.keyword}"(ROAS ${(k.revenue14d / k.cost).toFixed(1)})`).join(', ');
+              insights.push({ type: 'good', text: `고효율 키워드: ${names} → 입찰가 상향 또는 예산 집중 권장` });
+            }
+
+            // High CPC warning
+            if (cpc > 500 && roas < 2) insights.push({ type: 'warn', text: `CPC ${formatCurrency(cpc)} 높음 + ROAS 낮음 — 경쟁 키워드 대신 롱테일 키워드 활용 고려` });
+
+            // Product-level insight
+            const prodMap = new Map<string, { cost: number; revenue: number; orders: number }>();
+            for (const r of filtered.rows) {
+              const p = prodMap.get(r.product) ?? { cost: 0, revenue: 0, orders: 0 };
+              p.cost += r.cost; p.revenue += r.revenue14d; p.orders += r.orders14d;
+              prodMap.set(r.product, p);
+            }
+            for (const [name, p] of prodMap) {
+              const pr = p.cost > 0 ? p.revenue / p.cost : 0;
+              if (pr < 0.5 && p.cost > t.cost * 0.15) {
+                insights.push({ type: 'danger', text: `"${name.slice(0, 20)}" ROAS ${pr.toFixed(1)} — 광고비 비중 ${Math.round(p.cost / t.cost * 100)}%인데 효율 낮음. 예산 재배분 고려` });
+              }
+            }
+
+            if (insights.length === 0) return null;
+            const colors = { danger: 'bg-red-50 border-red-200 text-red-700', warn: 'bg-amber-50 border-amber-200 text-amber-700', good: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
+            const icons = { danger: '!', warn: '?', good: '+' };
+            return (
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5 space-y-2">
+                <h3 className="text-[13px] font-bold text-[#191F28]">자동 인사이트</h3>
+                {insights.map((ins, i) => (
+                  <div key={i} className={`${colors[ins.type]} border rounded-lg px-3 py-2 text-[12px] flex items-start gap-2`}>
+                    <span className="font-bold shrink-0 w-4 text-center">{icons[ins.type]}</span>
+                    <span>{ins.text}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Tabs */}
+          <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+            {tabs.map((tb) => (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key)}
+                className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                  tab === tb.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+                }`}
+              >
+                {tb.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ─── Tab: Daily / Trend ───────────────────────────────────── */}
+          {tab === 'daily' && (
+            <div className="space-y-4">
+              {/* Controls: granularity + metric chips */}
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 추이</h3>
+                  {/* Granularity toggle */}
+                  <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                    {granOptions.map((g) => (
+                      <button
+                        key={g.key}
+                        onClick={() => setGran(g.key)}
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                          gran === g.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Metric filter chips */}
+                <div className="flex flex-wrap gap-2">
+                  {METRICS.map((m) => (
+                    <MetricChip key={m.key} m={m} active={activeMetrics.includes(m.key)} onClick={() => toggleMetric(m.key)} />
+                  ))}
+                </div>
+
+                {/* Chart */}
+                {activeDefs.length > 0 && (
+                  <div className="h-[360px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis
+                          yAxisId="left"
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={yAxisFormatter(leftUnit)}
+                        />
+                        {rightUnit && (
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={yAxisFormatter(rightUnit)}
+                          />
+                        )}
+                        <Tooltip formatter={tooltipFormatter} />
+                        <Legend />
+                        {activeDefs.map((m) => {
+                          const yId = unitToAxis(m.unit);
+                          if (m.type === 'bar') {
+                            return (
+                              <Bar
+                                key={m.key}
+                                yAxisId={yId}
+                                dataKey={`__${m.key}`}
+                                name={m.label}
+                                fill={m.color}
+                                opacity={0.75}
+                                radius={[4, 4, 0, 0]}
+                              />
+                            );
+                          }
+                          return (
+                            <Line
+                              key={m.key}
+                              yAxisId={yId}
+                              type="monotone"
+                              dataKey={`__${m.key}`}
+                              name={m.label}
+                              stroke={m.color}
+                              strokeWidth={2}
+                              dot={{ r: 3, fill: m.color }}
+                            />
+                          );
+                        })}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                {activeDefs.length === 0 && (
+                  <p className="text-center text-[13px] text-[#B0B8C1] py-10">표시할 지표를 선택하세요</p>
+                )}
+              </div>
+
+              {/* Data table */}
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+                <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                  <span className="text-[12px] text-[#8B95A1]">헤더 클릭으로 정렬</span>
+                  <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
+                    <Download className="h-3.5 w-3.5" /> xlsx 다운로드
+                  </button>
+                </div>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
+                      {([
+                        ['date', gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월', 'left'],
+                        ['impressions', '노출', 'right'], ['clicks', '클릭', 'right'],
+                        ['ctr', 'CTR', 'right'], ['cpc', 'CPC', 'right'], ['cost', '광고비', 'right'],
+                        ['orders14d', '주문(14d)', 'right'], ['revenue14d', '매출(14d)', 'right'],
+                        ['roas', 'ROAS(14d)', 'right'],
+                        ['keywordCount', '키워드수', 'right'],
+                      ] as [string, string, string][]).map(([k, label, align]) => (
+                        <th key={k}
+                          onClick={() => toggleTrendSort(k)}
+                          className={`text-${align} px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] select-none whitespace-nowrap`}
+                        >
+                          {label} <TrendSortIcon k={k} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTrendData.map((d: any) => {
+                      const dCtr = d.impressions > 0 ? d.clicks / d.impressions : 0;
+                      const dCpc = d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
+                      const dRoas = d.cost > 0 ? d.revenue14d / d.cost : 0;
+                      return (
+                        <tr key={d.date} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                          <td className="px-3 py-2.5 font-medium text-[#191F28]">{d.label}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(d.impressions)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(d.clicks)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(dCtr)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatCurrency(dCpc)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(d.cost)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{d.orders14d}</td>
+                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(d.revenue14d)}</td>
+                          <td className={`px-3 py-2.5 text-right font-bold ${dRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                            {d.cost > 0 ? `${(dRoas * 100).toFixed(0)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[#8B5CF6] font-medium">{formatNumber(d.keywordCount ?? 0)}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* Total row */}
+                    <tr className="bg-[#F8FAFC] font-bold">
+                      <td className="px-3 py-2.5 text-[#191F28]">합계</td>
+                      <td className="px-3 py-2.5 text-right">{formatNumber(t.impressions)}</td>
+                      <td className="px-3 py-2.5 text-right">{formatNumber(t.clicks)}</td>
+                      <td className="px-3 py-2.5 text-right">{t.impressions > 0 ? pct(t.clicks / t.impressions) : '-'}</td>
+                      <td className="px-3 py-2.5 text-right">{t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-'}</td>
+                      <td className="px-3 py-2.5 text-right text-[#F43F5E]">{formatCurrency(t.cost)}</td>
+                      <td className="px-3 py-2.5 text-right">{t.orders14d}</td>
+                      <td className="px-3 py-2.5 text-right text-[#3182F6]">{formatCurrency(t.revenue14d)}</td>
+                      <td className={`px-3 py-2.5 text-right ${roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                        {(roas14d * 100).toFixed(0)}%
+                      </td>
+                      <td className="px-3 py-2.5 text-right">-</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Tab: Keywords ──────────────────────────────────────────── */}
+          {tab === 'keywords' && (
+            <div className="space-y-4">
+              {/* Keyword count trend chart */}
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 노출 키워드 수</h3>
+                  <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                    {([
+                      { key: 'daily' as Granularity, label: '일' },
+                      { key: 'weekly' as Granularity, label: '주' },
+                      { key: 'monthly' as Granularity, label: '월' },
+                    ]).map((g) => (
+                      <button
+                        key={g.key}
+                        onClick={() => setGran(g.key)}
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                          gran === g.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => [formatNumber(v), '키워드 수']} />
+                      <Bar dataKey="keywordCount" name="키워드 수" fill="#8B5CF6" opacity={0.7} radius={[4, 4, 0, 0]} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px] max-w-[360px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#B0B8C1]" />
+                  <input
+                    type="text"
+                    value={kwSearch}
+                    onChange={(e) => setKwSearch(e.target.value)}
+                    placeholder="키워드 검색..."
+                    className="w-full h-10 pl-9 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10"
+                  />
+                </div>
+                <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
+                  <Download className="h-3.5 w-3.5" /> xlsx
+                </button>
+                <span className="text-[12px] text-[#8B95A1]">
+                  {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {filtered.keywords.length}개 키워드
+                </span>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] min-w-[180px]">키워드</th>
+                      {([
+                        ['impressions', '노출'], ['clicks', '클릭'], ['cost', '광고비'],
+                        ['ctr', 'CTR'], ['cpc', 'CPC'], ['orders14d', '주문(14d)'],
+                        ['revenue14d', '매출(14d)'], ['cvr', 'CVR'], ['roas14d', 'ROAS(14d)'],
+                      ] as [SortKey, string][]).map(([k, label]) => (
+                        <th key={k}
+                          onClick={() => toggleSort(k)}
+                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none"
+                        >
+                          <span className="inline-flex items-center gap-1">{label} <SortIcon k={k} /></span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedKeywords.map((k) => (
+                      <tr key={k.keyword} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                        <td className="px-3 py-2 font-medium text-[#191F28] max-w-[260px] truncate">{k.keyword}</td>
+                        <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(k.impressions)}</td>
+                        <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(k.clicks)}</td>
+                        <td className="px-3 py-2 text-right text-[#F43F5E]">{formatCurrency(k.cost)}</td>
+                        <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.ctr)}</td>
+                        <td className="px-3 py-2 text-right text-[#6B7684]">{formatCurrency(k.cpc)}</td>
+                        <td className="px-3 py-2 text-right text-[#191F28]">{k.orders14d}</td>
+                        <td className="px-3 py-2 text-right text-[#3182F6]">{formatCurrency(k.revenue14d)}</td>
+                        <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.cvr)}</td>
+                        <td className={`px-3 py-2 text-right font-bold ${k.roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                          {k.cost > 0 ? `${(k.roas14d * 100).toFixed(0)}%` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {sortedKeywords.length >= kwLimit && (
+                <div className="text-center">
+                  <button
+                    onClick={() => setKwLimit((l) => l + 50)}
+                    className="text-[13px] text-[#3182F6] font-medium hover:underline"
+                  >
+                    더 보기
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── Tab: Placements ───────────────────────────────────────── */}
+          {tab === 'placements' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[13px] font-bold text-[#191F28]">노출지면별 광고비 · 매출</h3>
+                  <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
+                    <Download className="h-3.5 w-3.5" /> xlsx
+                  </button>
+                </div>
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={filtered.placements} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="placement" tick={{ fontSize: 11 }} width={160} />
+                      <Tooltip formatter={(v: number, name: string) => [formatCurrency(Math.round(v)), name]} />
+                      <Legend />
+                      <Bar dataKey="cost" name="광고비" fill="#F43F5E" opacity={0.7} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="revenue14d" name="매출(14일)" fill="#3182F6" opacity={0.7} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684]">노출지면</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">노출</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">클릭</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CTR</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">광고비</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">주문(14d)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">매출(14d)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">ROAS(14d)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">비중</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.placements.map((p) => {
+                      const pCtr = p.impressions > 0 ? p.clicks / p.impressions : 0;
+                      const pRoas = p.cost > 0 ? p.revenue14d / p.cost : 0;
+                      const costShare = t.cost > 0 ? p.cost / t.cost : 0;
+                      return (
+                        <tr key={p.placement} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                          <td className="px-3 py-2.5 font-medium text-[#191F28]">{p.placement}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(p.impressions)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(p.clicks)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCtr)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(p.cost)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{p.orders14d}</td>
+                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(p.revenue14d)}</td>
+                          <td className={`px-3 py-2.5 text-right font-bold ${pRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                            {p.cost > 0 ? `${(pRoas * 100).toFixed(0)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(costShare)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
