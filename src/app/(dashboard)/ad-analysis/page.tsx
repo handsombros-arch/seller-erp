@@ -5,7 +5,7 @@ import { formatNumber, formatCurrency } from '@/lib/utils';
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
-  ChevronDown, ChevronUp, Search, Download,
+  ChevronDown, ChevronUp, Search, Download, Settings, GripVertical,
 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line,
@@ -319,7 +319,7 @@ export default function AdAnalysisPage() {
   const [error, setError] = useState('');
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
-  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements'>('daily');
+  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
   const [gran, setGran] = useState<Granularity>('daily');
   const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
   const [filterCampaign, setFilterCampaign] = useState('all');
@@ -375,7 +375,7 @@ export default function AdAnalysisPage() {
     { key: 'cpc', label: 'CPC',
       render: (d) => d.clicks > 0 ? formatCurrency(Math.round(d.cost / d.clicks)) : '-',
       renderTotal: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-' },
-    { key: 'cost', label: '광고비',
+    { key: 'cost', label: '광고비(VAT)',
       render: (d) => formatCurrency(d.cost),
       renderTotal: (t) => formatCurrency(t.cost), className: 'text-[#F43F5E] font-medium' },
     { key: 'orders14d', label: '주문(14d)',
@@ -427,7 +427,24 @@ export default function AdAnalysisPage() {
     });
   };
 
-  const visibleCols = TABLE_COLS.filter((c) => activeCols.includes(c.key));
+  const colMap = Object.fromEntries(TABLE_COLS.map((c) => [c.key, c]));
+  const visibleCols = activeCols.map((k) => colMap[k]).filter(Boolean);
+  const dragCol = useRef<string | null>(null);
+  const handleColDragStart = (key: string) => { dragCol.current = key; };
+  const handleColDrop = (targetKey: string) => {
+    if (!dragCol.current || dragCol.current === targetKey) return;
+    setActiveCols((prev) => {
+      const from = prev.indexOf(dragCol.current!);
+      const to = prev.indexOf(targetKey);
+      if (from < 0 || to < 0) return prev;
+      const next = [...prev];
+      next.splice(from, 1);
+      next.splice(to, 0, dragCol.current!);
+      try { localStorage.setItem(TABLE_COL_STORAGE, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    dragCol.current = null;
+  };
 
   // ─── 매칭 유틸 ───────────────────────────────────────────────────
   const tokenize = (s: string) => s.toLowerCase().replace(/[()（）]/g, '').split(/[\s,]+/).filter(w => w.length >= 2);
@@ -766,6 +783,17 @@ export default function AdAnalysisPage() {
     }
     const placements = [...pMap.values()].sort((a, b) => b.cost - a.cost);
 
+    // Aggregate by product
+    const prodMap = new Map<string, any>();
+    for (const r of rows) {
+      if (!prodMap.has(r.product)) prodMap.set(r.product, { product: r.product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+      const m = prodMap.get(r.product)!;
+      m.impressions += r.impressions; m.clicks += r.clicks; m.cost += r.cost;
+      m.orders14d += r.orders14d; m.revenue14d += r.revenue14d;
+      m.cogs14d += r.cogs14d; m.commission14d += r.commission14d;
+    }
+    const products = [...prodMap.values()].sort((a, b) => b.cost - a.cost);
+
     const totals = daily.reduce((acc, d) => {
       acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
       acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
@@ -774,7 +802,7 @@ export default function AdAnalysisPage() {
       return acc;
     }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow);
 
-    return { rows, daily, keywords, placements, totals };
+    return { rows, daily, keywords, placements, products, totals };
   }, [data, filterCampaign, filterProduct]);
 
   // Aggregated chart data
@@ -912,6 +940,7 @@ export default function AdAnalysisPage() {
     { key: 'daily' as const, label: '기간별 추이' },
     { key: 'keywords' as const, label: '키워드 분석' },
     { key: 'placements' as const, label: '노출지면별' },
+    { key: 'products' as const, label: '상품별' },
   ];
 
   const granOptions: { key: Granularity; label: string }[] = [
@@ -1438,14 +1467,16 @@ export default function AdAnalysisPage() {
               {/* Data table */}
               <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
                 <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                  <span className="text-[12px] text-[#8B95A1]">헤더 클릭으로 정렬</span>
-                  <div className="flex items-center gap-3">
+                  <span className="text-[12px] text-[#8B95A1]">헤더 클릭 정렬 · 헤더 드래그 순서 변경</span>
+                  <div className="flex items-center gap-2">
                     <button onClick={() => setTableColEdit(!tableColEdit)}
-                      className="text-[12px] text-[#6B7684] hover:text-[#3182F6] font-medium">
-                      {tableColEdit ? '완료' : '컬럼 편집'}
+                      className={`flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
+                        tableColEdit ? 'border-[#3182F6] bg-[#EBF1FE] text-[#3182F6]' : 'border-[#E5E8EB] text-[#6B7684] hover:border-[#B0B8C1]'
+                      }`}>
+                      <Settings className="h-3 w-3" /> 컬럼
                     </button>
-                    <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
-                      <Download className="h-3.5 w-3.5" /> xlsx 다운로드
+                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-[#E5E8EB] text-[#6B7684] hover:border-[#B0B8C1]">
+                      <Download className="h-3 w-3" /> xlsx
                     </button>
                   </div>
                 </div>
@@ -1471,8 +1502,13 @@ export default function AdAnalysisPage() {
                         {gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월'} <TrendSortIcon k="date" />
                       </th>
                       {visibleCols.map((col) => (
-                        <th key={col.key} onClick={() => toggleTrendSort(col.key)}
-                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] select-none whitespace-nowrap">
+                        <th key={col.key}
+                          draggable
+                          onDragStart={() => handleColDragStart(col.key)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => handleColDrop(col.key)}
+                          onClick={() => toggleTrendSort(col.key)}
+                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-grab hover:text-[#191F28] select-none whitespace-nowrap active:cursor-grabbing">
                           {col.label} <TrendSortIcon k={col.key} />
                         </th>
                       ))}
@@ -1669,6 +1705,84 @@ export default function AdAnalysisPage() {
                           <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(p.revenue14d)}</td>
                           <td className={`px-3 py-2.5 text-right font-bold ${pRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                             {p.cost > 0 ? `${(pRoas * 100).toFixed(0)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(costShare)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Tab: Products ──────────────────────────────────────────── */}
+          {tab === 'products' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[13px] font-bold text-[#191F28]">상품별 광고비 · 매출</h3>
+                </div>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={filtered.products} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="product" tick={{ fontSize: 10 }} width={200} />
+                      <Tooltip formatter={(v: number, name: string) => [formatCurrency(Math.round(v)), name]} />
+                      <Legend />
+                      <Bar dataKey="cost" name="광고비(VAT)" fill="#F43F5E" opacity={0.7} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="revenue14d" name="매출(14일)" fill="#3182F6" opacity={0.7} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684]">상품명</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">노출</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">클릭</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CTR</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CPC</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">광고비(VAT)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">주문(14d)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">매출(14d)</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">AOV</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">CVR</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">ROAS</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">순이익</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684]">비중</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.products.map((p: any) => {
+                      const pCtr = p.impressions > 0 ? p.clicks / p.impressions : 0;
+                      const pCpc = p.clicks > 0 ? Math.round(p.cost / p.clicks) : 0;
+                      const pRoas = p.cost > 0 ? p.revenue14d / p.cost : 0;
+                      const pCvr = p.clicks > 0 ? p.orders14d / p.clicks : 0;
+                      const pAov = p.orders14d > 0 ? Math.round(p.revenue14d / p.orders14d) : 0;
+                      const pProfit = p.revenue14d - (p.cogs14d ?? 0) - (p.commission14d ?? 0) - p.cost;
+                      const costShare = t.cost > 0 ? p.cost / t.cost : 0;
+                      return (
+                        <tr key={p.product} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                          <td className="px-3 py-2.5 font-medium text-[#191F28] max-w-[200px] truncate" title={p.product}>{p.product}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(p.impressions)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(p.clicks)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCtr)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatCurrency(pCpc)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(p.cost)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#191F28]">{p.orders14d}</td>
+                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(p.revenue14d)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pAov ? formatCurrency(pAov) : '-'}</td>
+                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(pCvr)}</td>
+                          <td className={`px-3 py-2.5 text-right font-bold ${pRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                            {p.cost > 0 ? `${(pRoas * 100).toFixed(0)}%` : '-'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right font-medium ${pProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {formatCurrency(pProfit)}
                           </td>
                           <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(costShare)}</td>
                         </tr>
