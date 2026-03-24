@@ -82,6 +82,7 @@ export default function OutboundTab() {
   const [editTarget, setEditTarget] = useState<OutboundRecord | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState('');
+  const [filterMonth, setFilterMonth] = useState(THIS_MONTH);
 
   // 출고 유형
   const [outboundType, setOutboundType] = useState<'coupang_growth' | 'other'>('coupang_growth');
@@ -272,16 +273,18 @@ export default function OutboundTab() {
 
   // ── 통계 ─────────────────────────────────────────────────────────────────────
 
+  const filteredRecords = useMemo(() =>
+    records.filter((r) => r.outbound_date?.startsWith(filterMonth)),
+  [records, filterMonth]);
+
   const coupangMonthly = useMemo(() => {
-    const items = records.filter((r) =>
-      r.outbound_date?.startsWith(THIS_MONTH) && r.outbound_type === 'coupang_growth'
-    );
+    const items = filteredRecords.filter((r) => r.outbound_type === 'coupang_growth');
     return {
       qty:   items.reduce((s, r) => s + r.quantity, 0),
       boxes: items.reduce((s, r) => s + (r.box_count ?? 0), 0),
       count: items.length,
     };
-  }, [records]);
+  }, [filteredRecords]);
 
   const inputCls = 'w-full h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
 
@@ -302,12 +305,25 @@ export default function OutboundTab() {
         </button>
       </div>
 
-      {/* 쿠팡 이번달 통계 */}
+      {/* 월 선택 + 통계 */}
+      <div className="flex items-center gap-3 mb-1">
+        <button onClick={() => { const d = new Date(filterMonth + '-01'); d.setMonth(d.getMonth() - 1); setFilterMonth(d.toISOString().slice(0, 7)); }}
+          className="h-8 w-8 rounded-lg border border-[#E5E8EB] flex items-center justify-center text-[#6B7684] hover:bg-[#F2F4F6]">&lt;</button>
+        <input type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}
+          className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
+        <button onClick={() => { const d = new Date(filterMonth + '-01'); d.setMonth(d.getMonth() + 1); setFilterMonth(d.toISOString().slice(0, 7)); }}
+          className="h-8 w-8 rounded-lg border border-[#E5E8EB] flex items-center justify-center text-[#6B7684] hover:bg-[#F2F4F6]">&gt;</button>
+        {filterMonth !== THIS_MONTH && (
+          <button onClick={() => setFilterMonth(THIS_MONTH)}
+            className="h-8 px-3 rounded-lg text-[12px] text-[#3182F6] font-medium border border-[#E5E8EB] hover:bg-[#F8F9FA]">이번달</button>
+        )}
+        <span className="text-[12px] text-[#8B95A1] ml-auto">{filteredRecords.length}건</span>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: '쿠팡그로스 이번달 총 수량', value: `${formatNumber(coupangMonthly.qty)}개`, color: 'text-red-600' },
-          { label: '이번달 총 박스수',           value: `${formatNumber(coupangMonthly.boxes)}박스`, color: 'text-blue-600' },
-          { label: '이번달 출고 횟수',           value: `${formatNumber(coupangMonthly.count)}회`, color: 'text-[#191F28]' },
+          { label: '쿠팡그로스 총 수량', value: `${formatNumber(coupangMonthly.qty)}개`, color: 'text-red-600' },
+          { label: '총 박스수',           value: `${formatNumber(coupangMonthly.boxes)}박스`, color: 'text-blue-600' },
+          { label: '출고 횟수',           value: `${formatNumber(coupangMonthly.count)}회`, color: 'text-[#191F28]' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
             <p className="text-[13px] text-[#6B7684] mb-1">{label}</p>
@@ -322,7 +338,7 @@ export default function OutboundTab() {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-[#3182F6]" />
           </div>
-        ) : records.length === 0 ? (
+        ) : filteredRecords.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-[#B0B8C1]">
             <Package className="w-10 h-10 mb-3" />
             <p className="text-[13px]">출고 내역이 없습니다</p>
@@ -335,7 +351,7 @@ export default function OutboundTab() {
                 <span key={i} className="text-[12px] font-semibold text-[#6B7684]">{h}</span>
               ))}
             </div>
-            {records.map((record) => {
+            {filteredRecords.map((record) => {
               const productName = (record.sku as { product?: { name?: string } })?.product?.name ?? '-';
               const skuCode     = (record.sku as { sku_code?: string })?.sku_code ?? '';
               const optVals     = (record.sku as { option_values?: Record<string, string> })?.option_values ?? {};
@@ -462,7 +478,7 @@ export default function OutboundTab() {
             {outboundType === 'coupang_growth' && (
               <>
                 {/* 공통 필드 */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">출발 창고 *</label>
                     <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} required className={inputCls}>
@@ -503,7 +519,7 @@ export default function OutboundTab() {
                         </div>
 
                         {/* 센터명 + 도착예정일 */}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div>
                             <label className="block text-[12px] font-medium text-[#6B7684] mb-1">쿠팡 센터명 *</label>
                             <input
@@ -586,6 +602,7 @@ export default function OutboundTab() {
                 <div>
                   <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">메모</label>
                   <textarea
+                    lang="ko"
                     value={note} onChange={(e) => setNote(e.target.value)}
                     rows={2} placeholder="메모 (선택사항)"
                     className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] resize-none"
@@ -605,7 +622,7 @@ export default function OutboundTab() {
                     onChange={(id) => setOtherForm((f) => ({ ...f, sku_id: id }))}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">창고 *</label>
                     <select value={otherForm.warehouse_id} onChange={(e) => setOtherForm((f) => ({ ...f, warehouse_id: e.target.value }))} className={inputCls}>
@@ -621,7 +638,7 @@ export default function OutboundTab() {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">수량 *</label>
                     <input type="number" min="1" value={otherForm.quantity} onChange={(e) => setOtherForm((f) => ({ ...f, quantity: e.target.value }))} required placeholder="0" className={inputCls} />
@@ -634,6 +651,7 @@ export default function OutboundTab() {
                 <div>
                   <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">메모</label>
                   <textarea
+                    lang="ko"
                     value={otherForm.note} onChange={(e) => setOtherForm((f) => ({ ...f, note: e.target.value }))}
                     rows={2} placeholder="메모 (선택사항)"
                     className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] resize-none"
@@ -745,13 +763,13 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
           {isCoupang && (
             <div>
               <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">쿠팡 센터명</label>
-              <input value={form.coupang_center} onChange={(e) => set('coupang_center', e.target.value)}
+              <input lang="ko" value={form.coupang_center} onChange={(e) => set('coupang_center', e.target.value)}
                 placeholder="예: 쿠팡 군포" className={inputCls} />
             </div>
           )}
 
           {!isCoupang && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">창고</label>
                 <select value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)} className={inputCls}>
@@ -768,7 +786,7 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">수량 *</label>
               <input type="number" min="1" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} required className={inputCls} />
@@ -781,7 +799,7 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">출고일 *</label>
               <input type="date" value={form.outbound_date} onChange={(e) => set('outbound_date', e.target.value)} required className={inputCls} />
@@ -796,7 +814,7 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
 
           <div>
             <label className="block text-[13px] font-medium text-[#191F28] mb-1.5">메모</label>
-            <textarea value={form.note} onChange={(e) => set('note', e.target.value)} rows={2}
+            <textarea lang="ko" value={form.note} onChange={(e) => set('note', e.target.value)} rows={2}
               className="w-full px-3 py-2 text-[13px] border border-[#E5E8EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3182F6] resize-none" />
           </div>
 
