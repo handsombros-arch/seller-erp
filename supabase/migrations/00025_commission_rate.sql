@@ -10,3 +10,19 @@ CREATE TABLE IF NOT EXISTS coupang_category_fees (
 
 ALTER TABLE coupang_category_fees ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "auth_read" ON coupang_category_fees FOR SELECT TO authenticated USING (true);
+
+-- 광고 상품명 → 플랫폼 SKU 매핑 (사용자 확인 후 저장)
+CREATE TABLE IF NOT EXISTS ad_product_mappings (
+  ad_product_name TEXT PRIMARY KEY,
+  platform_sku_id TEXT,
+  matched_name TEXT,
+  price NUMERIC(12,2),
+  cost_price NUMERIC(12,2),
+  commission_rate NUMERIC(5,2),
+  sku_code TEXT,
+  confirmed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE ad_product_mappings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth_all" ON ad_product_mappings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON ad_product_mappings FOR ALL TO service_role USING (true) WITH CHECK (true);

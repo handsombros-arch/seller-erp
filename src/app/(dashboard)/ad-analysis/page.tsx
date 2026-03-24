@@ -320,10 +320,23 @@ function loadAdData(): AnalysisData | null {
   return null;
 }
 
+interface PendingMatch {
+  adName: string;
+  dbName: string;
+  price: number;
+  cost_price: number;
+  commission_rate: number;
+  sku_code: string;
+  score: number; // 매칭 신뢰도
+  status: 'pending' | 'confirmed' | 'ignored';
+}
+
 export default function AdAnalysisPage() {
   const [data, setData] = useState<AnalysisData | null>(loadAdData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
+  const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements'>('daily');
   const [gran, setGran] = useState<Granularity>('daily');
   const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
@@ -355,63 +368,55 @@ export default function AdAnalysisPage() {
     );
   };
 
-  // Upload handler — xlsx 파싱 + 집계 전부 클라이언트, 가격만 API
-  // accumulate=true면 기존 데이터에 추가
-  const handleUpload = useCallback(async (file: File, accumulate = false) => {
-    setLoading(true);
-    setError('');
-    try {
-      const [XLSX, pricesRes] = await Promise.all([
-        import('xlsx'),
-        fetch('/api/ad-analysis'),
-      ]);
-      if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
-      const { prices } = await pricesRes.json() as { prices: Record<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number }> };
+  // ─── 매칭 유틸 ───────────────────────────────────────────────────
+  const tokenize = (s: string) => s.toLowerCase().replace(/[()（）]/g, '').split(/[\s,]+/).filter(w => w.length >= 2);
 
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array' });
-      let raw: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      if (!raw.length) throw new Error('데이터가 없습니다');
+  const fuzzyMatch = (adName: string, pricesByName: Record<string, any>, priceNameKeys: string[]) => {
+    const lower = adName.toLowerCase();
+    if (pricesByName[lower]) return { info: pricesByName[lower], dbName: lower, score: 1 };
+    for (const key of priceNameKeys) {
+      if (lower.includes(key) || key.includes(lower)) return { info: pricesByName[key], dbName: key, score: 0.9 };
+    }
+    const adWords = tokenize(adName);
+    let best: any = null, bestKey = '', bestScore = 0;
+    for (const key of priceNameKeys) {
+      const dbWords = tokenize(key);
+      const overlap = adWords.filter(w => dbWords.some(d => d.includes(w) || w.includes(d))).length;
+      const score = overlap / Math.max(adWords.length, dbWords.length);
+      if (score > bestScore && score >= 0.5) { bestScore = score; best = pricesByName[key]; bestKey = key; }
+    }
+    return best ? { info: best, dbName: bestKey, score: bestScore } : null;
+  };
 
-      // 누적 모드: 기존 raw 데이터가 있으면 합치기 (날짜+키워드+옵션ID 기준 중복 제거)
-      if (accumulate && data?._rawRows) {
-        const existingKeys = new Set(data._rawRows.map((r: any) =>
-          `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`
-        ));
-        const newRows = raw.filter((r: any) => {
-          const key = `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
-          return !existingKeys.has(key);
-        });
-        raw = [...data._rawRows, ...newRows];
-      }
+  // ─── 데이터 처리 (prices 맵 기반) ──────────────────────────────
+  const processData = useCallback((raw: any[], prices: Record<string, any>, confirmedMap: Record<string, any>) => {
+    const matchedIds = new Set<string>();
+    const unmatchedIds = new Set<string>();
+    const dailyMap = new Map<string, any>();
+    const kwMap = new Map<string, any>();
+    const plMap = new Map<string, any>();
+    const compactMap = new Map<string, any>();
 
-      // Process
-      const matchedIds = new Set<string>();
-      const unmatchedIds = new Set<string>();
-      const dailyMap = new Map<string, any>();
-      const kwMap = new Map<string, any>();
-      const plMap = new Map<string, any>();
-      const compactMap = new Map<string, any>();
+    for (const r of raw) {
+      const dateStr = String(r['날짜']);
+      const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+      const keyword = r['키워드'] || '-';
+      const placement = r['광고 노출 지면'] || '기타';
+      const campaign = r['캠페인명'] || '기타';
+      const rawProduct = String(r['광고집행 상품명'] ?? '');
+      const product = rawProduct.split(',')[0].trim() || '기타';
+      const convOptionId = String(r['광고전환매출발생 옵션ID'] ?? '');
 
-      for (const r of raw) {
-        const dateStr = String(r['날짜']);
-        const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-        const keyword = r['키워드'] || '-';
-        const placement = r['광고 노출 지면'] || '기타';
-        const campaign = r['캠페인명'] || '기타';
-        const rawProduct = String(r['광고집행 상품명'] ?? '');
-        const product = rawProduct.split(',')[0].trim() || '기타';
-        const convOptionId = String(r['광고전환매출발생 옵션ID'] ?? '');
+      const impressions = Number(r['노출수']) || 0;
+      const clicks = Number(r['클릭수']) || 0;
+      const cost = Math.round((Number(r['광고비']) || 0) * 1.1);
+      const orders1d = Number(r['총 주문수(1일)']) || 0;
+      const revenue1d_raw = Number(r['총 전환매출액(1일)']) || 0;
+      const orders14d = Number(r['총 주문수(14일)']) || 0;
+      const revenue14d_raw = Number(r['총 전환매출액(14일)']) || 0;
 
-        const impressions = Number(r['노출수']) || 0;
-        const clicks = Number(r['클릭수']) || 0;
-        const cost = Math.round((Number(r['광고비']) || 0) * 1.1);
-        const orders1d = Number(r['총 주문수(1일)']) || 0;
-        const revenue1d_raw = Number(r['총 전환매출액(1일)']) || 0;
-        const orders14d = Number(r['총 주문수(14일)']) || 0;
-        const revenue14d_raw = Number(r['총 전환매출액(14일)']) || 0;
-
-        const matched = prices[convOptionId];
+      // 매칭: 옵션ID → 저장된 매핑 → 없으면 null (미매칭)
+      const matched = prices[convOptionId] ?? confirmedMap[product] ?? null;
         if (matched && (orders1d > 0 || orders14d > 0)) matchedIds.add(convOptionId);
         else if (!matched && (orders1d > 0 || orders14d > 0)) unmatchedIds.add(convOptionId);
 
@@ -482,38 +487,158 @@ export default function AdAnalysisPage() {
       const campaigns = [...new Set(rows.map((r: any) => r.campaign))].sort();
       const products = [...new Set(rows.map((r: any) => r.product))].sort();
 
-      const priceInfo = [...matchedIds].map((id) => ({ optionId: id, ...prices[id] }));
+      const priceInfo = [...matchedIds].map((id) => {
+        const info = prices[id] ?? confirmedMap[id];
+        return info ? { optionId: id, ...info } : null;
+      }).filter(Boolean) as PriceInfo[];
 
-      const result: AnalysisData = {
+      return {
         totalRows: raw.length,
         dateRange: { from: daily[0]?.date, to: daily[daily.length - 1]?.date },
         priceInfo,
         unmatchedOptionIds: [...unmatchedIds],
-        campaigns,
-        products,
-        rows,
-        totals,
-        daily,
-        keywords,
-        placements,
+        campaigns, products, rows, totals, daily, keywords, placements,
         _rawRows: raw,
-      };
-      setData(result);
+      } as AnalysisData;
+    }, []);
+
+  // ─── 결과 저장 ─────────────────────────────────────────────────
+  const saveResult = useCallback((result: AnalysisData) => {
+    setData(result);
+    try {
+      localStorage.setItem(AD_DATA_KEY, JSON.stringify(result));
+    } catch {
       try {
-        localStorage.setItem(AD_DATA_KEY, JSON.stringify(result));
-      } catch {
-        // 용량 초과 시 _rawRows 제외하고 저장
-        try {
-          const { _rawRows, ...forStorage } = result;
-          localStorage.setItem(AD_DATA_KEY, JSON.stringify(forStorage));
-        } catch {}
+        const { _rawRows, ...forStorage } = result;
+        localStorage.setItem(AD_DATA_KEY, JSON.stringify(forStorage));
+      } catch {}
+    }
+  }, []);
+
+  // ─── Upload handler ────────────────────────────────────────────
+  const handleUpload = useCallback(async (file: File, accumulate = false) => {
+    setLoading(true);
+    setError('');
+    try {
+      const [XLSX, pricesRes, mappingsRes] = await Promise.all([
+        import('xlsx'),
+        fetch('/api/ad-analysis'),
+        fetch('/api/ad-analysis/mappings'),
+      ]);
+      if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
+      const { prices, pricesByName, priceNameKeys } = await pricesRes.json();
+      const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
+
+      // 저장된 매핑 → confirmedMap (ad_product_name → priceInfo)
+      const confirmedMap: Record<string, any> = {};
+      for (const m of savedMappings) {
+        confirmedMap[m.ad_product_name] = {
+          price: Number(m.price), cost_price: Number(m.cost_price),
+          commission_rate: Number(m.commission_rate ?? 0),
+          sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
+        };
+      }
+
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      let raw: any[] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      if (!raw.length) throw new Error('데이터가 없습니다');
+
+      // 누적 모드
+      if (accumulate && data?._rawRows) {
+        const existingKeys = new Set(data._rawRows.map((r: any) =>
+          `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`
+        ));
+        const newRows = raw.filter((r: any) => {
+          const key = `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+          return !existingKeys.has(key);
+        });
+        raw = [...data._rawRows, ...newRows];
+      }
+
+      // 전환 발생 상품명 추출 (옵션ID로 매칭 안 되고 저장된 매핑도 없는 것만)
+      const adProductNames = new Set<string>();
+      for (const r of raw) {
+        const convId = String(r['광고전환매출발생 옵션ID'] ?? '');
+        const product = String(r['광고집행 상품명'] ?? '').split(',')[0].trim();
+        const hasOrders = (Number(r['총 주문수(14일)']) || 0) > 0;
+        if (hasOrders && product && !prices[convId] && !confirmedMap[product]) {
+          adProductNames.add(product);
+        }
+      }
+
+      // 미매칭 상품에 대해 퍼지 매칭 후보 생성
+      const pending: PendingMatch[] = [];
+      for (const adName of adProductNames) {
+        const result = fuzzyMatch(adName, pricesByName, priceNameKeys);
+        if (result) {
+          pending.push({
+            adName, dbName: result.dbName, score: result.score,
+            price: result.info.price, cost_price: result.info.cost_price,
+            commission_rate: result.info.commission_rate, sku_code: result.info.sku_code,
+            status: 'pending',
+          });
+        }
+      }
+
+      // 확인 필요한 매칭이 있으면 대기, 없으면 바로 처리
+      if (pending.length > 0) {
+        setPendingMatches(pending);
+        setPendingRaw(raw);
+        // 임시로 현재 확인된 매핑만으로 처리해서 보여줌
+        const result = processData(raw, prices, confirmedMap);
+        saveResult(result);
+      } else {
+        const result = processData(raw, prices, confirmedMap);
+        saveResult(result);
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data, processData, saveResult]);
+
+  // 매칭 확인 → DB 저장 → 재처리
+  const handleConfirmMatches = useCallback(async () => {
+    const confirmed = pendingMatches.filter(m => m.status === 'confirmed');
+    if (confirmed.length > 0) {
+      try {
+        await fetch('/api/ad-analysis/mappings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mappings: confirmed.map(m => ({
+              ad_product_name: m.adName, matched_name: m.dbName,
+              price: m.price, cost_price: m.cost_price,
+              commission_rate: m.commission_rate, sku_code: m.sku_code,
+            })),
+          }),
+        });
+      } catch {}
+    }
+
+    // 확인된 매핑 + 기존 prices로 재처리
+    if (pendingRaw) {
+      const pricesRes = await fetch('/api/ad-analysis');
+      const { prices } = await pricesRes.json();
+      const mappingsRes = await fetch('/api/ad-analysis/mappings');
+      const { mappings: savedMappings } = await mappingsRes.json();
+      const confirmedMap: Record<string, any> = {};
+      for (const m of savedMappings) {
+        confirmedMap[m.ad_product_name] = {
+          price: Number(m.price), cost_price: Number(m.cost_price),
+          commission_rate: Number(m.commission_rate ?? 0),
+          sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
+        };
+      }
+      const result = processData(pendingRaw, prices, confirmedMap);
+      saveResult(result);
+    }
+
+    setPendingMatches([]);
+    setPendingRaw(null);
+  }, [pendingMatches, pendingRaw, processData, saveResult]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -823,6 +948,64 @@ export default function AdAnalysisPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
+      )}
+
+      {/* 매칭 확인 패널 */}
+      {pendingMatches.length > 0 && (
+        <div className="bg-white rounded-2xl border-2 border-[#3182F6] p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-bold text-[#191F28]">상품 매칭 확인</h3>
+            <span className="text-[11px] text-[#8B95A1]">
+              광고 CSV 상품명 → DB 상품 자동 매칭 결과를 확인하세요
+            </span>
+          </div>
+          <div className="space-y-2">
+            {pendingMatches.map((m, i) => (
+              <div key={m.adName} className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border text-[12px] ${
+                m.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200' :
+                m.status === 'ignored' ? 'bg-gray-50 border-gray-200 opacity-50' :
+                'bg-amber-50 border-amber-200'
+              }`}>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="font-medium text-[#333D4B]">{m.adName}</p>
+                  <p className="text-[#6B7684] mt-0.5">
+                    → {m.dbName} · {m.price?.toLocaleString()}원 · 원가 {m.cost_price?.toLocaleString()}원 · 수수료 {m.commission_rate}%
+                    <span className="ml-2 text-[10px] text-[#B0B8C1]">신뢰도 {Math.round(m.score * 100)}%</span>
+                  </p>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setPendingMatches(prev => prev.map((p, j) => j === i ? { ...p, status: 'confirmed' } : p))}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                      m.status === 'confirmed' ? 'bg-emerald-600 text-white' : 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                    }`}
+                  >확인</button>
+                  <button
+                    onClick={() => setPendingMatches(prev => prev.map((p, j) => j === i ? { ...p, status: 'ignored' } : p))}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                      m.status === 'ignored' ? 'bg-gray-500 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >무시</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              onClick={() => setPendingMatches(prev => prev.map(p => ({ ...p, status: 'confirmed' })))}
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700"
+            >전체 확인</button>
+            <button
+              onClick={handleConfirmMatches}
+              disabled={!pendingMatches.some(m => m.status !== 'pending')}
+              className="px-4 py-2 rounded-lg bg-[#3182F6] text-white text-[12px] font-semibold hover:bg-[#1B6AE5] disabled:opacity-40"
+            >적용</button>
+            <button
+              onClick={() => { setPendingMatches([]); setPendingRaw(null); }}
+              className="px-4 py-2 rounded-lg border border-[#E5E8EB] text-[#6B7684] text-[12px] font-medium hover:bg-[#F8F9FA]"
+            >취소</button>
+          </div>
+        </div>
       )}
 
       {/* Results */}
