@@ -346,6 +346,7 @@ export default function AdAnalysisPage() {
   const [kpiEditOpen, setKpiEditOpen] = useState(false);
   const [trendSortKey, setTrendSortKey] = useState<string>('date');
   const [trendSortAsc, setTrendSortAsc] = useState(true);
+  const [tableColEdit, setTableColEdit] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('cost');
   const [sortAsc, setSortAsc] = useState(false);
   const [kwSearch, setKwSearch] = useState('');
@@ -367,6 +368,90 @@ export default function AdAnalysisPage() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
+
+  // ─── 데이터 테이블 컬럼 ──────────────────────────────────────────
+  type TableColKey = 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cost' | 'orders14d' | 'revenue14d' | 'roas' | 'orders1d' | 'revenue1d' | 'cvr' | 'cpm' | 'cpa' | 'profit' | 'adRatio' | 'aov' | 'keywordCount';
+
+  interface TableColDef {
+    key: TableColKey;
+    label: string;
+    render: (d: any) => React.ReactNode;
+    renderTotal: (t: any) => React.ReactNode;
+    className?: string;
+  }
+
+  const TABLE_COLS: TableColDef[] = [
+    { key: 'impressions', label: '노출',
+      render: (d) => formatNumber(d.impressions),
+      renderTotal: (t) => formatNumber(t.impressions) },
+    { key: 'clicks', label: '클릭',
+      render: (d) => formatNumber(d.clicks),
+      renderTotal: (t) => formatNumber(t.clicks), className: 'text-[#191F28]' },
+    { key: 'ctr', label: 'CTR',
+      render: (d) => d.impressions > 0 ? pct(d.clicks / d.impressions) : '-',
+      renderTotal: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
+    { key: 'cpc', label: 'CPC',
+      render: (d) => d.clicks > 0 ? formatCurrency(Math.round(d.cost / d.clicks)) : '-',
+      renderTotal: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-' },
+    { key: 'cost', label: '광고비',
+      render: (d) => formatCurrency(d.cost),
+      renderTotal: (t) => formatCurrency(t.cost), className: 'text-[#F43F5E] font-medium' },
+    { key: 'orders14d', label: '주문(14d)',
+      render: (d) => d.orders14d,
+      renderTotal: (t) => t.orders14d },
+    { key: 'revenue14d', label: '매출(14d)',
+      render: (d) => formatCurrency(d.revenue14d),
+      renderTotal: (t) => formatCurrency(t.revenue14d), className: 'text-[#3182F6] font-medium' },
+    { key: 'roas', label: 'ROAS(14d)',
+      render: (d) => { const r = d.cost > 0 ? d.revenue14d / d.cost : 0; return <span className={r >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{d.cost > 0 ? `${(r * 100).toFixed(0)}%` : '-'}</span>; },
+      renderTotal: (t) => { const r = t.cost > 0 ? t.revenue14d / t.cost : 0; return <span className={r >= 1 ? 'text-green-600' : 'text-red-500'}>{(r * 100).toFixed(0)}%</span>; } },
+    { key: 'orders1d', label: '주문(1d)',
+      render: (d) => d.orders1d,
+      renderTotal: (t) => t.orders1d },
+    { key: 'revenue1d', label: '매출(1d)',
+      render: (d) => formatCurrency(d.revenue1d),
+      renderTotal: (t) => formatCurrency(t.revenue1d), className: 'text-[#93C5FD]' },
+    { key: 'cvr', label: 'CVR(14d)',
+      render: (d) => d.clicks > 0 ? pct(d.orders14d / d.clicks) : '-',
+      renderTotal: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-' },
+    { key: 'cpm', label: 'CPM',
+      render: (d) => d.impressions > 0 ? formatCurrency(Math.round(d.cost / d.impressions * 1000)) : '-',
+      renderTotal: (t) => t.impressions > 0 ? formatCurrency(Math.round(t.cost / t.impressions * 1000)) : '-' },
+    { key: 'cpa', label: 'CPA',
+      render: (d) => d.orders14d > 0 ? formatCurrency(Math.round(d.cost / d.orders14d)) : '-',
+      renderTotal: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-' },
+    { key: 'aov', label: 'AOV',
+      render: (d) => d.orders14d > 0 ? formatCurrency(Math.round(d.revenue14d / d.orders14d)) : '-',
+      renderTotal: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.revenue14d / t.orders14d)) : '-' },
+    { key: 'adRatio', label: '광고비율',
+      render: (d) => d.revenue14d > 0 ? pct(d.cost / d.revenue14d) : '-',
+      renderTotal: (t) => t.revenue14d > 0 ? pct(t.cost / t.revenue14d) : '-' },
+    { key: 'profit', label: '순이익(14d)',
+      render: (d) => { const p = d.revenue14d - (d.cogs14d ?? 0) - (d.commission14d ?? 0) - d.cost; return <span className={p >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{formatCurrency(p)}</span>; },
+      renderTotal: (t) => { const p = t.revenue14d - t.cogs14d - (t.commission14d ?? 0) - t.cost; return <span className={p >= 0 ? 'text-green-600' : 'text-red-500'}>{formatCurrency(p)}</span>; } },
+    { key: 'keywordCount', label: '키워드수',
+      render: (d) => formatNumber(d.keywordCount ?? 0),
+      renderTotal: () => '-', className: 'text-[#8B5CF6] font-medium' },
+  ];
+
+  const DEFAULT_TABLE_COLS: TableColKey[] = ['impressions', 'clicks', 'ctr', 'cpc', 'cost', 'orders14d', 'revenue14d', 'roas', 'keywordCount'];
+  const TABLE_COL_STORAGE = 'lv-erp-ad-table-cols';
+
+  const [activeCols, setActiveCols] = useState<TableColKey[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_TABLE_COLS;
+    try { const s = localStorage.getItem(TABLE_COL_STORAGE); if (s) return JSON.parse(s); } catch {}
+    return DEFAULT_TABLE_COLS;
+  });
+
+  const toggleCol = (key: TableColKey) => {
+    setActiveCols((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try { localStorage.setItem(TABLE_COL_STORAGE, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const visibleCols = TABLE_COLS.filter((c) => activeCols.includes(c.key));
 
   // ─── 매칭 유틸 ───────────────────────────────────────────────────
   const tokenize = (s: string) => s.toLowerCase().replace(/[()（）]/g, '').split(/[\s,]+/).filter(w => w.length >= 2);
@@ -1374,66 +1459,63 @@ export default function AdAnalysisPage() {
               <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
                 <div className="flex items-center justify-between px-4 pt-3 pb-1">
                   <span className="text-[12px] text-[#8B95A1]">헤더 클릭으로 정렬</span>
-                  <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
-                    <Download className="h-3.5 w-3.5" /> xlsx 다운로드
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setTableColEdit(!tableColEdit)}
+                      className="text-[12px] text-[#6B7684] hover:text-[#3182F6] font-medium">
+                      {tableColEdit ? '완료' : '컬럼 편집'}
+                    </button>
+                    <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
+                      <Download className="h-3.5 w-3.5" /> xlsx 다운로드
+                    </button>
+                  </div>
                 </div>
+                {tableColEdit && (
+                  <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+                    {TABLE_COLS.map((c) => (
+                      <button key={c.key} onClick={() => toggleCol(c.key)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                          activeCols.includes(c.key)
+                            ? 'border-[#3182F6] bg-[#EBF1FE] text-[#3182F6]'
+                            : 'border-[#E5E8EB] bg-white text-[#8B95A1] hover:border-[#B0B8C1]'
+                        }`}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
-                      {([
-                        ['date', gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월', 'left'],
-                        ['impressions', '노출', 'right'], ['clicks', '클릭', 'right'],
-                        ['ctr', 'CTR', 'right'], ['cpc', 'CPC', 'right'], ['cost', '광고비', 'right'],
-                        ['orders14d', '주문(14d)', 'right'], ['revenue14d', '매출(14d)', 'right'],
-                        ['roas', 'ROAS(14d)', 'right'],
-                        ['keywordCount', '키워드수', 'right'],
-                      ] as [string, string, string][]).map(([k, label, align]) => (
-                        <th key={k}
-                          onClick={() => toggleTrendSort(k)}
-                          className={`text-${align} px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] select-none whitespace-nowrap`}
-                        >
-                          {label} <TrendSortIcon k={k} />
+                      <th onClick={() => toggleTrendSort('date')}
+                        className="text-left px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] select-none whitespace-nowrap">
+                        {gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월'} <TrendSortIcon k="date" />
+                      </th>
+                      {visibleCols.map((col) => (
+                        <th key={col.key} onClick={() => toggleTrendSort(col.key)}
+                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] select-none whitespace-nowrap">
+                          {col.label} <TrendSortIcon k={col.key} />
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedTrendData.map((d: any) => {
-                      const dCtr = d.impressions > 0 ? d.clicks / d.impressions : 0;
-                      const dCpc = d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
-                      const dRoas = d.cost > 0 ? d.revenue14d / d.cost : 0;
-                      return (
-                        <tr key={d.date} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
-                          <td className="px-3 py-2.5 font-medium text-[#191F28]">{d.label}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatNumber(d.impressions)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{formatNumber(d.clicks)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{pct(dCtr)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#6B7684]">{formatCurrency(dCpc)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#F43F5E] font-medium">{formatCurrency(d.cost)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#191F28]">{d.orders14d}</td>
-                          <td className="px-3 py-2.5 text-right text-[#3182F6] font-medium">{formatCurrency(d.revenue14d)}</td>
-                          <td className={`px-3 py-2.5 text-right font-bold ${dRoas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
-                            {d.cost > 0 ? `${(dRoas * 100).toFixed(0)}%` : '-'}
+                    {sortedTrendData.map((d: any) => (
+                      <tr key={d.date} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
+                        <td className="px-3 py-2.5 font-medium text-[#191F28]">{d.label}</td>
+                        {visibleCols.map((col) => (
+                          <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-[#6B7684]'}`}>
+                            {col.render(d)}
                           </td>
-                          <td className="px-3 py-2.5 text-right text-[#8B5CF6] font-medium">{formatNumber(d.keywordCount ?? 0)}</td>
-                        </tr>
-                      );
-                    })}
-                    {/* Total row */}
+                        ))}
+                      </tr>
+                    ))}
                     <tr className="bg-[#F8FAFC] font-bold">
                       <td className="px-3 py-2.5 text-[#191F28]">합계</td>
-                      <td className="px-3 py-2.5 text-right">{formatNumber(t.impressions)}</td>
-                      <td className="px-3 py-2.5 text-right">{formatNumber(t.clicks)}</td>
-                      <td className="px-3 py-2.5 text-right">{t.impressions > 0 ? pct(t.clicks / t.impressions) : '-'}</td>
-                      <td className="px-3 py-2.5 text-right">{t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-'}</td>
-                      <td className="px-3 py-2.5 text-right text-[#F43F5E]">{formatCurrency(t.cost)}</td>
-                      <td className="px-3 py-2.5 text-right">{t.orders14d}</td>
-                      <td className="px-3 py-2.5 text-right text-[#3182F6]">{formatCurrency(t.revenue14d)}</td>
-                      <td className={`px-3 py-2.5 text-right ${roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
-                        {(roas14d * 100).toFixed(0)}%
-                      </td>
-                      <td className="px-3 py-2.5 text-right">-</td>
+                      {visibleCols.map((col) => (
+                        <td key={col.key} className="px-3 py-2.5 text-right">
+                          {col.renderTotal(t)}
+                        </td>
+                      ))}
                     </tr>
                   </tbody>
                 </table>
