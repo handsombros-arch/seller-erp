@@ -18,17 +18,15 @@ import {
 interface DailyRow {
   date: string;
   impressions: number; clicks: number; cost: number;
-  orders1d: number; revenue1d: number; revenue1d_raw: number;
   orders14d: number; revenue14d: number; revenue14d_raw: number;
-  cogs1d: number; cogs14d: number; // 매출원가 (주문수 × 원가)
-  commission1d: number; commission14d: number; // 판매수수료 (매출 × 수수료율)
+  cogs14d: number; // 매출원가 (주문수 × 원가)
+  commission14d: number; // 판매수수료 (매출 × 수수료율)
 }
 
 interface KeywordRow {
   campaign?: string; product?: string;
   keyword: string;
   impressions: number; clicks: number; cost: number;
-  orders1d: number; revenue1d: number;
   orders14d: number; revenue14d: number;
   ctr: number; cpc: number; cvr: number; roas14d: number;
 }
@@ -37,7 +35,6 @@ interface PlacementRow {
   campaign?: string; product?: string;
   placement: string;
   impressions: number; clicks: number; cost: number;
-  orders1d: number; revenue1d: number;
   orders14d: number; revenue14d: number;
 }
 
@@ -50,10 +47,9 @@ interface PriceInfo {
 interface ParsedRow {
   date: string; campaign: string; product: string;
   impressions: number; clicks: number; cost: number;
-  orders1d: number; revenue1d: number; revenue1d_raw: number;
   orders14d: number; revenue14d: number; revenue14d_raw: number;
-  cogs1d: number; cogs14d: number;
-  commission1d: number; commission14d: number;
+  cogs14d: number;
+  commission14d: number;
   keywordCount: number;
 }
 
@@ -65,7 +61,7 @@ interface AnalysisData {
   campaigns: string[];
   products: string[];
   rows: ParsedRow[];
-  totals: DailyRow & { revenue1d_raw: number; revenue14d_raw: number };
+  totals: DailyRow;
   daily: DailyRow[];
   keywords: KeywordRow[];
   placements: PlacementRow[];
@@ -125,10 +121,9 @@ function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRow
       map.set(key, {
         date: key, label: bucketLabel(key, gran),
         impressions: 0, clicks: 0, cost: 0,
-        orders1d: 0, revenue1d: 0, revenue1d_raw: 0,
         orders14d: 0, revenue14d: 0, revenue14d_raw: 0,
-        cogs1d: 0, cogs14d: 0,
-        commission1d: 0, commission14d: 0,
+        cogs14d: 0,
+        commission14d: 0,
         keywordCount: 0,
       });
     }
@@ -136,15 +131,10 @@ function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRow
     b.impressions += d.impressions;
     b.clicks += d.clicks;
     b.cost += d.cost;
-    b.orders1d += d.orders1d;
-    b.revenue1d += d.revenue1d;
-    b.revenue1d_raw += d.revenue1d_raw;
     b.orders14d += d.orders14d;
     b.revenue14d += d.revenue14d;
     b.revenue14d_raw += d.revenue14d_raw;
-    b.cogs1d += d.cogs1d;
     b.cogs14d += d.cogs14d;
-    b.commission1d += d.commission1d;
     b.commission14d += d.commission14d;
   }
 
@@ -168,8 +158,8 @@ function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRow
 
 // ─── Chart metric config ────────────────────────────────────────────────────
 
-type MetricKey = 'cost' | 'revenue1d' | 'revenue14d' | 'roas1d' | 'roas14d' |
-  'impressions' | 'clicks' | 'orders1d' | 'orders14d' | 'ctr' | 'cvr' | 'cpc' | 'cpm' | 'cpa' | 'profit';
+type MetricKey = 'cost' | 'revenue14d' | 'roas14d' |
+  'impressions' | 'clicks' | 'orders14d' | 'ctr' | 'cvr' | 'cpc' | 'cpm' | 'cpa' | 'profit';
 
 interface MetricDef {
   key: MetricKey;
@@ -183,13 +173,10 @@ interface MetricDef {
 const METRICS: MetricDef[] = [
   { key: 'cost',       label: '광고비',      type: 'line', unit: 'won', color: '#F43F5E', getValue: (d) => d.cost },
   { key: 'revenue14d', label: '매출(14일)',   type: 'line', unit: 'won', color: '#3182F6', getValue: (d) => d.revenue14d },
-  { key: 'revenue1d',  label: '매출(1일)',    type: 'line', unit: 'won', color: '#93C5FD', getValue: (d) => d.revenue1d },
   { key: 'roas14d',    label: 'ROAS(14일)',   type: 'bar',  unit: 'pct', color: '#10B981', getValue: (d) => d.cost > 0 ? d.revenue14d / d.cost : 0 },
-  { key: 'roas1d',     label: 'ROAS(1일)',    type: 'bar',  unit: 'pct', color: '#6EE7B7', getValue: (d) => d.cost > 0 ? d.revenue1d / d.cost : 0 },
   { key: 'impressions',label: '노출',         type: 'line', unit: 'cnt', color: '#8B95A1', getValue: (d) => d.impressions },
   { key: 'clicks',     label: '클릭',         type: 'line', unit: 'cnt', color: '#8B5CF6', getValue: (d) => d.clicks },
   { key: 'orders14d',  label: '주문(14일)',   type: 'bar',  unit: 'cnt', color: '#F97316', getValue: (d) => d.orders14d },
-  { key: 'orders1d',   label: '주문(1일)',    type: 'bar',  unit: 'cnt', color: '#FDBA74', getValue: (d) => d.orders1d },
   { key: 'ctr',        label: 'CTR',          type: 'line', unit: 'pct', color: '#06B6D4', getValue: (d) => d.impressions > 0 ? d.clicks / d.impressions : 0 },
   { key: 'cvr',        label: 'CVR(14일)',    type: 'line', unit: 'pct', color: '#EAB308', getValue: (d) => d.clicks > 0 ? d.orders14d / d.clicks : 0 },
   { key: 'cpc',        label: 'CPC',          type: 'line', unit: 'won', color: '#A855F7', getValue: (d) => d.clicks > 0 ? d.cost / d.clicks : 0 },
@@ -223,28 +210,23 @@ const KPI_DEFS: KpiDef[] = [
   { key: 'cost', label: '광고비 (VAT포함)', icon: DollarSign, color: 'bg-red-50 text-red-600',
     getValue: (t) => formatCurrency(t.cost) },
   { key: 'roas', label: 'ROAS (14일)', icon: TrendingUp, color: 'bg-green-50 text-green-600',
-    getValue: (t) => `${(t.cost > 0 ? t.revenue14d / t.cost * 100 : 0).toFixed(0)}%`,
-    getSub: (t) => `1일: ${(t.cost > 0 ? t.revenue1d / t.cost * 100 : 0).toFixed(0)}%` },
+    getValue: (t) => `${(t.cost > 0 ? t.revenue14d / t.cost * 100 : 0).toFixed(0)}%` },
   { key: 'revenue', label: '전환매출 (14일)', icon: Target, color: 'bg-blue-50 text-blue-600',
-    getValue: (t) => formatCurrency(t.revenue14d),
-    getSub: (t) => `1일: ${formatCurrency(t.revenue1d)}` },
+    getValue: (t) => formatCurrency(t.revenue14d) },
   { key: 'orders', label: '주문수 (14일)', icon: Megaphone, color: 'bg-purple-50 text-purple-600',
-    getValue: (t) => `${t.orders14d}건`,
-    getSub: (t) => `1일: ${t.orders1d}건` },
+    getValue: (t) => `${t.orders14d}건` },
   { key: 'cpc', label: 'CPC', icon: MousePointerClick, color: 'bg-cyan-50 text-cyan-600',
     getValue: (t) => t.clicks > 0 ? formatCurrency(Math.round(t.cost / t.clicks)) : '-',
     getSub: (t) => `클릭 ${formatNumber(t.clicks)}` },
   { key: 'ctr', label: 'CTR', icon: MousePointerClick, color: 'bg-sky-50 text-sky-600',
     getValue: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
   { key: 'cvr', label: 'CVR (14일)', icon: Eye, color: 'bg-amber-50 text-amber-600',
-    getValue: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-',
-    getSub: (t) => `1일: ${t.clicks > 0 ? pct(t.orders1d / t.clicks) : '-'}` },
+    getValue: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-' },
   { key: 'cpm', label: 'CPM', icon: Eye, color: 'bg-teal-50 text-teal-600',
     getValue: (t) => t.impressions > 0 ? formatCurrency(Math.round(t.cost / t.impressions * 1000)) : '-',
     getSub: (t) => `노출 ${formatNumber(t.impressions)}` },
   { key: 'cpa', label: 'CPA (건당 광고비)', icon: DollarSign, color: 'bg-orange-50 text-orange-600',
-    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-',
-    getSub: (t) => `1일: ${t.orders1d > 0 ? formatCurrency(Math.round(t.cost / t.orders1d)) : '-'}` },
+    getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.cost / t.orders14d)) : '-' },
   { key: 'aov', label: 'AOV (평균 주문가)', icon: Target, color: 'bg-indigo-50 text-indigo-600',
     getValue: (t) => t.orders14d > 0 ? formatCurrency(Math.round(t.revenue14d / t.orders14d)) : '-' },
   { key: 'adRatio', label: '광고비율', icon: TrendingDown, color: 'bg-rose-50 text-rose-600',
@@ -370,7 +352,7 @@ export default function AdAnalysisPage() {
   };
 
   // ─── 데이터 테이블 컬럼 ──────────────────────────────────────────
-  type TableColKey = 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cost' | 'orders14d' | 'revenue14d' | 'roas' | 'orders1d' | 'revenue1d' | 'cvr' | 'cpm' | 'cpa' | 'profit' | 'adRatio' | 'aov' | 'keywordCount';
+  type TableColKey = 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cost' | 'orders14d' | 'revenue14d' | 'roas' | 'cvr' | 'cpm' | 'cpa' | 'profit' | 'adRatio' | 'aov' | 'keywordCount';
 
   interface TableColDef {
     key: TableColKey;
@@ -405,12 +387,6 @@ export default function AdAnalysisPage() {
     { key: 'roas', label: 'ROAS(14d)',
       render: (d) => { const r = d.cost > 0 ? d.revenue14d / d.cost : 0; return <span className={r >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{d.cost > 0 ? `${(r * 100).toFixed(0)}%` : '-'}</span>; },
       renderTotal: (t) => { const r = t.cost > 0 ? t.revenue14d / t.cost : 0; return <span className={r >= 1 ? 'text-green-600' : 'text-red-500'}>{(r * 100).toFixed(0)}%</span>; } },
-    { key: 'orders1d', label: '주문(1d)',
-      render: (d) => d.orders1d,
-      renderTotal: (t) => t.orders1d },
-    { key: 'revenue1d', label: '매출(1d)',
-      render: (d) => formatCurrency(d.revenue1d),
-      renderTotal: (t) => formatCurrency(t.revenue1d), className: 'text-[#93C5FD]' },
     { key: 'cvr', label: 'CVR(14d)',
       render: (d) => d.clicks > 0 ? pct(d.orders14d / d.clicks) : '-',
       renderTotal: (t) => t.clicks > 0 ? pct(t.orders14d / t.clicks) : '-' },
@@ -495,60 +471,54 @@ export default function AdAnalysisPage() {
       const impressions = Number(r['노출수']) || 0;
       const clicks = Number(r['클릭수']) || 0;
       const cost = Math.round((Number(r['광고비']) || 0) * 1.1);
-      const orders1d = Number(r['총 주문수(1일)']) || 0;
-      const revenue1d_raw = Number(r['총 전환매출액(1일)']) || 0;
       const orders14d = Number(r['총 주문수(14일)']) || 0;
       const revenue14d_raw = Number(r['총 전환매출액(14일)']) || 0;
 
       // 매칭: 옵션ID → 저장된 매핑 → 없으면 null (미매칭)
       const matched = prices[convOptionId] ?? confirmedMap[product] ?? null;
-        if (matched && (orders1d > 0 || orders14d > 0)) matchedIds.add(convOptionId);
-        else if (!matched && (orders1d > 0 || orders14d > 0)) unmatchedIds.add(convOptionId);
+        if (matched && orders14d > 0) matchedIds.add(convOptionId);
+        else if (!matched && orders14d > 0) unmatchedIds.add(convOptionId);
 
         const actualPrice = matched?.price ?? 0;
         const costPrice = matched?.cost_price ?? 0;
         const commissionRate = matched?.commission_rate ?? 0;
-        const revenue1d = actualPrice ? orders1d * actualPrice : revenue1d_raw;
-        const revenue14d = actualPrice ? orders14d * actualPrice : revenue14d_raw;
-        const cogs1d = costPrice ? orders1d * costPrice : 0;
+        // 매칭 시 DB 가격 × 주문수, 미매칭 시 0 (CSV raw 사용 안 함)
+        const revenue14d = actualPrice ? orders14d * actualPrice : 0;
         const cogs14d = costPrice ? orders14d * costPrice : 0;
-        const commission1d = commissionRate ? revenue1d * (commissionRate / 100) : 0;
         const commission14d = commissionRate ? revenue14d * (commissionRate / 100) : 0;
 
         // Daily
-        if (!dailyMap.has(date)) dailyMap.set(date, { date, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+        if (!dailyMap.has(date)) dailyMap.set(date, { date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
         const d = dailyMap.get(date)!;
         d.impressions += impressions; d.clicks += clicks; d.cost += cost;
-        d.orders1d += orders1d; d.revenue1d += revenue1d; d.revenue1d_raw += revenue1d_raw;
         d.orders14d += orders14d; d.revenue14d += revenue14d; d.revenue14d_raw += revenue14d_raw;
-        d.cogs1d += cogs1d; d.cogs14d += cogs14d;
-        d.commission1d += commission1d; d.commission14d += commission14d;
+        d.cogs14d += cogs14d;
+        d.commission14d += commission14d;
 
         // Keywords by campaign+product
         if (keyword !== '-') {
           const kwKey = `${campaign}||${product}||${keyword}`;
-          if (!kwMap.has(kwKey)) kwMap.set(kwKey, { campaign, product, keyword, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+          if (!kwMap.has(kwKey)) kwMap.set(kwKey, { campaign, product, keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
           const k = kwMap.get(kwKey)!;
           k.impressions += impressions; k.clicks += clicks; k.cost += cost;
-          k.orders1d += orders1d; k.revenue1d += revenue1d; k.orders14d += orders14d; k.revenue14d += revenue14d;
+          k.orders14d += orders14d; k.revenue14d += revenue14d;
         }
 
         // Placements by campaign+product
         const plKey = `${campaign}||${product}||${placement}`;
-        if (!plMap.has(plKey)) plMap.set(plKey, { campaign, product, placement, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+        if (!plMap.has(plKey)) plMap.set(plKey, { campaign, product, placement, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
         const p = plMap.get(plKey)!;
         p.impressions += impressions; p.clicks += clicks; p.cost += cost;
-        p.orders1d += orders1d; p.revenue1d += revenue1d; p.orders14d += orders14d; p.revenue14d += revenue14d;
+        p.orders14d += orders14d; p.revenue14d += revenue14d;
 
         // Compact rows (date+campaign+product)
         const cKey = `${date}|${campaign}|${product}`;
-        if (!compactMap.has(cKey)) compactMap.set(cKey, { date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0, _kw: new Set<string>() });
+        if (!compactMap.has(cKey)) compactMap.set(cKey, { date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0, _kw: new Set<string>() });
         const c = compactMap.get(cKey)!;
         c.impressions += impressions; c.clicks += clicks; c.cost += cost;
-        c.orders1d += orders1d; c.revenue1d += revenue1d; c.revenue1d_raw += revenue1d_raw;
         c.orders14d += orders14d; c.revenue14d += revenue14d; c.revenue14d_raw += revenue14d_raw;
-        c.cogs1d += cogs1d; c.cogs14d += cogs14d;
-        c.commission1d += commission1d; c.commission14d += commission14d;
+        c.cogs14d += cogs14d;
+        c.commission14d += commission14d;
         if (keyword !== '-' && impressions > 0) c._kw.add(keyword);
       }
 
@@ -562,12 +532,11 @@ export default function AdAnalysisPage() {
 
       const totals = daily.reduce((acc: any, d: any) => {
         acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
-        acc.orders1d += d.orders1d; acc.revenue1d += d.revenue1d; acc.revenue1d_raw += d.revenue1d_raw;
         acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
-        acc.cogs1d += d.cogs1d; acc.cogs14d += d.cogs14d;
-        acc.commission1d += d.commission1d; acc.commission14d += d.commission14d;
+        acc.cogs14d += d.cogs14d;
+        acc.commission14d += d.commission14d;
         return acc;
-      }, { impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+      }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
 
       const campaigns = [...new Set(rows.map((r: any) => r.campaign))].sort();
       const products = [...new Set(rows.map((r: any) => r.product))].sort();
@@ -745,14 +714,13 @@ export default function AdAnalysisPage() {
     const dMap = new Map<string, DailyRow>();
     for (const r of rows) {
       if (!dMap.has(r.date)) {
-        dMap.set(r.date, { date: r.date, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 });
+        dMap.set(r.date, { date: r.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
       }
       const d = dMap.get(r.date)!;
       d.impressions += r.impressions; d.clicks += r.clicks; d.cost += r.cost;
-      d.orders1d += r.orders1d; d.revenue1d += r.revenue1d; d.revenue1d_raw += r.revenue1d_raw;
       d.orders14d += r.orders14d; d.revenue14d += r.revenue14d; d.revenue14d_raw += r.revenue14d_raw;
-      d.cogs1d += r.cogs1d; d.cogs14d += r.cogs14d;
-      d.commission1d += r.commission1d; d.commission14d += r.commission14d;
+      d.cogs14d += r.cogs14d;
+      d.commission14d += r.commission14d;
     }
     const daily = [...dMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -761,10 +729,10 @@ export default function AdAnalysisPage() {
     // Re-aggregate by keyword (merge across campaign/product if both 'all')
     const kMap = new Map<string, any>();
     for (const k of fkw) {
-      if (!kMap.has(k.keyword)) kMap.set(k.keyword, { keyword: k.keyword, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+      if (!kMap.has(k.keyword)) kMap.set(k.keyword, { keyword: k.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
       const m = kMap.get(k.keyword)!;
       m.impressions += k.impressions; m.clicks += k.clicks; m.cost += k.cost;
-      m.orders1d += k.orders1d; m.revenue1d += k.revenue1d; m.orders14d += k.orders14d; m.revenue14d += k.revenue14d;
+      m.orders14d += k.orders14d; m.revenue14d += k.revenue14d;
     }
     const keywords: KeywordRow[] = [...kMap.values()].sort((a, b) => b.cost - a.cost).map((k) => ({
       ...k,
@@ -778,21 +746,20 @@ export default function AdAnalysisPage() {
     const fpl = data.placements.filter(matchRow);
     const pMap = new Map<string, any>();
     for (const p of fpl) {
-      if (!pMap.has(p.placement)) pMap.set(p.placement, { placement: p.placement, impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, orders14d: 0, revenue14d: 0 });
+      if (!pMap.has(p.placement)) pMap.set(p.placement, { placement: p.placement, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
       const m = pMap.get(p.placement)!;
       m.impressions += p.impressions; m.clicks += p.clicks; m.cost += p.cost;
-      m.orders1d += p.orders1d; m.revenue1d += p.revenue1d; m.orders14d += p.orders14d; m.revenue14d += p.revenue14d;
+      m.orders14d += p.orders14d; m.revenue14d += p.revenue14d;
     }
     const placements = [...pMap.values()].sort((a, b) => b.cost - a.cost);
 
     const totals = daily.reduce((acc, d) => {
       acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
-      acc.orders1d += d.orders1d; acc.revenue1d += d.revenue1d; acc.revenue1d_raw += d.revenue1d_raw;
       acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
-      acc.cogs1d += d.cogs1d; acc.cogs14d += d.cogs14d;
-      acc.commission1d += d.commission1d; acc.commission14d += d.commission14d;
+      acc.cogs14d += d.cogs14d;
+      acc.commission14d += d.commission14d;
       return acc;
-    }, { impressions: 0, clicks: 0, cost: 0, orders1d: 0, revenue1d: 0, revenue1d_raw: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs1d: 0, cogs14d: 0, commission1d: 0, commission14d: 0 } as DailyRow);
+    }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow);
 
     return { rows, daily, keywords, placements, totals };
   }, [data, filterCampaign, filterProduct]);
