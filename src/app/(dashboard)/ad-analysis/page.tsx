@@ -311,6 +311,7 @@ export default function AdAnalysisPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploads, setUploads] = useState<UploadInfo[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
@@ -623,56 +624,34 @@ export default function AdAnalysisPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useState(() => { if (typeof window !== 'undefined') setTimeout(loadFromDB, 0); });
 
-  // ─── Upload handler ────────────────────────────────────────────
+  // ─── Upload handler (FormData 직접 전송 — 서버에서 파싱) ─────────
   const handleUpload = useCallback(async (files: File[]) => {
     setLoading(true);
     setError('');
     try {
-      const XLSX = await import('xlsx');
-
-      // 파일별로 파싱 + 배치 분할 DB 저장
-      let totalInserted = 0;
       const duplicateFiles: string[] = [];
-      const BATCH = 1000; // 1000행씩 분할 전송 (행당 ~0.8KB, 배치당 ~0.8MB)
-      for (const file of files) {
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        if (!rows.length) continue;
+      const errors: string[] = [];
 
-        // 첫 배치로 중복 체크
-        const firstBatch = rows.slice(0, BATCH);
-        const firstRes = await fetch('/api/ad-analysis/rows', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, rows: firstBatch }),
-        });
-        if (firstRes.status === 409) {
-          duplicateFiles.push(file.name);
-          continue;
-        }
-        if (!firstRes.ok) throw new Error(`업로드 실패: ${file.name}`);
-        const firstResult = await firstRes.json();
-        totalInserted += firstResult.inserted ?? 0;
-
-        // 나머지 배치 전송
-        for (let i = BATCH; i < rows.length; i += BATCH) {
-          const batch = rows.slice(i, i + BATCH);
-          const res = await fetch('/api/ad-analysis/rows', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name, rows: batch, append: true }),
-          });
-          if (res.ok) {
-            const { inserted } = await res.json();
-            totalInserted += inserted ?? 0;
-          }
-        }
+      // 파일 2개씩 병렬 업로드
+      const CONCURRENT = 2;
+      for (let i = 0; i < files.length; i += CONCURRENT) {
+        const batch = files.slice(i, i + CONCURRENT);
+        const results = await Promise.allSettled(
+          batch.map(async (file, bi) => {
+            setUploadProgress({ current: i + bi + 1, total: files.length, fileName: file.name });
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/ad-analysis/upload', { method: 'POST', body: fd });
+            if (res.status === 409) { duplicateFiles.push(file.name); return; }
+            if (!res.ok) throw new Error(file.name);
+          })
+        );
+        results.forEach(r => { if (r.status === 'rejected') errors.push(r.reason?.message ?? '알 수 없는 오류'); });
       }
 
-      if (duplicateFiles.length) {
-        setError(`중복 파일 건너뜀: ${duplicateFiles.join(', ')}`);
-      }
+      setUploadProgress(null);
+      if (duplicateFiles.length) setError(`중복 파일 건너뜀: ${duplicateFiles.join(', ')}`);
+      if (errors.length) setError(prev => (prev ? prev + ' / ' : '') + `업로드 실패: ${errors.join(', ')}`);
 
       // DB에서 다시 로드 + 처리
       await loadFromDB();
@@ -1015,9 +994,24 @@ export default function AdAnalysisPage() {
       )}
 
       {loading && (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-[#3182F6]" />
-          <span className="ml-3 text-[15px] text-[#6B7684]">데이터 처리 중...</span>
+          {uploadProgress ? (
+            <div className="text-center">
+              <p className="text-[15px] font-medium text-[#333D4B]">
+                파일 업로드 중 ({uploadProgress.current}/{uploadProgress.total})
+              </p>
+              <p className="text-[12px] text-[#8B95A1] mt-1">{uploadProgress.fileName}</p>
+              <div className="w-48 h-1.5 bg-[#F2F4F6] rounded-full mt-2 overflow-hidden">
+                <div
+                  className="h-full bg-[#3182F6] rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <span className="text-[15px] text-[#6B7684]">데이터 처리 중...</span>
+          )}
         </div>
       )}
 
