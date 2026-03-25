@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
-// Body size limit 해제 (대용량 광고 데이터)
 export const maxDuration = 60;
 
 // GET: DB에서 모든 광고 raw rows 가져오기

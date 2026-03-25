@@ -633,7 +633,7 @@ export default function AdAnalysisPage() {
       // 파일별로 파싱 + 배치 분할 DB 저장
       let totalInserted = 0;
       const duplicateFiles: string[] = [];
-      const BATCH = 5000; // 5000행씩 분할 전송
+      const BATCH = 1000; // 1000행씩 분할 전송 (행당 ~0.8KB, 배치당 ~0.8MB)
       for (const file of files) {
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: 'array' });
