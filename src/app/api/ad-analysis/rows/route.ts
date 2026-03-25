@@ -72,17 +72,14 @@ export async function POST(request: NextRequest) {
     filename,
   }));
 
-  // 배치 upsert (1000개씩)
+  // 배치 upsert (2000개씩, select 없이 빠르게)
   let inserted = 0;
-  let skipped = 0;
-  for (let i = 0; i < upsertRows.length; i += 1000) {
-    const batch = upsertRows.slice(i, i + 1000);
-    const { data: result, error } = await admin
+  for (let i = 0; i < upsertRows.length; i += 2000) {
+    const batch = upsertRows.slice(i, i + 2000);
+    const { error } = await admin
       .from('ad_raw_rows')
-      .upsert(batch, { onConflict: 'dedup_key', ignoreDuplicates: true })
-      .select('dedup_key');
-    if (!error) inserted += result?.length ?? 0;
-    else skipped += batch.length;
+      .upsert(batch, { onConflict: 'dedup_key', ignoreDuplicates: true });
+    if (!error) inserted += batch.length;
   }
 
   // 업로드 기록 저장 (첫 배치에서만)

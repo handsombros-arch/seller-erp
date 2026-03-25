@@ -624,29 +624,57 @@ export default function AdAnalysisPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useState(() => { if (typeof window !== 'undefined') setTimeout(loadFromDB, 0); });
 
-  // ─── Upload handler (FormData 직접 전송 — 서버에서 파싱) ─────────
+  // ─── Upload handler (클라이언트 파싱 + 병렬 배치 전송) ─────────
   const handleUpload = useCallback(async (files: File[]) => {
     setLoading(true);
     setError('');
     try {
+      const XLSX = await import('xlsx');
       const duplicateFiles: string[] = [];
       const errors: string[] = [];
+      const BATCH = 2000;
+      const PARALLEL = 3; // 동시 API 호출 수
 
-      // 파일 2개씩 병렬 업로드
-      const CONCURRENT = 2;
-      for (let i = 0; i < files.length; i += CONCURRENT) {
-        const batch = files.slice(i, i + CONCURRENT);
-        const results = await Promise.allSettled(
-          batch.map(async (file, bi) => {
-            setUploadProgress({ current: i + bi + 1, total: files.length, fileName: file.name });
-            const fd = new FormData();
-            fd.append('file', file);
-            const res = await fetch('/api/ad-analysis/upload', { method: 'POST', body: fd });
-            if (res.status === 409) { duplicateFiles.push(file.name); return; }
-            if (!res.ok) throw new Error(file.name);
-          })
-        );
-        results.forEach(r => { if (r.status === 'rejected') errors.push(r.reason?.message ?? '알 수 없는 오류'); });
+      for (let fi = 0; fi < files.length; fi++) {
+        const file = files[fi];
+        setUploadProgress({ current: fi + 1, total: files.length, fileName: `${file.name} 파싱 중...` });
+
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        if (!rows.length) continue;
+
+        // 첫 배치: 중복 체크
+        const firstRes = await fetch('/api/ad-analysis/rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, rows: rows.slice(0, BATCH) }),
+        });
+        if (firstRes.status === 409) { duplicateFiles.push(file.name); continue; }
+        if (!firstRes.ok) { errors.push(file.name); continue; }
+
+        // 나머지 배치: 병렬 전송
+        const remaining: any[][] = [];
+        for (let i = BATCH; i < rows.length; i += BATCH) {
+          remaining.push(rows.slice(i, i + BATCH));
+        }
+
+        for (let i = 0; i < remaining.length; i += PARALLEL) {
+          const chunk = remaining.slice(i, i + PARALLEL);
+          const sent = BATCH + (i + chunk.length) * BATCH;
+          const pct = Math.min(100, Math.round((sent / rows.length) * 100));
+          setUploadProgress({ current: fi + 1, total: files.length, fileName: `${file.name} (${pct}%)` });
+
+          await Promise.all(
+            chunk.map(batch =>
+              fetch('/api/ad-analysis/rows', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name, rows: batch, append: true }),
+              })
+            )
+          );
+        }
       }
 
       setUploadProgress(null);
