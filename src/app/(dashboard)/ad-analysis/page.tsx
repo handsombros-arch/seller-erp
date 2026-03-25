@@ -308,9 +308,8 @@ interface PendingMatch {
 
 export default function AdAnalysisPage() {
   const [data, setData] = useState<AnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [uploads, setUploads] = useState<UploadInfo[]>([]);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
@@ -584,23 +583,22 @@ export default function AdAnalysisPage() {
     setData(result);
   }, []);
 
-  // ─── DB에서 로드 + 처리 ────────────────────────────────────────
-  const loadFromDB = useCallback(async () => {
+  // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
+  const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+
+  const handleUpload = useCallback(async (files: File[], accumulate = false) => {
     setLoading(true);
     setError('');
     try {
-      const [rowsRes, pricesRes, mappingsRes] = await Promise.all([
-        fetch('/api/ad-analysis/rows'),
+      const [XLSX, pricesRes, mappingsRes] = await Promise.all([
+        import('xlsx'),
         fetch('/api/ad-analysis'),
         fetch('/api/ad-analysis/mappings'),
       ]);
-      const { uploads: uploadList, rows: rawRows } = rowsRes.ok ? await rowsRes.json() : { uploads: [], rows: [] };
-      setUploads(uploadList);
-
-      if (!rawRows.length) { setData(null); setLoading(false); return; }
-
-      const { prices, pricesByName, priceNameKeys } = pricesRes.ok ? await pricesRes.json() : { prices: {}, pricesByName: {}, priceNameKeys: [] };
+      if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
+      const { prices, pricesByName, priceNameKeys } = await pricesRes.json();
       const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
+
       const confirmedMap: Record<string, any> = {};
       for (const m of savedMappings) {
         confirmedMap[m.ad_product_name] = {
@@ -610,67 +608,68 @@ export default function AdAnalysisPage() {
         };
       }
 
-      const result = processData(rawRows, prices, confirmedMap);
+      // 여러 파일 동시 읽기
+      const allRows: any[] = [];
+      for (const file of files) {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        allRows.push(...rows);
+      }
+      if (!allRows.length) throw new Error('데이터가 없습니다');
+
+      // 중복 제거 (파일 간 + 기존 데이터 포함)
+      const seen = new Set<string>();
+      let raw: any[] = [];
+
+      if (accumulate && data?._rawRows) {
+        for (const r of data._rawRows) {
+          const key = dedupKey(r);
+          if (!seen.has(key)) { seen.add(key); raw.push(r); }
+        }
+      }
+      for (const r of allRows) {
+        const key = dedupKey(r);
+        if (!seen.has(key)) { seen.add(key); raw.push(r); }
+      }
+
+      // 미매칭 상품 퍼지 매칭
+      const adProductNames = new Set<string>();
+      for (const r of raw) {
+        const convId = String(r['광고전환매출발생 옵션ID'] ?? '');
+        const product = String(r['광고집행 상품명'] ?? '').split(',')[0].trim();
+        const hasOrders = (Number(r['총 주문수(14일)']) || 0) > 0;
+        if (hasOrders && product && !prices[convId] && !confirmedMap[product]) {
+          adProductNames.add(product);
+        }
+      }
+
+      const pending: PendingMatch[] = [];
+      for (const adName of adProductNames) {
+        const result = fuzzyMatch(adName, pricesByName, priceNameKeys);
+        if (result) {
+          pending.push({
+            adName, dbName: result.dbName, score: result.score,
+            price: result.info.price, cost_price: result.info.cost_price,
+            commission_rate: result.info.commission_rate, sku_code: result.info.sku_code,
+            status: 'pending',
+          });
+        }
+      }
+
+      if (pending.length > 0) {
+        setPendingMatches(pending);
+        setPendingRaw(raw);
+      }
+
+      const result = processData(raw, prices, confirmedMap);
       saveResult(result);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [processData, saveResult]);
-
-  // 마운트 시 DB에서 로드
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useState(() => { if (typeof window !== 'undefined') setTimeout(loadFromDB, 0); });
-
-  // ─── Upload handler ────────────────────────────────────────────
-  const handleUpload = useCallback(async (files: File[]) => {
-    setLoading(true);
-    setError('');
-    try {
-      const XLSX = await import('xlsx');
-
-      // 파일별로 파싱 + DB 저장
-      let totalInserted = 0;
-      const duplicateFiles: string[] = [];
-      for (const file of files) {
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        if (!rows.length) continue;
-
-        // gzip 압축 전송 (27MB JSON → ~0.7MB gzip, Vercel 4.5MB 제한 대응)
-        const json = JSON.stringify({ filename: file.name, rows });
-        const blob = new Blob([json]);
-        const compressed = await new Response(
-          blob.stream().pipeThrough(new CompressionStream('gzip'))
-        ).arrayBuffer();
-
-        const res = await fetch('/api/ad-analysis/rows', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/gzip' },
-          body: compressed,
-        });
-        if (res.status === 409) {
-          duplicateFiles.push(file.name);
-          continue;
-        }
-        if (!res.ok) throw new Error(`업로드 실패: ${file.name}`);
-        const { inserted } = await res.json();
-        totalInserted += inserted;
-      }
-
-      if (duplicateFiles.length) {
-        setError(`중복 파일 건너뜀: ${duplicateFiles.join(', ')}`);
-      }
-
-      // DB에서 다시 로드 + 처리
-      await loadFromDB();
-    } catch (err: any) {
-      setError(err.message);
-      setLoading(false);
-    }
-  }, [loadFromDB]);
+  }, [data, processData, saveResult]);
 
   // 매칭 확인 → DB 저장 → 재처리
   const handleConfirmMatches = useCallback(async () => {
@@ -693,9 +692,26 @@ export default function AdAnalysisPage() {
 
     setPendingMatches([]);
     setPendingRaw(null);
-    // DB에서 다시 로드 (매핑 반영)
-    await loadFromDB();
-  }, [pendingMatches, loadFromDB]);
+    // 매핑 반영해서 재처리
+    if (pendingRaw) {
+      const [pricesRes, mappingsRes] = await Promise.all([
+        fetch('/api/ad-analysis'),
+        fetch('/api/ad-analysis/mappings'),
+      ]);
+      const { prices } = pricesRes.ok ? await pricesRes.json() : { prices: {} };
+      const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
+      const confirmedMap: Record<string, any> = {};
+      for (const m of savedMappings) {
+        confirmedMap[m.ad_product_name] = {
+          price: Number(m.price), cost_price: Number(m.cost_price),
+          commission_rate: Number(m.commission_rate ?? 0),
+          sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
+        };
+      }
+      const result = processData(pendingRaw, prices, confirmedMap);
+      saveResult(result);
+    }
+  }, [pendingMatches, pendingRaw, processData, saveResult]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -969,7 +985,7 @@ export default function AdAnalysisPage() {
           </button>
           {data && (
             <button
-              onClick={async () => { if (confirm('모든 광고 데이터를 삭제하시겠습니까?')) { await fetch('/api/ad-analysis/rows', { method: 'DELETE' }); setData(null); setUploads([]); } }}
+              onClick={() => { if (confirm('모든 광고 데이터를 삭제하시겠습니까?')) { setData(null); } }}
               className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[#6B7684] text-[13px] font-medium hover:bg-[#F8F9FA] transition-colors"
             >
               초기화
@@ -1015,15 +1031,10 @@ export default function AdAnalysisPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
       )}
 
-      {/* 업로드된 파일 목록 */}
-      {uploads.length > 0 && (
+      {/* 데이터 요약 */}
+      {data?._rawRows && (
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8B95A1]">
-          <span>업로드 파일:</span>
-          {uploads.map((u) => (
-            <span key={u.filename} className="px-2 py-0.5 rounded bg-[#F2F4F6] text-[#6B7684]">
-              {u.filename} ({u.row_count.toLocaleString()}행)
-            </span>
-          ))}
+          <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨</span>
         </div>
       )}
 
