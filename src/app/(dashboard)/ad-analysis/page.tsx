@@ -664,6 +664,13 @@ export default function AdAnalysisPage() {
 
       const result = processData(raw, prices, confirmedMap);
       saveResult(result);
+
+      // 백그라운드: 원본 파일을 Storage에 저장 (사용자 대기 없음)
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fetch('/api/ad-analysis/upload', { method: 'POST', body: fd }).catch(() => {});
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
