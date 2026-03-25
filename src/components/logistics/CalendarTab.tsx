@@ -171,6 +171,7 @@ export default function CalendarTab() {
   const [loading, setLoading]   = useState(false);
   const [filter, setFilter]     = useState<FilterType>('all');
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
+  const [dayPopup, setDayPopup] = useState<{ date: string; events: CalendarEvent[] } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -408,7 +409,12 @@ export default function CalendarTab() {
                       );
                     })}
                     {dayEvents.length > 3 && (
-                      <p className="text-[11px] text-[#B0B8C1] pl-1">+{dayEvents.length - 3}개 더</p>
+                      <button
+                        onClick={() => setDayPopup({ date: dateStr, events: dayEvents })}
+                        className="text-[11px] text-[#3182F6] font-medium pl-1 hover:underline"
+                      >
+                        +{dayEvents.length - 3}개 더
+                      </button>
                     )}
                   </div>
                 </div>
@@ -440,6 +446,53 @@ export default function CalendarTab() {
           </span>
         ))}
       </div>
+
+      {/* Day events popup */}
+      {dayPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setDayPopup(null)}>
+          <div className="absolute inset-0 bg-black/20" />
+          <div
+            className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] w-full max-w-sm mx-4 p-5 max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[15px] font-bold text-[#191F28]">
+                {dayPopup.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1년 $2월 $3일')}
+                <span className="ml-2 text-[12px] font-medium text-[#8B95A1]">{dayPopup.events.length}건</span>
+              </h3>
+              <button onClick={() => setDayPopup(null)} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-[#F2F4F6]">
+                <X className="h-4 w-4 text-[#6B7684]" />
+              </button>
+            </div>
+            <div className="overflow-y-auto space-y-1.5">
+              {dayPopup.events.map((event) => {
+                const style = eventStyle(event);
+                const subtypeLabel = event.type === 'order' ? '발주'
+                  : event.type === 'reorder' ? '발주권장'
+                  : event.type === 'inbound' ? (INBOUND_SUBTYPES[event.subtype] ?? '입고')
+                  : (OUTBOUND_SUBTYPES[event.subtype] ?? '출고');
+                return (
+                  <button
+                    key={event.id}
+                    onClick={() => { setDayPopup(null); setSelected(event); }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-[12px] flex items-center gap-2 ${style.pill} hover:opacity-80 transition-opacity`}
+                  >
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                    <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>{subtypeLabel}</span>
+                    <span className="truncate font-medium">{event.label}</span>
+                    {event.quantity > 0 && event.type !== 'reorder' && event.type !== 'order' && (
+                      <span className="shrink-0 text-[11px] opacity-70">{formatNumber(event.quantity)}개</span>
+                    )}
+                    {event.box_count != null && (
+                      <span className="shrink-0 text-[11px] opacity-70">{event.box_count}박스</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Event detail popup */}
       {selected && <EventPopup event={selected} onClose={() => setSelected(null)} />}
