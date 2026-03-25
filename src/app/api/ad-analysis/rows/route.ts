@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
-export const maxDuration = 60;
-
 // GET: DB에서 모든 광고 raw rows 가져오기
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -43,24 +41,22 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
   const admin = await createAdminClient();
-  const { filename, rows, append, totalRows } = await request.json() as { filename: string; rows: any[]; append?: boolean; totalRows?: number };
+  const { filename, rows } = await request.json() as { filename: string; rows: any[] };
 
   if (!filename || !rows?.length) {
     return NextResponse.json({ error: '파일명과 데이터 필요' }, { status: 400 });
   }
 
-  // 파일명 중복 체크 (append 모드에서는 건너뜀 — 배치 분할 전송)
-  if (!append) {
-    const { data: existing } = await admin
-      .from('ad_uploads')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('filename', filename)
-      .maybeSingle();
+  // 파일명 중복 체크
+  const { data: existing } = await admin
+    .from('ad_uploads')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('filename', filename)
+    .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json({ error: `이미 업로드된 파일: ${filename}`, duplicate: true }, { status: 409 });
-    }
+  if (existing) {
+    return NextResponse.json({ error: `이미 업로드된 파일: ${filename}`, duplicate: true }, { status: 409 });
   }
 
   // dedup key 생성 + upsert
@@ -72,20 +68,22 @@ export async function POST(request: NextRequest) {
     filename,
   }));
 
-  // upsert (클라이언트에서 500행씩 전송하므로 분할 불필요)
-  const { error } = await admin
-    .from('ad_raw_rows')
-    .upsert(upsertRows, { onConflict: 'dedup_key', ignoreDuplicates: true });
-  const inserted = error ? 0 : upsertRows.length;
-
-  // 업로드 기록 저장 (첫 배치에서만)
-  if (!append) {
-    await admin.from('ad_uploads').insert({
-      user_id: user.id,
-      filename,
-      row_count: totalRows ?? rows.length,
-    });
+  // 배치 upsert (1000개씩)
+  let inserted = 0;
+  for (let i = 0; i < upsertRows.length; i += 1000) {
+    const batch = upsertRows.slice(i, i + 1000);
+    const { error } = await admin
+      .from('ad_raw_rows')
+      .upsert(batch, { onConflict: 'dedup_key', ignoreDuplicates: true });
+    if (!error) inserted += batch.length;
   }
+
+  // 업로드 기록 저장
+  await admin.from('ad_uploads').insert({
+    user_id: user.id,
+    filename,
+    row_count: rows.length,
+  });
 
   return NextResponse.json({ inserted, skipped: rows.length - inserted, total: rows.length });
 }
@@ -106,7 +104,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ deleted: filename });
   }
 
-  // 전체 삭제 — TRUNCATE로 즉시 삭제
+  // 전체 삭제
   await admin.rpc('truncate_ad_data');
   return NextResponse.json({ deleted: 'all' });
 }
