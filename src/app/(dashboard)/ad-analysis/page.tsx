@@ -630,27 +630,44 @@ export default function AdAnalysisPage() {
     try {
       const XLSX = await import('xlsx');
 
-      // 파일별로 파싱 + DB 저장
+      // 파일별로 파싱 + 배치 분할 DB 저장
       let totalInserted = 0;
       const duplicateFiles: string[] = [];
+      const BATCH = 5000; // 5000행씩 분할 전송
       for (const file of files) {
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: 'array' });
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         if (!rows.length) continue;
 
-        const res = await fetch('/api/ad-analysis/rows', {
+        // 첫 배치로 중복 체크
+        const firstBatch = rows.slice(0, BATCH);
+        const firstRes = await fetch('/api/ad-analysis/rows', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, rows }),
+          body: JSON.stringify({ filename: file.name, rows: firstBatch }),
         });
-        if (res.status === 409) {
+        if (firstRes.status === 409) {
           duplicateFiles.push(file.name);
           continue;
         }
-        if (!res.ok) throw new Error(`업로드 실패: ${file.name}`);
-        const { inserted } = await res.json();
-        totalInserted += inserted;
+        if (!firstRes.ok) throw new Error(`업로드 실패: ${file.name}`);
+        const firstResult = await firstRes.json();
+        totalInserted += firstResult.inserted ?? 0;
+
+        // 나머지 배치 전송
+        for (let i = BATCH; i < rows.length; i += BATCH) {
+          const batch = rows.slice(i, i + BATCH);
+          const res = await fetch('/api/ad-analysis/rows', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, rows: batch, append: true }),
+          });
+          if (res.ok) {
+            const { inserted } = await res.json();
+            totalInserted += inserted ?? 0;
+          }
+        }
       }
 
       if (duplicateFiles.length) {

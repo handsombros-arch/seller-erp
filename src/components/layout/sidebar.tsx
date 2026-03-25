@@ -13,6 +13,7 @@ import {
   Building2,
   ShoppingCart,
   Megaphone,
+  Tag,
   Settings,
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ const navItems = [
   { title: '입출고 관리',   href: '/inbound',         icon: PackageCheck,    exact: false, sub: false },
   { title: '채널 판매',     href: '/channel-sales',   icon: ShoppingCart,    exact: false, sub: false },
   { title: '광고 분석',     href: '/ad-analysis',     icon: Megaphone,       exact: false, sub: false },
+  { title: '가격 분석',     href: '/price-tool',      icon: Tag,             exact: false, sub: false },
   { title: '설정',          href: '/settings',        icon: Settings,        exact: false, sub: false },
 ];
 
