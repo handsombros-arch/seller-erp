@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
   const admin = await createAdminClient();
-  const { filename, rows, append } = await request.json() as { filename: string; rows: any[]; append?: boolean };
+  const { filename, rows, append, totalRows } = await request.json() as { filename: string; rows: any[]; append?: boolean; totalRows?: number };
 
   if (!filename || !rows?.length) {
     return NextResponse.json({ error: '파일명과 데이터 필요' }, { status: 400 });
@@ -72,22 +72,18 @@ export async function POST(request: NextRequest) {
     filename,
   }));
 
-  // 배치 upsert (2000개씩, select 없이 빠르게)
-  let inserted = 0;
-  for (let i = 0; i < upsertRows.length; i += 2000) {
-    const batch = upsertRows.slice(i, i + 2000);
-    const { error } = await admin
-      .from('ad_raw_rows')
-      .upsert(batch, { onConflict: 'dedup_key', ignoreDuplicates: true });
-    if (!error) inserted += batch.length;
-  }
+  // upsert (클라이언트에서 500행씩 전송하므로 분할 불필요)
+  const { error } = await admin
+    .from('ad_raw_rows')
+    .upsert(upsertRows, { onConflict: 'dedup_key', ignoreDuplicates: true });
+  const inserted = error ? 0 : upsertRows.length;
 
   // 업로드 기록 저장 (첫 배치에서만)
   if (!append) {
     await admin.from('ad_uploads').insert({
       user_id: user.id,
       filename,
-      row_count: rows.length,
+      row_count: totalRows ?? rows.length,
     });
   }
 

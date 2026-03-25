@@ -632,8 +632,8 @@ export default function AdAnalysisPage() {
       const XLSX = await import('xlsx');
       const duplicateFiles: string[] = [];
       const errors: string[] = [];
-      const BATCH = 2000;
-      const PARALLEL = 3; // 동시 API 호출 수
+      const BATCH = 500; // Vercel Hobby 10초 제한 대응 — 작은 배치 + 높은 병렬
+      const PARALLEL = 6;
 
       for (let fi = 0; fi < files.length; fi++) {
         const file = files[fi];
@@ -644,11 +644,11 @@ export default function AdAnalysisPage() {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         if (!rows.length) continue;
 
-        // 첫 배치: 중복 체크
+        // 첫 배치: 중복 체크 + totalRows 전달 (업로드 기록에 전체 행 수 저장)
         const firstRes = await fetch('/api/ad-analysis/rows', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, rows: rows.slice(0, BATCH) }),
+          body: JSON.stringify({ filename: file.name, rows: rows.slice(0, BATCH), totalRows: rows.length }),
         });
         if (firstRes.status === 409) { duplicateFiles.push(file.name); continue; }
         if (!firstRes.ok) { errors.push(file.name); continue; }
