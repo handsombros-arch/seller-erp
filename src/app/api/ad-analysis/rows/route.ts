@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { gunzipSync } from 'zlib';
 
 // GET: DB에서 모든 광고 raw rows 가져오기
 export async function GET(request: NextRequest) {
@@ -41,7 +42,16 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
   const admin = await createAdminClient();
-  const { filename, rows } = await request.json() as { filename: string; rows: any[] };
+
+  // gzip 또는 일반 JSON 처리
+  let body: { filename: string; rows: any[] };
+  if (request.headers.get('content-type') === 'application/gzip') {
+    const buffer = Buffer.from(await request.arrayBuffer());
+    body = JSON.parse(gunzipSync(buffer).toString());
+  } else {
+    body = await request.json();
+  }
+  const { filename, rows } = body;
 
   if (!filename || !rows?.length) {
     return NextResponse.json({ error: '파일명과 데이터 필요' }, { status: 400 });

@@ -639,10 +639,17 @@ export default function AdAnalysisPage() {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         if (!rows.length) continue;
 
+        // gzip 압축 전송 (27MB JSON → ~0.7MB gzip, Vercel 4.5MB 제한 대응)
+        const json = JSON.stringify({ filename: file.name, rows });
+        const blob = new Blob([json]);
+        const compressed = await new Response(
+          blob.stream().pipeThrough(new CompressionStream('gzip'))
+        ).arrayBuffer();
+
         const res = await fetch('/api/ad-analysis/rows', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, rows }),
+          headers: { 'Content-Type': 'application/gzip' },
+          body: compressed,
         });
         if (res.status === 409) {
           duplicateFiles.push(file.name);
