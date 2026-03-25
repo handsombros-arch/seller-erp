@@ -56,6 +56,7 @@ function InputField({ label, hint, required, ...props }: React.InputHTMLAttribut
         {hint && <span className="text-[11px] text-[#B0B8C1]">{hint}</span>}
       </div>
       <input
+        lang="ko"
         {...props}
         className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
       />
@@ -97,7 +98,7 @@ function VatCostFields({ exclVat, onChange }: {
       <label className="text-[13px] font-medium text-[#191F28]">
         원가 <span className="text-[11px] text-[#B0B8C1] font-normal">(VAT 미포함 · 최종 도착가)</span>
       </label>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-1">
           <p className="text-[11px] text-[#6B7684] font-medium">VAT 제외</p>
           <input type="number" min="0" value={localExcl} onChange={(e) => handleExclChange(e.target.value)} placeholder="0" className={inputCls} />
@@ -202,7 +203,7 @@ function AddProductDialog({ open, onClose, onSave }: {
         />
 
         {/* 공급처 + 리드타임 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">공급처 <span className="text-[11px] text-[#B0B8C1] font-normal">(선택)</span></label>
             <select value={form.supplier_id} onChange={(e) => {
@@ -417,6 +418,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
                 ))}
                 <div className="flex items-center gap-1">
                   <input
+                    lang="ko"
                     value={opt.inputVal}
                     onChange={(e) => setInputVal(i, e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addValue(i); } }}
@@ -433,6 +435,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
           {/* 옵션 타입 추가 */}
           <div className="flex gap-2">
             <input
+              lang="ko"
               value={newOptKey}
               onChange={(e) => setNewOptKey(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOptType(); } }}
@@ -473,7 +476,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
         />
 
         {/* 공급처 + 리드타임 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">공급처 <span className="text-[11px] text-[#B0B8C1] font-normal">(선택)</span></label>
             <select value={form.supplier_id} onChange={(e) => {
@@ -502,7 +505,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
               직접 설정하려면 마스터 시트를 이용하세요.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <InputField label="발주점" type="number" placeholder="0" value={form.reorder_point} onChange={(e) => set('reorder_point', e.target.value)} />
             <InputField label="안전재고" type="number" placeholder="0" value={form.safety_stock} onChange={(e) => set('safety_stock', e.target.value)} />
           </div>
@@ -640,11 +643,11 @@ function PlatformSetupDialog({ skus, onClose }: {
                             <span className="text-[12px] font-medium text-[#191F28]">{ch.name}</span>
                           </td>
                           <td className="px-2 py-1.5">
-                            <input value={e.name} onChange={(ev) => updateEntry(sku.id, ch.id, 'name', ev.target.value)}
+                            <input lang="ko" value={e.name} onChange={(ev) => updateEntry(sku.id, ch.id, 'name', ev.target.value)}
                               placeholder="플랫폼에 등록된 상품명" className={inputCls} />
                           </td>
                           <td className="px-2 py-1.5">
-                            <input value={e.product_id} onChange={(ev) => updateEntry(sku.id, ch.id, 'product_id', ev.target.value)}
+                            <input lang="ko" value={e.product_id} onChange={(ev) => updateEntry(sku.id, ch.id, 'product_id', ev.target.value)}
                               placeholder="상품 ID" className={inputCls} />
                           </td>
                           <td className="px-2 py-1.5">
@@ -753,9 +756,9 @@ function EditSkuDialog({ open, onClose, sku, product, onSave }: {
           <div className="space-y-2">
             {options.map((opt, i) => (
               <div key={i} className="flex gap-2 items-center">
-                <input placeholder="옵션명" value={opt.key} onChange={(e) => setOption(i, 'key', e.target.value)}
+                <input lang="ko" placeholder="옵션명" value={opt.key} onChange={(e) => setOption(i, 'key', e.target.value)}
                   className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors" />
-                <input placeholder="값" value={opt.value} onChange={(e) => setOption(i, 'value', e.target.value)}
+                <input lang="ko" placeholder="값" value={opt.value} onChange={(e) => setOption(i, 'value', e.target.value)}
                   className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors" />
                 {options.length > 1 && (
                   <button type="button" onClick={() => removeOption(i)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors">
@@ -777,7 +780,7 @@ function EditSkuDialog({ open, onClose, sku, product, onSave }: {
             <label className="text-[13px] font-medium text-[#191F28]">발주점 / 안전재고</label>
             <span className="text-[11px] text-[#B0B8C1]">(선택)</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <InputField label="발주점" type="number" placeholder="0" value={form.reorder_point} onChange={(e) => set('reorder_point', e.target.value)} />
             <InputField label="안전재고" type="number" placeholder="0" value={form.safety_stock} onChange={(e) => set('safety_stock', e.target.value)} />
           </div>
@@ -933,22 +936,22 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div className="min-w-0">
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">상품 관리</h2>
           <p className="mt-1 text-[13px] text-[#6B7684]">상품과 SKU를 관리하세요</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
             <Upload className="h-4 w-4" /> CSV 업로드
           </button>
-          <button onClick={() => setAddProductOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+          <button onClick={() => setAddProductOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
             <Plus className="h-4 w-4" /> 상품 추가
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <p className="text-[12px] text-[#6B7684] font-medium mb-1">총 상품 수</p>
           <div className="flex items-baseline gap-1">

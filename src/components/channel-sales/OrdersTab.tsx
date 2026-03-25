@@ -10,7 +10,7 @@ import {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ChannelOrder {
-  id: string; channel: string; order_date: string;
+  id: string; channel: string; order_date: string; order_time: string | null;
   product_name: string; option_name: string | null;
   order_number: string | null; recipient: string | null;
   buyer_phone: string | null;
@@ -36,6 +36,7 @@ const JEJU_SURCHARGE = 3000;    // 제주/도서산간 추가
 
 const ALL_COLS = [
   { key: 'order_date',      label: '주문일자' },
+  { key: 'order_time',      label: '주문시간' },
   { key: 'product_name',    label: '상품명' },
   { key: 'master_name',     label: '관리용 상품명' },
   { key: 'option_name',     label: '옵션명' },
@@ -48,6 +49,23 @@ const ALL_COLS = [
 ] as const;
 
 type ColKey = (typeof ALL_COLS)[number]['key'];
+
+function colStorageKey(ch: string) {
+  return `orders-visible-cols-${ch || 'all'}`;
+}
+
+function loadVisibleCols(ch: string): Set<ColKey> {
+  try {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(colStorageKey(ch)) : null;
+    if (saved) {
+      const arr = JSON.parse(saved) as string[];
+      const valid = arr.filter((k) => ALL_COLS.some((c) => c.key === k)) as ColKey[];
+      if (valid.length) return new Set(valid);
+    }
+  } catch {}
+  // 기본값: order_time은 꺼진 상태
+  return new Set(ALL_COLS.filter((c) => c.key !== 'order_time').map((c) => c.key));
+}
 
 function isRemoteArea(addr: string) {
   return JEJU_KEYWORDS.some((k) => addr.includes(k));
@@ -283,7 +301,7 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   <X className="h-3.5 w-3.5" /> 파일 변경
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   { key: 'order_date', label: '주문일자 *' },
                   { key: 'product_name', label: '상품명 *' },
@@ -433,15 +451,7 @@ export default function OrdersTab() {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedMasterName, setSelectedMasterName] = useState('');
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
-    try {
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('orders-visible-cols') : null;
-      if (saved) {
-        const arr = JSON.parse(saved) as string[];
-        const valid = arr.filter((k) => ALL_COLS.some((c) => c.key === k)) as ColKey[];
-        if (valid.length) return new Set(valid);
-      }
-    } catch {}
-    return new Set(ALL_COLS.map((c) => c.key));
+    return loadVisibleCols('all');
   });
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -459,7 +469,7 @@ export default function OrdersTab() {
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
   const [colWidths, setColWidths] = useState<Record<ColKey, number>>({
-    order_date: 90, product_name: 200, master_name: 160, option_name: 140,
+    order_date: 90, order_time: 80, product_name: 200, master_name: 160, option_name: 140,
     order_number: 160, recipient: 90, quantity: 60, shipping_cost: 90,
     tracking_number: 140, order_status: 110,
   });
@@ -646,11 +656,17 @@ export default function OrdersTab() {
     setSelectedStatuses((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
   }
 
+  // 채널 변경 시 해당 채널의 컬럼 설정 불러오기
+  useEffect(() => {
+    setVisibleCols(loadVisibleCols(channel));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel]);
+
   function toggleCol(k: ColKey) {
     setVisibleCols((prev) => {
       const next = new Set(prev);
       if (next.has(k)) next.delete(k); else next.add(k);
-      try { localStorage.setItem('orders-visible-cols', JSON.stringify([...next])); } catch {}
+      try { localStorage.setItem(colStorageKey(channel), JSON.stringify([...next])); } catch {}
       return next;
     });
   }
@@ -729,6 +745,7 @@ export default function OrdersTab() {
           <div className="relative ml-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
             <input
+              lang="ko"
               value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="상품명, 주문번호, 수하인 검색"
               className="h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors w-56"
@@ -838,6 +855,11 @@ export default function OrdersTab() {
                       if (c.key === 'order_date') return (
                         <td key={c.key} className="px-4 py-3 whitespace-nowrap">
                           <span className="text-[13px] text-[#6B7684]">{formatDate(o.order_date)}</span>
+                        </td>
+                      );
+                      if (c.key === 'order_time') return (
+                        <td key={c.key} className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-[13px] text-[#6B7684] font-mono">{o.order_time ?? '-'}</span>
                         </td>
                       );
                       if (c.key === 'product_name') return (

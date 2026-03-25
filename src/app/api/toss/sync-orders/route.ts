@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
         return {
           channel:         'toss',
           order_date:      (item.orderedAt ?? chunk.start).substring(0, 10),
+          order_time:      (() => { const raw = item.orderedAt ?? ''; return raw.length > 10 ? raw.substring(11, 19) : null; })(),
           order_number:    String(item.orderProductId ?? item.orderId ?? ''),
           product_name:    item.productName ?? '',
           option_name:     item.optionName ?? null,

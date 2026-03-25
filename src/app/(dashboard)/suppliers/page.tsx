@@ -106,14 +106,14 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
       <Field label="회사명 / 제조사명" required>
-        <input className={inputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+        <input lang="ko" className={inputCls} placeholder="예: 선전전자공장" value={form.name} onChange={(e) => set('name', e.target.value)} required />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="담당자">
-          <input className={inputCls} placeholder="담당자 이름" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
+          <input lang="ko" className={inputCls} placeholder="담당자 이름" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
         </Field>
         <Field label="국가">
-          <input className={inputCls} placeholder="중국" value={form.country} onChange={(e) => set('country', e.target.value)} />
+          <input lang="ko" className={inputCls} placeholder="중국" value={form.country} onChange={(e) => set('country', e.target.value)} />
         </Field>
       </div>
       {/* 연락처 (국가번호 + 번호) */}
@@ -148,7 +148,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
       </Field>
 
       <Field label="주요 상품">
-        <input className={inputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
+        <input lang="ko" className={inputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
       </Field>
 
       {/* 주소 관리 */}
@@ -176,6 +176,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
               {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <input
+              lang="ko"
               className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
               placeholder="주소 입력"
               value={addrInput.address}
@@ -191,6 +192,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
 
       <Field label="메모">
         <textarea
+          lang="ko"
           className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
           rows={2} placeholder="특이사항, 계좌 정보 등"
           value={form.note} onChange={(e) => set('note', e.target.value)}
@@ -284,16 +286,16 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div className="min-w-0">
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">공급처 관리</h2>
           <p className="mt-1 text-[13px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
             <Upload className="h-4 w-4" /> CSV 업로드
           </button>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
             <Plus className="h-4 w-4" /> 공급처 추가
           </button>
         </div>

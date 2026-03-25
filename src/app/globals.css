@@ -24,6 +24,12 @@
 
 * { box-sizing: border-box; }
 
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+[contenteditable="true"] {
+  ime-mode: active;
+}
+
 body {
   background-color: #F2F4F6;
   color: #191F28;

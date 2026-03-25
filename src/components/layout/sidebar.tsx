@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { LVLogoText } from '@/components/ui/lv-logo';
 import {
   LayoutDashboard,
   Package,
@@ -11,6 +12,7 @@ import {
   FileSpreadsheet,
   Building2,
   ShoppingCart,
+  Megaphone,
   Settings,
 } from 'lucide-react';
 
@@ -22,6 +24,7 @@ const navItems = [
   { title: '재고 관리',     href: '/inventory',       icon: Warehouse,       exact: false, sub: false },
   { title: '입출고 관리',   href: '/inbound',         icon: PackageCheck,    exact: false, sub: false },
   { title: '채널 판매',     href: '/channel-sales',   icon: ShoppingCart,    exact: false, sub: false },
+  { title: '광고 분석',     href: '/ad-analysis',     icon: Megaphone,       exact: false, sub: false },
   { title: '설정',          href: '/settings',        icon: Settings,        exact: false, sub: false },
 ];
 
@@ -32,12 +35,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:w-[220px] md:flex-col md:fixed md:inset-y-0 bg-white border-r border-[#F2F4F6]">
       {/* 로고 */}
       <div className="flex items-center h-[60px] px-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-[10px] bg-primary flex items-center justify-center shadow-sm">
-            <Warehouse className="h-4 w-4 text-white" strokeWidth={2.5} />
-          </div>
-          <span className="font-bold text-[15px] tracking-[-0.02em] text-foreground">셀러 ERP</span>
-        </div>
+        <LVLogoText size={32} />
       </div>
 
       {/* 네비게이션 */}

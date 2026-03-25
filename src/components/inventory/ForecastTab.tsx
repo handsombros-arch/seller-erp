@@ -115,6 +115,7 @@ export default function ForecastTab() {
         <div className="ml-auto relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#B0B8C1]" />
           <input
+            lang="ko"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="상품명, SKU, 옵션 검색..."

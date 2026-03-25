@@ -9,7 +9,62 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params;
   const admin = await createAdminClient();
 
-  // 품목 먼저 삭제 후 발주서 삭제 (FK 제약 없을 경우에도 안전하게)
+  // 1. 발주서의 품목 ID 목록 조회
+  const { data: poItems } = await admin
+    .from('purchase_order_items')
+    .select('id')
+    .eq('po_id', id);
+
+  const poItemIds = (poItems ?? []).map((i: { id: string }) => i.id);
+
+  // 2. 연결된 입고 기록 조회 (재고 복원용)
+  if (poItemIds.length > 0) {
+    const { data: inboundRecords } = await admin
+      .from('inbound_records')
+      .select('sku_id, warehouse_id, quantity')
+      .in('po_item_id', poItemIds);
+
+    // 3. 입고된 수량만큼 재고에서 차감 (SKU+창고별 합산 후 한번에 차감)
+    if (inboundRecords && inboundRecords.length > 0) {
+      const qtyMap = new Map<string, { sku_id: string; warehouse_id: string; total: number }>();
+      for (const rec of inboundRecords) {
+        const key = `${rec.sku_id}_${rec.warehouse_id}`;
+        const existing = qtyMap.get(key);
+        if (existing) {
+          existing.total += rec.quantity;
+        } else {
+          qtyMap.set(key, { sku_id: rec.sku_id, warehouse_id: rec.warehouse_id, total: rec.quantity });
+        }
+      }
+
+      for (const { sku_id, warehouse_id, total } of qtyMap.values()) {
+        // 현재 재고 조회
+        const { data: inv } = await admin
+          .from('inventory')
+          .select('quantity')
+          .eq('sku_id', sku_id)
+          .eq('warehouse_id', warehouse_id)
+          .single();
+
+        if (inv) {
+          const newQty = Math.max((inv.quantity ?? 0) - total, 0);
+          await admin
+            .from('inventory')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('sku_id', sku_id)
+            .eq('warehouse_id', warehouse_id);
+        }
+      }
+    }
+
+    // 4. 입고 기록 삭제 (po_item FK 해제)
+    await admin
+      .from('inbound_records')
+      .delete()
+      .in('po_item_id', poItemIds);
+  }
+
+  // 5. 품목 삭제 후 발주서 삭제
   await admin.from('purchase_order_items').delete().eq('po_id', id);
   const { error } = await admin.from('purchase_orders').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

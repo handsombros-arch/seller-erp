@@ -158,14 +158,14 @@ function AddDialog({ open, onClose, onSaved }: {
             {skus.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">상품명 *</label>
-            <input className={inputCls} value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="상품명" required />
+            <input lang="ko" className={inputCls} value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="상품명" required />
           </div>
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">옵션</label>
-            <input className={inputCls} value={form.option_name} onChange={(e) => set('option_name', e.target.value)} placeholder="색상, 사이즈 등" />
+            <input lang="ko" className={inputCls} value={form.option_name} onChange={(e) => set('option_name', e.target.value)} placeholder="색상, 사이즈 등" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[13px] font-medium text-[#191F28]">수량 *</label>
@@ -554,7 +554,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
           {/* Column mapping */}
           <div className="bg-[#F8F9FB] rounded-xl p-4 space-y-3">
             <p className="text-[13px] font-semibold text-[#191F28]">컬럼 매핑</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 { label: '상품명 컬럼 *', val: nameCol, set: setNameCol },
                 { label: '수량 컬럼 *',   val: qtyCol,  set: setQtyCol },
@@ -1185,7 +1185,7 @@ function ReturnsTab() {
             </button>
           )}
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
+        <input lang="ko" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
           className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
       </div>
 
@@ -1325,41 +1325,43 @@ export default function ChannelSalesPage() {
   return (
     <div className="space-y-5">
       {/* ── 헤더 ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">채널 판매</h2>
-          <p className="mt-1 text-[12px] text-[#6B7684]">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
-        </div>
-        {/* 뷰별 액션 버튼 */}
-        <div className="flex items-center gap-2">
-          {(viewMode === 'orders' || viewMode === 'returns') && <>
-            <button onClick={() => setNaverOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 네이버
-            </button>
-            <button onClick={() => setTossOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 토스
-            </button>
-            <button onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <RefreshCw className="h-4 w-4" /> 쿠팡
-            </button>
-          </>}
-          {viewMode === 'orders' && (
-            <button onClick={() => setInsightsOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
-              <Upload className="h-4 w-4" /> 인사이트
-            </button>
-          )}
+      <div className="space-y-3">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">채널 판매</h2>
+            <p className="mt-1 text-[12px] text-[#6B7684]">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
+          </div>
+          {/* 뷰별 액션 버튼 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(viewMode === 'orders' || viewMode === 'returns') && <>
+              <button onClick={() => setNaverOpen(true)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                <RefreshCw className="h-4 w-4" /> 네이버
+              </button>
+              <button onClick={() => setTossOpen(true)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                <RefreshCw className="h-4 w-4" /> 토스
+              </button>
+              <button onClick={() => setSyncOpen(true)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                <RefreshCw className="h-4 w-4" /> 쿠팡
+              </button>
+            </>}
+            {viewMode === 'orders' && (
+              <button onClick={() => setInsightsOpen(true)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                <Upload className="h-4 w-4" /> 인사이트
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── 탭바 ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
         {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
           <button key={mode} onClick={() => setViewMode(mode)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             {label}
           </button>
         ))}

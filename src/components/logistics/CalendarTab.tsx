@@ -236,12 +236,12 @@ export default function CalendarTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div className="min-w-0">
           <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입출고 캘린더</h2>
           <p className="mt-1 text-[13px] text-[#6B7684]">입고 예정과 쿠팡 출고 일정을 한눈에 확인하세요</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Summary badges */}
           <div className="flex items-center gap-2 text-[12px] flex-wrap">
             {orderCount > 0 && (

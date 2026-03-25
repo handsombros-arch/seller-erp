@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
         return {
           channel:         'smartstore',
           order_date:      (ord.orderDate ?? po.placeOrderDate ?? from).substring(0, 10),
+          order_time:      (() => { const raw = ord.orderDate ?? po.placeOrderDate ?? ''; return raw.length > 10 ? raw.substring(11, 19) : null; })(),
           order_number:    po.productOrderId ?? null,
           product_name:    po.productName ?? '',
           option_name:     po.productOption ?? null,

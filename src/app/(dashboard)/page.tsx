@@ -157,11 +157,23 @@ function DailyOutboundChart() {
 
 const LINE_COLORS = ['#3182F6', '#FF6B00', '#1EC800', '#9B59B6', '#E74C3C', '#1ABC9C'];
 
+const PERIOD_OPTIONS = [
+  { value: 7, label: '7일' },
+  { value: 14, label: '14일' },
+  { value: 30, label: '30일' },
+  { value: 60, label: '60일' },
+  { value: 90, label: '90일' },
+] as const;
+
 function SalesTrendSection() {
   const [skuOptions, setSkuOptions] = useState<{ id: string; label: string; sku_code: string }[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try { return JSON.parse(localStorage.getItem('dash_trend_skus') ?? '[]'); } catch { return []; }
+  });
+  const [days, setDays] = useState<number>(() => {
+    if (typeof window === 'undefined') return 30;
+    return parseInt(localStorage.getItem('dash_trend_days') ?? '30') || 30;
   });
   const [orders, setOrders] = useState<{ order_date: string; sku_id: string; quantity: number }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -188,17 +200,22 @@ function SalesTrendSection() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // channel_orders에서 최근 30일 데이터 로드
+  function changeDays(d: number) {
+    setDays(d);
+    try { localStorage.setItem('dash_trend_days', String(d)); } catch {}
+  }
+
+  // channel_orders에서 선택 기간 데이터 로드
   useEffect(() => {
     if (!selectedIds.length) { setOrders([]); return; }
     setLoading(true);
-    const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     const to = new Date().toISOString().slice(0, 10);
     fetch(`/api/channel-orders?from=${from}&to=${to}`)
       .then(r => r.json())
       .then((d: any[]) => setOrders((d ?? []).filter((o: any) => o.sku?.id && selectedIds.includes(o.sku.id)).map((o: any) => ({ order_date: o.order_date, sku_id: o.sku.id, quantity: o.quantity }))))
       .finally(() => setLoading(false));
-  }, [selectedIds]);
+  }, [selectedIds, days]);
 
   function toggleSku(id: string) {
     setSelectedIds(prev => {
@@ -219,6 +236,17 @@ function SalesTrendSection() {
     return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, vals]) => ({ date, ...vals }));
   })();
 
+  // 상품별 주문 합계
+  const skuTotals = (() => {
+    const map = new Map<string, number>();
+    for (const o of orders) {
+      map.set(o.sku_id, (map.get(o.sku_id) ?? 0) + o.quantity);
+    }
+    return selectedIds.map(id => ({ id, label: skuOptions.find(s => s.id === id)?.label ?? id, total: map.get(id) ?? 0 }))
+      .sort((a, b) => b.total - a.total);
+  })();
+  const grandTotalQty = skuTotals.reduce((s, t) => s + t.total, 0);
+
   function skuLabel(id: string) { return skuOptions.find(s => s.id === id)?.label ?? id; }
   function fmtDate(d: string) { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}`; }
 
@@ -228,10 +256,18 @@ function SalesTrendSection() {
 
   return (
     <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
         <div>
           <h3 className="text-[13px] font-semibold text-[#191F28]">판매 추이</h3>
-          <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 30일 상품별 판매량</p>
+          <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 {days}일 상품별 판매량</p>
+        </div>
+        <div className="flex items-center gap-1 bg-[#F2F4F6] p-0.5 rounded-lg">
+          {PERIOD_OPTIONS.map(opt => (
+            <button key={opt.value} onClick={() => changeDays(opt.value)}
+              className={`h-7 px-2.5 rounded-md text-[12px] font-medium transition-colors ${days === opt.value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -251,7 +287,7 @@ function SalesTrendSection() {
           {dropOpen && (
             <div className="absolute left-0 top-9 z-30 w-80 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6]">
               <div className="p-2 border-b border-[#F2F4F6]">
-                <input autoFocus value={dropSearch} onChange={e => setDropSearch(e.target.value)} placeholder="상품명 또는 SKU 검색"
+                <input lang="ko" autoFocus value={dropSearch} onChange={e => setDropSearch(e.target.value)} placeholder="상품명 또는 SKU 검색"
                   className="w-full h-8 px-3 text-[12px] rounded-lg border border-[#E5E8EB] outline-none focus:border-[#3182F6]" />
               </div>
               <div className="max-h-64 overflow-y-auto p-2">
@@ -286,20 +322,43 @@ function SalesTrendSection() {
       ) : chartData.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-40"><p className="text-[13px] text-[#B0B8C1]">선택한 기간에 판매 데이터가 없습니다</p></div>
       ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" vertical={false} />
-            <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#B0B8C1' }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#B0B8C1' }} tickLine={false} axisLine={false} width={32} allowDecimals={false} />
-            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #E5E8EB', fontSize: 12 }}
-              labelFormatter={fmtDate} formatter={(value: any, name: any) => [formatNumber(value) + '개', skuLabel(String(name))]} />
-            <Legend formatter={(value) => <span style={{ fontSize: 12, color: '#6B7684' }}>{skuLabel(value)}</span>} />
-            {selectedIds.map((id, idx) => (
-              <Line key={id} type="monotone" dataKey={id} stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+        <>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" vertical={false} />
+              <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 11, fill: '#B0B8C1' }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#B0B8C1' }} tickLine={false} axisLine={false} width={32} allowDecimals={false} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #E5E8EB', fontSize: 12 }}
+                labelFormatter={fmtDate} formatter={(value: any, name: any) => [formatNumber(value) + '개', skuLabel(String(name))]} />
+              <Legend formatter={(value) => <span style={{ fontSize: 12, color: '#6B7684' }}>{skuLabel(value)}</span>} />
+              {selectedIds.map((id, idx) => (
+                <Line key={id} type="monotone" dataKey={id} stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                  strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+
+          {/* 상품별 주문 합계 */}
+          <div className="mt-4 border-t border-[#F2F4F6] pt-4">
+            <h4 className="text-[12px] font-semibold text-[#6B7684] mb-2">최근 {days}일 주문 합계</h4>
+            <div className="space-y-1.5">
+              {skuTotals.map((item, idx) => (
+                <div key={item.id} className="flex items-center gap-2.5">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: LINE_COLORS[selectedIds.indexOf(item.id) % LINE_COLORS.length] }} />
+                  <span className="text-[13px] text-[#191F28] flex-1 min-w-0 truncate">{item.label}</span>
+                  <span className="text-[13px] font-bold text-[#191F28] tabular-nums">{formatNumber(item.total)}개</span>
+                </div>
+              ))}
+              {skuTotals.length > 1 && (
+                <div className="flex items-center gap-2.5 pt-1.5 border-t border-[#F2F4F6]">
+                  <div className="w-2.5 h-2.5 shrink-0" />
+                  <span className="text-[13px] font-semibold text-[#6B7684] flex-1">합계</span>
+                  <span className="text-[13px] font-bold text-[#3182F6] tabular-nums">{formatNumber(grandTotalQty)}개</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

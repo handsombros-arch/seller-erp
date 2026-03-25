@@ -100,7 +100,9 @@ export async function POST(request: NextRequest) {
 
         const rows: any[] = [];
         for (const order of items) {
-          const orderDate = (order.orderedAt ?? order.paidAt ?? chunk.start).substring(0, 10);
+          const orderRaw = order.orderedAt ?? order.paidAt ?? chunk.start;
+          const orderDate = orderRaw.substring(0, 10);
+          const orderTime = orderRaw.length > 10 ? orderRaw.substring(11, 19) : null;
           const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
           const isJeju = /제주|서귀포|울릉|도서산간/.test(addr);
 
@@ -109,6 +111,7 @@ export async function POST(request: NextRequest) {
             rows.push({
               channel:         'coupang',
               order_date:      orderDate,
+              order_time:      orderTime,
               order_number:    `${order.shipmentBoxId}-${item.vendorItemId}`,
               product_name:    item.sellerProductName ?? item.vendorItemName ?? '',
               option_name:     item.sellerProductItemName ?? null,
@@ -173,13 +176,16 @@ export async function POST(request: NextRequest) {
       const rows: any[] = [];
       for (const order of items) {
         // paidAt은 Unix ms 타임스탬프
-        const orderDate = new Date(Number(order.paidAt)).toISOString().slice(0, 10);
+        const orderIso = new Date(Number(order.paidAt)).toISOString();
+        const orderDate = orderIso.slice(0, 10);
+        const orderTime = orderIso.slice(11, 19);
 
         for (const item of order.orderItems ?? []) {
           const vendorItemId = String(item.vendorItemId ?? '');
           rows.push({
             channel:         'coupang_rg',
             order_date:      orderDate,
+            order_time:      orderTime,
             order_number:    `${order.orderId}-${vendorItemId}`,
             product_name:    item.productName ?? '',
             option_name:     null,

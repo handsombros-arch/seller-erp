@@ -150,6 +150,7 @@ export function SearchSelect({
           <input
             ref={inputRef}
             type="text"
+            lang="ko"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setOpen(true); setHighlighted(0); }}
             onFocus={() => { setOpen(true); setHighlighted(0); }}

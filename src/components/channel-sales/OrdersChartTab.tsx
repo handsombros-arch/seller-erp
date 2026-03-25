@@ -329,7 +329,7 @@ export default function OrdersChartTab() {
             {productDropOpen && (
               <div className="absolute left-0 top-9 z-30 w-80 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6]">
                 <div className="p-2 border-b border-[#F2F4F6]">
-                  <input autoFocus value={productSearch} onChange={e => setProductSearch(e.target.value)}
+                  <input lang="ko" autoFocus value={productSearch} onChange={e => setProductSearch(e.target.value)}
                     placeholder="상품명 검색..."
                     className="w-full h-8 px-3 text-[12px] rounded-lg border border-[#E5E8EB] outline-none focus:border-[#3182F6]" />
                 </div>

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Warehouse, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { LVLogo } from '@/components/ui/lv-logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,10 +33,8 @@ export default function LoginPage() {
       <div className="w-full max-w-[400px]">
         {/* 로고 */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 mb-4">
-            <Warehouse className="h-8 w-7 text-white" strokeWidth={2.5} />
-          </div>
-          <h1 className="text-[24px] font-bold text-foreground tracking-[-0.03em]">셀러 ERP</h1>
+          <LVLogo size={56} className="mb-4 drop-shadow-lg" />
+          <h1 className="text-[24px] font-bold text-foreground tracking-[-0.03em]">LV ERP</h1>
           <p className="mt-1.5 text-[13px] text-[#6B7684]">재고 · 발주 · 예측 통합 관리</p>
         </div>
 
