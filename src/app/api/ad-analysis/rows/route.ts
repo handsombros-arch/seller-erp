@@ -106,8 +106,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ deleted: filename });
   }
 
-  // 전체 삭제
-  await admin.from('ad_raw_rows').delete().neq('dedup_key', '');
-  await admin.from('ad_uploads').delete().eq('user_id', user.id);
+  // 전체 삭제 — TRUNCATE로 즉시 삭제
+  await admin.rpc('truncate_ad_data');
   return NextResponse.json({ deleted: 'all' });
 }

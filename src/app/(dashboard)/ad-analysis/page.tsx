@@ -632,7 +632,7 @@ export default function AdAnalysisPage() {
       const XLSX = await import('xlsx');
       const duplicateFiles: string[] = [];
       const errors: string[] = [];
-      const BATCH = 500; // Vercel Hobby 10초 제한 대응 — 작은 배치 + 높은 병렬
+      const BATCH = 3000; // 3000행=~2.4MB (Vercel 4.5MB 이내, upsert ~2초)
       const PARALLEL = 6;
 
       for (let fi = 0; fi < files.length; fi++) {
