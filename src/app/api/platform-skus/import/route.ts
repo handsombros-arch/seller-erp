@@ -39,20 +39,22 @@ export async function POST(request: NextRequest) {
     const channelId = channelInfo.id;
     const isCoupang = channelInfo.type === 'coupang';
 
-    const platformProductName = String(row['플랫폼상품명'] ?? '').trim() || null;
-    const platformId          = String(row['플랫폼상품ID'] ?? '').trim() || null;
+    const platformProductName = String(row['플랫폼상품명'] ?? '').trim() || undefined;
+    const platformId          = String(row['플랫폼상품ID'] ?? '').trim() || undefined;
     const priceRaw = String(row['판매가'] ?? '').trim().replace(/,/g, '');
-    const price    = priceRaw ? Number(priceRaw) : null;
+    const price    = priceRaw ? Number(priceRaw) : undefined;
     const num = (key: string) => { const v = String(row[key] ?? '').trim().replace(/,/g, ''); return v ? Number(v) : undefined; };
 
     const rec: any = {
       sku_id: skuId,
       channel_id: channelId,
-      platform_product_name: platformProductName,
-      platform_product_id:   isCoupang ? null : platformId,
-      platform_sku_id:       isCoupang ? platformId : null,
-      price,
     };
+    if (platformProductName !== undefined) rec.platform_product_name = platformProductName;
+    if (platformId !== undefined) {
+      if (isCoupang) rec.platform_sku_id = platformId;
+      else rec.platform_product_id = platformId;
+    }
+    if (price !== undefined) rec.price = price;
     const coupon = num('쿠폰할인');          if (coupon !== undefined) rec.coupon_discount = coupon;
     const comm   = num('수수료율(%)');       if (comm !== undefined)   rec.commission_rate = comm;
     const fFulfill = num('입출고배송비');     if (fFulfill !== undefined) { rec.rg_fee_inout = fFulfill; rec.rg_fee_shipping = 0; }
