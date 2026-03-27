@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import OrdersTab from '@/components/channel-sales/OrdersTab';
 import OrdersChartTab from '@/components/channel-sales/OrdersChartTab';
+import DummyShipmentsTab from '@/components/channel-sales/DummyShipmentsTab';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1283,7 +1284,7 @@ function ReturnsTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ChannelSalesPage() {
-  const [viewMode, setViewMode] = useState<'orders' | 'chart' | 'returns'>('orders');
+  const [viewMode, setViewMode] = useState<'orders' | 'chart' | 'returns' | 'dummy'>('orders');
   const [sales, setSales] = useState<ChannelSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState('all');
@@ -1296,6 +1297,7 @@ export default function ChannelSalesPage() {
   const [tossOpen, setTossOpen]       = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [syncAllLoading, setSyncAllLoading] = useState(false);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -1334,6 +1336,29 @@ export default function ChannelSalesPage() {
           {/* 뷰별 액션 버튼 */}
           <div className="flex items-center gap-2 flex-wrap">
             {(viewMode === 'orders' || viewMode === 'returns') && <>
+              <button
+                onClick={async () => {
+                  setSyncAllLoading(true);
+                  try {
+                    const res = await fetch('/api/sync/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channels: [] }) });
+                    const d = await res.json();
+                    if (!res.ok) throw new Error(d.error ?? '동기화 실패');
+                    const parts: string[] = [];
+                    if (d.coupang_rg?.synced) parts.push(`쿠팡RG ${d.coupang_rg.synced}건`);
+                    if (d.coupang?.synced) parts.push(`쿠팡Wing ${d.coupang.synced}건`);
+                    if (d.smartstore?.synced) parts.push(`네이버 ${d.smartstore.synced}건`);
+                    if (d.toss?.synced) parts.push(`토스 ${d.toss.synced}건`);
+                    const errors = [d.coupang_rg, d.coupang, d.smartstore, d.toss].filter(c => c?.error).map(c => c.error);
+                    showToast(parts.length > 0 ? `전체 동기화: ${parts.join(' · ')}` : errors.length > 0 ? `오류: ${errors[0]}` : '변경사항 없음');
+                    load();
+                  } catch (err: any) { showToast(`동기화 실패: ${err.message}`); }
+                  setSyncAllLoading(false);
+                }}
+                disabled={syncAllLoading}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-[13px] font-medium text-white hover:bg-[#1B64DA] transition-colors whitespace-nowrap disabled:opacity-50">
+                {syncAllLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {syncAllLoading ? '동기화 중...' : '전체 동기화'}
+              </button>
               <button onClick={() => setNaverOpen(true)}
                 className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
                 <RefreshCw className="h-4 w-4" /> 네이버
@@ -1359,7 +1384,7 @@ export default function ChannelSalesPage() {
 
       {/* ── 탭바 ─────────────────────────────────────────────────────── */}
       <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
-        {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품']] as const).map(([mode, label]) => (
+        {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품'], ['dummy', '가배송']] as const).map(([mode, label]) => (
           <button key={mode} onClick={() => setViewMode(mode)}
             className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
             {label}
@@ -1371,6 +1396,7 @@ export default function ChannelSalesPage() {
       {viewMode === 'orders' && <OrdersTab />}
       {viewMode === 'chart'  && <OrdersChartTab />}
       {viewMode === 'returns' && <ReturnsTab />}
+      {viewMode === 'dummy' && <DummyShipmentsTab />}
 
       {/* Dialogs */}
       <NaverSyncDialog open={naverOpen} onClose={() => setNaverOpen(false)} onDone={(msg) => { showToast(msg); setNaverOpen(false); load(); }} />
