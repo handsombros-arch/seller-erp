@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <VatProvider>
-      <div className="min-h-screen bg-[#F2F4F6]">
+      <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-app)' }}>
         <Sidebar />
         <div className="md:pl-[220px]">
           <Header email={user?.email} />

@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
     .order('order_date', { ascending: false })
     .order('created_at', { ascending: false });
 
+  const isDummy = searchParams.get('is_dummy');
+  if (isDummy === 'true') query = query.eq('is_dummy', true);
+  else if (isDummy === 'false' || !isDummy) query = query.or('is_dummy.is.null,is_dummy.eq.false');
+
   if (channel && channel !== 'all') query = query.eq('channel', channel);
   if (from) query = query.gte('order_date', from);
   if (to)   query = query.lte('order_date', to);
@@ -59,4 +63,25 @@ export async function DELETE(request: NextRequest) {
   const { error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ deleted: count ?? 0 });
+}
+
+// PUT: 주문 업데이트 (가배송 전환 등)
+export async function PUT(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+
+  const admin = await createAdminClient();
+  const { id, ...updates } = await request.json();
+  if (!id) return NextResponse.json({ error: 'id 필요' }, { status: 400 });
+
+  const { data, error } = await admin
+    .from('channel_orders')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ order: data });
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils';
 import {
   Upload, X, Download, AlertCircle, CheckCircle2, Loader2,
-  MapPin, SlidersHorizontal, Search, Trash2,
+  MapPin, SlidersHorizontal, Search, Trash2, PackageX,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -829,6 +829,7 @@ export default function OrdersTab() {
                     </div>
                   </th>
                 ))}
+                <th style={{ width: 44, minWidth: 44 }} className="px-2 py-3 text-center text-[12px] font-semibold text-[#6B7684]"></th>
               </tr>
             </thead>
             <tbody>
@@ -942,6 +943,23 @@ export default function OrdersTab() {
                         </td>
                       );
                     })}
+                    <td className="px-2 py-3 text-center">
+                      <button
+                        title="가배송 전환 (재고 차감 제외)"
+                        onClick={async () => {
+                          if (!confirm('이 주문을 가배송(빈박스)으로 전환하시겠습니까?\n재고 차감에서 제외됩니다.')) return;
+                          await fetch('/api/channel-orders', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: o.id, is_dummy: true }),
+                          });
+                          setOrders((prev) => prev.filter((x) => x.id !== o.id));
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-[#B0B8C1] hover:text-orange-500 transition-colors mx-auto"
+                      >
+                        <PackageX className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}

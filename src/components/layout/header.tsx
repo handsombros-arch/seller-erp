@@ -50,7 +50,7 @@ export function Header({ email }: { email?: string }) {
   const initials = email ? email.slice(0, 1).toUpperCase() : '?';
 
   return (
-    <header className="sticky top-0 z-40 h-[60px] bg-white border-b border-[#F2F4F6]">
+    <header className="sticky top-0 z-40 h-14 backdrop-blur-xl" style={{ backgroundColor: 'var(--bg-header)', borderBottom: '1px solid var(--border-subtle)' }}>
       <div className="flex h-full items-center justify-between px-5 md:px-6">
         <div className="flex items-center gap-3">
           {/* 모바일 메뉴 */}
@@ -60,7 +60,7 @@ export function Header({ email }: { email?: string }) {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[220px] p-0 bg-white border-r border-[#F2F4F6]">
+            <SheetContent side="left" className="w-[220px] p-0" style={{ backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center h-[60px] px-5">
                 <LVLogoText size={32} />
               </div>
@@ -82,7 +82,7 @@ export function Header({ email }: { email?: string }) {
             </SheetContent>
           </Sheet>
 
-          <h1 className="text-[15px] font-semibold text-foreground tracking-[-0.02em]">
+          <h1 className="text-[15px] font-semibold tracking-[-0.02em]" style={{ color: 'var(--text-primary)' }}>
             {currentPage?.title ?? '대시보드'}
           </h1>
         </div>

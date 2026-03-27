@@ -62,7 +62,7 @@ export async function applyOrdersToInventory(
   // 2. 전체 주문 조회 (order_status + claim_status 둘 다)
   const { data: orders } = await admin
     .from('channel_orders')
-    .select('order_number, channel, sku_id, quantity, order_date, order_status, claim_status');
+    .select('order_number, channel, sku_id, quantity, order_date, order_status, claim_status, is_dummy');
 
   // 3. SKU별 마지막 수기 기입일
   const { data: manualAdj } = await admin
@@ -101,7 +101,7 @@ export async function applyOrdersToInventory(
   const negSet = new Set<string>();
 
   for (const order of orders ?? []) {
-    if (!order.sku_id || SKIP_CHANNELS.includes(order.channel)) continue;
+    if (!order.sku_id || SKIP_CHANNELS.includes(order.channel) || order.is_dummy) continue;
 
     const orderNum = order.order_number as string;
     const orderStatus = (order.order_status ?? '').toUpperCase();

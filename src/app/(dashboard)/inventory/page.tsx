@@ -1068,7 +1068,7 @@ function RgInventoryTab() {
       const res = await fetch('/api/coupang/sync-rg-inventory', { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? '동기화 실패');
-      setSyncMsg(`${d.synced}개 동기화${d.auto_classified ? ` · 반품 ${d.auto_classified}개 자동분류` : ''}`);
+      setSyncMsg(`${d.synced}개 동기화${d.auto_classified ? ` · 반품 ${d.auto_classified}개 자동분류` : ''}${d.cleaned ? ` · ${d.cleaned}개 잘못된 분류 정리` : ''}`);
       load();
     } catch (err: any) { setError(err.message); }
     setSyncing(false);

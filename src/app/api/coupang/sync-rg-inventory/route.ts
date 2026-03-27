@@ -31,15 +31,17 @@ export async function POST(request: NextRequest) {
   // platform_skus.platform_sku_id → sku_id 매핑 (신상품)
   const { data: psRows } = await admin
     .from('platform_skus')
-    .select('sku_id, platform_sku_id, platform_product_name')
+    .select('sku_id, platform_sku_id, platform_sku_id_return, platform_product_name')
     .not('platform_sku_id', 'is', null);
   const platformMap = new Map<string, string>();
-  const newProductExtIds = new Set<string>();        // 신상품 external_sku_id 집합
+  const returnExtIds = new Set<string>();             // 반품 external_sku_id 집합 (platform_sku_id_return)
   const nameToSkuId = new Map<string, string>();     // 상품명 → sku_id (반품→신상품 자동 연결용)
   for (const r of psRows ?? []) {
     if (r.sku_id && r.platform_sku_id) {
       platformMap.set(String(r.platform_sku_id), r.sku_id as string);
-      newProductExtIds.add(String(r.platform_sku_id));
+    }
+    if ((r as any).platform_sku_id_return) {
+      returnExtIds.add(String((r as any).platform_sku_id_return));
     }
     if (r.platform_product_name && r.sku_id) {
       nameToSkuId.set((r.platform_product_name as string).trim().toLowerCase(), r.sku_id as string);
@@ -81,8 +83,8 @@ export async function POST(request: NextRequest) {
       const extId = item.externalSkuId ? String(item.externalSkuId) : null;
       const itemName = item.vendorItemName ?? item.itemName ?? item.sellerProductName ?? item.productName ?? null;
 
-      // 신상품 SKU에 없고 아직 반품 등록도 안 된 항목 → 반품 후보
-      if (extId && !newProductExtIds.has(extId) && !existingReturnIds.has(vid)) {
+      // platform_sku_id_return에 해당하고 아직 반품 등록 안 된 항목만 반품 후보
+      if (extId && returnExtIds.has(extId) && !existingReturnIds.has(vid)) {
         newReturnCandidates.push({ vendor_item_id: vid, extId, itemName: itemName ?? '' });
       }
 
@@ -112,6 +114,42 @@ export async function POST(request: NextRequest) {
     await sleep(300);
   } while (nextToken);
 
+  // 잘못 반품 분류된 항목 정리: rg_return_vendor_items에 있지만 platform_sku_id_return이 아닌 항목 삭제
+  // (grade가 수동 설정된 것은 유저가 직접 분류한 것이므로 유지)
+  let cleaned = 0;
+  if (existingReturns && existingReturns.length > 0) {
+    // 모든 스냅샷의 vendor_item_id → external_sku_id 매핑 조회
+    const { data: allSnaps } = await admin
+      .from('rg_inventory_snapshots')
+      .select('vendor_item_id, external_sku_id')
+      .eq('snapshot_date', snapshotDate);
+    const vidToExt = new Map<string, string>();
+    for (const s of allSnaps ?? []) {
+      if (s.external_sku_id) vidToExt.set(s.vendor_item_id, s.external_sku_id);
+    }
+
+    const toClean = (existingReturns ?? [])
+      .map((r: any) => r.vendor_item_id)
+      .filter((vid: string) => {
+        const ext = vidToExt.get(vid);
+        // external_sku_id가 반품 ID도 아니고 신상품 ID에도 없는 것 = 잘못 자동분류된 것
+        // 단, platform_sku_id에 매칭되는 것(신상품)도 반품에서 제거
+        if (!ext) return false;
+        return !returnExtIds.has(ext);
+      });
+
+    if (toClean.length > 0) {
+      // grade가 null인 것만 삭제 (수동 분류는 유지)
+      const { data: deleted } = await admin
+        .from('rg_return_vendor_items')
+        .delete()
+        .in('vendor_item_id', toClean)
+        .is('grade', null)
+        .select('vendor_item_id');
+      cleaned = deleted?.length ?? 0;
+    }
+  }
+
   // 새 반품 아이템 자동 등록 (등급은 null, 상품명 매칭으로 신상품 연결)
   let autoClassified = 0;
   if (newReturnCandidates.length > 0) {
@@ -129,5 +167,5 @@ export async function POST(request: NextRequest) {
     autoClassified = upserted?.length ?? 0;
   }
 
-  return NextResponse.json({ synced, snapshot_date: snapshotDate, auto_classified: autoClassified });
+  return NextResponse.json({ synced, snapshot_date: snapshotDate, auto_classified: autoClassified, cleaned });
 }

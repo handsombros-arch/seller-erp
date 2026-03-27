@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ uploads: uploads ?? [], rows: allRows, totalRows: allRows.length });
 }
 
-// POST: 새 파일 업로드 (raw rows upsert)
+// POST: raw rows upsert (중복 자동 무시)
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -44,29 +44,17 @@ export async function POST(request: NextRequest) {
   const admin = await createAdminClient();
 
   // gzip 또는 일반 JSON 처리
-  let body: { filename: string; rows: any[] };
+  let body: { filename?: string; rows: any[] };
   if (request.headers.get('content-type') === 'application/gzip') {
     const buffer = Buffer.from(await request.arrayBuffer());
     body = JSON.parse(gunzipSync(buffer).toString());
   } else {
     body = await request.json();
   }
-  const { filename, rows } = body;
+  const { rows } = body;
 
-  if (!filename || !rows?.length) {
-    return NextResponse.json({ error: '파일명과 데이터 필요' }, { status: 400 });
-  }
-
-  // 파일명 중복 체크
-  const { data: existing } = await admin
-    .from('ad_uploads')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('filename', filename)
-    .maybeSingle();
-
-  if (existing) {
-    return NextResponse.json({ error: `이미 업로드된 파일: ${filename}`, duplicate: true }, { status: 409 });
+  if (!rows?.length) {
+    return NextResponse.json({ error: '데이터 필요' }, { status: 400 });
   }
 
   // dedup key 생성 + upsert
@@ -75,10 +63,10 @@ export async function POST(request: NextRequest) {
   const upsertRows = rows.map((r: any) => ({
     dedup_key: dedupKey(r),
     data: r,
-    filename,
+    filename: body.filename ?? 'bulk',
   }));
 
-  // 배치 upsert (1000개씩)
+  // 배치 upsert (1000개씩, 중복 무시)
   let inserted = 0;
   for (let i = 0; i < upsertRows.length; i += 1000) {
     const batch = upsertRows.slice(i, i + 1000);
@@ -88,14 +76,7 @@ export async function POST(request: NextRequest) {
     if (!error) inserted += batch.length;
   }
 
-  // 업로드 기록 저장
-  await admin.from('ad_uploads').insert({
-    user_id: user.id,
-    filename,
-    row_count: rows.length,
-  });
-
-  return NextResponse.json({ inserted, skipped: rows.length - inserted, total: rows.length });
+  return NextResponse.json({ inserted, total: rows.length });
 }
 
 // DELETE: 파일 삭제
