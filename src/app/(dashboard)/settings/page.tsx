@@ -505,11 +505,13 @@ function CoupangApiSection() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [form, setForm] = useState({ access_key: '', secret_key: '', vendor_id: '' });
+  const [rgSaverEnabled, setRgSaverEnabled] = useState(false);
+  const [rgSaverLoading, setRgSaverLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/coupang/credentials')
       .then((r) => r.json())
-      .then((d) => { setConnected(d); setLoading(false); })
+      .then((d) => { setConnected(d); setRgSaverEnabled(!!d?.rg_saver_enabled); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -575,6 +577,30 @@ function CoupangApiSection() {
               className="px-3.5 py-1.5 text-[13px] font-medium text-[#3182F6] bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
             >
               {showForm ? '취소' : connected ? '재등록' : '등록'}
+            </button>
+          </div>
+        )}
+
+        {/* 로켓그로스 세이버 */}
+        {connected && !showForm && (
+          <div className="px-5 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-[13px] font-medium text-[#191F28]">로켓그로스 세이버</p>
+              <p className="text-[12px] text-[#B0B8C1] mt-0.5">월 99,000원(VAT별도) · 반품회수비/재입고비 면제</p>
+            </div>
+            <button
+              disabled={rgSaverLoading}
+              onClick={async () => {
+                const next = !rgSaverEnabled;
+                setRgSaverLoading(true);
+                await fetch('/api/coupang/credentials', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rg_saver_enabled: next }) });
+                setRgSaverEnabled(next);
+                setRgSaverLoading(false);
+              }}
+              className={`px-4 py-2 rounded-xl text-[13px] font-semibold transition-all active:scale-95 ${
+                rgSaverEnabled ? 'bg-[#3182F6] text-white ring-2 ring-[#3182F6]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+              }`}>
+              {rgSaverLoading ? '...' : rgSaverEnabled ? '구독 중 ✓' : '미구독'}
             </button>
           </div>
         )}

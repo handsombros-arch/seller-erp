@@ -103,7 +103,6 @@ function PlatformTab({ skuOptions, channels }: {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [rgVatIncluded, setRgVatIncluded] = useState(false);
   const [rgSaverEnabled, setRgSaverEnabled] = useState(false);
-  const [rgSaverLoading, setRgSaverLoading] = useState(false);
   // 체크박스 선택 + 일괄 쿠폰할인
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDiscount, setBulkDiscount] = useState('');
@@ -402,18 +401,9 @@ function PlatformTab({ skuOptions, channels }: {
                           className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgVatIncluded ? 'bg-[#F97316] text-white ring-2 ring-[#F97316]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
                           VAT {rgVatIncluded ? '포함 ✓' : '제외'}
                         </button>
-                        <button
-                          disabled={rgSaverLoading}
-                          onClick={async () => {
-                            const next = !rgSaverEnabled;
-                            setRgSaverLoading(true);
-                            await fetch('/api/coupang/credentials', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rg_saver_enabled: next }) });
-                            setRgSaverEnabled(next);
-                            setRgSaverLoading(false);
-                          }}
-                          className={`ml-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgSaverEnabled ? 'bg-[#3182F6] text-white ring-2 ring-[#3182F6]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
-                          세이버 {rgSaverEnabled ? 'ON ✓' : 'OFF'}
-                        </button>
+                        {rgSaverEnabled && (
+                          <span className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#3182F6]/10 text-[#3182F6]">세이버 ✓</span>
+                        )}
                       </>)}
                     </th>
                   ))}
