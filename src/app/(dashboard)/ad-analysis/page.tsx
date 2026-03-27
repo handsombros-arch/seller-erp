@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, Fragment } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, Search, Download, Settings, GripVertical,
 } from 'lucide-react';
 import {
-  ComposedChart, Bar, Line,
+  ComposedChart, Bar, Line, Area, AreaChart,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart,
 } from 'recharts';
@@ -38,10 +38,24 @@ interface PlacementRow {
   orders14d: number; revenue14d: number;
 }
 
+interface PlacementDailyRow {
+  placement: string; date: string; campaign: string; product: string;
+  impressions: number; clicks: number; cost: number;
+  orders14d: number; revenue14d: number;
+}
+
+interface KeywordDailyRow {
+  keyword: string; date: string; campaign: string; product: string;
+  impressions: number; clicks: number; cost: number;
+  orders14d: number; revenue14d: number;
+  cogs14d: number; commission14d: number;
+}
+
 interface PriceInfo {
   optionId: string; price: number; cost_price: number;
   product_name: string; sku_code: string;
   commission_rate: number; // 판매대행수수료율 (VAT/전자결제수수료 제외)
+  rg_cost: number; // 쿠팡 그로스 부대비용 합산 (입출고+배송+반품+포장 등)
 }
 
 interface ParsedRow {
@@ -65,6 +79,8 @@ interface AnalysisData {
   daily: DailyRow[];
   keywords: KeywordRow[];
   placements: PlacementRow[];
+  placementDaily: PlacementDailyRow[];
+  keywordDaily: KeywordDailyRow[];
   _rawRows?: any[]; // 누적 업로드용 원본 데이터
 }
 
@@ -310,6 +326,7 @@ export default function AdAnalysisPage() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rgSaverMonthly, setRgSaverMonthly] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
@@ -335,9 +352,11 @@ export default function AdAnalysisPage() {
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
   const [pivotSearch, setPivotSearch] = useState('');
   const [kwOnlyOrders, setKwOnlyOrders] = useState(false);
-  const [placeGran, setPlaceGran] = useState<Granularity | 'total'>('total');
+  const [placeGran, setPlaceGran] = useState<Granularity | 'total'>('weekly');
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
+  const [placeMetric, setPlaceMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d'>('cost');
+  const [placeShowRoas, setPlaceShowRoas] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -472,12 +491,14 @@ export default function AdAnalysisPage() {
   };
 
   // ─── 데이터 처리 (prices 맵 기반) ──────────────────────────────
-  const processData = useCallback((raw: any[], prices: Record<string, any>, confirmedMap: Record<string, any>) => {
+  const processData = useCallback((raw: any[], prices: Record<string, any>, confirmedMap: Record<string, any>, rgSaverMonthly = 0) => {
     const matchedIds = new Set<string>();
     const unmatchedIds = new Set<string>();
     const dailyMap = new Map<string, any>();
     const kwMap = new Map<string, any>();
     const plMap = new Map<string, any>();
+    const plDateMap = new Map<string, any>();
+    const kwDateMap = new Map<string, any>();
     const compactMap = new Map<string, any>();
 
     for (const r of raw) {
@@ -504,9 +525,10 @@ export default function AdAnalysisPage() {
         const actualPrice = matched?.price ?? 0;
         const costPrice = matched?.cost_price ?? 0;
         const commissionRate = matched?.commission_rate ?? 0;
+        const rgCost = matched?.rg_cost ?? 0;
         // 매칭 시 DB 가격 × 주문수, 미매칭 시 0 (CSV raw 사용 안 함)
         const revenue14d = actualPrice ? orders14d * actualPrice : 0;
-        const cogs14d = costPrice ? orders14d * costPrice : 0;
+        const cogs14d = costPrice ? orders14d * (costPrice + rgCost) : 0;
         const commission14d = commissionRate ? revenue14d * (commissionRate / 100) : 0;
 
         // Daily
@@ -524,6 +546,14 @@ export default function AdAnalysisPage() {
           const k = kwMap.get(kwKey)!;
           k.impressions += impressions; k.clicks += clicks; k.cost += cost;
           k.orders14d += orders14d; k.revenue14d += revenue14d;
+
+          // Keyword × date (for period breakdown)
+          const kwDateKey = `${campaign}||${product}||${keyword}||${date}`;
+          if (!kwDateMap.has(kwDateKey)) kwDateMap.set(kwDateKey, { keyword, date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+          const kd = kwDateMap.get(kwDateKey)!;
+          kd.impressions += impressions; kd.clicks += clicks; kd.cost += cost;
+          kd.orders14d += orders14d; kd.revenue14d += revenue14d;
+          kd.cogs14d += cogs14d; kd.commission14d += commission14d;
         }
 
         // Placements by campaign+product
@@ -532,6 +562,13 @@ export default function AdAnalysisPage() {
         const p = plMap.get(plKey)!;
         p.impressions += impressions; p.clicks += clicks; p.cost += cost;
         p.orders14d += orders14d; p.revenue14d += revenue14d;
+
+        // Placement × date (for period breakdown)
+        const plDateKey = `${campaign}||${product}||${placement}||${date}`;
+        if (!plDateMap.has(plDateKey)) plDateMap.set(plDateKey, { placement, date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+        const pd = plDateMap.get(plDateKey)!;
+        pd.impressions += impressions; pd.clicks += clicks; pd.cost += cost;
+        pd.orders14d += orders14d; pd.revenue14d += revenue14d;
 
         // Compact rows (date+campaign+product)
         const cKey = `${date}|${campaign}|${product}`;
@@ -545,11 +582,20 @@ export default function AdAnalysisPage() {
       }
 
       const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+      // 로켓그로스 세이버 월정액 일할 배분
+      if (rgSaverMonthly > 0 && daily.length > 0) {
+        const dailySaver = Math.round(rgSaverMonthly / 30);
+        for (const d of daily) d.cogs14d += dailySaver;
+      }
+
       const keywords = [...kwMap.values()].sort((a, b) => b.cost - a.cost).map((k: any) => ({
         ...k, ctr: k.impressions > 0 ? k.clicks / k.impressions : 0, cpc: k.clicks > 0 ? Math.round(k.cost / k.clicks) : 0,
         cvr: k.clicks > 0 ? k.orders14d / k.clicks : 0, roas14d: k.cost > 0 ? k.revenue14d / k.cost : 0,
       }));
       const placements = [...plMap.values()].sort((a, b) => b.cost - a.cost);
+      const placementDaily = [...plDateMap.values()];
+      const keywordDaily = [...kwDateMap.values()];
       const rows = [...compactMap.values()].map(({ _kw, ...rest }: any) => ({ ...rest, keywordCount: _kw.size }));
 
       const totals = daily.reduce((acc: any, d: any) => {
@@ -573,7 +619,7 @@ export default function AdAnalysisPage() {
         dateRange: { from: daily[0]?.date, to: daily[daily.length - 1]?.date },
         priceInfo,
         unmatchedOptionIds: [...unmatchedIds],
-        campaigns, products, rows, totals, daily, keywords, placements,
+        campaigns, products, rows, totals, daily, keywords, placements, placementDaily, keywordDaily,
         _rawRows: raw,
       } as AnalysisData;
     }, []);
@@ -586,7 +632,7 @@ export default function AdAnalysisPage() {
   // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
   const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
 
-  const handleUpload = useCallback(async (files: File[], accumulate = false) => {
+  const handleUpload = useCallback(async (files: File[]) => {
     setLoading(true);
     setError('');
     try {
@@ -596,7 +642,8 @@ export default function AdAnalysisPage() {
         fetch('/api/ad-analysis/mappings'),
       ]);
       if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
-      const { prices, pricesByName, priceNameKeys } = await pricesRes.json();
+      const { prices, pricesByName, priceNameKeys, rgSaverMonthly: saverCost } = await pricesRes.json();
+      setRgSaverMonthly(saverCost ?? 0);
       const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
 
       const confirmedMap: Record<string, any> = {};
@@ -618,11 +665,12 @@ export default function AdAnalysisPage() {
       }
       if (!allRows.length) throw new Error('데이터가 없습니다');
 
-      // 중복 제거 (파일 간 + 기존 데이터 포함)
+      // 중복 제거 (기존 데이터 + 새 파일 누적)
       const seen = new Set<string>();
       let raw: any[] = [];
 
-      if (accumulate && data?._rawRows) {
+      // 기존 데이터가 있으면 항상 누적
+      if (data?._rawRows) {
         for (const r of data._rawRows) {
           const key = dedupKey(r);
           if (!seen.has(key)) { seen.add(key); raw.push(r); }
@@ -662,15 +710,17 @@ export default function AdAnalysisPage() {
         setPendingRaw(raw);
       }
 
-      const result = processData(raw, prices, confirmedMap);
+      const result = processData(raw, prices, confirmedMap, saverCost ?? 0);
       saveResult(result);
 
-      // 백그라운드: 원본 파일을 Storage에 저장 (사용자 대기 없음)
+      // 백그라운드: 원본 파일을 Storage에 저장
       for (const file of files) {
         const fd = new FormData();
         fd.append('file', file);
         fetch('/api/ad-analysis/upload', { method: 'POST', body: fd }).catch(() => {});
       }
+      // IndexedDB에 전체 누적 raw rows 저장 (새로고침 시 복원용)
+      saveToIdb(raw);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -715,16 +765,81 @@ export default function AdAnalysisPage() {
           sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
         };
       }
-      const result = processData(pendingRaw, prices, confirmedMap);
+      const result = processData(pendingRaw, prices, confirmedMap, rgSaverMonthly);
       saveResult(result);
     }
-  }, [pendingMatches, pendingRaw, processData, saveResult]);
+  }, [pendingMatches, pendingRaw, processData, saveResult, rgSaverMonthly]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = [...e.dataTransfer.files].filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
     if (files.length) handleUpload(files);
   }, [handleUpload]);
+
+  // ─── IndexedDB로 클라이언트 로컬에 raw rows 저장/복원 ─────────────
+  const idbName = 'lv-erp-ad';
+  const idbStore = 'rawRows';
+  const openIdb = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+    const req = indexedDB.open(idbName, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(idbStore); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const saveToIdb = async (rows: any[]) => {
+    try {
+      const db = await openIdb();
+      const tx = db.transaction(idbStore, 'readwrite');
+      tx.objectStore(idbStore).put(rows, 'data');
+      db.close();
+    } catch {}
+  };
+  const loadFromIdb = async (): Promise<any[] | null> => {
+    try {
+      const db = await openIdb();
+      return new Promise((resolve) => {
+        const tx = db.transaction(idbStore, 'readonly');
+        const req = tx.objectStore(idbStore).get('data');
+        req.onsuccess = () => { db.close(); resolve(req.result ?? null); };
+        req.onerror = () => { db.close(); resolve(null); };
+      });
+    } catch { return null; }
+  };
+
+  // ─── 페이지 로드 시 IndexedDB에서 복원 ─────────────────────────
+  const [initialLoading, setInitialLoading] = useState(false);
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (initialLoadDone.current || data) return;
+    initialLoadDone.current = true;
+    (async () => {
+      try {
+        setInitialLoading(true);
+        const cachedRows = await loadFromIdb();
+        if (!cachedRows?.length) return;
+        const [pricesRes, mappingsRes] = await Promise.all([
+          fetch('/api/ad-analysis'),
+          fetch('/api/ad-analysis/mappings'),
+        ]);
+        if (!pricesRes.ok) return;
+        const { prices, rgSaverMonthly: saverCost } = await pricesRes.json();
+        setRgSaverMonthly(saverCost ?? 0);
+        const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
+        const confirmedMap: Record<string, any> = {};
+        for (const m of savedMappings) {
+          confirmedMap[m.ad_product_name] = {
+            price: Number(m.price), cost_price: Number(m.cost_price),
+            commission_rate: Number(m.commission_rate ?? 0),
+            sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
+          };
+        }
+        const result = processData(cachedRows, prices, confirmedMap, saverCost ?? 0);
+        saveResult(result);
+      } catch {
+      } finally {
+        setInitialLoading(false);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filtered & re-aggregated data ──────────────────────────────────────
   const filtered = useMemo(() => {
@@ -779,6 +894,12 @@ export default function AdAnalysisPage() {
     }
     const placements = [...pMap.values()].sort((a, b) => b.cost - a.cost);
 
+    // Filter placementDaily
+    const placementDaily = (data.placementDaily ?? []).filter(matchRow);
+
+    // Filter keywordDaily
+    const keywordDaily = (data.keywordDaily ?? []).filter(matchRow);
+
     // Aggregate by campaign × product
     const cpMap = new Map<string, any>();
     for (const r of rows) {
@@ -810,7 +931,7 @@ export default function AdAnalysisPage() {
       return acc;
     }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow);
 
-    return { rows, daily, keywords, placements, products, campaignProducts, totals };
+    return { rows, daily, keywords, placements, placementDaily, keywordDaily, products, campaignProducts, totals };
   }, [data, filterCampaign, filterProduct]);
 
   // Aggregated chart data
@@ -1019,11 +1140,21 @@ export default function AdAnalysisPage() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           className="border-2 border-dashed border-[#D1D6DB] rounded-2xl p-12 text-center hover:border-[#3182F6] hover:bg-[#F8FAFF] transition-colors cursor-pointer"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !initialLoading && fileRef.current?.click()}
         >
-          <Upload className="h-10 w-10 mx-auto text-[#B0B8C1] mb-3" />
-          <p className="text-[15px] font-semibold text-[#333D4B]">쿠팡 광고 데이터 (xlsx) 를 드래그하거나 클릭하세요</p>
-          <p className="text-[12px] text-[#8B95A1] mt-1">PA 일별 키워드 리포트 · 여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
+          {initialLoading ? (
+            <>
+              <Loader2 className="h-10 w-10 mx-auto text-[#3182F6] mb-3 animate-spin" />
+              <p className="text-[15px] font-semibold text-[#333D4B]">저장된 데이터 불러오는 중...</p>
+              <p className="text-[12px] text-[#8B95A1] mt-1">이전에 업로드한 광고 데이터를 복원합니다</p>
+            </>
+          ) : (
+            <>
+              <Upload className="h-10 w-10 mx-auto text-[#B0B8C1] mb-3" />
+              <p className="text-[15px] font-semibold text-[#333D4B]">쿠팡 광고 데이터 (xlsx) 를 드래그하거나 클릭하세요</p>
+              <p className="text-[12px] text-[#8B95A1] mt-1">PA 일별 키워드 리포트 · 여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
+            </>
+          )}
         </div>
       )}
 
@@ -1664,28 +1795,23 @@ export default function AdAnalysisPage() {
             // 지면 × 기간 집계
             const placeData = (() => {
               const map = new Map<string, any>();
-              for (const r of filtered.rows) {
-                // rows에 placement가 없으므로 placements 데이터 사용
-              }
               // 합산 데이터
               const totals = new Map<string, any>();
               for (const p of filtered.placements) {
                 totals.set(p.placement, { ...p });
               }
-              // 기간별은 _rawRows에서 직접 집계
-              if (placeGran !== 'total' && data?._rawRows) {
-                for (const r of data._rawRows) {
-                  const dateStr = String(r['날짜'] ?? '');
-                  const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-                  const period = placeGran === 'daily' ? date : placeGran === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
-                  const pl = r['광고 노출 지면'] || '기타';
-                  const key = `${pl}||${period}`;
-                  if (!map.has(key)) map.set(key, { placement: pl, period, periodLabel: placeGran === 'daily' ? period.slice(5) : placeGran === 'monthly' ? period : bucketLabel(period, 'weekly'), impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+              // 기간별은 placementDaily에서 집계 (price 매칭된 revenue14d 포함)
+              if (placeGran !== 'total') {
+                for (const r of filtered.placementDaily) {
+                  const period = placeGran === 'daily' ? r.date : placeGran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
+                  const key = `${r.placement}||${period}`;
+                  if (!map.has(key)) map.set(key, { placement: r.placement, period, periodLabel: placeGran === 'daily' ? period.slice(5) : placeGran === 'monthly' ? period : bucketLabel(period, 'weekly'), impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
                   const m = map.get(key)!;
-                  m.impressions += Number(r['노출수']) || 0;
-                  m.clicks += Number(r['클릭수']) || 0;
-                  m.cost += Math.round((Number(r['광고비']) || 0) * 1.1);
-                  m.orders14d += Number(r['총 주문수(14일)']) || 0;
+                  m.impressions += r.impressions;
+                  m.clicks += r.clicks;
+                  m.cost += r.cost;
+                  m.orders14d += r.orders14d;
+                  m.revenue14d += r.revenue14d;
                 }
               }
               return { totals: [...totals.values()], byPeriod: [...map.values()] };
@@ -1708,8 +1834,45 @@ export default function AdAnalysisPage() {
               </>);
             };
 
+            // ── 100% 누적 영역 차트 데이터 ──
+            const PLACE_COLORS: string[] = ['#3182F6', '#F43F5E', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316'];
+            const placeMetricOpts: { key: typeof placeMetric; label: string }[] = [
+              { key: 'cost', label: '광고비' }, { key: 'impressions', label: '노출' },
+              { key: 'clicks', label: '클릭' }, { key: 'orders14d', label: '주문' },
+              { key: 'revenue14d', label: '매출' },
+            ];
+            const placeMetricLabel = placeMetricOpts.find(o => o.key === placeMetric)?.label ?? '';
+
+            // 기간별 차트 데이터 생성 (합산이면 주간으로 표시)
+            const chartGranForPlace = placeGran === 'total' ? 'weekly' as Granularity : placeGran as Granularity;
+            const chartByPeriod = (() => {
+              const map = new Map<string, any>();
+              for (const r of filtered.placementDaily) {
+                const period = chartGranForPlace === 'daily' ? r.date : chartGranForPlace === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
+                const label = chartGranForPlace === 'daily' ? period.slice(5) : chartGranForPlace === 'monthly' ? period : bucketLabel(period, 'weekly');
+                if (!map.has(period)) map.set(period, { period, label, _cost: 0, _revenue: 0 });
+                const row = map.get(period)!;
+                row[r.placement] = (row[r.placement] ?? 0) + r[placeMetric];
+                row._cost += r.cost;
+                row._revenue += r.revenue14d;
+              }
+              return [...map.values()].sort((a, b) => a.period.localeCompare(b.period));
+            })();
+
+            // 비율 변환 (100% 누적) + ROAS
+            const chartDataPct = chartByPeriod.map((row) => {
+              const out: any = { label: row.label, period: row.period };
+              let total = 0;
+              for (const pl of plNames) total += row[pl] ?? 0;
+              for (const pl of plNames) out[pl] = total > 0 ? ((row[pl] ?? 0) / total) * 100 : 0;
+              out._total = total;
+              out._roas = row._cost > 0 ? (row._revenue / row._cost) * 100 : 0;
+              return out;
+            });
+
             return (
             <div className="space-y-4">
+              {/* 컨트롤 바 */}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[160px] max-w-[300px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
@@ -1717,12 +1880,72 @@ export default function AdAnalysisPage() {
                     className="w-full h-9 pl-8 pr-3 rounded-lg border border-[#E5E8EB] text-[12px] focus:outline-none focus:border-[#3182F6]" />
                 </div>
                 <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
-                  {([['total', '합산'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
+                  {([['total', '합산'], ['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setPlaceGran(k)}
                       className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeGran === k ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>{l}</button>
                   ))}
                 </div>
+                <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                  {placeMetricOpts.map(({ key, label }) => (
+                    <button key={key} onClick={() => setPlaceMetric(key)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${placeMetric === key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>{label}</button>
+                  ))}
+                </div>
+                <button onClick={() => setPlaceShowRoas(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${placeShowRoas ? 'bg-[#191F28] text-white border-[#191F28]' : 'bg-white text-[#6B7684] border-[#E5E8EB] hover:border-[#B0B8C1]'}`}>
+                  ROAS {placeShowRoas ? 'ON' : 'OFF'}
+                </button>
               </div>
+
+              {/* 100% 누적 영역 차트 + ROAS 보조축 */}
+              {chartDataPct.length > 1 && (
+                <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[13px] font-bold text-[#191F28]">지면별 {placeMetricLabel} 비중 추이</h3>
+                    {placeShowRoas && <span className="text-[11px] text-[#6B7684]">--- ROAS (우축)</span>}
+                  </div>
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartDataPct}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis yAxisId="left" tickFormatter={(v: number) => `${Math.round(v)}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
+                        {placeShowRoas && (
+                          <YAxis yAxisId="right" orientation="right"
+                            tickFormatter={(v: number) => `${Math.round(v)}%`}
+                            tick={{ fontSize: 11, fill: '#6B7684' }}
+                            stroke="#B0B8C1" />
+                        )}
+                        <Tooltip
+                          formatter={(value: number, name: string, props: any) => {
+                            if (name === 'ROAS') return [`${value.toFixed(0)}%`, name];
+                            const row = props.payload;
+                            const total = row._total ?? 0;
+                            const raw = total > 0 ? (value / 100) * total : 0;
+                            const formatted = placeMetric === 'cost' || placeMetric === 'revenue14d'
+                              ? fmtW(Math.round(raw)) : formatNumber(Math.round(raw));
+                            return [`${formatted} (${value.toFixed(1)}%)`, name];
+                          }}
+                          labelFormatter={(label: string) => label}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        {plNames.map((pl, i) => (
+                          <Bar key={pl} dataKey={pl} stackId="1" yAxisId="left"
+                            fill={PLACE_COLORS[i % PLACE_COLORS.length]}
+                            fillOpacity={0.85} barSize={chartDataPct.length > 20 ? undefined : 40} />
+                        ))}
+                        {placeShowRoas && (
+                          <Line type="monotone" dataKey="_roas" yAxisId="right" name="ROAS"
+                            stroke="#191F28" strokeWidth={2} strokeDasharray="6 3"
+                            dot={{ r: 3, fill: '#191F28' }} />
+                        )}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* 테이블 */}
               <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto relative">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
@@ -1745,15 +1968,16 @@ export default function AdAnalysisPage() {
                         <Fragment key={p.placement}>
                           <tr className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC] cursor-pointer"
                             onClick={() => setExpandedPlaces((prev) => { const n = new Set(prev); n.has(p.placement) ? n.delete(p.placement) : n.add(p.placement); return n; })}>
-                            <td className="px-3 py-2.5 font-medium text-[#191F28]">
-                              {placeGran !== 'total' && (isExp ? <ChevronDown className="h-3 w-3 inline mr-1" /> : <ChevronUp className="h-3 w-3 inline mr-1 rotate-90" />)}
+                            <td className="px-3 py-2.5 font-medium text-[#191F28] flex items-center gap-1.5">
+                              <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PLACE_COLORS[plNames.indexOf(p.placement) % PLACE_COLORS.length] }} />
+                              {placeGran !== 'total' && (isExp ? <ChevronDown className="h-3 w-3 inline" /> : <ChevronUp className="h-3 w-3 inline rotate-90" />)}
                               {p.placement}
                             </td>
                             {renderMetricRow(p)}
                           </tr>
                           {isExp && subRows.map((sr: any) => (
                             <tr key={`${p.placement}||${sr.period}`} className="border-b border-[#F2F4F6] bg-[#FAFBFF]">
-                              <td className="px-3 py-2 pl-8 text-[11px] text-[#6B7684]">{sr.periodLabel}</td>
+                              <td className="px-3 py-2 pl-10 text-[11px] text-[#6B7684]">{sr.periodLabel}</td>
                               {renderMetricRow(sr, true)}
                             </tr>
                           ))}
@@ -1802,20 +2026,18 @@ export default function AdAnalysisPage() {
               const gran = pivotGran === 'total' ? 'total' : pivotGran;
 
               if (pivotDim === 'keyword' && gran !== 'total') {
-                const raw = data._rawRows ?? [];
-                for (const r of raw) {
-                  const dateStr = String(r['날짜'] ?? '');
-                  const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-                  const period = gran === 'daily' ? date : gran === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
-                  const kw = r['키워드'] || '-';
-                  if (kw === '-') continue;
-                  const key = `${period}||${kw}`;
-                  if (!map.has(key)) map.set(key, { period, periodLabel: gran === 'daily' ? period.slice(5) : gran === 'monthly' ? period : bucketLabel(period, 'weekly'), dim: kw, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+                for (const r of filtered.keywordDaily) {
+                  const period = gran === 'daily' ? r.date : gran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
+                  const key = `${period}||${r.keyword}`;
+                  if (!map.has(key)) map.set(key, { period, periodLabel: gran === 'daily' ? period.slice(5) : gran === 'monthly' ? period : bucketLabel(period, 'weekly'), dim: r.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
                   const m = map.get(key)!;
-                  m.impressions += Number(r['노출수']) || 0;
-                  m.clicks += Number(r['클릭수']) || 0;
-                  m.cost += Math.round((Number(r['광고비']) || 0) * 1.1);
-                  m.orders14d += Number(r['총 주문수(14일)']) || 0;
+                  m.impressions += r.impressions;
+                  m.clicks += r.clicks;
+                  m.cost += r.cost;
+                  m.orders14d += r.orders14d;
+                  m.revenue14d += r.revenue14d;
+                  m.cogs14d += r.cogs14d;
+                  m.commission14d += r.commission14d;
                 }
                 return [...map.values()];
               }

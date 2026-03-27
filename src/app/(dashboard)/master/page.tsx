@@ -73,7 +73,10 @@ function SelectCell({ value, onChange, options, placeholder }: {
 
 // ─── Platform Tab ────────────────────────────────────────────────────────────
 
-interface ChannelEntry { name: string; product_id: string; price: string; coupon_discount: string; sku_id_return: string; }
+interface ChannelEntry {
+  name: string; product_id: string; price: string; coupon_discount: string; sku_id_return: string;
+  rg_fee_inout: string; rg_fee_shipping: string; rg_fee_return: string; rg_fee_restock: string; rg_fee_send: string; rg_fee_packing: string;
+}
 
 interface PlatformRow {
   sku_id: string;
@@ -98,6 +101,9 @@ function PlatformTab({ skuOptions, channels }: {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [rgVatIncluded, setRgVatIncluded] = useState(false);
+  const [rgSaverEnabled, setRgSaverEnabled] = useState(false);
+  const [rgSaverLoading, setRgSaverLoading] = useState(false);
   // 체크박스 선택 + 일괄 쿠폰할인
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDiscount, setBulkDiscount] = useState('');
@@ -170,10 +176,15 @@ function PlatformTab({ skuOptions, channels }: {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [res, aliasRes] = await Promise.all([
+    const [res, aliasRes, credRes] = await Promise.all([
       fetch('/api/platform-skus'),
       fetch('/api/sku-aliases'),
+      fetch('/api/coupang/credentials'),
     ]);
+    if (credRes.ok) {
+      const cred = await credRes.json().catch(() => null);
+      if (cred?.rg_saver_enabled != null) setRgSaverEnabled(!!cred.rg_saver_enabled);
+    }
     const platformData: any[] = res.ok ? await res.json().catch(() => []) : [];
     // aliases를 sku_id별로 그루핑
     const aliasData: any[] = aliasRes.ok ? await aliasRes.json().catch(() => []) : [];
@@ -193,9 +204,15 @@ function PlatformTab({ skuOptions, channels }: {
         price:         p.price != null ? String(p.price) : '',
         coupon_discount: p.coupon_discount != null ? String(p.coupon_discount) : '',
         sku_id_return: p.platform_sku_id_return ?? '',
+        rg_fee_inout:    p.rg_fee_inout != null ? String(p.rg_fee_inout) : '',
+        rg_fee_shipping: p.rg_fee_shipping != null ? String(p.rg_fee_shipping) : '',
+        rg_fee_return:   p.rg_fee_return != null ? String(p.rg_fee_return) : '',
+        rg_fee_restock:  p.rg_fee_restock != null ? String(p.rg_fee_restock) : '',
+        rg_fee_send:     p.rg_fee_send != null ? String(p.rg_fee_send) : '',
+        rg_fee_packing:  p.rg_fee_packing != null ? String(p.rg_fee_packing) : '',
       };
     }
-    const empty: ChannelEntry = { name: '', product_id: '', price: '', coupon_discount: '', sku_id_return: '' };
+    const empty: ChannelEntry = { name: '', product_id: '', price: '', coupon_discount: '', sku_id_return: '', rg_fee_inout: '', rg_fee_shipping: '', rg_fee_return: '', rg_fee_restock: '', rg_fee_send: '', rg_fee_packing: '' };
     const built: PlatformRow[] = skuOptions.map((s) => ({
       sku_id:       s.id,
       sku_code:     s.sku_code,
@@ -256,19 +273,28 @@ function PlatformTab({ skuOptions, channels }: {
 
         const sku_id_return = e.sku_id_return.trim() || null;
         const isCoupang = c.type === 'coupang';
+        const body: Record<string, any> = {
+          sku_id: row.sku_id,
+          channel_id: c.id,
+          platform_product_name: name || null,
+          platform_product_id:   isCoupang ? null : product_id,
+          platform_sku_id:       isCoupang ? product_id : null,
+          price,
+          coupon_discount,
+          platform_sku_id_return: sku_id_return,
+        };
+        if (isCoupang) {
+          body.rg_fee_inout    = e.rg_fee_inout?.trim()    ? Number(e.rg_fee_inout.replace(/,/g, ''))    : 0;
+          body.rg_fee_shipping = e.rg_fee_shipping?.trim() ? Number(e.rg_fee_shipping.replace(/,/g, '')) : 0;
+          body.rg_fee_return   = e.rg_fee_return?.trim()   ? Number(e.rg_fee_return.replace(/,/g, ''))   : 0;
+          body.rg_fee_restock  = e.rg_fee_restock?.trim()  ? Number(e.rg_fee_restock.replace(/,/g, ''))  : 0;
+          body.rg_fee_send     = e.rg_fee_send?.trim()     ? Number(e.rg_fee_send.replace(/,/g, ''))     : 0;
+          body.rg_fee_packing  = e.rg_fee_packing?.trim()  ? Number(e.rg_fee_packing.replace(/,/g, ''))  : 0;
+        }
         await fetch('/api/platform-skus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sku_id: row.sku_id,
-            channel_id: c.id,
-            platform_product_name: name || null,
-            platform_product_id:   isCoupang ? null : product_id,
-            platform_sku_id:       isCoupang ? product_id : null,
-            price,
-            coupon_discount,
-            platform_sku_id_return: sku_id_return,
-          }),
+          body: JSON.stringify(body),
         });
         if (name) {
           await fetch('/api/sku-aliases', {
@@ -370,7 +396,27 @@ function PlatformTab({ skuOptions, channels }: {
                   </th>
                   <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-[40px] bg-[#F8F9FB] border-b border-[#F2F4F6] border-r">상품 / SKU</th>
                   {channels.map((c) => (
-                    <th key={c.id} colSpan={c.type === 'coupang' ? 5 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">{c.name}</th>
+                    <th key={c.id} colSpan={c.type === 'coupang' ? 11 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">
+                      {c.name}
+                      {c.type === 'coupang' && (<>
+                        <button onClick={() => setRgVatIncluded(!rgVatIncluded)}
+                          className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${rgVatIncluded ? 'bg-[#F97316] text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
+                          {rgVatIncluded ? 'VAT 포함' : 'VAT 제외'}
+                        </button>
+                        <button
+                          disabled={rgSaverLoading}
+                          onClick={async () => {
+                            const next = !rgSaverEnabled;
+                            setRgSaverLoading(true);
+                            await fetch('/api/coupang/credentials', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rg_saver_enabled: next }) });
+                            setRgSaverEnabled(next);
+                            setRgSaverLoading(false);
+                          }}
+                          className={`ml-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${rgSaverEnabled ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
+                          세이버 {rgSaverEnabled ? 'ON' : 'OFF'}
+                        </button>
+                      </>)}
+                    </th>
                   ))}
                   <th rowSpan={2} className="border-b border-[#F2F4F6] min-w-[52px]" />
                 </tr>
@@ -381,6 +427,14 @@ function PlatformTab({ skuOptions, channels }: {
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
                       {c.type === 'coupang' && <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[80px]">쿠폰할인</th>}
+                      {c.type === 'coupang' && <>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">RG입출고</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">RG배송</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">반품회수</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">반품재입고</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">창고발송</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">포장비</th>
+                      </>}
                       {/* 반품 옵션ID 컬럼 숨김 - RG 재고에서 자동 분류 */}
                     </Fragment>
                   ))}
@@ -391,7 +445,7 @@ function PlatformTab({ skuOptions, channels }: {
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB] cursor-pointer select-none hover:bg-[#F0F3FA] transition-colors" onClick={() => toggleCollapsed(group.name)}>
-                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={2 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 5 : 3), 0) + 1}>
+                      <td className="px-4 py-2.5 sticky left-0 bg-inherit" colSpan={2 + channels.reduce((s, c) => s + (c.type === 'coupang' ? 11 : 3), 0) + 1}>
                         <div className="flex items-center gap-2">
                           {collapsed.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
                           <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
@@ -448,6 +502,25 @@ function PlatformTab({ skuOptions, channels }: {
                                 placeholder="0" className={inputCls} />
                             </td>
                           )}
+                          {c.type === 'coupang' && <>
+                            {(['rg_fee_inout', 'rg_fee_shipping', 'rg_fee_return', 'rg_fee_restock', 'rg_fee_send', 'rg_fee_packing'] as const).map((field) => {
+                              const saverZero = rgSaverEnabled && (field === 'rg_fee_return' || field === 'rg_fee_restock');
+                              const raw = (e as any)[field] ?? '';
+                              const display = saverZero ? '0' : rgVatIncluded && raw !== '' ? String(Math.round(Number(raw) * 1.1)) : raw;
+                              return (
+                                <td key={field} className="px-2 py-2">
+                                  <input type="number" min="0" value={display}
+                                    disabled={saverZero}
+                                    onChange={(ev) => {
+                                      const v = ev.target.value;
+                                      const stored = rgVatIncluded && v !== '' ? String(Math.round(Number(v) / 1.1)) : v;
+                                      updateEntry(row.sku_id, c.id, field as keyof ChannelEntry, stored);
+                                    }}
+                                    placeholder="0" className={`${inputCls} ${saverZero ? 'bg-[#F2F4F6] text-[#B0B8C1]' : ''}`} />
+                                </td>
+                              );
+                            })}
+                          </>}
                           {/* 반품 옵션ID 입력 숨김 */}
                         </Fragment>
                       );

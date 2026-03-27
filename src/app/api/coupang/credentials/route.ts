@@ -9,14 +9,14 @@ export async function GET() {
   const admin = await createAdminClient();
   const { data } = await admin
     .from('coupang_credentials')
-    .select('id, vendor_id, updated_at')
+    .select('id, vendor_id, updated_at, rg_saver_enabled')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   // access_key / secret_key는 마스킹해서 반환 (보안)
   if (!data) return NextResponse.json(null);
-  return NextResponse.json({ id: data.id, vendor_id: data.vendor_id, updated_at: data.updated_at });
+  return NextResponse.json({ id: data.id, vendor_id: data.vendor_id, updated_at: data.updated_at, rg_saver_enabled: data.rg_saver_enabled ?? false });
 }
 
 export async function POST(request: NextRequest) {
@@ -41,6 +41,31 @@ export async function POST(request: NextRequest) {
     updated_at: new Date().toISOString(),
   });
 
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+
+  const body = await request.json();
+  const admin = await createAdminClient();
+
+  const { data: cred } = await admin
+    .from('coupang_credentials')
+    .select('id')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!cred) return NextResponse.json({ error: '쿠팡 API 키를 먼저 설정하세요' }, { status: 400 });
+
+  const updates: Record<string, any> = {};
+  if (body.rg_saver_enabled !== undefined) updates.rg_saver_enabled = !!body.rg_saver_enabled;
+
+  const { error } = await admin.from('coupang_credentials').update(updates).eq('id', cred.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
