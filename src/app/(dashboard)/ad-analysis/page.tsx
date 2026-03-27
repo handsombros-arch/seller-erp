@@ -327,6 +327,7 @@ export default function AdAnalysisPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rgSaverMonthly, setRgSaverMonthly] = useState(0);
+  const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
@@ -491,7 +492,7 @@ export default function AdAnalysisPage() {
   };
 
   // ─── 데이터 처리 (prices 맵 기반) ──────────────────────────────
-  const processData = useCallback((raw: any[], prices: Record<string, any>, confirmedMap: Record<string, any>, rgSaverMonthly = 0) => {
+  const processData = useCallback((raw: any[], prices: Record<string, any>, confirmedMap: Record<string, any>, rgSaverMonthly = 0, monthlyTotal = 0) => {
     const matchedIds = new Set<string>();
     const unmatchedIds = new Set<string>();
     const dailyMap = new Map<string, any>();
@@ -583,10 +584,11 @@ export default function AdAnalysisPage() {
 
       const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
-      // 로켓그로스 세이버 월정액 일할 배분
-      if (rgSaverMonthly > 0 && daily.length > 0) {
-        const dailySaver = Math.round(rgSaverMonthly / 30);
-        for (const d of daily) d.cogs14d += dailySaver;
+      // 월 고정비용 일할 배분 (세이버 + 인건비/관리비 등)
+      const totalMonthlyFixed = rgSaverMonthly + monthlyTotal;
+      if (totalMonthlyFixed > 0 && daily.length > 0) {
+        const dailyFixed = Math.round(totalMonthlyFixed / 30);
+        for (const d of daily) d.cogs14d += dailyFixed;
       }
 
       const keywords = [...kwMap.values()].sort((a, b) => b.cost - a.cost).map((k: any) => ({
@@ -642,8 +644,9 @@ export default function AdAnalysisPage() {
         fetch('/api/ad-analysis/mappings'),
       ]);
       if (!pricesRes.ok) throw new Error('가격 정보 조회 실패');
-      const { prices, pricesByName, priceNameKeys, rgSaverMonthly: saverCost } = await pricesRes.json();
+      const { prices, pricesByName, priceNameKeys, rgSaverMonthly: saverCost, monthlyTotal: mTotal } = await pricesRes.json();
       setRgSaverMonthly(saverCost ?? 0);
+      setMonthlyTotal(mTotal ?? 0);
       const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
 
       const confirmedMap: Record<string, any> = {};
@@ -710,7 +713,7 @@ export default function AdAnalysisPage() {
         setPendingRaw(raw);
       }
 
-      const result = processData(raw, prices, confirmedMap, saverCost ?? 0);
+      const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
       // 백그라운드: 원본 파일을 Storage에 저장
@@ -765,10 +768,10 @@ export default function AdAnalysisPage() {
           sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
         };
       }
-      const result = processData(pendingRaw, prices, confirmedMap, rgSaverMonthly);
+      const result = processData(pendingRaw, prices, confirmedMap, rgSaverMonthly, monthlyTotal);
       saveResult(result);
     }
-  }, [pendingMatches, pendingRaw, processData, saveResult, rgSaverMonthly]);
+  }, [pendingMatches, pendingRaw, processData, saveResult, rgSaverMonthly, monthlyTotal]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -821,8 +824,9 @@ export default function AdAnalysisPage() {
           fetch('/api/ad-analysis/mappings'),
         ]);
         if (!pricesRes.ok) return;
-        const { prices, rgSaverMonthly: saverCost } = await pricesRes.json();
+        const { prices, rgSaverMonthly: saverCost, monthlyTotal: mTotal } = await pricesRes.json();
         setRgSaverMonthly(saverCost ?? 0);
+        setMonthlyTotal(mTotal ?? 0);
         const { mappings: savedMappings } = mappingsRes.ok ? await mappingsRes.json() : { mappings: [] };
         const confirmedMap: Record<string, any> = {};
         for (const m of savedMappings) {
@@ -832,7 +836,7 @@ export default function AdAnalysisPage() {
             sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
           };
         }
-        const result = processData(cachedRows, prices, confirmedMap, saverCost ?? 0);
+        const result = processData(cachedRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
         saveResult(result);
       } catch {
       } finally {

@@ -904,6 +904,131 @@ function ManualSyncSection() {
   );
 }
 
+// ───────────────── Monthly Costs ─────────────────
+
+interface MonthlyCost { id: string; label: string; amount: number; sort_order: number; }
+
+function MonthlyCostsSection() {
+  const [items, setItems] = useState<MonthlyCost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newLabel, setNewLabel] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editLabel, setEditLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch('/api/monthly-costs');
+    const data = res.ok ? await res.json() : [];
+    setItems(data);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handleSave(item: MonthlyCost) {
+    setSaving(true);
+    await fetch('/api/monthly-costs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, label: editLabel || item.label, amount: Number(editAmount.replace(/,/g, '')) || 0 }),
+    });
+    setEditId(null);
+    await load();
+    setSaving(false);
+  }
+
+  async function handleAdd() {
+    if (!newLabel.trim()) return;
+    setSaving(true);
+    await fetch('/api/monthly-costs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: newLabel.trim(), amount: 0 }),
+    });
+    setNewLabel('');
+    await load();
+    setSaving(false);
+  }
+
+  async function handleDelete(id: string) {
+    await fetch(`/api/monthly-costs?id=${id}`, { method: 'DELETE' });
+    await load();
+  }
+
+  const total = items.reduce((s, i) => s + Number(i.amount ?? 0), 0);
+  const totalVat = Math.round(total * 1.1);
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+  return (
+    <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#F2F4F6]">
+        <h3 className="text-[15px] font-bold text-[#191F28]">월 고정비용</h3>
+        <p className="text-[12px] text-[#6B7684] mt-0.5">순익 계산에 반영됩니다. VAT 제외 금액을 입력하세요.</p>
+      </div>
+      <div className="px-5 py-4 space-y-2">
+        {loading ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+        ) : (
+          <>
+            {items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 bg-[#F8F9FB] rounded-xl group">
+                {editId === item.id ? (
+                  <>
+                    <input lang="ko" value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
+                      className="h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] w-28 focus:outline-none focus:border-[#3182F6]" />
+                    <input type="number" min="0" value={editAmount} onChange={(e) => setEditAmount(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSave(item); }}
+                      className="h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] w-32 focus:outline-none focus:border-[#3182F6] text-right" />
+                    <span className="text-[11px] text-[#B0B8C1]">원</span>
+                    <button onClick={() => handleSave(item)} disabled={saving}
+                      className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50">저장</button>
+                    <button onClick={() => setEditId(null)} className="text-[12px] text-[#6B7684]">취소</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[13px] font-medium text-[#191F28] w-28">{item.label}</span>
+                    <span className="text-[13px] text-[#191F28] tabular-nums flex-1 text-right">{fmt(Number(item.amount ?? 0))}원</span>
+                    <span className="text-[11px] text-[#B0B8C1] w-24 text-right">VAT포함 {fmt(Math.round(Number(item.amount ?? 0) * 1.1))}원</span>
+                    <button onClick={() => { setEditId(item.id); setEditLabel(item.label); setEditAmount(String(item.amount ?? 0)); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Pencil className="h-3.5 w-3.5 text-[#6B7684]" />
+                    </button>
+                    <button onClick={() => handleDelete(item.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            {/* 합계 */}
+            {items.length > 0 && (
+              <div className="flex items-center gap-3 px-3 py-2.5 border-t border-[#E5E8EB] mt-2">
+                <span className="text-[13px] font-bold text-[#191F28] w-28">합계</span>
+                <span className="text-[13px] font-bold text-[#191F28] tabular-nums flex-1 text-right">{fmt(total)}원</span>
+                <span className="text-[11px] font-semibold text-[#6B7684] w-24 text-right">VAT포함 {fmt(totalVat)}원</span>
+                <div className="w-[52px]" />
+              </div>
+            )}
+            {/* 항목 추가 */}
+            <div className="flex items-center gap-2 pt-2">
+              <input lang="ko" value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+                placeholder="새 비용 항목명" className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] w-40 focus:outline-none focus:border-[#3182F6]" />
+              <button onClick={handleAdd} disabled={saving || !newLabel.trim()}
+                className="h-9 px-3.5 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50 flex items-center gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> 추가
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ───────────────── Main page ─────────────────
 
 export default function SettingsPage() {
@@ -915,6 +1040,7 @@ export default function SettingsPage() {
       </div>
 
       <ManualSyncSection />
+      <MonthlyCostsSection />
       <WarehouseSection />
       <ChannelSection />
       <CoupangApiSection />

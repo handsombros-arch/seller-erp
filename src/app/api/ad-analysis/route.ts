@@ -9,6 +9,14 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
 
+  // 월 고정비용 합산
+  const { data: monthlyCosts } = await admin
+    .from('monthly_costs')
+    .select('amount');
+  const monthlyTotal = Math.round(
+    (monthlyCosts ?? []).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0) * 1.1
+  ); // VAT 포함
+
   // 로켓그로스 세이버 구독 여부
   const { data: coupangCred } = await admin
     .from('coupang_credentials')
@@ -56,5 +64,5 @@ export async function GET(request: NextRequest) {
   }
 
   // pricesByName의 키 목록 (클라이언트에서 포함 매칭용)
-  return NextResponse.json({ prices, pricesByName, priceNameKeys: Object.keys(pricesByName), rgSaverMonthly });
+  return NextResponse.json({ prices, pricesByName, priceNameKeys: Object.keys(pricesByName), rgSaverMonthly, monthlyTotal });
 }
