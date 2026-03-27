@@ -33,9 +33,26 @@ export async function GET(request: NextRequest) {
   const rgSaverOn = !!(coupangCred as any)?.rg_saver_enabled;
   const rgSaverMonthly = rgSaverOn ? Math.round(99000 * 1.1) : 0; // VAT 포함
 
+  // 반품 할인율
+  const { data: gradeDiscounts } = await admin
+    .from('sku_grade_discounts')
+    .select('sku_id, grade, rate');
+  const discountMap = new Map<string, Record<string, number>>();
+  for (const d of gradeDiscounts ?? []) {
+    if (!discountMap.has(d.sku_id)) discountMap.set(d.sku_id, {});
+    discountMap.get(d.sku_id)![d.grade] = Number(d.rate);
+  }
+
+  // 반품 vendorItemId → sku_id + grade 매핑
+  const { data: returnItems } = await admin
+    .from('rg_return_vendor_items')
+    .select('vendor_item_id, grade, sku_id')
+    .not('grade', 'is', null)
+    .not('sku_id', 'is', null);
+
   const { data: platformSkus } = await admin
     .from('platform_skus')
-    .select('platform_sku_id, price, coupon_discount, commission_rate, rg_fee_inout, rg_fee_shipping, rg_fee_return, rg_fee_restock, rg_fee_send, rg_fee_packing, sku:sku_id(sku_code, cost_price, product:product_id(name))')
+    .select('platform_sku_id, price, coupon_discount, commission_rate, rg_fee_inout, rg_fee_shipping, rg_fee_return, rg_fee_restock, rg_fee_send, rg_fee_packing, sku:sku_id(id, sku_code, cost_price, product:product_id(name))')
     .not('platform_sku_id', 'is', null);
 
   const prices: Record<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number; rg_cost: number }> = {};
@@ -67,6 +84,32 @@ export async function GET(request: NextRequest) {
         pricesByName[pName] = info;
       }
     }
+  }
+
+  // 반품 vendorItemId에 대한 가격 정보 추가 (신상품가 × 할인율)
+  // sku_id → 신상품 platform_sku의 info 매핑
+  const skuIdToInfo = new Map<string, { price: number; cost_price: number; product_name: string; sku_code: string; commission_rate: number; rg_cost: number }>();
+  for (const ps of platformSkus ?? []) {
+    const sku = ps.sku as any;
+    if (sku?.id && ps.price != null) {
+      const existing = skuIdToInfo.get(sku.id);
+      if (!existing) skuIdToInfo.set(sku.id, prices[String(ps.platform_sku_id)] ?? { price: 0, cost_price: 0, product_name: '', sku_code: '', commission_rate: 0, rg_cost: 0 });
+    }
+  }
+
+  for (const ret of returnItems ?? []) {
+    const vid = ret.vendor_item_id;
+    if (prices[vid]) continue; // 이미 등록됨
+    const baseInfo = skuIdToInfo.get(ret.sku_id);
+    if (!baseInfo) continue;
+    const discountRates = discountMap.get(ret.sku_id);
+    const rate = discountRates?.[ret.grade] ?? 0;
+    if (rate <= 0) continue;
+    const discountedPrice = Math.round(baseInfo.price * rate / 100);
+    prices[vid] = {
+      ...baseInfo,
+      price: discountedPrice,
+    };
   }
 
   // pricesByName의 키 목록 (클라이언트에서 포함 매칭용)

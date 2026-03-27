@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
-import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap } from 'lucide-react';
+import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, Download, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 
@@ -597,6 +597,175 @@ function PlatformTab({ skuOptions, channels }: {
   );
 }
 
+// ─── Grade Discount Tab ─────────────────────────────────────────────────────
+
+const GRADES = ['최상', '상', '중', '미개봉'] as const;
+
+function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: string; sku_code: string; product_name: string; option_label: string }[] }) {
+  const [data, setData] = useState<Record<string, Record<string, number>>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [q, setQ] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  const [toast, setToast] = useState('');
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch('/api/sku-grade-discounts');
+    const rows: any[] = res.ok ? await res.json() : [];
+    const map: Record<string, Record<string, number>> = {};
+    for (const r of rows) {
+      if (!map[r.sku_id]) map[r.sku_id] = {};
+      map[r.sku_id][r.grade] = Number(r.rate);
+    }
+    setData(map);
+    setLoading(false);
+    setDirty(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function updateRate(skuId: string, grade: string, value: number) {
+    setData(prev => ({ ...prev, [skuId]: { ...(prev[skuId] ?? {}), [grade]: value } }));
+    setDirty(true);
+  }
+
+  async function handleSaveAll() {
+    setSaving(true);
+    const items: any[] = [];
+    for (const [skuId, grades] of Object.entries(data)) {
+      for (const [grade, rate] of Object.entries(grades)) {
+        if (rate > 0) items.push({ sku_id: skuId, grade, rate });
+      }
+    }
+    await fetch('/api/sku-grade-discounts', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    setSaving(false);
+    setDirty(false);
+    setToast('저장 완료'); setTimeout(() => setToast(''), 2000);
+  }
+
+  const filtered = q
+    ? skuOptions.filter(s => `${s.product_name} ${s.sku_code} ${s.option_label}`.toLowerCase().includes(q.toLowerCase()))
+    : skuOptions;
+
+  // 상품별 그루핑
+  const groups = (() => {
+    const map = new Map<string, typeof skuOptions>();
+    for (const s of filtered) {
+      if (!map.has(s.product_name)) map.set(s.product_name, []);
+      map.get(s.product_name)!.push(s);
+    }
+    return [...map.entries()].map(([name, skus]) => ({ name, skus }));
+  })();
+
+  const inputCls = 'h-9 w-20 px-2 rounded-lg border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 text-[12px] text-center bg-transparent focus:bg-white transition-colors tabular-nums';
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <AlertCircle className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
+        <p className="text-[13px] text-[#3182F6]">
+          <span className="font-semibold">SKU별 등급별 할인율</span>을 입력하세요. 신상품 판매가 대비 비율(%)로 입력합니다. 예: 85 = 신상품가의 85%
+        </p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[#F2F4F6]">
+          <span className="text-[13px] font-semibold text-[#191F28]">반품 재판매 할인율 (%)</span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+              <input lang="ko" value={q} onChange={(e) => setQ(e.target.value)} placeholder="검색"
+                className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-36" />
+            </div>
+            <a href="/api/sku-grade-discounts?format=csv" download
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <Download className="h-3.5 w-3.5" /> CSV
+            </a>
+            <button onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <Upload className="h-3.5 w-3.5" /> 업로드
+            </button>
+            <button onClick={handleSaveAll} disabled={saving || !dirty}
+              className={`h-8 px-4 rounded-xl text-[12px] font-semibold transition-all ${dirty ? 'bg-[#3182F6] text-white hover:bg-[#1B64DA]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                  <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-[#6B7684] min-w-[200px]">상품 / SKU</th>
+                  {GRADES.map(g => (
+                    <th key={g} className="text-center px-3 py-2.5 text-[12px] font-semibold text-[#6B7684] min-w-[90px]">{g}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group) => (
+                  <Fragment key={group.name}>
+                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB]">
+                      <td colSpan={1 + GRADES.length} className="px-5 py-2">
+                        <span className="text-[12px] font-semibold text-[#191F28]">{group.name}</span>
+                        <span className="text-[11px] text-[#B0B8C1] ml-2">{group.skus.length}개</span>
+                      </td>
+                    </tr>
+                    {group.skus.map((sku) => (
+                      <tr key={sku.id} className="border-b border-[#F2F4F6] hover:bg-[#FAFAFA]">
+                        <td className="px-5 py-2.5">
+                          <p className="text-[13px] text-[#191F28]">{sku.option_label || '기본'}</p>
+                          <p className="text-[11px] text-[#B0B8C1] font-mono">{sku.sku_code}</p>
+                        </td>
+                        {GRADES.map(g => (
+                          <td key={g} className="text-center px-2 py-2">
+                            <input type="number" min="0" max="100"
+                              value={data[sku.id]?.[g] ?? ''}
+                              onChange={(e) => updateRate(sku.id, g, Number(e.target.value) || 0)}
+                              placeholder="-"
+                              className={inputCls} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => { setImportOpen(false); load(); }}
+        title="반품 할인율 업로드"
+        templateType="grade-discounts"
+        templateUrl="/api/sku-grade-discounts?format=csv"
+        importUrl="/api/sku-grade-discounts/import"
+        columns={['SKU코드', '최상', '상', '중', '미개봉']}
+        description="SKU코드는 필수입니다. 할인율은 신상품 판매가 대비 비율(%)로 입력합니다."
+      />
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Suppliers Tab ───────────────────────────────────────────────────────────
 
 const COUNTRY_CODES = [
@@ -981,7 +1150,7 @@ function SuppliersTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function MasterPage() {
-  const [tab, setTab] = useState<'master' | 'platform'>('master');
+  const [tab, setTab] = useState<'master' | 'platform' | 'discount' | 'supplier'>('master');
   const [rows, setRows] = useState<SkuRow[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -1267,7 +1436,7 @@ export default function MasterPage() {
             <p className="mt-1 text-[13px] text-[#6B7684]">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
           </div>
           <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl shrink-0">
-            {([['master', '마스터 시트'], ['platform', '플랫폼 상품명']] as const).map(([t, label]) => (
+            {([['master', 'SKU 마스터'], ['platform', '상품 관리'], ['discount', '반품 할인율'], ['supplier', '공급처']] as const).map(([t, label]) => (
               <button key={t} onClick={() => setTab(t)}
                 className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
                 {label}
@@ -1300,10 +1469,16 @@ export default function MasterPage() {
         )}
       </div>
 
-      {/* 플랫폼 상품명 탭 */}
+      {/* 상품 관리 탭 */}
       {tab === 'platform' && <PlatformTab skuOptions={skuOptions} channels={channels} />}
 
-      {/* 마스터 시트 탭 */}
+      {/* 반품 할인율 탭 */}
+      {tab === 'discount' && <GradeDiscountTab skuOptions={skuOptions} />}
+
+      {/* 공급처 탭 */}
+      {tab === 'supplier' && <SuppliersTab />}
+
+      {/* SKU 마스터 탭 */}
       {tab === 'master' && <>
       {/* 안내 */}
       <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
