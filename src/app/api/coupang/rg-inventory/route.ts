@@ -57,8 +57,9 @@ export async function GET(request: NextRequest) {
 
   for (const row of snapshots ?? []) {
     const key = row.vendor_item_id;
-    // MECE: 수동 분류 OR external_sku_id가 platform_sku_id_return에 해당
-    const isManualReturn = returnMap.has(key);
+    // MECE: grade가 지정된 수동 분류만 반품, grade NULL은 신상품
+    const returnInfo = returnMap.get(key);
+    const isManualReturn = !!returnInfo && returnInfo.grade !== null;
     const isAutoReturn = !isManualReturn && !!row.external_sku_id && autoReturnExtIds.has(row.external_sku_id);
     const isReturn = isManualReturn || isAutoReturn;
 
