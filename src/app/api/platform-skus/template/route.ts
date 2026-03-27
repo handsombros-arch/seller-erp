@@ -33,7 +33,7 @@ export async function GET() {
     psMap.set(`${ps.sku_id}|${ps.channel_id}`, ps);
   }
 
-  const lines: string[] = ['SKU코드,채널명,플랫폼상품명,플랫폼상품ID,판매가,쿠폰할인,수수료율(%),RG입출고비,RG배송비,반품회수비,반품재입고비,창고발송비,포장비,상품명(참고),옵션(참고)'];
+  const lines: string[] = ['SKU코드,채널명,플랫폼상품명,플랫폼상품ID,판매가,쿠폰할인,수수료율(%),입출고배송비,반품회수비,반품재입고비,창고발송비,포장비,상품명(참고),옵션(참고)'];
 
   for (const channel of channels ?? []) {
     const isCoupang = (channel as any).type === 'coupang';
@@ -52,8 +52,7 @@ export async function GET() {
         ps?.price != null ? String(ps.price) : '',
         num(ps?.coupon_discount),
         num(ps?.commission_rate),
-        num(ps?.rg_fee_inout),
-        num(ps?.rg_fee_shipping),
+        num((ps?.rg_fee_inout ?? 0) + (ps?.rg_fee_shipping ?? 0) || undefined),
         num(ps?.rg_fee_return),
         num(ps?.rg_fee_restock),
         num(ps?.rg_fee_send),

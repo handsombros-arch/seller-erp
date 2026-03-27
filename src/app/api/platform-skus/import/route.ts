@@ -55,8 +55,7 @@ export async function POST(request: NextRequest) {
     };
     const coupon = num('쿠폰할인');          if (coupon !== undefined) rec.coupon_discount = coupon;
     const comm   = num('수수료율(%)');       if (comm !== undefined)   rec.commission_rate = comm;
-    const fInout = num('RG입출고비');        if (fInout !== undefined) rec.rg_fee_inout = fInout;
-    const fShip  = num('RG배송비');          if (fShip !== undefined)  rec.rg_fee_shipping = fShip;
+    const fFulfill = num('입출고배송비');     if (fFulfill !== undefined) { rec.rg_fee_inout = fFulfill; rec.rg_fee_shipping = 0; }
     const fRet   = num('반품회수비');        if (fRet !== undefined)   rec.rg_fee_return = fRet;
     const fRes   = num('반품재입고비');      if (fRes !== undefined)   rec.rg_fee_restock = fRes;
     const fSend  = num('창고발송비');        if (fSend !== undefined)  rec.rg_fee_send = fSend;

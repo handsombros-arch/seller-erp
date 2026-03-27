@@ -31,8 +31,7 @@ export async function GET(request: NextRequest) {
     if (ps.platform_sku_id && ps.price != null) {
       const sku = ps.sku as any;
       const couponDiscount = Number((ps as any).coupon_discount ?? 0);
-      const rgCostExVat = Number((ps as any).rg_fee_inout ?? 0)
-        + Number((ps as any).rg_fee_shipping ?? 0)
+      const rgCostExVat = Number((ps as any).rg_fee_inout ?? 0) + Number((ps as any).rg_fee_shipping ?? 0) // 입출고배송비
         + (rgSaverOn ? 0 : Number((ps as any).rg_fee_return ?? 0))
         + (rgSaverOn ? 0 : Number((ps as any).rg_fee_restock ?? 0))
         + Number((ps as any).rg_fee_send ?? 0)
