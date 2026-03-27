@@ -1,15 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { coupangFetch } from '@/lib/coupang/auth';
 import { buildSkuMatcher } from '@/lib/inventory/matchSku';
 import { applyOrdersToInventory } from '@/lib/inventory/applyOrders';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+type Channel = 'coupang_rg' | 'coupang' | 'smartstore' | 'toss';
+
 /**
- * 전 채널 주문 동기화 핵심 로직 (직접 호출용)
+ * 수동 동기화 API
+ * POST /api/sync/manual
+ * body: { channels: Channel[] }   (빈 배열이면 전체)
  */
-export async function runSyncOrders(): Promise<Record<string, any>> {
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const requested: Channel[] = Array.isArray(body.channels) && body.channels.length > 0
+    ? body.channels
+    : ['coupang_rg', 'coupang', 'smartstore', 'toss'];
+
   const admin = await createAdminClient();
   const matcher = await buildSkuMatcher(admin);
 
@@ -23,22 +36,21 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
 
   const results: Record<string, any> = {};
 
-  // 쿠팡 credentials 조회 (RG + Wing 공용)
+  // 쿠팡 credentials
   const { data: cred } = await admin
     .from('coupang_credentials')
     .select('access_key, secret_key, vendor_id')
     .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-
   const credentials = cred
     ? { accessKey: cred.access_key, secretKey: cred.secret_key, vendorId: cred.vendor_id }
     : null;
 
-  // ─── 1a. 쿠팡 그로스 주문 ─────────────────────────────────────────
-  try {
-    if (credentials) {
+  // 쿠팡 RG
+  if (requested.includes('coupang_rg')) {
+    try {
+      if (!credentials) throw new Error('쿠팡 API 키 미설정');
       const rgPath = `/v2/providers/rg_open_api/apis/api/v1/vendors/${credentials.vendorId}/rg/orders`;
-      let rgSynced = 0;
-
+      let synced = 0;
       for (let i = 3; i >= 0; i--) {
         const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
         let nextToken: string | undefined;
@@ -48,15 +60,12 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
           const json = await coupangFetch(rgPath, params, credentials);
           const items: any[] = Array.isArray(json?.data) ? json.data : [];
           nextToken = json?.nextToken || undefined;
-
           const rows = items.flatMap((order: any) => {
             const orderIso = new Date(Number(order.paidAt)).toISOString();
-            const orderDate = orderIso.slice(0, 10);
-            const orderTime = orderIso.slice(11, 19);
             return (order.orderItems ?? []).map((item: any) => {
               const vid = String(item.vendorItemId ?? '');
               return {
-                channel: 'coupang_rg', order_date: orderDate, order_time: orderTime,
+                channel: 'coupang_rg', order_date: orderIso.slice(0, 10), order_time: orderIso.slice(11, 19),
                 order_number: `${order.orderId}-${vid}`,
                 product_name: item.productName ?? '', option_name: null,
                 quantity: Number(item.salesQuantity ?? 1),
@@ -67,29 +76,27 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
               };
             });
           });
-
           if (rows.length > 0) {
             const { data: ins } = await admin.from('channel_orders')
               .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: true }).select('id');
-            rgSynced += ins?.length ?? 0;
+            synced += ins?.length ?? 0;
           }
           await sleep(300);
         } while (nextToken);
         await sleep(400);
       }
-      results.coupang_rg = { synced: rgSynced };
-    } else {
-      results.coupang_rg = { skipped: 'no credentials' };
+      results.coupang_rg = { synced };
+    } catch (err: any) {
+      results.coupang_rg = { error: err.message };
     }
-  } catch (err: any) {
-    results.coupang_rg = { error: err.message };
   }
 
-  // ─── 1b. 쿠팡 Wing 직배 주문 ──────────────────────────────────────
-  try {
-    if (credentials) {
+  // 쿠팡 Wing
+  if (requested.includes('coupang')) {
+    try {
+      if (!credentials) throw new Error('쿠팡 API 키 미설정');
       const wingPath = `/v2/providers/openapi/apis/api/v4/vendors/${credentials.vendorId}/ordersheets`;
-      let wingSynced = 0;
+      let synced = 0;
       for (const status of ['ACCEPT', 'INSTRUCT', 'DELIVERING', 'FINAL_DELIVERY']) {
         let wToken: string | undefined;
         do {
@@ -100,12 +107,11 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
           wToken = json?.nextToken || undefined;
           const rows = items.flatMap((order: any) => {
             const orderRaw = order.orderedAt ?? order.paidAt ?? from3;
-            const orderDate = orderRaw.substring(0, 10);
-            const orderTime = orderRaw.length > 10 ? orderRaw.substring(11, 19) : null;
             const addr = [order.receiver?.addr1, order.receiver?.addr2].filter(Boolean).join(' ').trim();
             const isJeju = /제주|서귀포|울릉|도서산간/.test(addr);
             return (order.orderItems ?? []).map((item: any) => ({
-              channel: 'coupang', order_date: orderDate, order_time: orderTime,
+              channel: 'coupang', order_date: orderRaw.substring(0, 10),
+              order_time: orderRaw.length > 10 ? orderRaw.substring(11, 19) : null,
               order_number: `${order.shipmentBoxId}-${item.vendorItemId}`,
               product_name: item.sellerProductName ?? item.vendorItemName ?? '',
               option_name: item.sellerProductItemName ?? null,
@@ -120,77 +126,32 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
           if (rows.length > 0) {
             const { data: ins } = await admin.from('channel_orders')
               .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: true }).select('id');
-            wingSynced += ins?.length ?? 0;
+            synced += ins?.length ?? 0;
           }
           await sleep(300);
         } while (wToken);
         await sleep(300);
       }
-      results.coupang_wing = { synced: wingSynced };
-    } else {
-      results.coupang_wing = { skipped: 'no credentials' };
+      results.coupang = { synced };
+    } catch (err: any) {
+      results.coupang = { error: err.message };
     }
-  } catch (err: any) {
-    results.coupang_wing = { error: err.message };
   }
 
-  // ─── 1c. Wing 반품/취소 동기화 ────────────────────────────────────
-  try {
-    if (credentials) {
-      let wingReturns = 0;
-      const returnPath = `/v2/providers/openapi/apis/api/v6/vendors/${credentials.vendorId}/returnRequests`;
-      for (const cancelType of ['RETURN', 'CANCEL'] as const) {
-        try {
-          const rp: Record<string, string> = { searchType: 'timeFrame', createdAtFrom: `${from3}T00:00`, createdAtTo: `${today}T23:59` };
-          if (cancelType === 'CANCEL') rp.cancelType = 'CANCEL';
-          const rj = await coupangFetch(returnPath, rp, credentials);
-          for (const ret of rj?.data ?? []) {
-            for (const item of ret.returnItems ?? []) {
-              const vid = item.vendorItemId ? String(item.vendorItemId) : null;
-              const shipKey = item.shipmentBoxId ? `${item.shipmentBoxId}-${vid}` : null;
-              if (shipKey) {
-                const { data: ex } = await admin.from('channel_orders').select('id').eq('order_number', shipKey).eq('channel', 'coupang').limit(1).maybeSingle();
-                if (ex) await admin.from('channel_orders').update({ claim_type: cancelType, claim_status: ret.receiptStatus, claim_date: ret.createdAt?.substring(0, 10) }).eq('id', ex.id);
-              }
-              await admin.from('coupang_returns').upsert({
-                return_id: ret.receiptId, order_id: ret.orderId ?? null,
-                sku_id: vid ? (matcher.byVendorItemId(vid) ?? null) : null,
-                vendor_item_id: vid ? Number(vid) : null,
-                product_name: item.sellerProductName ?? '', option_name: item.vendorItemName ?? null,
-                quantity: Number(item.cancelCount ?? 1),
-                return_reason: ret.reasonCodeText ?? ret.cancelReason ?? null,
-                return_type: cancelType, status: ret.receiptStatus,
-                returned_at: ret.createdAt?.substring(0, 10) ?? today,
-              }, { onConflict: 'return_id', ignoreDuplicates: false });
-              wingReturns++;
-            }
-          }
-        } catch { /* 개별 cancelType 에러 — non-critical */ }
-        await sleep(400);
-      }
-      results.coupang_wing_returns = { synced: wingReturns };
-    }
-  } catch (err: any) {
-    results.coupang_wing_returns = { error: err.message };
-  }
-
-  // ─── 2. 네이버 스마트스토어 ───────────────────────────────────────
-  try {
-    const { data: naverCred } = await admin
-      .from('naver_credentials')
-      .select('client_id, client_secret')
-      .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-
-    if (naverCred) {
+  // 네이버 스마트스토어
+  if (requested.includes('smartstore')) {
+    try {
+      const { data: naverCred } = await admin
+        .from('naver_credentials')
+        .select('client_id, client_secret')
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (!naverCred) throw new Error('네이버 API 키 미설정');
       const { getNaverToken, naverFetch } = await import('@/lib/naver/auth');
       const token = await getNaverToken({ clientId: naverCred.client_id, clientSecret: naverCred.client_secret });
-      let naverSynced = 0;
-
-      // 3일간 하루씩
+      let synced = 0;
       for (let i = 3; i >= 0; i--) {
         const dayStart = new Date(Date.now() - i * 86400000);
         const dayEnd = new Date(dayStart.getTime() + 86400000 - 1);
-
         let page = 1;
         const allIds: string[] = [];
         while (true) {
@@ -204,7 +165,6 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
           page++;
           await sleep(500);
         }
-
         for (let j = 0; j < allIds.length; j += 300) {
           const batch = allIds.slice(j, j + 300);
           const queryJson = await naverFetch('/external/v1/pay-order/seller/product-orders/query', token, {
@@ -236,31 +196,28 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
           if (rows.length > 0) {
             const { data: ins } = await admin.from('channel_orders')
               .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: true }).select('id');
-            naverSynced += ins?.length ?? 0;
+            synced += ins?.length ?? 0;
           }
         }
         await sleep(600);
       }
-      results.smartstore = { synced: naverSynced };
-    } else {
-      results.smartstore = { skipped: 'no credentials' };
+      results.smartstore = { synced };
+    } catch (err: any) {
+      results.smartstore = { error: err.message };
     }
-  } catch (err: any) {
-    results.smartstore = { error: err.message };
   }
 
-  // ─── 3. 토스 ──────────────────────────────────────────────────────
-  try {
-    const { data: tossCred } = await admin
-      .from('toss_credentials')
-      .select('access_key, secret_key')
-      .order('updated_at', { ascending: false }).limit(1).maybeSingle();
-
-    if (tossCred) {
+  // 토스
+  if (requested.includes('toss')) {
+    try {
+      const { data: tossCred } = await admin
+        .from('toss_credentials')
+        .select('access_key, secret_key')
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (!tossCred) throw new Error('토스 API 키 미설정');
       const { getTossToken, tossFetch } = await import('@/lib/toss/auth');
       const token = await getTossToken({ accessKey: tossCred.access_key, secretKey: tossCred.secret_key });
-      let tossSynced = 0;
-
+      let synced = 0;
       let nextCursor: string | null = null;
       do {
         const params = new URLSearchParams({ startDate: from3, endDate: today, limit: '50' });
@@ -268,7 +225,6 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
         const json = await tossFetch(`/api/v3/shopping-fep/orders/v2?${params}`, token);
         const items: any[] = json?.success?.results ?? [];
         nextCursor = json?.success?.nextCursor ?? null;
-
         const rows = items.map((item: any) => {
           const skuCode = item.productManagementCode ?? item.productItemManagementCode ?? '';
           const addr = [item.address, item.detailAddress].filter(Boolean).join(' ').trim();
@@ -288,79 +244,26 @@ export async function runSyncOrders(): Promise<Record<string, any>> {
             sku_id: matcher.byCode(skuCode) ?? matcher.byNameOption(item.productName ?? '', item.optionName) ?? null,
           };
         });
-
         if (rows.length > 0) {
           const { data: ins } = await admin.from('channel_orders')
             .upsert(rows, { onConflict: 'order_number,channel', ignoreDuplicates: true }).select('id');
-          tossSynced += ins?.length ?? 0;
+          synced += ins?.length ?? 0;
         }
         await sleep(300);
       } while (nextCursor);
-
-      // 토스 클레임 (반품/교환) 동기화
-      let tossClaims = 0;
-      // 전체 클레임 조회 (type/status 필터 없이)
-      let claimNext: string | null = null;
-      do {
-        const cp = new URLSearchParams({ size: '100' });
-        if (claimNext) cp.set('nextToken', claimNext);
-        const cj = await tossFetch(`/api/v3/shopping-fep/claims?${cp}`, token);
-        const citems: any[] = cj?.success?.items ?? [];
-        claimNext = cj?.success?.hasNext ? (cj?.success?.nextToken ?? null) : null;
-        for (const c of citems) {
-          const opId = String(c.order?.orderProductId ?? '');
-          const cDate = c.requestedDt ? c.requestedDt.substring(0, 10) : null;
-          const cType = c.type ?? 'RETURN';
-          const cStatus = `${cType}_${c.status ?? 'REQUESTED'}`;
-          if (opId) {
-            const { data: ex } = await admin.from('channel_orders').select('id').eq('order_number', opId).eq('channel', 'toss').limit(1).maybeSingle();
-            if (ex) {
-              await admin.from('channel_orders').update({ claim_status: cStatus, claim_type: cType, claim_date: cDate }).eq('id', ex.id);
-            } else {
-              await admin.from('channel_orders').upsert({
-                channel: 'toss', order_date: cDate ?? today, order_number: opId,
-                product_name: c.product?.name ?? '', option_name: c.product?.optionName ?? null,
-                quantity: c.product?.quantity ?? 1, order_status: cStatus,
-                claim_status: cStatus, claim_type: cType, claim_date: cDate,
-                shipping_cost: 0, orig_shipping: 0, jeju_surcharge: false,
-                sku_id: matcher.byNameOption(c.product?.name ?? '', c.product?.optionName) ?? null,
-              }, { onConflict: 'order_number,channel', ignoreDuplicates: false });
-            }
-            tossClaims++;
-          }
-        }
-        await sleep(300);
-      } while (claimNext);
-
-      results.toss = { synced: tossSynced, claims: tossClaims };
-    } else {
-      results.toss = { skipped: 'no credentials' };
+      results.toss = { synced };
+    } catch (err: any) {
+      results.toss = { error: err.message };
     }
-  } catch (err: any) {
-    results.toss = { error: err.message };
   }
 
-  // ─── 4. 재고 차감/복구 ────────────────────────────────────────────
+  // 재고 차감/복구
   try {
-    // cron은 system user — userId로 'system' 사용
     const deduct = await applyOrdersToInventory(admin, '00000000-0000-0000-0000-000000000000');
     results.inventory = { deducted: deduct.applied, restored: deduct.restored };
   } catch (err: any) {
     results.inventory = { error: err.message };
   }
 
-  console.log('[cron/sync-orders]', JSON.stringify(results));
-  return { ok: true, ...results };
-}
-
-/**
- * HTTP 엔드포인트 (수동 트리거용)
- */
-export async function GET(request: NextRequest) {
-  const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const result = await runSyncOrders();
-  return NextResponse.json(result);
+  return NextResponse.json({ ok: true, ...results });
 }

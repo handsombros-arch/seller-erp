@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -797,6 +797,113 @@ function DataResetSection() {
   );
 }
 
+// ───────────────── Manual Sync section ─────────────────
+
+const SYNC_CHANNELS = [
+  { key: 'coupang_rg', label: '쿠팡 그로스', color: 'bg-red-100 text-red-700' },
+  { key: 'coupang', label: '쿠팡 Wing', color: 'bg-red-100 text-red-700' },
+  { key: 'smartstore', label: '스마트스토어', color: 'bg-green-100 text-green-700' },
+  { key: 'toss', label: '토스', color: 'bg-blue-100 text-blue-700' },
+] as const;
+
+function ManualSyncSection() {
+  const [syncing, setSyncing] = useState<string | null>(null); // 'all' | channel key | null
+  const [results, setResults] = useState<Record<string, any> | null>(null);
+
+  const runSync = async (channels: string[]) => {
+    const key = channels.length === 4 ? 'all' : channels[0];
+    setSyncing(key);
+    setResults(null);
+    try {
+      const res = await fetch('/api/sync/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels }),
+      });
+      const json = await res.json();
+      setResults(json);
+    } catch (err: any) {
+      setResults({ error: err.message });
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const isDisabled = syncing !== null;
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <RefreshCw className="w-5 h-5 text-[#333D4B]" />
+        <h2 className="text-[15px] font-bold text-[#191F28]">수동 동기화</h2>
+      </div>
+      <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+        <p className="text-[12px] text-[#6B7684] mb-4">
+          자동 동기화(매일 08:00 KST)가 실패했을 때 수동으로 실행합니다. 최근 3일 주문을 동기화합니다.
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            disabled={isDisabled}
+            onClick={() => runSync(['coupang_rg', 'coupang', 'smartstore', 'toss'])}
+            className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-white bg-[#333D4B] rounded-xl hover:bg-[#191F28] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {syncing === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            전체 동기화
+          </button>
+
+          {SYNC_CHANNELS.map((ch) => (
+            <button
+              key={ch.key}
+              disabled={isDisabled}
+              onClick={() => runSync([ch.key])}
+              className={`flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-xl border border-[#E5E8EB] hover:bg-[#F9FAFB] disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+            >
+              {syncing === ch.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {ch.label}
+            </button>
+          ))}
+        </div>
+
+        {results && (
+          <div className="space-y-1.5 p-3 bg-[#F9FAFB] rounded-xl text-[12px]">
+            {results.error && (
+              <div className="flex items-center gap-1.5 text-red-600">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {results.error}
+              </div>
+            )}
+            {SYNC_CHANNELS.map((ch) => {
+              const r = results[ch.key];
+              if (!r) return null;
+              const ok = !r.error;
+              return (
+                <div key={ch.key} className="flex items-center gap-2">
+                  {ok ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  )}
+                  <span className={`font-medium ${ch.color} px-1.5 py-0.5 rounded`}>{ch.label}</span>
+                  <span className="text-[#4E5968]">
+                    {ok ? `${r.synced ?? 0}건 동기화` : r.error}
+                  </span>
+                </div>
+              );
+            })}
+            {results.inventory && (
+              <div className="flex items-center gap-2 text-[#4E5968]">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                <span>재고 차감 {results.inventory.deducted ?? 0}건 / 복구 {results.inventory.restored ?? 0}건</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ───────────────── Main page ─────────────────
 
 export default function SettingsPage() {
@@ -807,6 +914,7 @@ export default function SettingsPage() {
         <p className="text-[13px] text-[#6B7684] mt-0.5">창고, 채널, 계정을 관리합니다</p>
       </div>
 
+      <ManualSyncSection />
       <WarehouseSection />
       <ChannelSection />
       <CoupangApiSection />

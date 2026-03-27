@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       '',
       `*주문 동기화*`,
       `  쿠팡 그로스: ${syncOrders.coupang_rg?.synced ?? 0}건`,
-      `  쿠팡 Wing: ${syncOrders.coupang_wing?.synced ?? 0}건`,
+      `  쿠팡 Wing: ${syncOrders.coupang_wing?.synced ?? 0}건 (반품: ${syncOrders.coupang_wing_returns?.synced ?? 0}건)`,
       `  스마트스토어: ${syncOrders.smartstore?.synced ?? 0}건`,
       `  토스: ${syncOrders.toss?.synced ?? 0}건`,
       `  재고 차감: ${syncOrders.inventory?.deducted ?? 0}건 · 복구: ${syncOrders.inventory?.restored ?? 0}건`,
@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
     const errors: string[] = [];
     if (syncOrders.coupang_rg?.error) errors.push(`쿠팡RG: ${syncOrders.coupang_rg.error}`);
     if (syncOrders.coupang_wing?.error) errors.push(`쿠팡Wing: ${syncOrders.coupang_wing.error}`);
+    if (syncOrders.coupang_wing_returns?.error) errors.push(`쿠팡반품: ${syncOrders.coupang_wing_returns.error}`);
     if (syncOrders.smartstore?.error) errors.push(`네이버: ${syncOrders.smartstore.error}`);
     if (syncOrders.toss?.error) errors.push(`토스: ${syncOrders.toss.error}`);
     if (results.syncRgInventory?.error) errors.push(`RG재고: ${results.syncRgInventory.error}`);

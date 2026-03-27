@@ -45,26 +45,17 @@ export function buildCoupangAuth(
   return { authorization, url };
 }
 
-export async function coupangFetch(
-  path: string,
-  params: Record<string, string>,
-  creds: CoupangCredentials
+async function coupangFetchOnce(
+  url: string,
+  authorization: string,
+  vendorId: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<any> {
-  const { authorization, url } = buildCoupangAuth('GET', path, params, creds);
-
-  const proxyUrl = process.env.COUPANG_PROXY_URL;
-  const proxySecret = process.env.COUPANG_PROXY_SECRET;
-
-  const fetchUrl = proxyUrl ? proxyUrl : url;
-  const extraHeaders: Record<string, string> = proxyUrl
-    ? { 'X-Target-URL': url, ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) }
-    : {};
-
-  const res = await fetch(fetchUrl, {
+  const res = await fetch(url, {
     headers: {
       Authorization: authorization,
       'Content-Type': 'application/json;charset=UTF-8',
-      'X-Requested-By': creds.vendorId,
+      'X-Requested-By': vendorId,
       ...extraHeaders,
     },
     cache: 'no-store',
@@ -76,7 +67,6 @@ export async function coupangFetch(
     throw new Error(`Coupang API ${res.status}: ${text.slice(0, 400)}`);
   }
 
-  // HTML 응답 감지 (Fly.io 프록시 또는 게이트웨이 에러 페이지)
   if (text.trimStart().startsWith('<')) {
     throw new Error(`Coupang API: HTML 응답 수신 (프록시/게이트웨이 오류) - ${text.slice(0, 200)}`);
   }
@@ -87,10 +77,65 @@ export async function coupangFetch(
   } catch {
     throw new Error(`Coupang API: JSON 파싱 실패 - ${text.slice(0, 200)}`);
   }
-  // Coupang API는 code: 200 (숫자) 또는 "200" (문자열) 모두 사용
   if (json.code && String(json.code) !== '200') {
     throw new Error(`Coupang API 오류: ${json.message ?? json.code}`);
   }
 
   return json;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 쿠팡 API 호출 (리트라이 3회 + 프록시 실패 시 직접 호출 폴백)
+ */
+export async function coupangFetch(
+  path: string,
+  params: Record<string, string>,
+  creds: CoupangCredentials
+): Promise<any> {
+  const { authorization, url } = buildCoupangAuth('GET', path, params, creds);
+
+  const proxyUrl = process.env.COUPANG_PROXY_URL;
+  const proxySecret = process.env.COUPANG_PROXY_SECRET;
+  const useProxy = !!proxyUrl;
+
+  const MAX_RETRIES = 3;
+  const BACKOFF = [1000, 2000, 4000];
+
+  // 프록시 먼저 시도, 실패하면 직접 호출 폴백
+  const strategies: Array<{ label: string; fetchUrl: string; extra: Record<string, string> }> = [];
+  if (useProxy) {
+    strategies.push({
+      label: 'proxy',
+      fetchUrl: proxyUrl!,
+      extra: { 'X-Target-URL': url, ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) },
+    });
+  }
+  strategies.push({ label: 'direct', fetchUrl: url, extra: {} });
+
+  let lastError: Error | null = null;
+
+  for (const strategy of strategies) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await coupangFetchOnce(strategy.fetchUrl, authorization, creds.vendorId, strategy.extra);
+      } catch (err: any) {
+        lastError = err;
+        const status = err.message?.match(/Coupang API (\d+)/)?.[1];
+        // 인증 오류(401/403)는 리트라이 무의미 → 즉시 다음 전략
+        if (status === '401' || status === '403') break;
+        // 마지막 시도가 아니면 백오프 후 재시도
+        if (attempt < MAX_RETRIES - 1) {
+          await sleep(BACKOFF[attempt]);
+        }
+      }
+    }
+    // 프록시 실패 → 직접 호출 폴백 로그
+    if (strategy.label === 'proxy' && strategies.length > 1) {
+      console.warn(`[coupangFetch] 프록시 실패, 직접 호출로 폴백: ${lastError?.message?.slice(0, 100)}`);
+    }
+  }
+
+  throw lastError ?? new Error('Coupang API: 알 수 없는 오류');
 }
