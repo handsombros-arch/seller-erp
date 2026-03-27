@@ -9,13 +9,19 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
 
-  // 월 고정비용 합산
+  // 월 고정비용 합산 (항목별 VAT 적용)
   const { data: monthlyCosts } = await admin
     .from('monthly_costs')
-    .select('amount');
-  const monthlyTotal = Math.round(
-    (monthlyCosts ?? []).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0) * 1.1
-  ); // VAT 포함
+    .select('id, amount, vat_applicable, parent_id');
+  // parent가 있는 항목(세부)만 합산, parent가 없고 children도 없는 항목도 합산
+  const allCosts = monthlyCosts ?? [];
+  const parentIds = new Set(allCosts.filter((r: any) => r.parent_id).map((r: any) => r.parent_id));
+  const monthlyTotal = allCosts.reduce((s: number, r: any) => {
+    // 세부항목이 있는 상위 항목은 건너뜀 (세부항목에서 합산)
+    if (!r.parent_id && parentIds.has(r.id)) return s;
+    const amt = Number(r.amount ?? 0);
+    return s + (r.vat_applicable ? Math.round(amt * 1.1) : amt);
+  }, 0);
 
   // 로켓그로스 세이버 구독 여부
   const { data: coupangCred } = await admin

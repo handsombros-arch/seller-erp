@@ -906,50 +906,72 @@ function ManualSyncSection() {
 
 // ───────────────── Monthly Costs ─────────────────
 
-interface MonthlyCost { id: string; label: string; amount: number; sort_order: number; }
+interface MCost { id: string; label: string; amount: number; vat_applicable: boolean; parent_id: string | null; sort_order: number; }
+interface Snapshot { year_month: string; cost_id: string; amount: number; cost: { label: string; parent_id: string | null; vat_applicable: boolean } | null; }
 
 function MonthlyCostsSection() {
-  const [items, setItems] = useState<MonthlyCost[]>([]);
+  const [items, setItems] = useState<MCost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newLabel, setNewLabel] = useState('');
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editAmount, setEditAmount] = useState('');
-  const [editLabel, setEditLabel] = useState('');
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newParent, setNewParent] = useState('');
+  const [tab, setTab] = useState<'edit' | 'history'>('edit');
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapLoading, setSnapLoading] = useState(false);
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
+  const now = new Date();
+  const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   async function load() {
     setLoading(true);
     const res = await fetch('/api/monthly-costs');
-    const data = res.ok ? await res.json() : [];
-    setItems(data);
+    setItems(res.ok ? await res.json() : []);
     setLoading(false);
+    setDirty(false);
+  }
+
+  async function loadHistory() {
+    setSnapLoading(true);
+    const res = await fetch('/api/monthly-costs?history=all');
+    setSnapshots(res.ok ? await res.json() : []);
+    setSnapLoading(false);
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (tab === 'history') loadHistory(); }, [tab]);
 
-  async function handleSave(item: MonthlyCost) {
-    setSaving(true);
-    await fetch('/api/monthly-costs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id, label: editLabel || item.label, amount: Number(editAmount.replace(/,/g, '')) || 0 }),
-    });
-    setEditId(null);
-    await load();
-    setSaving(false);
+  function updateItem(id: string, field: keyof MCost, value: any) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+    setDirty(true);
   }
 
-  async function handleAdd() {
-    if (!newLabel.trim()) return;
+  async function handleSaveAll() {
     setSaving(true);
+    await fetch('/api/monthly-costs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    setDirty(false);
+    setSaving(false);
+    setToast('저장 완료'); setTimeout(() => setToast(''), 2000);
+  }
+
+  async function handleAdd(parentId?: string) {
+    const label = parentId ? newLabel : newLabel;
+    if (!label.trim()) return;
     await fetch('/api/monthly-costs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: newLabel.trim(), amount: 0 }),
+      body: JSON.stringify({ label: label.trim(), amount: 0, parent_id: parentId || null }),
     });
     setNewLabel('');
+    setNewParent('');
     await load();
-    setSaving(false);
   }
 
   async function handleDelete(id: string) {
@@ -957,74 +979,273 @@ function MonthlyCostsSection() {
     await load();
   }
 
-  const total = items.reduce((s, i) => s + Number(i.amount ?? 0), 0);
-  const totalVat = Math.round(total * 1.1);
-  const fmt = (n: number) => n.toLocaleString('ko-KR');
+  async function handleSnapshot() {
+    setSnapshotSaving(true);
+    await fetch('/api/monthly-costs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'snapshot', year_month: curYm }),
+    });
+    setSnapshotSaving(false);
+    setToast(`${curYm} 스냅샷 저장 완료`); setTimeout(() => setToast(''), 2000);
+    if (tab === 'history') loadHistory();
+  }
+
+  const parents = items.filter(i => !i.parent_id);
+  const childrenOf = (pid: string) => items.filter(i => i.parent_id === pid);
+
+  const calcAmount = (item: MCost): number => {
+    const children = childrenOf(item.id);
+    if (children.length > 0) return children.reduce((s, c) => s + Number(c.amount ?? 0), 0);
+    return Number(item.amount ?? 0);
+  };
+
+  const calcVat = (item: MCost): number => {
+    const children = childrenOf(item.id);
+    if (children.length > 0) return children.reduce((s, c) => s + (c.vat_applicable ? Math.round(Number(c.amount ?? 0) * 1.1) : Number(c.amount ?? 0)), 0);
+    return item.vat_applicable ? Math.round(Number(item.amount ?? 0) * 1.1) : Number(item.amount ?? 0);
+  };
+
+  const totalExVat = parents.reduce((s, p) => s + calcAmount(p), 0);
+  const totalInclVat = parents.reduce((s, p) => s + calcVat(p), 0);
+
+  // History
+  const historyMonths = [...new Set(snapshots.map(s => s.year_month))].sort().reverse();
+
+  const inputCls = 'h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] transition-colors';
 
   return (
     <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#F2F4F6]">
-        <h3 className="text-[15px] font-bold text-[#191F28]">월 고정비용</h3>
-        <p className="text-[12px] text-[#6B7684] mt-0.5">순익 계산에 반영됩니다. VAT 제외 금액을 입력하세요.</p>
+      <div className="px-5 py-4 border-b border-[#F2F4F6] flex items-center justify-between">
+        <div>
+          <h3 className="text-[15px] font-bold text-[#191F28]">월 고정비용</h3>
+          <p className="text-[12px] text-[#6B7684] mt-0.5">순익 계산에 반영됩니다. VAT 제외 금액 기준.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+            <button onClick={() => setTab('edit')}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'edit' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              편집
+            </button>
+            <button onClick={() => setTab('history')}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'history' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              월별 추이
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="px-5 py-4 space-y-2">
-        {loading ? (
-          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
-        ) : (
-          <>
-            {items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 bg-[#F8F9FB] rounded-xl group">
-                {editId === item.id ? (
-                  <>
-                    <input lang="ko" value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
-                      className="h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] w-28 focus:outline-none focus:border-[#3182F6]" />
-                    <input type="number" min="0" value={editAmount} onChange={(e) => setEditAmount(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSave(item); }}
-                      className="h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] w-32 focus:outline-none focus:border-[#3182F6] text-right" />
-                    <span className="text-[11px] text-[#B0B8C1]">원</span>
-                    <button onClick={() => handleSave(item)} disabled={saving}
-                      className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50">저장</button>
-                    <button onClick={() => setEditId(null)} className="text-[12px] text-[#6B7684]">취소</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-[13px] font-medium text-[#191F28] w-28">{item.label}</span>
-                    <span className="text-[13px] text-[#191F28] tabular-nums flex-1 text-right">{fmt(Number(item.amount ?? 0))}원</span>
-                    <span className="text-[11px] text-[#B0B8C1] w-24 text-right">VAT포함 {fmt(Math.round(Number(item.amount ?? 0) * 1.1))}원</span>
-                    <button onClick={() => { setEditId(item.id); setEditLabel(item.label); setEditAmount(String(item.amount ?? 0)); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Pencil className="h-3.5 w-3.5 text-[#6B7684]" />
-                    </button>
-                    <button onClick={() => handleDelete(item.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                    </button>
-                  </>
-                )}
+
+      {tab === 'edit' ? (
+        <div className="px-5 py-4 space-y-1">
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+          ) : (
+            <>
+              {/* 헤더 */}
+              <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[#B0B8C1]">
+                <span className="w-32">항목</span>
+                <span className="w-28 text-right">금액</span>
+                <span className="w-16 text-center">VAT</span>
+                <span className="w-24 text-right">실비용</span>
+                <span className="w-8" />
               </div>
-            ))}
-            {/* 합계 */}
-            {items.length > 0 && (
-              <div className="flex items-center gap-3 px-3 py-2.5 border-t border-[#E5E8EB] mt-2">
-                <span className="text-[13px] font-bold text-[#191F28] w-28">합계</span>
-                <span className="text-[13px] font-bold text-[#191F28] tabular-nums flex-1 text-right">{fmt(total)}원</span>
-                <span className="text-[11px] font-semibold text-[#6B7684] w-24 text-right">VAT포함 {fmt(totalVat)}원</span>
-                <div className="w-[52px]" />
+
+              {parents.map((parent) => {
+                const children = childrenOf(parent.id);
+                const hasChildren = children.length > 0;
+                const amt = calcAmount(parent);
+                const vatAmt = calcVat(parent);
+
+                return (
+                  <div key={parent.id}>
+                    {/* 상위 항목 */}
+                    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl ${hasChildren ? 'bg-[#F8F9FB]' : 'bg-[#F8F9FB]'}`}>
+                      <input lang="ko" value={parent.label} onChange={(e) => updateItem(parent.id, 'label', e.target.value)}
+                        className={`${inputCls} w-32 font-medium bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                      {hasChildren ? (
+                        <span className="w-28 text-[13px] tabular-nums text-right text-[#6B7684]">{fmt(amt)}원</span>
+                      ) : (
+                        <input type="number" min="0" value={parent.amount || ''} onChange={(e) => updateItem(parent.id, 'amount', Number(e.target.value) || 0)}
+                          placeholder="0" className={`${inputCls} w-28 text-right bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
+                      )}
+                      <button onClick={() => updateItem(parent.id, 'vat_applicable', !parent.vat_applicable)}
+                        className={`w-16 text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
+                          hasChildren ? 'invisible' : parent.vat_applicable
+                            ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
+                            : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                        }`}>
+                        {parent.vat_applicable ? '과세 ✓' : '비과세'}
+                      </button>
+                      <span className="w-24 text-[12px] tabular-nums text-right text-[#6B7684]">{fmt(vatAmt)}원</span>
+                      <button onClick={() => handleDelete(parent.id)} className="w-8 flex justify-center opacity-0 hover:opacity-100 group-hover:opacity-100">
+                        <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />
+                      </button>
+                    </div>
+
+                    {/* 세부항목 */}
+                    {children.map((child) => (
+                      <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB]">
+                        <input lang="ko" value={child.label} onChange={(e) => updateItem(child.id, 'label', e.target.value)}
+                          className={`${inputCls} w-32 text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                        <input type="number" min="0" value={child.amount || ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value) || 0)}
+                          placeholder="0" className={`${inputCls} w-28 text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
+                        <button onClick={() => updateItem(child.id, 'vat_applicable', !child.vat_applicable)}
+                          className={`w-16 text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
+                            child.vat_applicable
+                              ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
+                              : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                          }`}>
+                          {child.vat_applicable ? '과세 ✓' : '비과세'}
+                        </button>
+                        <span className="w-24 text-[11px] tabular-nums text-right text-[#B0B8C1]">
+                          {fmt(child.vat_applicable ? Math.round(Number(child.amount ?? 0) * 1.1) : Number(child.amount ?? 0))}원
+                        </span>
+                        <button onClick={() => handleDelete(child.id)} className="w-8 flex justify-center">
+                          <Trash2 className="h-3 w-3 text-red-300 hover:text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* 세부항목 추가 */}
+                    {newParent === parent.id ? (
+                      <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-[#E5E8EB]">
+                        <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(parent.id); if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
+                          placeholder="세부항목명" className={`${inputCls} w-32 text-[12px]`} />
+                        <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-[#3182F6] font-medium hover:underline">추가</button>
+                        <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setNewParent(parent.id); setNewLabel(''); }}
+                        className="ml-6 pl-3 py-1 text-[11px] text-[#3182F6] hover:underline border-l-2 border-transparent">
+                        + 세부항목
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* 합계 */}
+              <div className="flex items-center gap-2 px-3 py-3 border-t border-[#E5E8EB] mt-3">
+                <span className="w-32 text-[13px] font-bold text-[#191F28]">합계</span>
+                <span className="w-28 text-[13px] font-bold text-[#191F28] tabular-nums text-right">{fmt(totalExVat)}원</span>
+                <span className="w-16" />
+                <span className="w-24 text-[12px] font-bold text-[#191F28] tabular-nums text-right">{fmt(totalInclVat)}원</span>
+                <span className="w-8" />
               </div>
-            )}
-            {/* 항목 추가 */}
-            <div className="flex items-center gap-2 pt-2">
-              <input lang="ko" value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-                placeholder="새 비용 항목명" className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] w-40 focus:outline-none focus:border-[#3182F6]" />
-              <button onClick={handleAdd} disabled={saving || !newLabel.trim()}
-                className="h-9 px-3.5 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50 flex items-center gap-1.5">
-                <Plus className="h-3.5 w-3.5" /> 추가
-              </button>
+
+              {/* 하단 액션 */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#F2F4F6]">
+                <div className="flex items-center gap-2">
+                  {newParent === '' && newParent !== '__root__' ? (
+                    <button onClick={() => { setNewParent('__root__'); setNewLabel(''); }}
+                      className="h-9 px-3.5 rounded-lg border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] flex items-center gap-1.5">
+                      <Plus className="h-3.5 w-3.5" /> 항목 추가
+                    </button>
+                  ) : newParent === '__root__' ? (
+                    <div className="flex items-center gap-2">
+                      <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { handleAdd(); setNewParent(''); } if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
+                        placeholder="새 항목명" className={`${inputCls} w-36`} />
+                      <button onClick={() => { handleAdd(); setNewParent(''); }} disabled={!newLabel.trim()}
+                        className="h-9 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50">추가</button>
+                      <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
+                    </div>
+                  ) : null}
+                  <button onClick={handleSnapshot} disabled={snapshotSaving}
+                    className="h-9 px-3.5 rounded-lg border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] flex items-center gap-1.5">
+                    {snapshotSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {curYm} 스냅샷 저장
+                  </button>
+                </div>
+                <button onClick={handleSaveAll} disabled={saving || !dirty}
+                  className={`h-9 px-5 rounded-lg text-[13px] font-semibold transition-all ${dirty ? 'bg-[#3182F6] text-white hover:bg-[#1B64DA]' : 'bg-[#F2F4F6] text-[#B0B8C1] cursor-default'}`}>
+                  {saving ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        /* 월별 추이 탭 */
+        <div className="px-5 py-4">
+          {snapLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+          ) : historyMonths.length === 0 ? (
+            <p className="text-center text-[13px] text-[#B0B8C1] py-8">저장된 스냅샷이 없습니다. 편집 탭에서 스냅샷을 저장하세요.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[12px]">
+                <thead>
+                  <tr className="border-b border-[#E5E8EB]">
+                    <th className="text-left px-3 py-2.5 text-[#6B7684] font-semibold min-w-[120px]">항목</th>
+                    {historyMonths.map(ym => (
+                      <th key={ym} className="text-right px-3 py-2.5 text-[#6B7684] font-semibold min-w-[100px]">{ym}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const allCostIds = [...new Set(snapshots.map(s => s.cost_id))];
+                    const costMeta = new Map<string, { label: string; parent_id: string | null }>();
+                    for (const s of snapshots) {
+                      if (s.cost && !costMeta.has(s.cost_id)) costMeta.set(s.cost_id, { label: s.cost.label, parent_id: s.cost.parent_id });
+                    }
+                    const parentIds = allCostIds.filter(id => !costMeta.get(id)?.parent_id);
+                    const childrenOf = (pid: string) => allCostIds.filter(id => costMeta.get(id)?.parent_id === pid);
+                    const getAmt = (ym: string, cid: string) => snapshots.find(s => s.year_month === ym && s.cost_id === cid)?.amount ?? 0;
+
+                    const rows: JSX.Element[] = [];
+                    for (const pid of parentIds) {
+                      const kids = childrenOf(pid);
+                      rows.push(
+                        <tr key={pid} className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
+                          <td className="px-3 py-2.5 font-semibold text-[#191F28]">{costMeta.get(pid)?.label}</td>
+                          {historyMonths.map(ym => {
+                            const val = kids.length > 0 ? kids.reduce((s, kid) => s + Number(getAmt(ym, kid)), 0) : Number(getAmt(ym, pid));
+                            return <td key={ym} className="px-3 py-2.5 text-right tabular-nums text-[#191F28] font-medium">{fmt(val)}</td>;
+                          })}
+                        </tr>
+                      );
+                      for (const kid of kids) {
+                        rows.push(
+                          <tr key={kid} className="border-b border-[#F2F4F6]">
+                            <td className="px-3 py-2 pl-7 text-[#6B7684]">{costMeta.get(kid)?.label}</td>
+                            {historyMonths.map(ym => (
+                              <td key={ym} className="px-3 py-2 text-right tabular-nums text-[#6B7684]">{fmt(Number(getAmt(ym, kid)))}</td>
+                            ))}
+                          </tr>
+                        );
+                      }
+                    }
+                    // 합계 행
+                    rows.push(
+                      <tr key="total" className="border-t-2 border-[#191F28]">
+                        <td className="px-3 py-2.5 font-bold text-[#191F28]">합계</td>
+                        {historyMonths.map(ym => {
+                          const total = snapshots.filter(s => s.year_month === ym).reduce((s, r) => {
+                            const isChild = !!costMeta.get(r.cost_id)?.parent_id;
+                            const isParentWithKids = !isChild && childrenOf(r.cost_id).length > 0;
+                            return s + (isParentWithKids ? 0 : Number(r.amount ?? 0));
+                          }, 0);
+                          return <td key={ym} className="px-3 py-2.5 text-right tabular-nums font-bold text-[#191F28]">{fmt(total)}</td>;
+                        })}
+                      </tr>
+                    );
+                    return rows;
+                  })()}
+                </tbody>
+              </table>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
+        </div>
+      )}
     </section>
   );
 }
