@@ -602,7 +602,7 @@ function PlatformTab({ skuOptions, channels }: {
         templateType="platform-skus"
         templateUrl="/api/platform-skus/template"
         importUrl="/api/platform-skus/import"
-        columns={['SKU코드', '채널명', '플랫폼상품명', '플랫폼상품ID', '판매가']}
+        columns={['SKU코드', '채널명', '플랫폼상품명', '플랫폼상품ID', '판매가', '쿠폰할인', '수수료율(%)', 'RG입출고비', 'RG배송비', '반품회수비', '반품재입고비', '창고발송비', '포장비']}
         description="SKU코드와 채널명은 필수입니다. 채널명은 설정>채널에 등록된 이름과 동일해야 합니다."
       />
     </div>
