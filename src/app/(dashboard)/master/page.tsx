@@ -399,8 +399,8 @@ function PlatformTab({ skuOptions, channels }: {
                       {c.name}
                       {c.type === 'coupang' && (<>
                         <button onClick={() => setRgVatIncluded(!rgVatIncluded)}
-                          className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${rgVatIncluded ? 'bg-[#F97316] text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
-                          {rgVatIncluded ? 'VAT 포함' : 'VAT 제외'}
+                          className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgVatIncluded ? 'bg-[#F97316] text-white ring-2 ring-[#F97316]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
+                          VAT {rgVatIncluded ? '포함 ✓' : '제외'}
                         </button>
                         <button
                           disabled={rgSaverLoading}
@@ -411,8 +411,8 @@ function PlatformTab({ skuOptions, channels }: {
                             setRgSaverEnabled(next);
                             setRgSaverLoading(false);
                           }}
-                          className={`ml-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${rgSaverEnabled ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
-                          세이버 {rgSaverEnabled ? 'ON' : 'OFF'}
+                          className={`ml-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgSaverEnabled ? 'bg-[#3182F6] text-white ring-2 ring-[#3182F6]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
+                          세이버 {rgSaverEnabled ? 'ON ✓' : 'OFF'}
                         </button>
                       </>)}
                     </th>
