@@ -261,49 +261,65 @@ function PlatformTab({ skuOptions, channels }: {
 
   async function saveRow(row: PlatformRow) {
     setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: true } : r));
-    await Promise.all(
-      channels.map(async (c) => {
-        const e = row.entries[c.id];
-        const name       = e.name.trim();
-        const product_id = e.product_id.trim() || null;
-        const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
-        const coupon_discount = e.coupon_discount?.trim() ? Number(e.coupon_discount.replace(/,/g, '')) : 0;
+    let hasError = false;
+    try {
+      await Promise.all(
+        channels.map(async (c) => {
+          const e = row.entries[c.id];
+          const name       = e.name.trim();
+          const product_id = e.product_id.trim() || null;
+          const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
+          const coupon_discount = e.coupon_discount?.trim() ? Number(e.coupon_discount.replace(/,/g, '')) : 0;
 
-        const sku_id_return = e.sku_id_return.trim() || null;
-        const isCoupang = c.type === 'coupang';
-        const body: Record<string, any> = {
-          sku_id: row.sku_id,
-          channel_id: c.id,
-          platform_product_name: name || null,
-          platform_product_id:   isCoupang ? null : product_id,
-          platform_sku_id:       isCoupang ? product_id : null,
-          price,
-          coupon_discount,
-          platform_sku_id_return: sku_id_return,
-        };
-        if (isCoupang) {
-          body.rg_fee_inout    = e.rg_fee_fulfill?.trim()   ? Number(e.rg_fee_fulfill.replace(/,/g, '')) : 0;
-          body.rg_fee_shipping = 0;
-          body.rg_fee_return   = e.rg_fee_return?.trim()   ? Number(e.rg_fee_return.replace(/,/g, ''))   : 0;
-          body.rg_fee_restock  = e.rg_fee_restock?.trim()  ? Number(e.rg_fee_restock.replace(/,/g, ''))  : 0;
-          body.rg_fee_send     = e.rg_fee_send?.trim()     ? Number(e.rg_fee_send.replace(/,/g, ''))     : 0;
-          body.rg_fee_packing  = e.rg_fee_packing?.trim()  ? Number(e.rg_fee_packing.replace(/,/g, ''))  : 0;
-        }
-        await fetch('/api/platform-skus', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (name) {
-          await fetch('/api/sku-aliases', {
+          const sku_id_return = e.sku_id_return.trim() || null;
+          const isCoupang = c.type === 'coupang';
+          const body: Record<string, any> = {
+            sku_id: row.sku_id,
+            channel_id: c.id,
+            platform_product_name: name || null,
+            platform_product_id:   isCoupang ? null : product_id,
+            platform_sku_id:       isCoupang ? product_id : null,
+            price,
+            coupon_discount,
+            platform_sku_id_return: sku_id_return,
+          };
+          if (isCoupang) {
+            body.rg_fee_inout    = e.rg_fee_fulfill?.trim()   ? Number(e.rg_fee_fulfill.replace(/,/g, '')) : 0;
+            body.rg_fee_shipping = 0;
+            body.rg_fee_return   = e.rg_fee_return?.trim()   ? Number(e.rg_fee_return.replace(/,/g, ''))   : 0;
+            body.rg_fee_restock  = e.rg_fee_restock?.trim()  ? Number(e.rg_fee_restock.replace(/,/g, ''))  : 0;
+            body.rg_fee_send     = e.rg_fee_send?.trim()     ? Number(e.rg_fee_send.replace(/,/g, ''))     : 0;
+            body.rg_fee_packing  = e.rg_fee_packing?.trim()  ? Number(e.rg_fee_packing.replace(/,/g, ''))  : 0;
+          }
+          const res = await fetch('/api/platform-skus', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channel_name: name, sku_id: row.sku_id }),
+            body: JSON.stringify(body),
           });
-        }
-      })
-    );
-    setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false } : r));
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            console.error(`[platform-skus 저장 실패] ${c.name}:`, d.error ?? res.status);
+            hasError = true;
+          }
+          if (name) {
+            await fetch('/api/sku-aliases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channel_name: name, sku_id: row.sku_id }),
+            });
+          }
+        })
+      );
+    } catch (err) {
+      console.error('[platform-skus saveRow 에러]', err);
+      hasError = true;
+    }
+    if (hasError) {
+      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false } : r));
+    } else {
+      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false } : r));
+      load();
+    }
   }
 
   const filtered = q
