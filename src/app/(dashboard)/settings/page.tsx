@@ -932,7 +932,7 @@ function ManualSyncSection() {
 
 // ───────────────── Monthly Costs ─────────────────
 
-interface MCost { id: string; label: string; amount: number; vat_applicable: boolean; parent_id: string | null; sort_order: number; }
+interface MCost { id: string; label: string; amount: number; vat_applicable: boolean; parent_id: string | null; sort_order: number; note?: string; }
 interface Snapshot { year_month: string; cost_id: string; amount: number; cost: { label: string; parent_id: string | null; vat_applicable: boolean } | null; }
 
 function MonthlyCostsSection() {
@@ -947,10 +947,25 @@ function MonthlyCostsSection() {
   const [snapLoading, setSnapLoading] = useState(false);
   const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [sortKey, setSortKey] = useState<'label' | 'amount' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const fmt = (n: number) => n.toLocaleString('ko-KR');
+  // 월 선택
   const now = new Date();
   const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedYm, setSelectedYm] = useState(curYm);
+
+  // 최근 12개월 옵션 생성
+  const monthOptions = (() => {
+    const opts: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      opts.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return opts;
+  })();
+
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
 
   async function load() {
     setLoading(true);
@@ -988,36 +1003,48 @@ function MonthlyCostsSection() {
   }
 
   async function handleAdd(parentId?: string) {
-    const label = parentId ? newLabel : newLabel;
-    if (!label.trim()) return;
-    await fetch('/api/monthly-costs', {
+    if (!newLabel.trim()) return;
+    const res = await fetch('/api/monthly-costs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: label.trim(), amount: 0, parent_id: parentId || null }),
+      body: JSON.stringify({ label: newLabel.trim(), amount: 0, parent_id: parentId || null }),
     });
+    const created = await res.json().catch(() => null);
+    if (created?.id) {
+      setItems(prev => [...prev, { id: created.id, label: created.label, amount: 0, vat_applicable: created.vat_applicable ?? true, parent_id: created.parent_id ?? null, sort_order: created.sort_order ?? 999, note: '' }]);
+    }
     setNewLabel('');
     setNewParent('');
-    await load();
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/monthly-costs?id=${id}`, { method: 'DELETE' });
-    await load();
+    setItems(prev => prev.filter(i => i.id !== id && i.parent_id !== id));
+    fetch(`/api/monthly-costs?id=${id}`, { method: 'DELETE' });
   }
 
   async function handleSnapshot() {
     setSnapshotSaving(true);
+    if (dirty) await handleSaveAll();
     await fetch('/api/monthly-costs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'snapshot', year_month: curYm }),
+      body: JSON.stringify({ action: 'snapshot', year_month: selectedYm }),
     });
     setSnapshotSaving(false);
-    setToast(`${curYm} 스냅샷 저장 완료`); setTimeout(() => setToast(''), 2000);
+    setToast(`${selectedYm} 정산 저장 완료`); setTimeout(() => setToast(''), 2000);
     if (tab === 'history') loadHistory();
   }
 
-  const parents = items.filter(i => !i.parent_id);
+  function toggleSort(key: 'label' | 'amount') {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortKey(null); setSortDir('asc'); }
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
   const childrenOf = (pid: string) => items.filter(i => i.parent_id === pid);
 
   const calcAmount = (item: MCost): number => {
@@ -1032,20 +1059,39 @@ function MonthlyCostsSection() {
     return item.vat_applicable ? Math.round(Number(item.amount ?? 0) * 1.1) : Number(item.amount ?? 0);
   };
 
+  // 정렬된 parents
+  const parents = (() => {
+    const list = items.filter(i => !i.parent_id);
+    if (!sortKey) return list;
+    return [...list].sort((a, b) => {
+      const av = sortKey === 'label' ? a.label : calcAmount(a);
+      const bv = sortKey === 'label' ? b.label : calcAmount(b);
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  })();
+
   const totalExVat = parents.reduce((s, p) => s + calcAmount(p), 0);
   const totalInclVat = parents.reduce((s, p) => s + calcVat(p), 0);
 
-  // History
   const historyMonths = [...new Set(snapshots.map(s => s.year_month))].sort().reverse();
 
   const inputCls = 'h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] transition-colors';
+  const W = { num: 'w-8', label: 'w-36', amount: 'w-28', vat: 'w-16', real: 'w-28', note: 'flex-1 min-w-[80px]', del: 'w-8' };
+  const sortIcon = (key: 'label' | 'amount') => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   return (
     <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
       <div className="px-5 py-4 border-b border-[#F2F4F6] flex items-center justify-between">
-        <div>
-          <h3 className="text-[15px] font-bold text-[#191F28]">월 고정비용</h3>
-          <p className="text-[12px] text-[#6B7684] mt-0.5">순익 계산에 반영됩니다. VAT 제외 금액 기준.</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h3 className="text-[15px] font-bold text-[#191F28]">월 고정비용</h3>
+            <p className="text-[12px] text-[#6B7684] mt-0.5">순익 계산에 반영됩니다. VAT 제외 금액 기준.</p>
+          </div>
+          <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] font-semibold text-[#3182F6] focus:outline-none focus:border-[#3182F6] bg-white cursor-pointer">
+            {monthOptions.map(ym => <option key={ym} value={ym}>{ym.replace('-', '년 ')}월</option>)}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
@@ -1069,14 +1115,16 @@ function MonthlyCostsSection() {
             <>
               {/* 헤더 */}
               <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[#B0B8C1]">
-                <span className="w-32">항목</span>
-                <span className="w-28 text-right">금액</span>
-                <span className="w-16 text-center">VAT</span>
-                <span className="w-24 text-right">실비용</span>
-                <span className="w-8" />
+                <span className={W.num}>#</span>
+                <button onClick={() => toggleSort('label')} className={`${W.label} text-left hover:text-[#191F28] transition-colors`}>항목{sortIcon('label')}</button>
+                <button onClick={() => toggleSort('amount')} className={`${W.amount} text-right hover:text-[#191F28] transition-colors`}>금액{sortIcon('amount')}</button>
+                <span className={`${W.vat} text-center`}>VAT</span>
+                <span className={`${W.real} text-right`}>실비용</span>
+                <span className={W.note}>비고</span>
+                <span className={W.del} />
               </div>
 
-              {parents.map((parent) => {
+              {parents.map((parent, pIdx) => {
                 const children = childrenOf(parent.id);
                 const hasChildren = children.length > 0;
                 const amt = calcAmount(parent);
@@ -1085,48 +1133,53 @@ function MonthlyCostsSection() {
                 return (
                   <div key={parent.id}>
                     {/* 상위 항목 */}
-                    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl ${hasChildren ? 'bg-[#F8F9FB]' : 'bg-[#F8F9FB]'}`}>
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#F8F9FB] group">
+                      <span className={`${W.num} text-[11px] text-[#B0B8C1] tabular-nums`}>{pIdx + 1}</span>
                       <input lang="ko" value={parent.label} onChange={(e) => updateItem(parent.id, 'label', e.target.value)}
-                        className={`${inputCls} w-32 font-medium bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                        className={`${inputCls} ${W.label} font-medium bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
                       {hasChildren ? (
-                        <span className="w-28 text-[13px] tabular-nums text-right text-[#6B7684]">{fmt(amt)}원</span>
+                        <span className={`${W.amount} text-[13px] tabular-nums text-right text-[#6B7684]`}>{fmt(amt)}원</span>
                       ) : (
-                        <input type="number" min="0" value={parent.amount || ''} onChange={(e) => updateItem(parent.id, 'amount', Number(e.target.value) || 0)}
-                          placeholder="0" className={`${inputCls} w-28 text-right bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
+                        <input type="text" inputMode="numeric" value={parent.amount || ''} onChange={(e) => updateItem(parent.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                          placeholder="0" className={`${inputCls} ${W.amount} text-right bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
                       )}
                       <button onClick={() => updateItem(parent.id, 'vat_applicable', !parent.vat_applicable)}
-                        className={`w-16 text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
+                        className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
                           hasChildren ? 'invisible' : parent.vat_applicable
                             ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
                             : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
                         }`}>
                         {parent.vat_applicable ? '과세 ✓' : '비과세'}
                       </button>
-                      <span className="w-24 text-[12px] tabular-nums text-right text-[#6B7684]">{fmt(vatAmt)}원</span>
-                      <button onClick={() => handleDelete(parent.id)} className="w-8 flex justify-center opacity-0 hover:opacity-100 group-hover:opacity-100">
+                      <span className={`${W.real} text-[12px] tabular-nums text-right text-[#6B7684]`}>{fmt(vatAmt)}원</span>
+                      <span className={W.note} />
+                      <button onClick={() => handleDelete(parent.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
                         <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />
                       </button>
                     </div>
 
                     {/* 세부항목 */}
-                    {children.map((child) => (
-                      <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB]">
+                    {children.map((child, cIdx) => (
+                      <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB] group">
+                        <span className={`${W.num} text-[10px] text-[#D0D5DD] tabular-nums`}>{pIdx + 1}-{cIdx + 1}</span>
                         <input lang="ko" value={child.label} onChange={(e) => updateItem(child.id, 'label', e.target.value)}
-                          className={`${inputCls} w-32 text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
-                        <input type="number" min="0" value={child.amount || ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value) || 0)}
-                          placeholder="0" className={`${inputCls} w-28 text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
+                          className={`${inputCls} ${W.label} text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                        <input type="text" inputMode="numeric" value={child.amount || ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                          placeholder="0" className={`${inputCls} ${W.amount} text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
                         <button onClick={() => updateItem(child.id, 'vat_applicable', !child.vat_applicable)}
-                          className={`w-16 text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
+                          className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
                             child.vat_applicable
                               ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
                               : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
                           }`}>
                           {child.vat_applicable ? '과세 ✓' : '비과세'}
                         </button>
-                        <span className="w-24 text-[11px] tabular-nums text-right text-[#B0B8C1]">
+                        <span className={`${W.real} text-[11px] tabular-nums text-right text-[#B0B8C1]`}>
                           {fmt(child.vat_applicable ? Math.round(Number(child.amount ?? 0) * 1.1) : Number(child.amount ?? 0))}원
                         </span>
-                        <button onClick={() => handleDelete(child.id)} className="w-8 flex justify-center">
+                        <input lang="ko" value={child.note ?? ''} onChange={(e) => updateItem(child.id, 'note', e.target.value)}
+                          placeholder="비고" className={`${inputCls} ${W.note} text-[11px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white text-[#6B7684]`} />
+                        <button onClick={() => handleDelete(child.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
                           <Trash2 className="h-3 w-3 text-red-300 hover:text-red-500" />
                         </button>
                       </div>
@@ -1135,9 +1188,10 @@ function MonthlyCostsSection() {
                     {/* 세부항목 추가 */}
                     {newParent === parent.id ? (
                       <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-[#E5E8EB]">
+                        <span className={W.num} />
                         <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(parent.id); if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
-                          placeholder="세부항목명" className={`${inputCls} w-32 text-[12px]`} />
+                          placeholder="세부항목명" className={`${inputCls} ${W.label} text-[12px]`} />
                         <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-[#3182F6] font-medium hover:underline">추가</button>
                         <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
                       </div>
@@ -1153,11 +1207,11 @@ function MonthlyCostsSection() {
 
               {/* 합계 */}
               <div className="flex items-center gap-2 px-3 py-3 border-t border-[#E5E8EB] mt-3">
-                <span className="w-32 text-[13px] font-bold text-[#191F28]">합계</span>
-                <span className="w-28 text-[13px] font-bold text-[#191F28] tabular-nums text-right">{fmt(totalExVat)}원</span>
-                <span className="w-16" />
-                <span className="w-24 text-[12px] font-bold text-[#191F28] tabular-nums text-right">{fmt(totalInclVat)}원</span>
-                <span className="w-8" />
+                <span className={W.num} />
+                <span className={`${W.label} text-[13px] font-bold text-[#191F28]`}>합계</span>
+                <span className={`${W.amount} text-[13px] font-bold text-[#191F28] tabular-nums text-right`}>{fmt(totalExVat)}원</span>
+                <span className={W.vat} />
+                <span className={`${W.real} text-[12px] font-bold text-[#191F28] tabular-nums text-right`}>{fmt(totalInclVat)}원</span>
               </div>
 
               {/* 하단 액션 */}
@@ -1179,9 +1233,9 @@ function MonthlyCostsSection() {
                     </div>
                   ) : null}
                   <button onClick={handleSnapshot} disabled={snapshotSaving}
-                    className="h-9 px-3.5 rounded-lg border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] flex items-center gap-1.5">
-                    {snapshotSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    {curYm} 스냅샷 저장
+                    className="h-9 px-3.5 rounded-lg border border-[#F97316] text-[12px] font-semibold text-[#F97316] hover:bg-[#FFF7ED] flex items-center gap-1.5 transition-colors">
+                    {snapshotSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    {selectedYm} 정산 저장
                   </button>
                 </div>
                 <button onClick={handleSaveAll} disabled={saving || !dirty}
@@ -1198,7 +1252,7 @@ function MonthlyCostsSection() {
           {snapLoading ? (
             <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
           ) : historyMonths.length === 0 ? (
-            <p className="text-center text-[13px] text-[#B0B8C1] py-8">저장된 스냅샷이 없습니다. 편집 탭에서 스냅샷을 저장하세요.</p>
+            <p className="text-center text-[13px] text-[#B0B8C1] py-8">저장된 스냅샷이 없습니다. 편집 탭에서 정산 저장하세요.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[12px]">
@@ -1218,12 +1272,12 @@ function MonthlyCostsSection() {
                       if (s.cost && !costMeta.has(s.cost_id)) costMeta.set(s.cost_id, { label: s.cost.label, parent_id: s.cost.parent_id });
                     }
                     const parentIds = allCostIds.filter(id => !costMeta.get(id)?.parent_id);
-                    const childrenOf = (pid: string) => allCostIds.filter(id => costMeta.get(id)?.parent_id === pid);
+                    const histChildrenOf = (pid: string) => allCostIds.filter(id => costMeta.get(id)?.parent_id === pid);
                     const getAmt = (ym: string, cid: string) => snapshots.find(s => s.year_month === ym && s.cost_id === cid)?.amount ?? 0;
 
                     const rows: JSX.Element[] = [];
                     for (const pid of parentIds) {
-                      const kids = childrenOf(pid);
+                      const kids = histChildrenOf(pid);
                       rows.push(
                         <tr key={pid} className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
                           <td className="px-3 py-2.5 font-semibold text-[#191F28]">{costMeta.get(pid)?.label}</td>
@@ -1244,14 +1298,13 @@ function MonthlyCostsSection() {
                         );
                       }
                     }
-                    // 합계 행
                     rows.push(
                       <tr key="total" className="border-t-2 border-[#191F28]">
                         <td className="px-3 py-2.5 font-bold text-[#191F28]">합계</td>
                         {historyMonths.map(ym => {
                           const total = snapshots.filter(s => s.year_month === ym).reduce((s, r) => {
                             const isChild = !!costMeta.get(r.cost_id)?.parent_id;
-                            const isParentWithKids = !isChild && childrenOf(r.cost_id).length > 0;
+                            const isParentWithKids = !isChild && histChildrenOf(r.cost_id).length > 0;
                             return s + (isParentWithKids ? 0 : Number(r.amount ?? 0));
                           }, 0);
                           return <td key={ym} className="px-3 py-2.5 text-right tabular-nums font-bold text-[#191F28]">{fmt(total)}</td>;

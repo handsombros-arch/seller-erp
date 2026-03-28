@@ -1,0 +1,73 @@
+ 현재 전체 구조
+
+  seller-erp
+  ├─ 프론트엔드 (Next.js + Vercel)
+  ├─ 데이터베이스 (Supabase PostgreSQL)
+  ├─ 쿠팡 API 프록시 (Fly.io · Tokyo)
+  └─ 매일 08:00 자동 실행 (Vercel Cron)
+
+  사이드바 메뉴 (6개)
+
+  대시보드          /
+  마스터 시트       /master (+ 상품관리, 공급처)
+  재고 관리         /inventory
+  입출고 관리       /inbound
+  채널 판매         /channel-sales
+  설정              /settings
+
+  재고 관리 (5탭)
+
+  종합 현황    ── SKU별 창고+쿠팡 재고 합산
+  창고별 상세  ── 창고별 수량, 원가, 재고가치
+  쿠팡그로스   ── 신상품/반품재판매 (MECE 자동분류, 등급)
+  추이         ── 쿠팡재고 + 창고재고 + 판매량 시계열 차트 (SKU 필터)
+  예측         ── 소진일, 발주 권장일, 단종 관리
+
+  입출고 관리 (4탭)
+
+  발주 관리    ── 발주서 생성/상태관리 (초안→발주→수입중→완료)
+  입고 기록    ── 입고 처리, 재고 반영
+  출고 관리    ── 쿠팡그로스 센터별 출고
+  캘린더       ── 입출고 일정 월별 캘린더
+
+  채널 판매 (3탭)
+
+  주문 내역    ── 전 채널 주문 (날짜 프리셋, 검색, 교환처리)
+  주문 분석    ── 일/주/월별 차트
+  반품         ── 반품 내역
+
+  데이터 흐름
+
+  [매일 08:00 자동]
+    쿠팡/네이버/토스 API ──→ channel_orders (주문)
+    배송중 주문 ──→ inventory 차감
+    반품 완료 ──→ inventory 복구
+    쿠팡 RG API ──→ rg_inventory_snapshots
+    channel_orders ──→ skus.sales_7d/30d
+    inventory ──→ warehouse_inventory_snapshots
+
+  [SKU 매칭 (자동)]
+    SKU코드 → vendorItemId → 상품명+옵션 (단어경계 매칭)
+    sku_name_aliases 누적 (플랫폼 상품명 변경 시 보존)
+
+  [재고 차감 조건]
+    배송중/배송완료 → 차감
+    배송준비중/결제취소 → 무시
+    반품완료 → 복구
+    교환 → 수동 처리 (교환품 선택)
+    쿠팡RG → 무시 (쿠팡 자체 관리)
+
+  주요 테이블
+
+  products / skus              ── 상품·SKU 마스터
+  inventory                    ── 창고 현재 재고
+  warehouse_inventory_snapshots ── 창고 일별 스냅샷
+  rg_inventory_snapshots       ── 쿠팡 RG 일별 스냅샷
+  rg_return_vendor_items       ── 반품재판매 분류
+  channel_orders               ── 전 채널 주문
+  platform_skus                ── 플랫폼별 상품 매핑
+  sku_name_aliases             ── 연동 상품명 누적
+  purchase_orders / _items     ── 발주서
+  inbound_records              ── 입고 기록
+  outbound_records             ── 출고 기록
+  inventory_adjustments        ── 재고 조정 이력

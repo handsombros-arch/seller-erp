@@ -38,11 +38,13 @@ export async function PUT(request: NextRequest) {
 
   for (const item of items) {
     if (item.id) {
-      await admin.from('monthly_costs').update({
+      const update: any = {
         label: item.label,
         amount: item.amount ?? 0,
         vat_applicable: item.vat_applicable ?? true,
-      }).eq('id', item.id);
+      };
+      if (item.note !== undefined) update.note = item.note;
+      await admin.from('monthly_costs').update(update).eq('id', item.id);
     }
   }
 
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
     if (body.label !== undefined) update.label = body.label;
     if (body.amount !== undefined) update.amount = body.amount;
     if (body.vat_applicable !== undefined) update.vat_applicable = body.vat_applicable;
+    if (body.note !== undefined) update.note = body.note;
     await admin.from('monthly_costs').update(update).eq('id', body.id);
   } else {
     const { data: maxRow } = await admin
@@ -87,16 +90,18 @@ export async function POST(request: NextRequest) {
       .order('sort_order', { ascending: false })
       .limit(1)
       .maybeSingle();
-    await admin.from('monthly_costs').insert({
+    const row: any = {
       label: body.label,
       amount: body.amount ?? 0,
       vat_applicable: body.vat_applicable ?? true,
       parent_id: body.parent_id ?? null,
       sort_order: (maxRow?.sort_order ?? 0) + 1,
-    });
+    };
+    if (body.note !== undefined) row.note = body.note;
+    const { data: inserted } = await admin.from('monthly_costs').insert(row).select('*').single();
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(inserted ?? { ok: true });
 }
 
 export async function DELETE(request: NextRequest) {
