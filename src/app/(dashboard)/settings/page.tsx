@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2, RefreshCw, Save } from 'lucide-react';
+import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2, RefreshCw, Save, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -949,6 +949,7 @@ function MonthlyCostsSection() {
   const [toast, setToast] = useState('');
   const [sortKey, setSortKey] = useState<'label' | 'amount' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // 월 선택
   const now = new Date();
@@ -1134,7 +1135,14 @@ function MonthlyCostsSection() {
                   <div key={parent.id}>
                     {/* 상위 항목 */}
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#F8F9FB] group">
-                      <span className={`${W.num} text-[11px] text-[#B0B8C1] tabular-nums`}>{pIdx + 1}</span>
+                      {hasChildren ? (
+                        <button onClick={() => setCollapsed(prev => { const next = new Set(prev); next.has(parent.id) ? next.delete(parent.id) : next.add(parent.id); return next; })}
+                          className={`${W.num} flex items-center justify-center`}>
+                          {collapsed.has(parent.id) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684]" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684]" />}
+                        </button>
+                      ) : (
+                        <span className={`${W.num} text-[11px] text-[#B0B8C1] tabular-nums`}>{pIdx + 1}</span>
+                      )}
                       <input lang="ko" value={parent.label} onChange={(e) => updateItem(parent.id, 'label', e.target.value)}
                         className={`${inputCls} ${W.label} font-medium bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
                       {hasChildren ? (
@@ -1158,49 +1166,51 @@ function MonthlyCostsSection() {
                       </button>
                     </div>
 
-                    {/* 세부항목 */}
-                    {children.map((child, cIdx) => (
-                      <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB] group">
-                        <span className={`${W.num} text-[10px] text-[#D0D5DD] tabular-nums`}>{pIdx + 1}-{cIdx + 1}</span>
-                        <input lang="ko" value={child.label} onChange={(e) => updateItem(child.id, 'label', e.target.value)}
-                          className={`${inputCls} ${W.label} text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
-                        <input type="text" inputMode="numeric" value={child.amount || ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
-                          placeholder="0" className={`${inputCls} ${W.amount} text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
-                        <button onClick={() => updateItem(child.id, 'vat_applicable', !child.vat_applicable)}
-                          className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
-                            child.vat_applicable
-                              ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
-                              : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
-                          }`}>
-                          {child.vat_applicable ? '과세 ✓' : '비과세'}
-                        </button>
-                        <span className={`${W.real} text-[11px] tabular-nums text-right text-[#B0B8C1]`}>
-                          {fmt(child.vat_applicable ? Math.round(Number(child.amount ?? 0) * 1.1) : Number(child.amount ?? 0))}원
-                        </span>
-                        <input lang="ko" value={child.note ?? ''} onChange={(e) => updateItem(child.id, 'note', e.target.value)}
-                          placeholder="비고" className={`${inputCls} ${W.note} text-[11px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white text-[#6B7684]`} />
-                        <button onClick={() => handleDelete(child.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
-                          <Trash2 className="h-3 w-3 text-red-300 hover:text-red-500" />
-                        </button>
-                      </div>
-                    ))}
+                    {/* 세부항목 (접기/펼치기) */}
+                    {!collapsed.has(parent.id) && <>
+                      {children.map((child, cIdx) => (
+                        <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB] group">
+                          <span className={`${W.num} text-[10px] text-[#D0D5DD] tabular-nums`}>{pIdx + 1}-{cIdx + 1}</span>
+                          <input lang="ko" value={child.label} onChange={(e) => updateItem(child.id, 'label', e.target.value)}
+                            className={`${inputCls} ${W.label} text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                          <input type="text" inputMode="numeric" value={child.amount || ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                            placeholder="0" className={`${inputCls} ${W.amount} text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums`} />
+                          <button onClick={() => updateItem(child.id, 'vat_applicable', !child.vat_applicable)}
+                            className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
+                              child.vat_applicable
+                                ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
+                                : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                            }`}>
+                            {child.vat_applicable ? '과세 ✓' : '비과세'}
+                          </button>
+                          <span className={`${W.real} text-[11px] tabular-nums text-right text-[#B0B8C1]`}>
+                            {fmt(child.vat_applicable ? Math.round(Number(child.amount ?? 0) * 1.1) : Number(child.amount ?? 0))}원
+                          </span>
+                          <input lang="ko" value={child.note ?? ''} onChange={(e) => updateItem(child.id, 'note', e.target.value)}
+                            placeholder="비고" className={`${inputCls} ${W.note} text-[11px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white text-[#6B7684]`} />
+                          <button onClick={() => handleDelete(child.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
+                            <Trash2 className="h-3 w-3 text-red-300 hover:text-red-500" />
+                          </button>
+                        </div>
+                      ))}
 
-                    {/* 세부항목 추가 */}
-                    {newParent === parent.id ? (
-                      <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-[#E5E8EB]">
-                        <span className={W.num} />
-                        <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(parent.id); if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
-                          placeholder="세부항목명" className={`${inputCls} ${W.label} text-[12px]`} />
-                        <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-[#3182F6] font-medium hover:underline">추가</button>
-                        <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setNewParent(parent.id); setNewLabel(''); }}
-                        className="ml-6 pl-3 py-1 text-[11px] text-[#3182F6] hover:underline border-l-2 border-transparent">
-                        + 세부항목
-                      </button>
-                    )}
+                      {/* 세부항목 추가 */}
+                      {newParent === parent.id ? (
+                        <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-[#E5E8EB]">
+                          <span className={W.num} />
+                          <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(parent.id); if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
+                            placeholder="세부항목명" className={`${inputCls} ${W.label} text-[12px]`} />
+                          <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-[#3182F6] font-medium hover:underline">추가</button>
+                          <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setNewParent(parent.id); setNewLabel(''); }}
+                          className="ml-6 pl-3 py-1 text-[11px] text-[#3182F6] hover:underline border-l-2 border-transparent">
+                          + 세부항목
+                        </button>
+                      )}
+                    </>}
                   </div>
                 );
               })}
