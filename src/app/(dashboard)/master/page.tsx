@@ -517,12 +517,12 @@ function PlatformTab({ skuOptions, channels }: {
                               placeholder="상품ID" className={inputCls} />
                           </td>
                           <td className="px-2 py-2">
-                            <input type="number" min="0" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value)}
+                            <input type="text" inputMode="numeric" value={e.price} onChange={(ev) => updateEntry(row.sku_id, c.id, 'price', ev.target.value.replace(/[^0-9]/g, ''))}
                               placeholder="0" className={inputCls} />
                           </td>
                           {c.type === 'coupang' && (
                             <td className="px-2 py-2">
-                              <input type="number" min="0" value={e.coupon_discount} onChange={(ev) => updateEntry(row.sku_id, c.id, 'coupon_discount', ev.target.value)}
+                              <input type="text" inputMode="numeric" value={e.coupon_discount} onChange={(ev) => updateEntry(row.sku_id, c.id, 'coupon_discount', ev.target.value.replace(/[^0-9]/g, ''))}
                                 placeholder="0" className={inputCls} />
                             </td>
                           )}
@@ -533,10 +533,10 @@ function PlatformTab({ skuOptions, channels }: {
                               const display = saverZero ? '0' : rgVatIncluded && raw !== '' ? String(Math.round(Number(raw) * 1.1)) : raw;
                               return (
                                 <td key={field} className="px-2 py-2">
-                                  <input type="number" min="0" value={display}
+                                  <input type="text" inputMode="numeric" value={display}
                                     disabled={saverZero}
                                     onChange={(ev) => {
-                                      const v = ev.target.value;
+                                      const v = ev.target.value.replace(/[^0-9]/g, '');
                                       const stored = rgVatIncluded && v !== '' ? String(Math.round(Number(v) / 1.1)) : v;
                                       updateEntry(row.sku_id, c.id, field as keyof ChannelEntry, stored);
                                     }}
