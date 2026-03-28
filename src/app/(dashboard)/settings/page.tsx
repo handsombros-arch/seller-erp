@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Loader2, Pencil, Warehouse, Radio, User, Link2, CheckCircle2, AlertCircle, Trash2, RefreshCw, Save } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
