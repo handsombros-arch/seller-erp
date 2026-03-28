@@ -86,6 +86,7 @@ interface PlatformRow {
   entries: Record<string, ChannelEntry>; // channel_id → data
   dirty: boolean;
   saving: boolean;
+  error: string;
 }
 
 interface ChannelInfo { id: string; name: string; type: string; }
@@ -219,6 +220,7 @@ function PlatformTab({ skuOptions, channels }: {
       entries: Object.fromEntries(channels.map((c) => [c.id, bySkuId[s.id]?.[c.id] ?? { ...empty }])),
       dirty:   false,
       saving:  false,
+      error:   '',
     }));
     setRows(built);
     setLoading(false);
@@ -260,8 +262,8 @@ function PlatformTab({ skuOptions, channels }: {
   }
 
   async function saveRow(row: PlatformRow) {
-    setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: true } : r));
-    let hasError = false;
+    setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: true, error: '' } : r));
+    const errors: string[] = [];
     try {
       await Promise.all(
         channels.map(async (c) => {
@@ -298,8 +300,7 @@ function PlatformTab({ skuOptions, channels }: {
           });
           if (!res.ok) {
             const d = await res.json().catch(() => ({}));
-            console.error(`[platform-skus 저장 실패] ${c.name}:`, d.error ?? res.status);
-            hasError = true;
+            errors.push(`${c.name}: ${d.error ?? res.status}`);
           }
           if (name) {
             await fetch('/api/sku-aliases', {
@@ -311,15 +312,20 @@ function PlatformTab({ skuOptions, channels }: {
         })
       );
     } catch (err) {
-      console.error('[platform-skus saveRow 에러]', err);
-      hasError = true;
+      errors.push(err instanceof Error ? err.message : '알 수 없는 오류');
     }
-    if (hasError) {
-      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false } : r));
+    if (errors.length) {
+      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, error: errors.join(', ') } : r));
     } else {
-      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false } : r));
+      setRows((prev) => prev.map((r) => r.sku_id === row.sku_id ? { ...r, saving: false, dirty: false, error: '' } : r));
       load();
     }
+  }
+
+  async function saveAllDirty() {
+    const dirtyRows = rows.filter((r) => r.dirty);
+    if (!dirtyRows.length) return;
+    await Promise.all(dirtyRows.map(saveRow));
   }
 
   const filtered = q
@@ -392,6 +398,20 @@ function PlatformTab({ skuOptions, channels }: {
             </div>
             <button onClick={() => { setSelected(new Set()); setBulkDiscount(''); }}
               className="text-[12px] text-[#6B7684] hover:text-[#191F28] ml-auto">취소</button>
+          </div>
+        )}
+
+        {rows.some((r) => r.dirty) && (
+          <div className="flex items-center gap-3 px-5 py-2.5 bg-[#FFF7ED] border-b border-[#FED7AA] sticky top-0 z-10">
+            <AlertCircle className="h-4 w-4 text-[#F97316] shrink-0" />
+            <span className="text-[12px] font-medium text-[#9A3412]">
+              {rows.filter((r) => r.dirty).length}개 행 수정됨 — 저장하지 않으면 사라집니다
+            </span>
+            <button onClick={saveAllDirty} disabled={rows.some((r) => r.saving)}
+              className="ml-auto h-8 px-4 rounded-lg bg-[#F97316] text-white text-[12px] font-semibold hover:bg-[#EA580C] disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap">
+              {rows.some((r) => r.saving) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              전체 저장
+            </button>
           </div>
         )}
 
@@ -532,6 +552,14 @@ function PlatformTab({ skuOptions, channels }: {
                     <td className="px-3 py-2 text-center">
                       {row.saving ? (
                         <Loader2 className="h-4 w-4 animate-spin text-[#3182F6] mx-auto" />
+                      ) : row.error ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <button onClick={() => saveRow(row)}
+                            className="h-8 px-3 rounded-lg bg-red-500 text-white text-[12px] font-medium hover:bg-red-600 whitespace-nowrap">
+                            재시도
+                          </button>
+                          <span className="text-[10px] text-red-500 max-w-[100px] truncate" title={row.error}>{row.error}</span>
+                        </div>
                       ) : row.dirty ? (
                         <button onClick={() => saveRow(row)}
                           className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] whitespace-nowrap">
