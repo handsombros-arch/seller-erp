@@ -122,7 +122,7 @@ function PlatformTab({ skuOptions, channels }: {
       const res = await fetch('/api/coupang/sync-platform-prices', { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? '오류');
-      setSyncResult(`${d.updated}개 업데이트 (상품 ${d.productsScanned ?? '?'}개 스캔 · 가격맵 ${d.priceMapped}개)`);
+      setSyncResult(`${d.updated}개 ID 갱신 (상품 ${d.productsScanned ?? '?'}개 스캔 · 스킵 ${d.skipped ?? 0}개)`);
       load();
     } catch (err: any) {
       setSyncResult(`실패: ${err.message}`);
@@ -364,10 +364,10 @@ function PlatformTab({ skuOptions, channels }: {
             </div>
             {channels.some((c) => c.type === 'coupang') && (
               <button onClick={syncPrices} disabled={syncing}
-                title={syncResult ?? '쿠팡 vendorItemId·판매가 자동 동기화'}
+                title={syncResult ?? '쿠팡 옵션ID 자동 매핑 (externalSkuId → vendorItemId)'}
                 className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-60 transition-colors whitespace-nowrap">
                 {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                쿠팡 동기화
+                쿠팡 ID 동기화
               </button>
             )}
             <button onClick={() => setImportOpen(true)}
