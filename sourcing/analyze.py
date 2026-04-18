@@ -53,9 +53,9 @@ genai.configure(api_key=API_KEYS[0])
 print(f"[gemini] {len(API_KEYS)}개 키 로드됨")
 
 
-# gemini-2.0-flash: 무료 1500/일 (2.5는 20/일로 매우 빡셈)
+# gemini-2.0-flash: 무료 1500/일. 소진 시 2.5 계열로 폴백.
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-FALLBACK_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash-001"]
+FALLBACK_MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
 
 def _parse_retry_delay(err_str: str) -> int:
