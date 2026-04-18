@@ -433,22 +433,9 @@ export default function ComparePage() {
                 {c.canonicalDims.map((dim: string) => (
                   <Row key={dim} label={dim} items={items} render={(_it, i) => {
                     const d = c.itemDimMap[i][dim];
-                    if (!d || d.score == null) return <Missing />;
+                    if (!d) return <Missing />;
                     const renamedFromOriginal = d.originals.find((o) => o && o !== dim);
-                    return (
-                      <div>
-                        <WinnerCell isWinner={i === c.dimensionWinners[dim]}>
-                          <ScoreCell score={d.score} />
-                          {d.verdict && <span className="ml-2 text-xs text-gray-500">{d.verdict}</span>}
-                        </WinnerCell>
-                        {d.spec_evidence && (
-                          <div className="text-[10px] text-blue-600 mt-0.5">📐 {d.spec_evidence}</div>
-                        )}
-                        {renamedFromOriginal && (
-                          <div className="text-[9px] text-gray-400 mt-0.5 italic">원본: {d.originals.join(' / ')}</div>
-                        )}
-                      </div>
-                    );
+                    return <DimensionCell d={d} isWinner={i === c.dimensionWinners[dim]} renamedFromOriginal={!!renamedFromOriginal} originals={d.originals} />;
                   }} />
                 ))}
               </>
@@ -460,18 +447,8 @@ export default function ComparePage() {
                 {c.extraDims.map((dim: string) => (
                   <Row key={dim} label={dim} items={items} render={(_it, i) => {
                     const d = c.itemDimMap[i][dim];
-                    if (!d || d.score == null) return <Missing />;
-                    return (
-                      <div>
-                        <WinnerCell isWinner={i === c.dimensionWinners[dim]}>
-                          <ScoreCell score={d.score} />
-                          {d.verdict && <span className="ml-2 text-xs text-gray-500">{d.verdict}</span>}
-                        </WinnerCell>
-                        {d.spec_evidence && (
-                          <div className="text-[10px] text-blue-600 mt-0.5">📐 {d.spec_evidence}</div>
-                        )}
-                      </div>
-                    );
+                    if (!d) return <Missing />;
+                    return <DimensionCell d={d} isWinner={i === c.dimensionWinners[dim]} />;
                   }} />
                 ))}
               </>
@@ -620,6 +597,42 @@ function ScoreCell({ score }: { score?: number | null }) {
   if (score == null) return <Missing />;
   const color = score >= 8 ? 'text-green-600' : score >= 6 ? 'text-blue-600' : score >= 4 ? 'text-yellow-600' : 'text-red-600';
   return <span className={`font-bold ${color}`}>{score}/10</span>;
+}
+
+function DimensionCell({ d, isWinner, renamedFromOriginal, originals }: {
+  d: { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] };
+  isWinner?: boolean;
+  renamedFromOriginal?: boolean;
+  originals?: string[];
+}) {
+  const spec = (d.spec_evidence || '').trim();
+  const hasSpec = spec && spec !== '없음' && spec !== 'null' && spec !== 'N/A';
+  const verdictColor = d.verdict?.includes('약점') || d.verdict?.includes('치명')
+    ? 'bg-red-50 text-red-700'
+    : d.verdict?.includes('강점')
+      ? 'bg-green-50 text-green-700'
+      : 'bg-gray-100 text-gray-600';
+  return (
+    <div>
+      {/* 1순위: 스펙 (있으면 크게) */}
+      {hasSpec ? (
+        <div className={`text-sm leading-snug ${isWinner ? 'font-bold text-green-700' : 'text-gray-800'}`}>
+          {isWinner && <Trophy className="inline w-3.5 h-3.5 text-yellow-500 mr-1" />}
+          📐 {spec}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-400 italic">스펙 미표기</div>
+      )}
+      {/* 2순위: 점수 + 판정 */}
+      <div className="flex items-center gap-2 mt-1">
+        <ScoreCell score={d.score} />
+        {d.verdict && <span className={`text-[10px] px-1.5 py-0.5 rounded ${verdictColor}`}>{d.verdict}</span>}
+      </div>
+      {renamedFromOriginal && originals && (
+        <div className="text-[9px] text-gray-400 mt-0.5 italic">원본: {originals.join(' / ')}</div>
+      )}
+    </div>
+  );
 }
 
 function VerdictTag({ v }: { v?: string }) {
