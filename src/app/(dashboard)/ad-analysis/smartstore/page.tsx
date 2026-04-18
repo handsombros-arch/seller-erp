@@ -5,7 +5,7 @@ import { Megaphone } from 'lucide-react';
 export default function SmartStoreAdAnalysisPage() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-[#F8F9FA] flex items-center justify-center mb-4">
+      <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-4">
         <Megaphone className="w-7 h-7 text-[#B0B8C1]" />
       </div>
       <h2 className="text-[18px] font-bold text-[#191F28] mb-1">스마트스토어 광고 분석</h2>

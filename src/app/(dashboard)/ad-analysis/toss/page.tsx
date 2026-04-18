@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
-import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown } from 'lucide-react';
+import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Package } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -388,70 +388,103 @@ export default function TossAdAnalysisPage() {
 
       {hasData && (
         <>
-          {/* 필터 바 */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-4 flex flex-wrap items-center gap-3">
-            <span className="text-[11px] text-[#8B95A1]">필터</span>
-            <div className="flex items-center gap-1.5">
-              <label className="text-[11px] text-[#6B7684]">기간</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white" />
-              <span className="text-[11px] text-[#8B95A1]">~</span>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white" />
-              {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo(''); }}
-                  className="h-7 px-2 rounded-lg text-[11px] text-[#6B7684] hover:bg-[#F8F9FA]">초기화</button>
+          {/* 캠페인/상품 필터 (쿠팡과 동일 위치: KPI 위) */}
+          {(campaigns.length > 1 || products.length > 1) && (
+            <div className="flex flex-wrap items-center gap-3">
+              {campaigns.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[#6B7684]">캠페인</label>
+                  <select
+                    value={campaignFilter}
+                    onChange={(e) => setCampaignFilter(e.target.value)}
+                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]"
+                  >
+                    <option value="">전체 ({campaigns.length})</option>
+                    {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
+              {products.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[#6B7684]">상품</label>
+                  <select
+                    value={productFilter}
+                    onChange={(e) => setProductFilter(e.target.value)}
+                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] max-w-[300px] truncate"
+                  >
+                    <option value="">전체 ({products.length})</option>
+                    {products.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+              {(campaignFilter || productFilter) && (
+                <button
+                  onClick={() => { setCampaignFilter(''); setProductFilter(''); }}
+                  className="text-[12px] text-[#3182F6] font-medium hover:underline"
+                >
+                  필터 초기화
+                </button>
               )}
             </div>
-            {campaigns.length > 0 && (
-              <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white">
-                <option value="">캠페인 전체</option>
-                {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            )}
-            {products.length > 0 && (
-              <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white">
-                <option value="">상품 전체</option>
-                {products.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            )}
-            <span className="text-[11px] text-[#8B95A1] ml-auto">집계 대상: {filteredRows.length.toLocaleString()}행 / 전체 {rows.length.toLocaleString()}행</span>
-          </div>
+          )}
 
           {/* KPI 카드 */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <KPICard icon={<TrendingUp className="h-3.5 w-3.5" />} label="노출" value={fmtN(totals.impressions)} />
-            <KPICard icon={<TrendingUp className="h-3.5 w-3.5" />} label="클릭" value={fmtN(totals.clicks)} sub={`CTR ${fmtPct(totals.ctr)}`} />
-            <KPICard icon={<TrendingDown className="h-3.5 w-3.5" />} label="CPC" value={fmtW(totals.cpc)} accent="amber" />
-            <KPICard icon={<TrendingUp className="h-3.5 w-3.5" />} label="주문" value={fmtN(totals.orderCount)} sub={`CVR ${fmtPct(totals.cvr)}`} />
-            <KPICard icon={<TrendingUp className="h-3.5 w-3.5" />} label="판매수량" value={fmtN(totals.salesQty)} />
-            <KPICard label="광고비" value={fmtW(totals.cost)} accent="red" />
-            <KPICard label="매출" value={fmtW(totals.revenue)} accent="emerald" />
-            <KPICard label="ROAS" value={`${totals.roas.toFixed(0)}%`} accent={totals.roas >= 300 ? 'emerald' : totals.roas >= 100 ? 'blue' : 'red'} />
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[12px] text-[#8B95A1]">핵심 지표</span>
+              <span className="text-[11px] text-[#B0B8C1]">집계 {filteredRows.length.toLocaleString()}행 / 전체 {rows.length.toLocaleString()}행</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <KPICard icon={<Eye className="h-4 w-4" />} label="노출" value={fmtN(totals.impressions)} accent="blue" />
+              <KPICard icon={<MousePointerClick className="h-4 w-4" />} label="클릭" value={fmtN(totals.clicks)} sub={`CTR ${fmtPct(totals.ctr)}`} accent="blue" />
+              <KPICard icon={<DollarSign className="h-4 w-4" />} label="CPC" value={fmtW(totals.cpc)} accent="amber" />
+              <KPICard icon={<ShoppingCart className="h-4 w-4" />} label="주문" value={fmtN(totals.orderCount)} sub={`CVR ${fmtPct(totals.cvr)}`} accent="emerald" />
+              <KPICard icon={<Package className="h-4 w-4" />} label="판매수량" value={fmtN(totals.salesQty)} accent="emerald" />
+              <KPICard icon={<TrendingDown className="h-4 w-4" />} label="광고비" value={fmtW(totals.cost)} accent="red" />
+              <KPICard icon={<TrendingUp className="h-4 w-4" />} label="매출" value={fmtW(totals.revenue)} accent="emerald" />
+              <KPICard icon={totals.roas >= 100 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} label="ROAS" value={`${totals.roas.toFixed(0)}%`} accent={totals.roas >= 300 ? 'emerald' : totals.roas >= 100 ? 'blue' : 'red'} />
+            </div>
           </div>
 
-          {/* 탭 바 */}
+          {/* 탭 바 (쿠팡과 동일) */}
           <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-4 py-1.5 text-[12px] rounded-lg font-semibold transition-colors ${
+                className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
                   tab === t.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
                 }`}
               >{t.label}</button>
             ))}
           </div>
 
+          {/* 기간 선택 bar (쿠팡과 동일 위치: 탭 아래) */}
+          <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-[#F2F4F6] px-4 py-2.5">
+            <span className="text-[12px] font-semibold text-[#191F28]">기간</span>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+            <span className="text-[11px] text-[#6B7684]">~</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
+            )}
+            {(dateFrom || dateTo) && (
+              <span className="text-[10px] text-[#6B7684] ml-1">
+                {daily.length}일 / {tab !== 'trend' ? `${listRows.length}항목` : `${filteredRows.length.toLocaleString()}행`}
+              </span>
+            )}
+          </div>
+
           {/* 기간별 추이 탭 */}
           {tab === 'trend' && (
             <>
-              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-[14px] font-bold text-[#191F28]">📊 노출수 & CPC 변화</h2>
+                    <h3 className="text-[13px] font-bold text-[#191F28]">노출수 & CPC 변화</h3>
                     <p className="text-[11px] text-[#8B95A1] mt-0.5">일자별 노출량 변동과 클릭당 비용 추이</p>
                   </div>
                   <GranToggle gran={gran} onChange={setGran} />
@@ -471,9 +504,9 @@ export default function TossAdAnalysisPage() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[14px] font-bold text-[#191F28]">💰 광고비 vs 매출 & ROAS</h2>
+                  <h3 className="text-[13px] font-bold text-[#191F28]">광고비 · 매출 · ROAS</h3>
                   <GranToggle gran={gran} onChange={setGran} />
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
@@ -493,9 +526,9 @@ export default function TossAdAnalysisPage() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[14px] font-bold text-[#191F28]">🎯 클릭 & 전환율</h2>
+                  <h3 className="text-[13px] font-bold text-[#191F28]">클릭 & 전환율</h3>
                   <GranToggle gran={gran} onChange={setGran} />
                 </div>
                 <ResponsiveContainer width="100%" height={240}>
@@ -515,9 +548,9 @@ export default function TossAdAnalysisPage() {
               </div>
 
               {/* 기간별 요약 테이블 */}
-              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[14px] font-bold text-[#191F28]">📅 기간별 요약</h2>
+                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 요약</h3>
                   <div className="flex gap-2">
                     <GranToggle gran={gran} onChange={setGran} />
                     <button
@@ -534,12 +567,12 @@ export default function TossAdAnalysisPage() {
 
           {/* 캠페인별 / 광고세트별 / 상품별 탭 */}
           {tab !== 'trend' && (
-            <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+            <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h2 className="text-[14px] font-bold text-[#191F28]">
-                  {tab === 'campaign' ? '🎯 캠페인별 분석' : tab === 'adSet' ? '📂 광고세트별 분석' : '📦 상품별 분석'}
+                <h3 className="text-[13px] font-bold text-[#191F28]">
+                  {tab === 'campaign' ? '캠페인별 분석' : tab === 'adSet' ? '광고세트별 분석' : '상품별 분석'}
                   <span className="ml-2 text-[11px] font-normal text-[#8B95A1]">{listRows.length.toLocaleString()}개</span>
-                </h2>
+                </h3>
                 <div className="flex flex-wrap items-center gap-2">
                   {(tab === 'campaign' || tab === 'adSet') && (
                     <span className="text-[11px] text-[#8B95A1]">행 클릭 → 일자별 상세</span>
@@ -676,31 +709,34 @@ function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gra
 }
 
 function KPICard({ icon, label, value, sub, accent = 'gray' }: { icon?: React.ReactNode; label: string; value: string; sub?: string; accent?: 'gray' | 'emerald' | 'red' | 'blue' | 'amber' }) {
-  const color = {
-    gray: 'text-[#191F28]',
-    emerald: 'text-[#10B981]',
-    red: 'text-[#EF4444]',
-    blue: 'text-[#3182F6]',
-    amber: 'text-[#F59E0B]',
+  const badge = {
+    gray: 'bg-[#F2F4F6] text-[#6B7684]',
+    emerald: 'bg-green-50 text-green-600',
+    red: 'bg-red-50 text-red-600',
+    blue: 'bg-blue-50 text-blue-600',
+    amber: 'bg-orange-50 text-orange-600',
   }[accent];
   return (
-    <div className="bg-white rounded-2xl border border-[#E5E8EB] p-4">
-      <div className="flex items-center gap-1.5 text-[11px] text-[#8B95A1] mb-1">
-        {icon}<span>{label}</span>
+    <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4 flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${badge}`}>
+          {icon}
+        </div>
+        <span className="text-[12px] text-[#6B7684] font-medium">{label}</span>
       </div>
-      <div className={`text-[20px] font-bold ${color}`}>{value}</div>
-      {sub && <div className="text-[10px] text-[#B0B8C1] mt-0.5">{sub}</div>}
+      <p className="text-[20px] font-bold text-[#191F28] mt-1">{value}</p>
+      {sub && <p className="text-[11px] text-[#B0B8C1]">{sub}</p>}
     </div>
   );
 }
 
 function GranToggle({ gran, onChange }: { gran: Gran; onChange: (g: Gran) => void }) {
   return (
-    <div className="flex gap-1 bg-[#F8F9FA] rounded-lg p-0.5">
+    <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
       {(['daily', 'weekly', 'monthly'] as const).map((g) => (
         <button key={g} onClick={() => onChange(g)}
-          className={`px-3 py-1 text-[11px] rounded-md font-medium transition-colors ${
-            gran === g ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'
+          className={`px-3 py-1.5 text-[12px] rounded-md font-medium transition-colors ${
+            gran === g ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
           }`}>
           {g === 'daily' ? '일별' : g === 'weekly' ? '주별' : '월별'}
         </button>
