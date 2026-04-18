@@ -47,3 +47,12 @@ test-*.mjs
 *_sample.json
 
 .vercel
+.env.local
+
+# 소싱 분석 - Chrome 프로파일/결과 (Tailwind 스캔 제외 위해)
+sourcing/.profiles/
+sourcing/results/
+sourcing/__pycache__/
+test/data/
+test/.chrome-profile/
+test/.chrome-profile-naver/

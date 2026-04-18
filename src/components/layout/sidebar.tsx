@@ -15,9 +15,11 @@ import {
   ShoppingCart,
   Megaphone,
   Tag,
+  Calculator,
   Settings,
   Sun,
   Moon,
+  Search,
 } from 'lucide-react';
 
 const navItems = [
@@ -30,6 +32,8 @@ const navItems = [
   { title: '채널 판매',   href: '/channel-sales', icon: ShoppingCart,    exact: false, section: 'sales' },
   { title: '광고 분석',   href: '/ad-analysis',   icon: Megaphone,       exact: false, section: 'sales' },
   { title: '가격 분석',   href: '/price-tool',    icon: Tag,             exact: false, section: 'sales' },
+  { title: '소싱 분석',   href: '/sourcing',      icon: Search,          exact: false, section: 'sales' },
+  { title: '정산',        href: '/settlement',    icon: Calculator,      exact: false, section: 'etc' },
   { title: '설정',        href: '/settings',      icon: Settings,        exact: false, section: 'etc' },
 ];
 
