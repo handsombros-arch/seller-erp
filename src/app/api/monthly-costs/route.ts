@@ -36,17 +36,22 @@ export async function PUT(request: NextRequest) {
   const { items } = await request.json() as { items: any[] };
   const admin = await createAdminClient();
 
-  for (const item of items) {
-    if (item.id) {
-      const update: any = {
-        label: item.label,
-        amount: item.amount ?? 0,
-        vat_applicable: item.vat_applicable ?? true,
-      };
-      if (item.note !== undefined) update.note = item.note;
-      await admin.from('monthly_costs').update(update).eq('id', item.id);
-    }
-  }
+  const updates = items.filter((i: any) => i.id).map((item: any) => ({
+    id: item.id,
+    label: item.label,
+    vat_applicable: item.vat_applicable ?? true,
+    is_income: item.is_income ?? false,
+    is_locked: item.is_locked ?? false,
+    sort_order: item.sort_order ?? 0,
+    note: item.note ?? '',
+    category: item.category ?? 'variable',
+  }));
+
+  // 병렬 업데이트
+  await Promise.all(updates.map((u: any) => {
+    const { id, ...fields } = u;
+    return admin.from('monthly_costs').update(fields).eq('id', id);
+  }));
 
   return NextResponse.json({ ok: true });
 }
@@ -60,7 +65,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const admin = await createAdminClient();
 
-  // 스냅샷 저장
+  // 스냅샷 저장 (기존 호환)
   if (body.action === 'snapshot') {
     const { year_month } = body;
     const { data: costs } = await admin.from('monthly_costs').select('id, amount');
@@ -76,30 +81,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, saved: rows.length });
   }
 
+  // 월별 금액 스냅샷 저장 (프론트에서 금액 직접 전달)
+  if (body.action === 'snapshot_items') {
+    const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number }[] };
+    const rows = (amounts ?? []).map((a: any) => ({
+      year_month,
+      cost_id: a.id,
+      amount: a.amount ?? 0,
+    }));
+    if (rows.length) {
+      await admin.from('monthly_cost_snapshots')
+        .upsert(rows, { onConflict: 'year_month,cost_id' });
+    }
+    return NextResponse.json({ ok: true, saved: rows.length });
+  }
+
   if (body.id) {
     const update: any = {};
     if (body.label !== undefined) update.label = body.label;
     if (body.amount !== undefined) update.amount = body.amount;
     if (body.vat_applicable !== undefined) update.vat_applicable = body.vat_applicable;
     if (body.note !== undefined) update.note = body.note;
+    if (body.is_income !== undefined) update.is_income = body.is_income;
+    if (body.is_locked !== undefined) update.is_locked = body.is_locked;
+    if (body.sort_order !== undefined) update.sort_order = body.sort_order;
+    if (body.category !== undefined) update.category = body.category;
     await admin.from('monthly_costs').update(update).eq('id', body.id);
-  } else {
-    const { data: maxRow } = await admin
-      .from('monthly_costs')
-      .select('sort_order')
-      .order('sort_order', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const row: any = {
-      label: body.label,
-      amount: body.amount ?? 0,
-      vat_applicable: body.vat_applicable ?? true,
-      parent_id: body.parent_id ?? null,
-      sort_order: (maxRow?.sort_order ?? 0) + 1,
-    };
-    if (body.note !== undefined) row.note = body.note;
-    const { data: inserted } = await admin.from('monthly_costs').insert(row).select('*').single();
+    return NextResponse.json({ ok: true });
   }
+
+  const { data: maxRow } = await admin
+    .from('monthly_costs')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row: any = {
+    label: body.label,
+    amount: body.amount ?? 0,
+    vat_applicable: body.vat_applicable ?? true,
+    is_income: body.is_income ?? false,
+    is_locked: body.is_locked ?? false,
+    parent_id: body.parent_id ?? null,
+    sort_order: (maxRow?.sort_order ?? 0) + 1,
+  };
+  if (body.note !== undefined) row.note = body.note;
+  const { data: inserted } = await admin.from('monthly_costs').insert(row).select('*').single();
 
   return NextResponse.json(inserted ?? { ok: true });
 }
@@ -108,6 +135,14 @@ export async function DELETE(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+
+  // 월별 스냅샷 삭제
+  const ym = request.nextUrl.searchParams.get('ym');
+  if (ym) {
+    const admin = await createAdminClient();
+    await admin.from('monthly_cost_snapshots').delete().eq('year_month', ym);
+    return NextResponse.json({ ok: true, deleted: ym });
+  }
 
   const id = request.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id 필요' }, { status: 400 });
