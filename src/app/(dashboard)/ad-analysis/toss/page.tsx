@@ -146,8 +146,14 @@ export default function TossAdAnalysisPage() {
   // 전역 필터
   const [campaignFilter, setCampaignFilter] = useState<string>('');
   const [productFilter, setProductFilter] = useState<string>('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   // 탭
   const [tab, setTab] = useState<TabKey>('trend');

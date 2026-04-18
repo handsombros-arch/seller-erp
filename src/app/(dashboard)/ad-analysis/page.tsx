@@ -357,8 +357,14 @@ export default function AdAnalysisPage() {
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
   const [placeMetric, setPlaceMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d'>('cost');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [metricTypes, setMetricTypes] = useState<Record<string, 'bar' | 'line'>>({});
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
