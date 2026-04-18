@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'rea
 import { formatNumber } from '@/lib/utils';
 import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Radio } from 'lucide-react';
 import {
-  ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
 /* ══ 공통 포맷 ══ */
@@ -87,6 +87,24 @@ function bucketKey(d: string, g: Gran): string {
 type TabKey = 'trend' | 'campaign' | 'adSet' | 'product';
 type SortKey = 'cost' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr' | 'cvr' | 'cpc' | 'cpm' | 'orderCount';
 
+type MetricKey = 'impressions' | 'cpm' | 'clicks' | 'ctr' | 'cpc' | 'orderCount' | 'cvr' | 'cost' | 'revenue' | 'roas';
+type MetricUnit = 'cnt' | 'won' | 'pct';
+interface MetricDef { key: MetricKey; label: string; type: 'bar' | 'line'; unit: MetricUnit; color: string; }
+
+const METRICS: MetricDef[] = [
+  { key: 'impressions', label: '노출',    type: 'line', unit: 'cnt', color: '#3182F6' },
+  { key: 'cpm',         label: 'CPM',     type: 'line', unit: 'won', color: '#F59E0B' },
+  { key: 'clicks',      label: '클릭',    type: 'line', unit: 'cnt', color: '#8B5CF6' },
+  { key: 'ctr',         label: 'CTR',     type: 'line', unit: 'pct', color: '#06B6D4' },
+  { key: 'cpc',         label: 'CPC',     type: 'line', unit: 'won', color: '#A855F7' },
+  { key: 'orderCount',  label: '주문',    type: 'bar',  unit: 'cnt', color: '#F97316' },
+  { key: 'cvr',         label: 'CVR',     type: 'line', unit: 'pct', color: '#EAB308' },
+  { key: 'cost',        label: '광고비',  type: 'bar',  unit: 'won', color: '#EF4444' },
+  { key: 'revenue',     label: '매출',    type: 'bar',  unit: 'won', color: '#10B981' },
+  { key: 'roas',        label: 'ROAS',    type: 'line', unit: 'pct', color: '#3182F6' },
+];
+const DEFAULT_METRICS: MetricKey[] = ['impressions', 'cpm'];
+
 interface AggRow {
   key: string; name: string;
   impressions: number; clicks: number; cost: number; revenue: number; orderCount: number;
@@ -167,6 +185,11 @@ export default function TossAdAnalysisPage() {
   // 드릴다운
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
+  // 기간별 추이 차트 지표
+  const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
+  const [metricTypes, setMetricTypes] = useState<Partial<Record<MetricKey, 'bar' | 'line'>>>({});
+  const [rightAxisKeys, setRightAxisKeys] = useState<Set<MetricKey>>(new Set(['cpm']));
+
   useEffect(() => {
     (async () => {
       try {
@@ -205,10 +228,18 @@ export default function TossAdAnalysisPage() {
         return merged;
       });
       if (newRaw.length) {
-        fetch('/api/ad-analysis/toss', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: newRaw, filename: files[0]?.name ?? 'toss' }),
-        }).catch(() => {});
+        try {
+          const res = await fetch('/api/ad-analysis/toss', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: newRaw, filename: files[0]?.name ?? 'toss' }),
+          });
+          if (!res.ok) {
+            const body = await res.text();
+            setError(`DB 저장 실패 (${res.status}): ${body.slice(0, 200)} — 새로고침 시 데이터 사라질 수 있음`);
+          }
+        } catch (err: any) {
+          setError(`DB 저장 실패: ${err.message} — 새로고침 시 데이터 사라질 수 있음`);
+        }
       }
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -487,30 +518,120 @@ export default function TossAdAnalysisPage() {
             )}
           </div>
 
-          {/* 기간별 추이 탭 — 노출 & CPM 하나로 단순화 */}
+          {/* 기간별 추이 탭 */}
           {tab === 'trend' && (
             <>
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-[13px] font-bold text-[#191F28]">노출수 & CPM</h3>
-                    <p className="text-[11px] text-[#8B95A1] mt-0.5">CPM(천회 노출당 비용)이 변동하면 지면이 바뀐 신호</p>
+                    <h3 className="text-[13px] font-bold text-[#191F28]">기간별 추이</h3>
+                    <p className="text-[11px] text-[#8B95A1] mt-0.5">칩 클릭 → 막대 → 꺾은선 → 숨김 · 보조축: 오른쪽 Y축 사용</p>
                   </div>
                   <GranToggle gran={gran} onChange={setGran} />
                 </div>
-                <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={daily}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
-                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #F2F4F6', borderRadius: '12px', fontSize: '12px' }}
-                      formatter={(v: any) => fmtN(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Area yAxisId="left" type="monotone" dataKey="impressions" fill="#DBEAFE" stroke="#3182F6" name="노출수" strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="cpm" stroke="#F59E0B" name="CPM" strokeWidth={2.5} dot={{ r: 3 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+
+                {/* Metric chips */}
+                <div className="flex flex-wrap gap-2">
+                  {METRICS.map((m) => {
+                    const active = activeMetrics.includes(m.key);
+                    const currentType = metricTypes[m.key] || m.type;
+                    const handleClick = () => {
+                      if (!active) {
+                        setActiveMetrics((prev) => [...prev, m.key]);
+                        setMetricTypes((prev) => ({ ...prev, [m.key]: 'bar' }));
+                      } else if (currentType === 'bar') {
+                        setMetricTypes((prev) => ({ ...prev, [m.key]: 'line' }));
+                      } else {
+                        setActiveMetrics((prev) => prev.filter((k) => k !== m.key));
+                      }
+                    };
+                    return (
+                      <button key={m.key} onClick={handleClick}
+                        className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
+                          active ? 'text-white shadow-sm' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                        }`}
+                        style={active ? { backgroundColor: m.color } : {}}>
+                        {m.label} {active ? (currentType === 'bar' ? '▊' : '━') : ''}
+                      </button>
+                    );
+                  })}
+                  {activeMetrics.length > 0 && (
+                    <div className="flex items-center gap-1 ml-1 border-l border-[#E5E8EB] pl-2">
+                      <span className="text-[10px] text-[#6B7684]">보조축:</span>
+                      {activeMetrics.map((key) => {
+                        const m = METRICS.find((x) => x.key === key);
+                        if (!m) return null;
+                        const isRight = rightAxisKeys.has(key);
+                        return (
+                          <button key={key}
+                            onClick={() => setRightAxisKeys((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(key)) n.delete(key); else n.add(key);
+                              return n;
+                            })}
+                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}
+                            style={isRight ? { backgroundColor: m.color } : {}}>
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Chart */}
+                {activeMetrics.length > 0 && (() => {
+                  const activeDefs = METRICS.filter((m) => activeMetrics.includes(m.key));
+                  const leftDef = activeDefs.find((m) => !rightAxisKeys.has(m.key));
+                  const rightDef = activeDefs.find((m) => rightAxisKeys.has(m.key));
+                  const fmtUnit = (u: MetricUnit) => (v: number) => {
+                    if (u === 'pct') return `${v.toFixed(1)}%`;
+                    if (u === 'won') return fmtN(v);
+                    return fmtN(v);
+                  };
+                  return (
+                    <div className="h-[360px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={daily}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                          <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }}
+                            tickFormatter={leftDef ? fmtUnit(leftDef.unit) : (v) => String(v)} />
+                          {rightDef && (
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }}
+                              tickFormatter={fmtUnit(rightDef.unit)} />
+                          )}
+                          <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #F2F4F6', borderRadius: '12px', fontSize: '12px' }}
+                            formatter={(v: any, name: string) => {
+                              const def = METRICS.find((x) => x.label === name);
+                              if (!def) return fmtN(Number(v));
+                              if (def.unit === 'pct') return `${Number(v).toFixed(2)}%`;
+                              if (def.unit === 'won') return fmtW(Number(v));
+                              return fmtN(Number(v));
+                            }} />
+                          <Legend wrapperStyle={{ fontSize: '12px' }} />
+                          {activeDefs.map((m) => {
+                            const yId = rightAxisKeys.has(m.key) ? 'right' : 'left';
+                            const chartType = metricTypes[m.key] || m.type;
+                            if (chartType === 'bar') {
+                              return (
+                                <Bar key={m.key} yAxisId={yId} dataKey={m.key} name={m.label}
+                                  fill={m.color} opacity={0.8} radius={[4, 4, 0, 0]} />
+                              );
+                            }
+                            return (
+                              <Line key={m.key} yAxisId={yId} type="monotone" dataKey={m.key} name={m.label}
+                                stroke={m.color} strokeWidth={2.5} dot={{ r: 3, fill: m.color }} />
+                            );
+                          })}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  );
+                })()}
+                {activeMetrics.length === 0 && (
+                  <div className="text-center py-10 text-[12px] text-[#B0B8C1]">칩을 클릭해서 지표를 추가하세요</div>
+                )}
               </div>
 
               <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
