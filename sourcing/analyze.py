@@ -7,12 +7,22 @@ Usage:
 출력: results/{base}-analysis.json
 """
 import os
+import re
 import sys
 import json
 import time
 import requests
 from io import BytesIO
 from pathlib import Path
+
+_MEANINGFUL_CHAR_RE = re.compile(r"[가-힣a-zA-Z0-9]")
+
+
+def count_meaningful_chars(text) -> int:
+    """한글 음절 + 영문 + 숫자 개수. 이모지/이모티콘/자음만/반복기호/공백 제외."""
+    if not text:
+        return 0
+    return len(_MEANINGFUL_CHAR_RE.findall(str(text)))
 
 if os.name == "nt":
     try: sys.stdout.reconfigure(encoding="utf-8")
@@ -320,15 +330,18 @@ raw JSON만 출력 (코드블록 X):
         return {"error": str(e), "raw": getattr(resp, "text", None) if 'resp' in dir() else None}
 
 
+MIN_MEANINGFUL_CHARS = int(os.environ.get("MIN_MEANINGFUL_CHARS", "20"))
+
+
 def select_representative_reviews(reviews: list[dict], target_count: int = 200) -> tuple[list[dict], dict]:
     """객관성 있는 리뷰 샘플링.
-    - 30자 미만 무내용 필터 (가구매 의심 패턴)
+    - 의미있는 문자(한글/영문/숫자) 20자 미만 제외 — 이모지/이모티콘/반복기호 등 가구매 신호 필터
     - 별점별 비례 샘플링 (부정 가중)
     - 각 별점 내 도움됨 순
     Returns: (selected_reviews, sampling_info)
     """
-    # 1) 필터: 본문 있고 30자+
-    filtered = [r for r in reviews if (r.get("text") and len(str(r["text"]).strip()) >= 30)]
+    # 1) 필터: 의미있는 문자가 MIN_MEANINGFUL_CHARS 이상
+    filtered = [r for r in reviews if count_meaningful_chars(r.get("text")) >= MIN_MEANINGFUL_CHARS]
 
     # 2) 별점별 분류
     by_rating: dict[int, list[dict]] = {1: [], 2: [], 3: [], 4: [], 5: []}
@@ -368,9 +381,10 @@ def select_representative_reviews(reviews: list[dict], target_count: int = 200) 
 
     sampling_info = {
         "total_reviews": len(reviews),
-        "filtered_short_below_30chars": len(reviews) - len(filtered),
+        "filtered_by_meaningful_chars": len(reviews) - len(filtered),
+        "min_meaningful_chars": MIN_MEANINGFUL_CHARS,
         "selected_count": len(selected),
-        "selection_strategy": "별점별 비례 샘플링 (부정 가중) + 각 별점 내 도움됨순",
+        "selection_strategy": "의미있는 문자 필터 + 별점별 비례 (부정 가중) + 각 별점 내 도움됨순",
         "negative_weight": "1~3★ 비중 55% (가구매 보정)",
         "rating_distribution_in_sample": actual_dist,
     }
@@ -451,7 +465,7 @@ trend_durability (트렌드 지속성):
 
 ⚠️ 샘플링 정보 (객관성 보정):
 - 전체 {sampling_info['total_reviews']}개 리뷰 중 {sampling_info['selected_count']}개를 분석에 사용
-- 짧은 리뷰 ({sampling_info['filtered_short_below_30chars']}개 < 30자) 제외
+- 무의미 리뷰 ({sampling_info['filtered_by_meaningful_chars']}개 < {sampling_info['min_meaningful_chars']}자 유의미 문자) 제외 (이모지/이모티콘/반복기호 필터)
 - 별점별 비례 + 부정 가중 (1~3★ 55% 비중) — 가구매 보정
 - 샘플 분포: {sampling_info['rating_distribution_in_sample']}
 - 각 리뷰 옆 👍N = 도움됨 수 (높을수록 진짜 구매자 공감)
@@ -494,6 +508,16 @@ raw JSON만 출력 (코드블록 X):
   "review_topic_frequency": [
     {{"topic": "디자인", "mention_count": 45, "mention_pct": 35, "sentiment": "positive/mixed/negative", "key_quotes": ["1~2개 인용"]}}
   ],
+  "meaningful_keywords": [
+    {{
+      "keyword": "리뷰 본문에 자주 등장한 **구체 단어/구**. '좋아요' 같은 범용 형용사 금지. 소싱 시 시그널 되는 단어만 (예: 초경량, A4수납, 어깨편함, 냄새없음, 박음질불량, 지퍼뻑뻑, 색상다름, 배송빠름, 재구매의사)",
+      "mention_count": "추정 언급 횟수 (정수)",
+      "category": "품질/디자인/사용감/배송/가격/소재/사이즈/AS/비교/기타 중 택1",
+      "sentiment": "positive/negative/neutral",
+      "key_quotes": ["대표 인용 1~2개 (원문 그대로 짧게)"]
+    }}
+  ],
+  "_keywords_instruction": "15~30개, mention_count 내림차순 정렬, 중복 의미 금지. 각 키워드는 category와 sentiment가 일관되게 매칭되도록.",
   "category_dimensions_scored": [
     {{
       "dimension": "차원명 (예: 수납력)",

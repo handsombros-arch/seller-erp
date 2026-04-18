@@ -591,6 +591,31 @@ export default function SourcingDetailPage() {
                 </div>
               )}
 
+              {/* 의미있는 키워드 */}
+              {ra.meaningful_keywords?.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3">🔑 리뷰 핵심 키워드 <span className="text-xs font-normal text-gray-500 ml-1">({ra.meaningful_keywords.length}개)</span></h3>
+                  <div className="flex flex-wrap gap-2">
+                    {ra.meaningful_keywords.map((k: any, i: number) => {
+                      const sentBg = k.sentiment === 'positive' ? 'bg-green-50 border-green-300 text-green-800'
+                        : k.sentiment === 'negative' ? 'bg-red-50 border-red-300 text-red-800'
+                        : 'bg-gray-50 border-gray-300 text-gray-700';
+                      const catColor = k.sentiment === 'positive' ? 'bg-green-600'
+                        : k.sentiment === 'negative' ? 'bg-red-600'
+                        : 'bg-gray-500';
+                      const quotes = (k.key_quotes || []).slice(0, 2).join('  |  ');
+                      return (
+                        <div key={i} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs ${sentBg}`} title={quotes}>
+                          <span className={`${catColor} text-white text-[9px] font-semibold px-1.5 py-0.5 rounded`}>{k.category}</span>
+                          <strong>{k.keyword}</strong>
+                          <span className="text-[10px] opacity-70">{k.mention_count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* 타겟 비교 (페이지 의도 vs 실제 구매자) */}
               {(ra.page_intended_targets?.length > 0 || ra.actual_buyer_targets?.length > 0) && (
                 <div className="bg-white border rounded-lg p-4">
