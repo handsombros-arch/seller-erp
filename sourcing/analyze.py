@@ -199,7 +199,7 @@ def analyze_detail_images(images: list[Image.Image], product_title: str | None) 
       "백팩": ["재질", "크기", "무게", "색상", "용량", "노트북칸", "끈길이", "수납포켓", "방수", "원산지"],
       "화장품": ["용량", "주성분", "피부타입", "사용시간", "향", "PH", "제형", "원산지", "유통기한", "유효성분"],
       "가전": ["전력", "크기", "무게", "전압", "소음", "에너지등급", "보증", "원산지"],
-      "구강용품/샤워기": ["수압", "분사모드", "용량", "무게", "방수", "충전시간", "배터리"],
+      "구강세정기": ["수압", "분사모드", "물통용량", "무게/휴대성", "방수/내구성", "충전/배터리", "노즐", "소음", "A/S"],
       "의류": ["재질", "사이즈", "색상", "신축성", "세탁법", "안감", "원산지", "촉감"],
       "가구": ["크기", "재질", "내하중", "조립", "마감", "보증", "원산지"]
     }},
@@ -257,12 +257,44 @@ CATEGORY_DIMENSIONS = {
 }
 
 
+_CATEGORY_KEY_ALIASES = {
+    "구강세정기": ["구강세정기", "구강용품", "샤워기", "워터픽", "치아"],
+    "백팩": ["백팩", "배낭"],
+    "가방": ["가방", "핸드백", "토트백", "숄더백", "크로스백"],
+    "신발": ["신발", "스니커즈", "운동화", "구두", "슬리퍼"],
+    "의류": ["의류", "티셔츠", "셔츠", "바지", "원피스", "자켓", "점퍼", "코트"],
+    "화장품": ["화장품", "메이크업", "립스틱", "파운데이션"],
+    "스킨케어": ["스킨케어", "토너", "에센스", "세럼", "크림", "로션", "클렌저"],
+    "가전": ["가전", "청소기", "공기청정기", "에어컨", "세탁기", "냉장고"],
+    "주방용품": ["주방", "냄비", "프라이팬", "도마", "조리도구"],
+    "가구": ["가구", "책상", "의자", "소파", "침대", "수납장"],
+    "식품": ["식품", "간식", "과자", "음료", "차", "커피"],
+    "전자제품": ["전자제품", "이어폰", "헤드폰", "키보드", "마우스", "충전기", "케이블"],
+    "유아동": ["유아", "아동", "아기", "유아동", "베이비"],
+    "문구": ["문구", "노트", "펜", "필기구", "다이어리"],
+    "스포츠/레저": ["스포츠", "레저", "운동", "헬스", "요가", "자전거"],
+}
+
+
 def get_category_dimensions(category: str | None) -> list[str]:
     if not category: return CATEGORY_DIMENSIONS["default"]
     cat = category.strip()
+    # 1) 직접 매칭
     for key in CATEGORY_DIMENSIONS:
-        if key in cat or cat in key:
+        if key == "default": continue
+        if key == cat or key in cat or cat in key:
             return CATEGORY_DIMENSIONS[key]
+    # 2) alias 키워드 매칭
+    import re as _re
+    norm = lambda s: _re.sub(r"[\s_\-/·,()]", "", s.lower())
+    cat_n = norm(cat)
+    best = None
+    for key, aliases in _CATEGORY_KEY_ALIASES.items():
+        score = sum(len(norm(a)) for a in aliases if norm(a) in cat_n)
+        if score > 0 and (best is None or score > best[1]):
+            best = (key, score)
+    if best:
+        return CATEGORY_DIMENSIONS.get(best[0], CATEGORY_DIMENSIONS["default"])
     return CATEGORY_DIMENSIONS["default"]
 
 
