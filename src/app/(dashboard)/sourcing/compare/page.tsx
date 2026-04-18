@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ExternalLink, Trophy, Minus } from 'lucide-react';
+import { getCategoryDimensions, matchDimension } from '@/lib/sourcing-dimensions';
 
 type Item = any;
 
@@ -134,25 +135,8 @@ const SPEC_ALIASES: Record<string, string[]> = {
   '모델명': ['모델명', '모델번호', 'model'],
 };
 
-/* ─── 차원 그룹 정규화 (Gemini가 자유롭게 붙인 차원명을 표준으로 묶음) ─── */
-const DIMENSION_ALIASES: Record<string, string[]> = {
-  '수압/세정력': ['수압', '세정력', '세정', '워터제트', '워터압력'],
-  '휴대성': ['휴대', '크기', '무게', '사이즈', '부피', '그립'],
-  '배터리/충전': ['배터리', '충전', '사용시간', '지속시간', '수명'],
-  '물통/용량': ['물통', '용량', '수통', '탱크'],
-  '방수/내구성': ['방수', '내구', '품질', '마감', '견고', '방진'],
-  '노즐/모드': ['노즐', '모드', '분사', '팁'],
-  '소음': ['소음', '데시벨', 'db'],
-  '디자인/그립감': ['디자인', '외관', '스타일', '그립', '색상', '컬러'],
-  '사용편의성': ['편의', '사용감', '조작', '사용법', '직관'],
-  '위생/청소': ['위생', '청소', '세척', '관리', '분리'],
-  'A/S': ['as', 'a/s', '보증', '애프터', '서비스'],
-  '가격대비가치': ['가성비', '가격대비', '가치', '비용효율'],
-  // 일반 (카테고리 무관)
-  '내구성/품질': ['내구', '품질', '마감', '튼튼'],
-  '수납력': ['수납', '공간', '포켓'],
-  '착용감': ['착용', '착화', '핏'],
-};
+// 차원 정규화는 @/lib/sourcing-dimensions 의 CATEGORY_DIMENSIONS 를 소스 오브 트루스로 사용.
+// 카테고리별 표준 차원 리스트에 매칭 시도 → 실패 시 원본 그대로 (기타 섹션).
 
 // 키를 표준 키로 정규화. 매칭 안 되면 원본 키.
 function normalizeKey(rawKey: string): string {
@@ -167,25 +151,6 @@ function normalizeKey(rawKey: string): string {
   return rawKey;
 }
 
-// 차원명 정규화. 키워드 매칭 점수 기반 — 가장 많이 겹치는 canonical로.
-function normalizeDimension(rawDim: string): string {
-  if (!rawDim) return rawDim;
-  const lower = rawDim.toLowerCase().replace(/[\s_\-/·,·()]/g, '');
-  let bestKey = rawDim;
-  let bestScore = 0;
-  for (const [canonical, keywords] of Object.entries(DIMENSION_ALIASES)) {
-    let score = 0;
-    for (const kw of keywords) {
-      const kl = kw.toLowerCase().replace(/[\s_\-/·,·]/g, '');
-      if (lower.includes(kl)) score += kl.length; // 긴 키워드 우선
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestKey = canonical;
-    }
-  }
-  return bestKey;
-}
 
 function findSpec(specs: any, aliases: string[]): any {
   if (!specs) return null;
@@ -243,28 +208,37 @@ export default function ComparePage() {
     const capacityValues = capacities.map((c) => c?.value ?? null);
     const capacityWinner = findWinner(capacityValues, 'higher');
 
-    // 차원별 점수 비교 — 정규화된 차원명으로 묶기
-    // itemDimMap[itemIdx][canonicalDim] = { score, verdict, spec_evidence, original_labels: [] }
-    const itemDimMap: Record<string, { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] }>[] = items.map((it) => {
-      const byCanonical: Record<string, { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] }> = {};
+    // 차원별 점수 비교 — 카테고리 표준 차원 리스트 기준 매칭
+    // 1) 첫 상품 카테고리(혹은 다수결)로 canonical 리스트 결정
+    const categories = items.map((it) => it.detail_analysis?.category).filter(Boolean) as string[];
+    const primaryCategory = categories[0] || '';
+    const canonicalDims = getCategoryDimensions(primaryCategory);
+
+    // 2) 각 상품 차원을 canonical 에 매핑. 매칭 실패 시 'extra' 로 보관
+    type DimEntry = { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] };
+    const itemDimMap: Record<string, DimEntry>[] = items.map((it) => {
+      const byKey: Record<string, DimEntry> = {};
       for (const d of (it.review_analysis?.category_dimensions_scored || []) as any[]) {
-        const canonical = normalizeDimension(d.dimension || '');
+        const key = matchDimension(d.dimension || '', canonicalDims) || (d.dimension || '(unnamed)');
         const score = d.score != null ? Number(d.score) : null;
-        if (!byCanonical[canonical]) {
-          byCanonical[canonical] = { score, verdict: d.verdict, spec_evidence: d.spec_evidence, originals: [d.dimension].filter(Boolean) };
+        if (!byKey[key]) {
+          byKey[key] = { score, verdict: d.verdict, spec_evidence: d.spec_evidence, originals: [d.dimension].filter(Boolean) };
         } else {
-          // 동일 canonical 중복 시: 높은 점수 우선, spec_evidence/verdict 병합
-          if (score != null && (byCanonical[canonical].score == null || score > (byCanonical[canonical].score as number))) {
-            byCanonical[canonical].score = score;
-            byCanonical[canonical].verdict = d.verdict;
+          if (score != null && (byKey[key].score == null || score > (byKey[key].score as number))) {
+            byKey[key].score = score;
+            byKey[key].verdict = d.verdict;
           }
-          if (d.spec_evidence && !byCanonical[canonical].spec_evidence) byCanonical[canonical].spec_evidence = d.spec_evidence;
-          if (d.dimension) byCanonical[canonical].originals.push(d.dimension);
+          if (d.spec_evidence && !byKey[key].spec_evidence) byKey[key].spec_evidence = d.spec_evidence;
+          if (d.dimension) byKey[key].originals.push(d.dimension);
         }
       }
-      return byCanonical;
+      return byKey;
     });
-    const allDimensions = Array.from(new Set(itemDimMap.flatMap((m) => Object.keys(m))));
+
+    // canonical 차원은 리스트 순서로, 기타는 뒤에 (canonical 외 key)
+    const canonicalSet = new Set(canonicalDims);
+    const extraDims = Array.from(new Set(itemDimMap.flatMap((m) => Object.keys(m)))).filter((k) => !canonicalSet.has(k));
+    const allDimensions = [...canonicalDims, ...extraDims];
     const dimensionWinners: Record<string, number | null> = {};
     allDimensions.forEach((dim) => {
       const scores = itemDimMap.map((m) => (m[dim]?.score ?? null));
@@ -292,6 +266,7 @@ export default function ComparePage() {
       weights, weightWinner,
       capacities, capacityWinner,
       allDimensions, dimensionWinners, itemDimMap,
+      canonicalDims, extraDims, primaryCategory,
       allSpecKeys,
       keyOriginalsMap,
     };
@@ -452,10 +427,37 @@ export default function ComparePage() {
               );
             })}
 
-            {c.allDimensions.length > 0 && (
+            {c.canonicalDims.length > 0 && (
               <>
-                <SectionHead label={`차원별 평가 (${items[0].detail_analysis?.category || '카테고리'})`} cols={items.length + 1} />
-                {c.allDimensions.map((dim: string) => (
+                <SectionHead label={`차원별 평가 (${c.primaryCategory || '카테고리'} 표준)`} cols={items.length + 1} />
+                {c.canonicalDims.map((dim: string) => (
+                  <Row key={dim} label={dim} items={items} render={(_it, i) => {
+                    const d = c.itemDimMap[i][dim];
+                    if (!d || d.score == null) return <Missing />;
+                    const renamedFromOriginal = d.originals.find((o) => o && o !== dim);
+                    return (
+                      <div>
+                        <WinnerCell isWinner={i === c.dimensionWinners[dim]}>
+                          <ScoreCell score={d.score} />
+                          {d.verdict && <span className="ml-2 text-xs text-gray-500">{d.verdict}</span>}
+                        </WinnerCell>
+                        {d.spec_evidence && (
+                          <div className="text-[10px] text-blue-600 mt-0.5">📐 {d.spec_evidence}</div>
+                        )}
+                        {renamedFromOriginal && (
+                          <div className="text-[9px] text-gray-400 mt-0.5 italic">원본: {d.originals.join(' / ')}</div>
+                        )}
+                      </div>
+                    );
+                  }} />
+                ))}
+              </>
+            )}
+
+            {c.extraDims.length > 0 && (
+              <>
+                <SectionHead label="기타 차원 (표준 리스트 외)" cols={items.length + 1} />
+                {c.extraDims.map((dim: string) => (
                   <Row key={dim} label={dim} items={items} render={(_it, i) => {
                     const d = c.itemDimMap[i][dim];
                     if (!d || d.score == null) return <Missing />;
@@ -467,9 +469,6 @@ export default function ComparePage() {
                         </WinnerCell>
                         {d.spec_evidence && (
                           <div className="text-[10px] text-blue-600 mt-0.5">📐 {d.spec_evidence}</div>
-                        )}
-                        {d.originals.length > 1 && (
-                          <div className="text-[9px] text-gray-400 mt-0.5 italic">merged: {d.originals.join(' / ')}</div>
                         )}
                       </div>
                     );
