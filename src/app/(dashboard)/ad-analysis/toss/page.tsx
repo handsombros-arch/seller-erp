@@ -2,9 +2,9 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
-import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Package } from 'lucide-react';
+import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Radio } from 'lucide-react';
 import {
-  ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
 /* ══ 공통 포맷 ══ */
@@ -85,19 +85,19 @@ function bucketKey(d: string, g: Gran): string {
 }
 
 type TabKey = 'trend' | 'campaign' | 'adSet' | 'product';
-type SortKey = 'cost' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr' | 'cvr' | 'cpc' | 'orderCount';
+type SortKey = 'cost' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr' | 'cvr' | 'cpc' | 'cpm' | 'orderCount';
 
 interface AggRow {
   key: string; name: string;
   impressions: number; clicks: number; cost: number; revenue: number; orderCount: number;
-  ctr: number; cvr: number; cpc: number; roas: number;
+  ctr: number; cvr: number; cpc: number; cpm: number; roas: number;
 }
 
 function aggregate(rows: TossRow[], getKey: (r: TossRow) => string, getName?: (r: TossRow) => string): AggRow[] {
   const map = new Map<string, AggRow>();
   for (const r of rows) {
     const key = getKey(r) || '(empty)';
-    if (!map.has(key)) map.set(key, { key, name: (getName?.(r) || getKey(r) || '(empty)'), impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, roas: 0 });
+    if (!map.has(key)) map.set(key, { key, name: (getName?.(r) || getKey(r) || '(empty)'), impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, cpm: 0, roas: 0 });
     const c = map.get(key)!;
     c.impressions += r.impressions; c.clicks += r.clicks; c.cost += r.cost;
     c.revenue += r.revenue; c.orderCount += r.orderCount;
@@ -106,7 +106,8 @@ function aggregate(rows: TossRow[], getKey: (r: TossRow) => string, getName?: (r
     ...g,
     ctr: g.impressions > 0 ? g.clicks / g.impressions * 100 : 0,
     cvr: g.clicks > 0 ? g.orderCount / g.clicks * 100 : 0,
-    cpc: g.clicks > 0 ? g.cost / g.clicks : 0,
+    cpc: g.clicks > 0 ? Math.round(g.cost / g.clicks) : 0,
+    cpm: g.impressions > 0 ? Math.round(g.cost / g.impressions * 1000) : 0,
     roas: g.cost > 0 ? g.revenue / g.cost * 100 : 0,
   }));
 }
@@ -114,13 +115,13 @@ function aggregate(rows: TossRow[], getKey: (r: TossRow) => string, getName?: (r
 interface DailyRow {
   date: string;
   impressions: number; clicks: number; cost: number; revenue: number; orderCount: number;
-  ctr: number; cvr: number; cpc: number; roas: number;
+  ctr: number; cvr: number; cpc: number; cpm: number; roas: number;
 }
 function aggregateDaily(rows: TossRow[], gran: Gran): DailyRow[] {
   const map = new Map<string, DailyRow>();
   for (const r of rows) {
     const k = bucketKey(r.date, gran);
-    if (!map.has(k)) map.set(k, { date: k, impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, roas: 0 });
+    if (!map.has(k)) map.set(k, { date: k, impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, cpm: 0, roas: 0 });
     const c = map.get(k)!;
     c.impressions += r.impressions; c.clicks += r.clicks; c.cost += r.cost;
     c.revenue += r.revenue; c.orderCount += r.orderCount;
@@ -130,6 +131,7 @@ function aggregateDaily(rows: TossRow[], gran: Gran): DailyRow[] {
     ctr: d.impressions > 0 ? d.clicks / d.impressions * 100 : 0,
     cvr: d.clicks > 0 ? d.orderCount / d.clicks * 100 : 0,
     cpc: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
+    cpm: d.impressions > 0 ? Math.round(d.cost / d.impressions * 1000) : 0,
     roas: d.cost > 0 ? d.revenue / d.cost * 100 : 0,
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -248,7 +250,8 @@ export default function TossAdAnalysisPage() {
       ...t,
       ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
       cvr: t.clicks > 0 ? t.orderCount / t.clicks * 100 : 0,
-      cpc: t.clicks > 0 ? t.cost / t.clicks : 0,
+      cpc: t.clicks > 0 ? Math.round(t.cost / t.clicks) : 0,
+      cpm: t.impressions > 0 ? Math.round(t.cost / t.impressions * 1000) : 0,
       roas: t.cost > 0 ? t.revenue / t.cost * 100 : 0,
     };
   }, [filteredRows]);
@@ -436,10 +439,10 @@ export default function TossAdAnalysisPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               <KPICard icon={<Eye className="h-4 w-4" />} label="노출" value={fmtN(totals.impressions)} accent="blue" />
+              <KPICard icon={<Radio className="h-4 w-4" />} label="CPM" value={fmtN(totals.cpm)} sub="천회 노출당 비용" accent="amber" />
               <KPICard icon={<MousePointerClick className="h-4 w-4" />} label="클릭" value={fmtN(totals.clicks)} sub={`CTR ${fmtPct(totals.ctr)}`} accent="blue" />
-              <KPICard icon={<DollarSign className="h-4 w-4" />} label="CPC" value={fmtW(totals.cpc)} accent="amber" />
+              <KPICard icon={<DollarSign className="h-4 w-4" />} label="CPC" value={fmtN(totals.cpc)} sub="클릭당 비용" accent="amber" />
               <KPICard icon={<ShoppingCart className="h-4 w-4" />} label="주문" value={fmtN(totals.orderCount)} sub={`CVR ${fmtPct(totals.cvr)}`} accent="emerald" />
-              <KPICard icon={<Package className="h-4 w-4" />} label="판매수량" value={fmtN(totals.salesQty)} accent="emerald" />
               <KPICard icon={<TrendingDown className="h-4 w-4" />} label="광고비" value={fmtW(totals.cost)} accent="red" />
               <KPICard icon={<TrendingUp className="h-4 w-4" />} label="매출" value={fmtW(totals.revenue)} accent="emerald" />
               <KPICard icon={totals.roas >= 100 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} label="ROAS" value={`${totals.roas.toFixed(0)}%`} accent={totals.roas >= 300 ? 'emerald' : totals.roas >= 100 ? 'blue' : 'red'} />
@@ -478,79 +481,35 @@ export default function TossAdAnalysisPage() {
             )}
           </div>
 
-          {/* 기간별 추이 탭 */}
+          {/* 기간별 추이 탭 — 노출 & CPM 하나로 단순화 */}
           {tab === 'trend' && (
             <>
               <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-[13px] font-bold text-[#191F28]">노출수 & CPC 변화</h3>
-                    <p className="text-[11px] text-[#8B95A1] mt-0.5">일자별 노출량 변동과 클릭당 비용 추이</p>
+                    <h3 className="text-[13px] font-bold text-[#191F28]">노출수 & CPM</h3>
+                    <p className="text-[11px] text-[#8B95A1] mt-0.5">CPM(천회 노출당 비용)이 변동하면 지면이 바뀐 신호</p>
                   </div>
                   <GranToggle gran={gran} onChange={setGran} />
                 </div>
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={320}>
                   <ComposedChart data={daily}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
                     <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${fmtN(v)}원`} />
-                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                      formatter={(v: any, n: string) => n === 'CPC' ? fmtW(Number(v)) : fmtN(Number(v))} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
+                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #F2F4F6', borderRadius: '12px', fontSize: '12px' }}
+                      formatter={(v: any) => fmtN(Number(v))} />
                     <Legend wrapperStyle={{ fontSize: '12px' }} />
                     <Area yAxisId="left" type="monotone" dataKey="impressions" fill="#DBEAFE" stroke="#3182F6" name="노출수" strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="cpc" stroke="#F59E0B" name="CPC" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line yAxisId="right" type="monotone" dataKey="cpm" stroke="#F59E0B" name="CPM" strokeWidth={2.5} dot={{ r: 3 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
 
               <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">광고비 · 매출 · ROAS</h3>
-                  <GranToggle gran={gran} onChange={setGran} />
-                </div>
-                <ResponsiveContainer width="100%" height={280}>
-                  <ComposedChart data={daily}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                      formatter={(v: any, n: string) => n === 'ROAS' ? `${Number(v).toFixed(0)}%` : fmtW(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <ReferenceLine yAxisId="right" y={100} stroke="#EF4444" strokeDasharray="3 3" />
-                    <Bar yAxisId="left" dataKey="cost" fill="#EF4444" name="광고비" />
-                    <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="매출" />
-                    <Line yAxisId="right" type="monotone" dataKey="roas" stroke="#3182F6" name="ROAS" strokeWidth={2.5} dot={{ r: 3 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">클릭 & 전환율</h3>
-                  <GranToggle gran={gran} onChange={setGran} />
-                </div>
-                <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={daily}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                      formatter={(v: any, n: string) => n === 'CTR' || n === 'CVR' ? `${Number(v).toFixed(2)}%` : fmtN(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Bar yAxisId="left" dataKey="clicks" fill="#8B5CF6" name="클릭" />
-                    <Line yAxisId="right" type="monotone" dataKey="ctr" stroke="#F59E0B" name="CTR" strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="cvr" stroke="#10B981" name="CVR" strokeWidth={2} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* 기간별 요약 테이블 */}
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 요약</h3>
+                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 상세</h3>
                   <div className="flex gap-2">
                     <GranToggle gran={gran} onChange={setGran} />
                     <button
@@ -597,6 +556,7 @@ export default function TossAdAnalysisPage() {
                       <th className="w-8"></th>
                       <th className="text-left px-3 py-2.5 font-medium">이름</th>
                       <SortTh k="impressions" label="노출" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="cpm" label="CPM" cur={sortKey} dir={sortDir} onClick={sortHandler} />
                       <SortTh k="clicks" label="클릭" cur={sortKey} dir={sortDir} onClick={sortHandler} />
                       <SortTh k="ctr" label="CTR" cur={sortKey} dir={sortDir} onClick={sortHandler} />
                       <SortTh k="cpc" label="CPC" cur={sortKey} dir={sortDir} onClick={sortHandler} />
@@ -621,9 +581,10 @@ export default function TossAdAnalysisPage() {
                             </td>
                             <td className="px-3 py-2.5 max-w-[280px] truncate text-[#333D4B]" title={g.name}>{g.name}</td>
                             <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.impressions)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#F59E0B] font-medium">{fmtN(g.cpm)}</td>
                             <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.clicks)}</td>
                             <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.ctr)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtW(g.cpc)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtN(g.cpc)}</td>
                             <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.orderCount)}</td>
                             <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.cvr)}</td>
                             <td className="px-3 py-2.5 text-right text-[#EF4444] font-medium">{fmtW(g.cost)}</td>
@@ -634,7 +595,7 @@ export default function TossAdAnalysisPage() {
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={11} className="p-0">
+                              <td colSpan={12} className="p-0">
                                 <div className="bg-[#FAFBFC] border-l-2 border-[#3182F6] px-6 py-4">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-[11px] font-semibold text-[#333D4B]">{g.name} — 일자별 상세</span>
@@ -672,6 +633,7 @@ function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gra
           <tr className="text-[11px] text-[#6B7684]">
             <th className={`text-left px-3 ${pad} font-medium`}>{gran === 'monthly' ? '월' : gran === 'weekly' ? '주' : '일자'}</th>
             <th className={`text-right px-3 ${pad} font-medium`}>노출</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>CPM</th>
             <th className={`text-right px-3 ${pad} font-medium`}>클릭</th>
             <th className={`text-right px-3 ${pad} font-medium`}>CTR</th>
             <th className={`text-right px-3 ${pad} font-medium`}>CPC</th>
@@ -687,9 +649,10 @@ function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gra
             <tr key={i} className="border-b border-[#F1F3F5] hover:bg-[#F8FAFF]">
               <td className={`px-3 ${pad} text-[#333D4B]`}>{d.date}</td>
               <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.impressions)}</td>
+              <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtN(d.cpm)}</td>
               <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.clicks)}</td>
               <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.ctr)}</td>
-              <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtW(d.cpc)}</td>
+              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtN(d.cpc)}</td>
               <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.orderCount)}</td>
               <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.cvr)}</td>
               <td className={`px-3 ${pad} text-right text-[#EF4444] font-medium`}>{fmtW(d.cost)}</td>
@@ -700,7 +663,7 @@ function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gra
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan={10} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
+            <tr><td colSpan={11} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
           )}
         </tbody>
       </table>
