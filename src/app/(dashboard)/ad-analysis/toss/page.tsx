@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
-import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown } from 'lucide-react';
+import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown } from 'lucide-react';
 import {
-  ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
 /* ══ 공통 포맷 ══ */
@@ -84,8 +84,55 @@ function bucketKey(d: string, g: Gran): string {
   return d;
 }
 
-type AggKey = 'campaign' | 'adSet' | 'ad' | 'product' | 'option';
+type TabKey = 'trend' | 'campaign' | 'adSet' | 'product';
 type SortKey = 'cost' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr' | 'cvr' | 'cpc' | 'orderCount';
+
+interface AggRow {
+  key: string; name: string;
+  impressions: number; clicks: number; cost: number; revenue: number; orderCount: number;
+  ctr: number; cvr: number; cpc: number; roas: number;
+}
+
+function aggregate(rows: TossRow[], getKey: (r: TossRow) => string, getName?: (r: TossRow) => string): AggRow[] {
+  const map = new Map<string, AggRow>();
+  for (const r of rows) {
+    const key = getKey(r) || '(empty)';
+    if (!map.has(key)) map.set(key, { key, name: (getName?.(r) || getKey(r) || '(empty)'), impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, roas: 0 });
+    const c = map.get(key)!;
+    c.impressions += r.impressions; c.clicks += r.clicks; c.cost += r.cost;
+    c.revenue += r.revenue; c.orderCount += r.orderCount;
+  }
+  return Array.from(map.values()).map((g) => ({
+    ...g,
+    ctr: g.impressions > 0 ? g.clicks / g.impressions * 100 : 0,
+    cvr: g.clicks > 0 ? g.orderCount / g.clicks * 100 : 0,
+    cpc: g.clicks > 0 ? g.cost / g.clicks : 0,
+    roas: g.cost > 0 ? g.revenue / g.cost * 100 : 0,
+  }));
+}
+
+interface DailyRow {
+  date: string;
+  impressions: number; clicks: number; cost: number; revenue: number; orderCount: number;
+  ctr: number; cvr: number; cpc: number; roas: number;
+}
+function aggregateDaily(rows: TossRow[], gran: Gran): DailyRow[] {
+  const map = new Map<string, DailyRow>();
+  for (const r of rows) {
+    const k = bucketKey(r.date, gran);
+    if (!map.has(k)) map.set(k, { date: k, impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, ctr: 0, cvr: 0, cpc: 0, roas: 0 });
+    const c = map.get(k)!;
+    c.impressions += r.impressions; c.clicks += r.clicks; c.cost += r.cost;
+    c.revenue += r.revenue; c.orderCount += r.orderCount;
+  }
+  return Array.from(map.values()).map((d) => ({
+    ...d,
+    ctr: d.impressions > 0 ? d.clicks / d.impressions * 100 : 0,
+    cvr: d.clicks > 0 ? d.orderCount / d.clicks * 100 : 0,
+    cpc: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
+    roas: d.cost > 0 ? d.revenue / d.cost * 100 : 0,
+  })).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 export default function TossAdAnalysisPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -93,13 +140,24 @@ export default function TossAdAnalysisPage() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // 전역 필터
+  const [campaignFilter, setCampaignFilter] = useState<string>('');
+  const [productFilter, setProductFilter] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // 탭
+  const [tab, setTab] = useState<TabKey>('trend');
   const [gran, setGran] = useState<Gran>('daily');
-  const [aggBy, setAggBy] = useState<AggKey>('product');
+
+  // 리스트 정렬/검색
   const [sortKey, setSortKey] = useState<SortKey>('cost');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [search, setSearch] = useState('');
-  const [campaignFilter, setCampaignFilter] = useState<string>('');
-  const [productFilter, setProductFilter] = useState<string>('');
+
+  // 드릴다운
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -160,32 +218,31 @@ export default function TossAdAnalysisPage() {
     setRows([]);
   }
 
-  // 필터 적용
-  const filteredRows = useMemo(() => {
-    return rows.filter((r) =>
-      (!campaignFilter || r.campaign === campaignFilter) &&
-      (!productFilter || r.product === productFilter)
-    );
-  }, [rows, campaignFilter, productFilter]);
-
-  const campaigns = useMemo(() => Array.from(new Set(rows.map((r) => r.campaign))).filter(Boolean).sort(), [rows]);
-  const products = useMemo(() => Array.from(new Set(rows.map((r) => r.product))).filter(Boolean).sort(), [rows]);
   const dateRange = useMemo(() => {
     if (!rows.length) return null;
     const dates = rows.map((r) => r.date).filter(Boolean).sort();
     return { from: dates[0], to: dates[dates.length - 1] };
   }, [rows]);
 
-  // KPI 합계
+  // 전역 필터 적용: 캠페인 + 상품 + 기간
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) =>
+      (!campaignFilter || r.campaign === campaignFilter) &&
+      (!productFilter || r.product === productFilter) &&
+      (!dateFrom || r.date >= dateFrom) &&
+      (!dateTo || r.date <= dateTo)
+    );
+  }, [rows, campaignFilter, productFilter, dateFrom, dateTo]);
+
+  const campaigns = useMemo(() => Array.from(new Set(rows.map((r) => r.campaign))).filter(Boolean).sort(), [rows]);
+  const products = useMemo(() => Array.from(new Set(rows.map((r) => r.product))).filter(Boolean).sort(), [rows]);
+
+  // KPI 합계 (필터 반영)
   const totals = useMemo(() => {
     const t = { impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0, salesQty: 0 };
     for (const r of filteredRows) {
-      t.impressions += r.impressions;
-      t.clicks += r.clicks;
-      t.cost += r.cost;
-      t.revenue += r.revenue;
-      t.orderCount += r.orderCount;
-      t.salesQty += r.salesQty;
+      t.impressions += r.impressions; t.clicks += r.clicks; t.cost += r.cost;
+      t.revenue += r.revenue; t.orderCount += r.orderCount; t.salesQty += r.salesQty;
     }
     return {
       ...t,
@@ -196,56 +253,49 @@ export default function TossAdAnalysisPage() {
     };
   }, [filteredRows]);
 
-  // 기간별 집계 (노출수 + CPC 중심 + 광고비/매출/ROAS)
-  const daily = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const r of filteredRows) {
-      const k = bucketKey(r.date, gran);
-      if (!map.has(k)) map.set(k, { date: k, impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0 });
-      const c = map.get(k);
-      c.impressions += r.impressions;
-      c.clicks += r.clicks;
-      c.cost += r.cost;
-      c.revenue += r.revenue;
-      c.orderCount += r.orderCount;
-    }
-    return Array.from(map.values()).map((d) => ({
-      ...d,
-      cpc: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
-      ctr: d.impressions > 0 ? d.clicks / d.impressions * 100 : 0,
-      cvr: d.clicks > 0 ? d.orderCount / d.clicks * 100 : 0,
-      roas: d.cost > 0 ? d.revenue / d.cost * 100 : 0,
-    })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredRows, gran]);
+  // 기간별 추이 차트
+  const daily = useMemo(() => aggregateDaily(filteredRows, gran), [filteredRows, gran]);
 
-  // 집계 기준
-  const byGroup = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const r of filteredRows) {
-      const key = r[aggBy] || '(empty)';
-      if (!map.has(key)) map.set(key, { name: key, impressions: 0, clicks: 0, cost: 0, revenue: 0, orderCount: 0 });
-      const c = map.get(key);
-      c.impressions += r.impressions;
-      c.clicks += r.clicks;
-      c.cost += r.cost;
-      c.revenue += r.revenue;
-      c.orderCount += r.orderCount;
-    }
-    let arr = Array.from(map.values()).map((g) => ({
-      ...g,
-      ctr: g.impressions > 0 ? g.clicks / g.impressions * 100 : 0,
-      cvr: g.clicks > 0 ? g.orderCount / g.clicks * 100 : 0,
-      cpc: g.clicks > 0 ? g.cost / g.clicks : 0,
-      roas: g.cost > 0 ? g.revenue / g.cost * 100 : 0,
-    }));
-    if (search) arr = arr.filter((g) => g.name.toLowerCase().includes(search.toLowerCase()));
-    arr.sort((a, b) => (sortDir === 'desc' ? b[sortKey] - a[sortKey] : a[sortKey] - b[sortKey]));
-    return arr;
-  }, [filteredRows, aggBy, sortKey, sortDir, search]);
+  // 탭별 집계 리스트
+  const listRows = useMemo(() => {
+    let base: AggRow[] = [];
+    if (tab === 'campaign') base = aggregate(filteredRows, (r) => r.campaignId || r.campaign, (r) => r.campaign);
+    else if (tab === 'adSet') base = aggregate(filteredRows, (r) => r.adSetId || r.adSet, (r) => r.adSet);
+    else if (tab === 'product') base = aggregate(filteredRows, (r) => r.productId || r.product, (r) => r.product);
+    else return [];
+    if (search) base = base.filter((g) => g.name.toLowerCase().includes(search.toLowerCase()));
+    base.sort((a, b) => (sortDir === 'desc' ? (b as any)[sortKey] - (a as any)[sortKey] : (a as any)[sortKey] - (b as any)[sortKey]));
+    return base;
+  }, [filteredRows, tab, sortKey, sortDir, search]);
 
-  function downloadXlsx(rows: any[], filename: string) {
+  // 드릴다운: 특정 캠페인/세트의 일자별 데이터
+  const getDailyFor = useCallback((key: string) => {
+    const matched = filteredRows.filter((r) => {
+      if (tab === 'campaign') return (r.campaignId || r.campaign) === key;
+      if (tab === 'adSet') return (r.adSetId || r.adSet) === key;
+      if (tab === 'product') return (r.productId || r.product) === key;
+      return false;
+    });
+    return aggregateDaily(matched, gran);
+  }, [filteredRows, tab, gran]);
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // 탭 전환 시 펼친 항목 초기화
+  useEffect(() => {
+    setExpandedKeys(new Set());
+    setSearch('');
+  }, [tab]);
+
+  function downloadXlsx(data: any[], filename: string) {
     import('xlsx').then((XLSX) => {
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
       XLSX.writeFile(wb, filename);
@@ -253,6 +303,17 @@ export default function TossAdAnalysisPage() {
   }
 
   const hasData = rows.length > 0;
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: 'trend', label: '기간별 추이' },
+    { key: 'campaign', label: '캠페인별' },
+    { key: 'adSet', label: '광고세트별' },
+    { key: 'product', label: '상품별' },
+  ];
+
+  const sortHandler = (k: SortKey) => {
+    setSortKey(k);
+    setSortDir((d) => (sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'));
+  };
 
   return (
     <div className="space-y-5">
@@ -262,7 +323,7 @@ export default function TossAdAnalysisPage() {
           <Megaphone className="h-5 w-5 text-[#3182F6]" />
           <h1 className="text-[20px] font-bold text-[#191F28]">토스 광고 분석</h1>
           {dateRange && (
-            <span className="text-[12px] text-[#8B95A1]">{dateRange.from} ~ {dateRange.to}</span>
+            <span className="text-[12px] text-[#8B95A1]">데이터: {dateRange.from} ~ {dateRange.to}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -279,7 +340,7 @@ export default function TossAdAnalysisPage() {
               onClick={deleteAll}
               className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[#6B7684] text-[13px] font-medium hover:bg-[#F8F9FA] transition-colors"
             >
-              초기화
+              <Trash2 className="h-3.5 w-3.5" /> 초기화
             </button>
           )}
         </div>
@@ -327,27 +388,36 @@ export default function TossAdAnalysisPage() {
 
       {hasData && (
         <>
-          {/* 데이터 요약 + 필터 */}
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8B95A1]">
-            <span>데이터: {rows.length.toLocaleString()}행</span>
+          {/* 필터 바 */}
+          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-4 flex flex-wrap items-center gap-3">
+            <span className="text-[11px] text-[#8B95A1]">필터</span>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[11px] text-[#6B7684]">기간</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white" />
+              <span className="text-[11px] text-[#8B95A1]">~</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white" />
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="h-7 px-2 rounded-lg text-[11px] text-[#6B7684] hover:bg-[#F8F9FA]">초기화</button>
+              )}
+            </div>
             {campaigns.length > 0 && (
-              <select
-                value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white"
-              >
+              <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
+                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white">
                 <option value="">캠페인 전체</option>
                 {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             )}
             {products.length > 0 && (
-              <select
-                value={productFilter} onChange={(e) => setProductFilter(e.target.value)}
-                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white"
-              >
+              <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}
+                className="h-7 px-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white">
                 <option value="">상품 전체</option>
                 {products.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
+            <span className="text-[11px] text-[#8B95A1] ml-auto">집계 대상: {filteredRows.length.toLocaleString()}행 / 전체 {rows.length.toLocaleString()}행</span>
           </div>
 
           {/* KPI 카드 */}
@@ -362,210 +432,245 @@ export default function TossAdAnalysisPage() {
             <KPICard label="ROAS" value={`${totals.roas.toFixed(0)}%`} accent={totals.roas >= 300 ? 'emerald' : totals.roas >= 100 ? 'blue' : 'red'} />
           </div>
 
-          {/* 🎯 일별 노출수 + CPC 변화 차트 (토스 핵심) */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-[14px] font-bold text-[#191F28]">📊 노출수 & CPC 변화</h2>
-                <p className="text-[11px] text-[#8B95A1] mt-0.5">일자별 노출량 변동과 클릭당 비용 추이 — 토스 광고 최적화 핵심 지표</p>
+          {/* 탭 바 */}
+          <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-1.5 text-[12px] rounded-lg font-semibold transition-colors ${
+                  tab === t.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+                }`}
+              >{t.label}</button>
+            ))}
+          </div>
+
+          {/* 기간별 추이 탭 */}
+          {tab === 'trend' && (
+            <>
+              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-[14px] font-bold text-[#191F28]">📊 노출수 & CPC 변화</h2>
+                    <p className="text-[11px] text-[#8B95A1] mt-0.5">일자별 노출량 변동과 클릭당 비용 추이</p>
+                  </div>
+                  <GranToggle gran={gran} onChange={setGran} />
+                </div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${fmtN(v)}원`} />
+                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
+                      formatter={(v: any, n: string) => n === 'CPC' ? fmtW(Number(v)) : fmtN(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Area yAxisId="left" type="monotone" dataKey="impressions" fill="#DBEAFE" stroke="#3182F6" name="노출수" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="cpc" stroke="#F59E0B" name="CPC" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
-              <GranToggle gran={gran} onChange={setGran} />
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => fmtN(v)} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${fmtN(v)}원`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                  formatter={(v: any, n: string) => n === 'CPC' ? fmtW(Number(v)) : fmtN(Number(v))}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Area yAxisId="left" type="monotone" dataKey="impressions" fill="#DBEAFE" stroke="#3182F6" name="노출수" strokeWidth={2} />
-                <Line yAxisId="right" type="monotone" dataKey="cpc" stroke="#F59E0B" name="CPC" strokeWidth={2.5} dot={{ r: 3 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
 
-          {/* 광고비 vs 매출 + ROAS 차트 */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[14px] font-bold text-[#191F28]">💰 광고비 vs 매출 & ROAS</h2>
-              <GranToggle gran={gran} onChange={setGran} />
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                  formatter={(v: any, n: string) => n === 'ROAS' ? `${Number(v).toFixed(0)}%` : fmtW(Number(v))}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <ReferenceLine yAxisId="right" y={100} stroke="#EF4444" strokeDasharray="3 3" />
-                <Bar yAxisId="left" dataKey="cost" fill="#EF4444" name="광고비" />
-                <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="매출" />
-                <Line yAxisId="right" type="monotone" dataKey="roas" stroke="#3182F6" name="ROAS" strokeWidth={2.5} dot={{ r: 3 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-[14px] font-bold text-[#191F28]">💰 광고비 vs 매출 & ROAS</h2>
+                  <GranToggle gran={gran} onChange={setGran} />
+                </div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
+                      formatter={(v: any, n: string) => n === 'ROAS' ? `${Number(v).toFixed(0)}%` : fmtW(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <ReferenceLine yAxisId="right" y={100} stroke="#EF4444" strokeDasharray="3 3" />
+                    <Bar yAxisId="left" dataKey="cost" fill="#EF4444" name="광고비" />
+                    <Bar yAxisId="left" dataKey="revenue" fill="#10B981" name="매출" />
+                    <Line yAxisId="right" type="monotone" dataKey="roas" stroke="#3182F6" name="ROAS" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
 
-          {/* 클릭 & CVR 차트 */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[14px] font-bold text-[#191F28]">🎯 클릭 & 전환율</h2>
-              <GranToggle gran={gran} onChange={setGran} />
-            </div>
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
-                  formatter={(v: any, n: string) => n === 'CTR' || n === 'CVR' ? `${Number(v).toFixed(2)}%` : fmtN(Number(v))}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar yAxisId="left" dataKey="clicks" fill="#8B5CF6" name="클릭" />
-                <Line yAxisId="right" type="monotone" dataKey="ctr" stroke="#F59E0B" name="CTR" strokeWidth={2} />
-                <Line yAxisId="right" type="monotone" dataKey="cvr" stroke="#10B981" name="CVR" strokeWidth={2} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-[14px] font-bold text-[#191F28]">🎯 클릭 & 전환율</h2>
+                  <GranToggle gran={gran} onChange={setGran} />
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F3F5" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#8B95A1' }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#8B95A1' }} tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                    <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E5E8EB', borderRadius: '12px', fontSize: '12px' }}
+                      formatter={(v: any, n: string) => n === 'CTR' || n === 'CVR' ? `${Number(v).toFixed(2)}%` : fmtN(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Bar yAxisId="left" dataKey="clicks" fill="#8B5CF6" name="클릭" />
+                    <Line yAxisId="right" type="monotone" dataKey="ctr" stroke="#F59E0B" name="CTR" strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="cvr" stroke="#10B981" name="CVR" strokeWidth={2} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
 
-          {/* 집계 테이블 */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="text-[14px] font-bold text-[#191F28]">📋 기준별 분석</h2>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex gap-1 bg-[#F8F9FA] rounded-lg p-0.5">
-                  {([
-                    { k: 'campaign', l: '캠페인' },
-                    { k: 'adSet', l: '광고세트' },
-                    { k: 'ad', l: '광고' },
-                    { k: 'product', l: '상품' },
-                    { k: 'option', l: '옵션' },
-                  ] as const).map((o) => (
+              {/* 기간별 요약 테이블 */}
+              <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-[14px] font-bold text-[#191F28]">📅 기간별 요약</h2>
+                  <div className="flex gap-2">
+                    <GranToggle gran={gran} onChange={setGran} />
                     <button
-                      key={o.k}
-                      onClick={() => setAggBy(o.k)}
-                      className={`px-3 py-1 text-[11px] rounded-md font-medium transition-colors ${
-                        aggBy === o.k ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'
-                      }`}
-                    >{o.l}</button>
-                  ))}
+                      onClick={() => downloadXlsx(daily, `토스_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
+                      className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]">
+                      <Download className="h-3 w-3" /> xlsx
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
-                  <input
-                    value={search} onChange={(e) => setSearch(e.target.value)} placeholder="검색..."
-                    className="h-7 pl-8 pr-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white w-32"
-                  />
+                <DailyTable rows={daily} gran={gran} />
+              </div>
+            </>
+          )}
+
+          {/* 캠페인별 / 광고세트별 / 상품별 탭 */}
+          {tab !== 'trend' && (
+            <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-[14px] font-bold text-[#191F28]">
+                  {tab === 'campaign' ? '🎯 캠페인별 분석' : tab === 'adSet' ? '📂 광고세트별 분석' : '📦 상품별 분석'}
+                  <span className="ml-2 text-[11px] font-normal text-[#8B95A1]">{listRows.length.toLocaleString()}개</span>
+                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(tab === 'campaign' || tab === 'adSet') && (
+                    <span className="text-[11px] text-[#8B95A1]">행 클릭 → 일자별 상세</span>
+                  )}
+                  <GranToggle gran={gran} onChange={setGran} />
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="검색..."
+                      className="h-7 pl-8 pr-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white w-40" />
+                  </div>
+                  <button
+                    onClick={() => downloadXlsx(listRows, `토스_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
+                    className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]">
+                    <Download className="h-3 w-3" /> xlsx
+                  </button>
                 </div>
-                <button
-                  onClick={() => downloadXlsx(byGroup, `토스_${aggBy}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
-                  className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]"
-                >
-                  <Download className="h-3 w-3" /> xlsx
-                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
+                    <tr className="text-[11px] text-[#6B7684]">
+                      <th className="w-8"></th>
+                      <th className="text-left px-3 py-2.5 font-medium">이름</th>
+                      <SortTh k="impressions" label="노출" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="clicks" label="클릭" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="ctr" label="CTR" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="cpc" label="CPC" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="orderCount" label="주문" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="cvr" label="CVR" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="cost" label="광고비" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="revenue" label="매출" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                      <SortTh k="roas" label="ROAS" cur={sortKey} dir={sortDir} onClick={sortHandler} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listRows.map((g) => {
+                      const isExpanded = expandedKeys.has(g.key);
+                      const canExpand = tab === 'campaign' || tab === 'adSet' || tab === 'product';
+                      return (
+                        <Fragment key={g.key}>
+                          <tr
+                            className={`border-b border-[#F1F3F5] hover:bg-[#F8FAFF] ${canExpand ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                            onClick={() => canExpand && toggleExpand(g.key)}>
+                            <td className="px-2 py-2.5 text-[#B0B8C1]">
+                              {canExpand && (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
+                            </td>
+                            <td className="px-3 py-2.5 max-w-[280px] truncate text-[#333D4B]" title={g.name}>{g.name}</td>
+                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.impressions)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.clicks)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.ctr)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtW(g.cpc)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.orderCount)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.cvr)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#EF4444] font-medium">{fmtW(g.cost)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#10B981] font-medium">{fmtW(g.revenue)}</td>
+                            <td className={`px-3 py-2.5 text-right font-bold ${
+                              g.roas >= 300 ? 'text-[#10B981]' : g.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
+                            }`}>{g.roas.toFixed(0)}%</td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={11} className="p-0">
+                                <div className="bg-[#FAFBFC] border-l-2 border-[#3182F6] px-6 py-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-semibold text-[#333D4B]">{g.name} — 일자별 상세</span>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); downloadXlsx(getDailyFor(g.key), `토스_${tab}_${g.name.slice(0, 20)}_${gran}.xlsx`); }}
+                                      className="h-6 px-2 rounded-md border border-[#E5E8EB] text-[10px] text-[#6B7684] flex items-center gap-1 hover:bg-white">
+                                      <Download className="h-3 w-3" /> xlsx
+                                    </button>
+                                  </div>
+                                  <DailyTable rows={getDailyFor(g.key)} gran={gran} dense />
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
-                  <tr className="text-[11px] text-[#6B7684]">
-                    <th className="text-left px-3 py-2.5 font-medium">이름</th>
-                    <SortTh k="impressions" label="노출" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="clicks" label="클릭" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="ctr" label="CTR" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="cpc" label="CPC" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="orderCount" label="주문" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="cvr" label="CVR" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="cost" label="광고비" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="revenue" label="매출" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                    <SortTh k="roas" label="ROAS" cur={sortKey} dir={sortDir} onClick={(k) => { setSortKey(k); setSortDir((d) => sortKey === k ? (d === 'desc' ? 'asc' : 'desc') : 'desc'); }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {byGroup.map((g, i) => (
-                    <tr key={i} className="border-b border-[#F1F3F5] hover:bg-[#F8FAFF]">
-                      <td className="px-3 py-2.5 max-w-[260px] truncate text-[#333D4B]" title={g.name}>{g.name}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.impressions)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.clicks)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.ctr)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtW(g.cpc)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.orderCount)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.cvr)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#EF4444] font-medium">{fmtW(g.cost)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#10B981] font-medium">{fmtW(g.revenue)}</td>
-                      <td className={`px-3 py-2.5 text-right font-bold ${
-                        g.roas >= 300 ? 'text-[#10B981]' : g.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
-                      }`}>{g.roas.toFixed(0)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 기간별 요약 테이블 */}
-          <div className="bg-white rounded-2xl border border-[#E5E8EB] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[14px] font-bold text-[#191F28]">📅 기간별 요약</h2>
-              <div className="flex gap-2">
-                <GranToggle gran={gran} onChange={setGran} />
-                <button
-                  onClick={() => downloadXlsx(daily, `토스_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
-                  className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]"
-                >
-                  <Download className="h-3 w-3" /> xlsx
-                </button>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
-                  <tr className="text-[11px] text-[#6B7684]">
-                    <th className="text-left px-3 py-2.5 font-medium">{gran === 'monthly' ? '월' : gran === 'weekly' ? '주' : '일자'}</th>
-                    <th className="text-right px-3 py-2.5 font-medium">노출</th>
-                    <th className="text-right px-3 py-2.5 font-medium">클릭</th>
-                    <th className="text-right px-3 py-2.5 font-medium">CTR</th>
-                    <th className="text-right px-3 py-2.5 font-medium">CPC</th>
-                    <th className="text-right px-3 py-2.5 font-medium">주문</th>
-                    <th className="text-right px-3 py-2.5 font-medium">CVR</th>
-                    <th className="text-right px-3 py-2.5 font-medium">광고비</th>
-                    <th className="text-right px-3 py-2.5 font-medium">매출</th>
-                    <th className="text-right px-3 py-2.5 font-medium">ROAS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {daily.map((d, i) => (
-                    <tr key={i} className="border-b border-[#F1F3F5] hover:bg-[#F8FAFF]">
-                      <td className="px-3 py-2.5 text-[#333D4B]">{d.date}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(d.impressions)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(d.clicks)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(d.ctr)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#F59E0B] font-medium">{fmtW(d.cpc)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(d.orderCount)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(d.cvr)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#EF4444] font-medium">{fmtW(d.cost)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#10B981] font-medium">{fmtW(d.revenue)}</td>
-                      <td className={`px-3 py-2.5 text-right font-bold ${
-                        d.roas >= 300 ? 'text-[#10B981]' : d.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
-                      }`}>{d.roas.toFixed(0)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gran; dense?: boolean }) {
+  const pad = dense ? 'py-1.5' : 'py-2.5';
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12px]">
+        <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
+          <tr className="text-[11px] text-[#6B7684]">
+            <th className={`text-left px-3 ${pad} font-medium`}>{gran === 'monthly' ? '월' : gran === 'weekly' ? '주' : '일자'}</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>노출</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>클릭</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>CTR</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>CPC</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>주문</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>CVR</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>광고비</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>매출</th>
+            <th className={`text-right px-3 ${pad} font-medium`}>ROAS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((d, i) => (
+            <tr key={i} className="border-b border-[#F1F3F5] hover:bg-[#F8FAFF]">
+              <td className={`px-3 ${pad} text-[#333D4B]`}>{d.date}</td>
+              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.impressions)}</td>
+              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.clicks)}</td>
+              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.ctr)}</td>
+              <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtW(d.cpc)}</td>
+              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.orderCount)}</td>
+              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.cvr)}</td>
+              <td className={`px-3 ${pad} text-right text-[#EF4444] font-medium`}>{fmtW(d.cost)}</td>
+              <td className={`px-3 ${pad} text-right text-[#10B981] font-medium`}>{fmtW(d.revenue)}</td>
+              <td className={`px-3 ${pad} text-right font-bold ${
+                d.roas >= 300 ? 'text-[#10B981]' : d.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
+              }`}>{d.roas.toFixed(0)}%</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={10} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
