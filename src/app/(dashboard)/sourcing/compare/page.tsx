@@ -4,8 +4,23 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ExternalLink, Trophy, Minus } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trophy, Minus, Plus, Save, FolderOpen, Trash2, X } from 'lucide-react';
 import { getCategoryDimensions, matchDimension } from '@/lib/sourcing-dimensions';
+
+interface CustomRow {
+  id: string;
+  label: string;
+  values: Record<string, string>; // itemId → value
+}
+
+interface Snapshot {
+  id: string;
+  name: string;
+  item_ids: string[];
+  note?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
 
 type Item = any;
 
@@ -171,12 +186,102 @@ export default function ComparePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 커스텀 행 + 스냅샷
+  const [customRows, setCustomRows] = useState<CustomRow[]>([]);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [currentSnapshotId, setCurrentSnapshotId] = useState<string | null>(null);
+  const [currentSnapshotDate, setCurrentSnapshotDate] = useState<string | null>(null);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+
   useEffect(() => {
     if (ids.length === 0) { setLoading(false); return; }
     Promise.all(ids.map((id) => fetch('/api/sourcing/' + id).then((r) => r.ok ? r.json() : null)))
       .then((arr) => setItems(arr.filter(Boolean)))
       .finally(() => setLoading(false));
   }, [ids.join(',')]);
+
+  // 스냅샷 목록 로드
+  useEffect(() => {
+    fetch('/api/sourcing/comparisons').then((r) => r.ok ? r.json() : []).then(setSnapshots).catch(() => {});
+  }, []);
+
+  const addCustomRow = () => {
+    setCustomRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), label: '', values: {} },
+    ]);
+  };
+
+  const updateCustomRow = (rowId: string, patch: Partial<CustomRow>) => {
+    setCustomRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...patch } : r)));
+  };
+
+  const updateCustomCell = (rowId: string, itemId: string, value: string) => {
+    setCustomRows((prev) => prev.map((r) =>
+      r.id === rowId ? { ...r, values: { ...r.values, [itemId]: value } } : r
+    ));
+  };
+
+  const removeCustomRow = (rowId: string) => {
+    setCustomRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
+  const saveSnapshot = async () => {
+    const defaultName = `비교 ${new Date().toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}`;
+    const name = prompt('스냅샷 이름', currentSnapshotId ? snapshots.find((s) => s.id === currentSnapshotId)?.name || defaultName : defaultName);
+    if (!name) return;
+    setSavingSnapshot(true);
+    try {
+      const body = { name, item_ids: ids, custom_rows: customRows };
+      let res;
+      if (currentSnapshotId) {
+        res = await fetch(`/api/sourcing/comparisons/${currentSnapshotId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch('/api/sourcing/comparisons', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+      }
+      if (!res.ok) { alert('저장 실패: ' + (await res.text()).slice(0, 200)); return; }
+      const saved = await res.json();
+      setCurrentSnapshotId(saved.id);
+      setCurrentSnapshotDate(saved.created_at);
+      // 목록 갱신
+      const list = await fetch('/api/sourcing/comparisons').then((r) => r.json());
+      setSnapshots(list);
+    } finally { setSavingSnapshot(false); }
+  };
+
+  const loadSnapshot = async (snapshotId: string) => {
+    const res = await fetch(`/api/sourcing/comparisons/${snapshotId}`);
+    if (!res.ok) { alert('로드 실패'); return; }
+    const snap = await res.json();
+    setCurrentSnapshotId(snap.id);
+    setCurrentSnapshotDate(snap.created_at);
+    setCustomRows(snap.custom_rows || []);
+    // 항목이 다르면 URL 갱신 안내
+    if (JSON.stringify(snap.item_ids.sort()) !== JSON.stringify([...ids].sort())) {
+      const go = confirm(`이 스냅샷은 ${snap.item_ids.length}개 상품 조합입니다. 해당 조합으로 이동할까요?`);
+      if (go) window.location.href = `/sourcing/compare?ids=${snap.item_ids.join(',')}`;
+    }
+  };
+
+  const deleteSnapshot = async (snapshotId: string) => {
+    if (!confirm('이 스냅샷을 삭제하시겠습니까?')) return;
+    await fetch(`/api/sourcing/comparisons/${snapshotId}`, { method: 'DELETE' });
+    setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId));
+    if (currentSnapshotId === snapshotId) {
+      setCurrentSnapshotId(null);
+      setCurrentSnapshotDate(null);
+    }
+  };
+
+  const newSnapshot = () => {
+    setCurrentSnapshotId(null);
+    setCurrentSnapshotDate(null);
+    setCustomRows([]);
+  };
 
   /* 비교 데이터 사전 계산 */
   const comparisons = useMemo(() => {
@@ -307,7 +412,57 @@ export default function ComparePage() {
         <div className="text-sm text-gray-500">{items.length}개 상품 비교 · 🏆 = 카테고리 1위</div>
       </div>
 
-      <h1 className="text-xl font-bold">상품 비교</h1>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold">상품 비교</h1>
+          {currentSnapshotId && currentSnapshotDate && (
+            <div className="text-xs text-gray-500 mt-1">
+              스냅샷: <strong>{snapshots.find((s) => s.id === currentSnapshotId)?.name || '(이름 없음)'}</strong>
+              <span className="ml-2 text-gray-400">저장일 {new Date(currentSnapshotDate).toLocaleString('ko-KR')}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 스냅샷 툴바 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {snapshots.length > 0 && (
+            <div className="relative">
+              <details className="group">
+                <summary className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50 cursor-pointer list-none">
+                  <FolderOpen className="w-3.5 h-3.5" /> 불러오기 ({snapshots.length})
+                </summary>
+                <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg w-80 max-h-96 overflow-y-auto z-20">
+                  {snapshots.map((s) => (
+                    <div key={s.id} className={`flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-blue-50 ${currentSnapshotId === s.id ? 'bg-blue-50' : ''}`}>
+                      <button onClick={() => loadSnapshot(s.id)} className="flex-1 text-left">
+                        <div className="font-medium text-gray-900">{s.name}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          {new Date(s.created_at).toLocaleString('ko-KR')} · {s.item_ids.length}개 상품
+                        </div>
+                      </button>
+                      <button onClick={() => deleteSnapshot(s.id)} className="ml-2 p-1 text-gray-400 hover:text-red-600">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+          {currentSnapshotId && (
+            <button onClick={newSnapshot} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">
+              <X className="w-3.5 h-3.5" /> 새로 시작
+            </button>
+          )}
+          <button
+            onClick={saveSnapshot}
+            disabled={savingSnapshot}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-blue-500 bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60"
+          >
+            <Save className="w-3.5 h-3.5" /> {currentSnapshotId ? '업데이트 저장' : '스냅샷 저장'}
+          </button>
+        </div>
+      </div>
 
       {/* 종합 우승 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -552,8 +707,6 @@ export default function ComparePage() {
                 <>
                   <SectionHead label="카테고리별 핵심 스펙 (셀러별 우열 비교)" cols={items.length + 1} />
                   {remainingKeys.map((key: string) => {
-                    const originals = c.keyOriginalsMap.get(key);
-                    const showAlt = originals && originals.size > 1;
                     return (
                       <Row key={key} label={key} items={items} render={(it) => {
                         const v = getSpecValue(it, key);
@@ -565,6 +718,52 @@ export default function ComparePage() {
                 </>
               );
             })()}
+
+            {/* 수기 비교 항목 */}
+            <SectionHead label={`수기 비교 항목${customRows.length > 0 ? ` (${customRows.length})` : ''}`} cols={items.length + 1} />
+            {customRows.map((row) => (
+              <tr key={row.id} className="hover:bg-yellow-50">
+                <th className="text-left px-3 py-2 bg-yellow-50/30 sticky left-0 align-top">
+                  <div className="flex items-start gap-1">
+                    <input
+                      type="text"
+                      value={row.label}
+                      onChange={(e) => updateCustomRow(row.id, { label: e.target.value })}
+                      placeholder="항목명"
+                      className="flex-1 text-xs font-medium px-1.5 py-1 border border-gray-200 rounded bg-white min-w-0"
+                    />
+                    <button
+                      onClick={() => removeCustomRow(row.id)}
+                      className="p-1 text-gray-400 hover:text-red-600 shrink-0"
+                      title="행 삭제"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </th>
+                {items.map((it) => (
+                  <td key={it.id} className="px-3 py-2 align-top">
+                    <textarea
+                      value={row.values[it.id] || ''}
+                      onChange={(e) => updateCustomCell(row.id, it.id, e.target.value)}
+                      placeholder="값 입력..."
+                      rows={1}
+                      className="w-full text-xs px-2 py-1 border border-gray-200 rounded bg-white resize-y min-h-[28px]"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+            <tr>
+              <td colSpan={items.length + 1} className="px-3 py-2 bg-gray-50">
+                <button
+                  onClick={addCustomRow}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 수기 항목 추가
+                </button>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
