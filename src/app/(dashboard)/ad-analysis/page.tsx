@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, Search, Download, Settings, GripVertical,
 } from 'lucide-react';
 import {
-  ComposedChart, Bar, Line, Area, AreaChart,
+  ComposedChart, Bar, Line, Area, AreaChart, ReferenceLine,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart,
 } from 'recharts';
@@ -357,6 +357,11 @@ export default function AdAnalysisPage() {
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
   const [placeMetric, setPlaceMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d'>('cost');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [metricTypes, setMetricTypes] = useState<Record<string, 'bar' | 'line'>>({});
+  const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
+  const [memos, setMemos] = useState<Record<string, string>>({});
   const [placeShowRoas, setPlaceShowRoas] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -722,8 +727,15 @@ export default function AdAnalysisPage() {
         fd.append('file', file);
         fetch('/api/ad-analysis/upload', { method: 'POST', body: fd }).catch(() => {});
       }
-      // IndexedDB에 전체 누적 raw rows 저장 (새로고침 시 복원용)
+      // IndexedDB에 전체 누적 저장 + DB에 신규분만 백업
       saveToIdb(raw);
+      if (allRows.length > 0) {
+        fetch('/api/ad-analysis/rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: allRows, filename: files[0]?.name ?? 'upload' }),
+        }).catch(() => {});
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -808,7 +820,7 @@ export default function AdAnalysisPage() {
     } catch { return null; }
   };
 
-  // ─── 페이지 로드 시 IndexedDB에서 복원 ─────────────────────────
+  // ─── 페이지 로드 시 IndexedDB → DB fallback 복원 ─────────────────────────
   const [initialLoading, setInitialLoading] = useState(false);
   const initialLoadDone = useRef(false);
   useEffect(() => {
@@ -817,7 +829,22 @@ export default function AdAnalysisPage() {
     (async () => {
       try {
         setInitialLoading(true);
-        const cachedRows = await loadFromIdb();
+        // 1차: IndexedDB에서 복원
+        let cachedRows = await loadFromIdb();
+        // 2차: IndexedDB 없으면 DB에서 복원
+        if (!cachedRows?.length) {
+          try {
+            const dbRes = await fetch('/api/ad-analysis/rows');
+            if (dbRes.ok) {
+              const { rows: dbRows } = await dbRes.json();
+              if (dbRows?.length) {
+                cachedRows = dbRows;
+                // IndexedDB에도 캐시
+                saveToIdb(dbRows);
+              }
+            }
+          } catch {}
+        }
         if (!cachedRows?.length) return;
         const [pricesRes, mappingsRes] = await Promise.all([
           fetch('/api/ad-analysis'),
@@ -844,6 +871,23 @@ export default function AdAnalysisPage() {
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 메모 로드
+  useEffect(() => {
+    fetch('/api/ad-analysis/memos').then(r => r.ok ? r.json() : []).then((list: any[]) => {
+      const map: Record<string, string> = {};
+      for (const m of list) map[m.date] = m.memo;
+      setMemos(map);
+    }).catch(() => {});
+  }, []);
+
+  const saveMemo = (date: string, memo: string) => {
+    setMemos(prev => ({ ...prev, [date]: memo }));
+    fetch('/api/ad-analysis/memos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, memo }),
+    }).catch(() => {});
+  };
 
   // ── Filtered & re-aggregated data ──────────────────────────────────────
   const filtered = useMemo(() => {
@@ -938,10 +982,60 @@ export default function AdAnalysisPage() {
     return { rows, daily, keywords, placements, placementDaily, keywordDaily, products, campaignProducts, totals };
   }, [data, filterCampaign, filterProduct]);
 
+  // 기간 필터 적용 (차트+테이블+KPI+키워드+지면 모두 반영)
+  const dateFiltered = useMemo(() => {
+    if (!dateFrom && !dateTo) return filtered;
+    const dateInRange = (date: string) => {
+      if (dateFrom && date < dateFrom) return false;
+      if (dateTo && date > dateTo) return false;
+      return true;
+    };
+    const daily = filtered.daily.filter(d => dateInRange(d.date));
+    const totals = daily.reduce((acc, d) => {
+      acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
+      acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
+      acc.cogs14d += d.cogs14d; acc.commission14d += d.commission14d;
+      return acc;
+    }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow);
+    const filteredRows = filtered.rows.filter(r => dateInRange(r.date));
+    // 키워드 재집계 (keywordDaily에서)
+    const kwMap = new Map<string, KeywordRow>();
+    for (const kd of (filtered.keywordDaily ?? []).filter(d => dateInRange(d.date))) {
+      const prev = kwMap.get(kd.keyword) ?? { keyword: kd.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, ctr: 0, cpc: 0, cvr: 0, roas14d: 0 };
+      prev.impressions += kd.impressions; prev.clicks += kd.clicks; prev.cost += kd.cost;
+      prev.orders14d += kd.orders14d; prev.revenue14d += kd.revenue14d;
+      kwMap.set(kd.keyword, prev);
+    }
+    const keywords = [...kwMap.values()].map(k => ({
+      ...k,
+      ctr: k.impressions > 0 ? k.clicks / k.impressions : 0,
+      cpc: k.clicks > 0 ? k.cost / k.clicks : 0,
+      cvr: k.clicks > 0 ? k.orders14d / k.clicks : 0,
+      roas14d: k.cost > 0 ? k.revenue14d / k.cost : 0,
+    })).sort((a, b) => b.cost - a.cost);
+    // 지면 재집계 (placementDaily에서)
+    const plMap = new Map<string, PlacementRow>();
+    for (const pd of (filtered.placementDaily ?? []).filter(d => dateInRange(d.date))) {
+      const key = pd.placement;
+      const prev = plMap.get(key) ?? { placement: key, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, ctr: 0, cpc: 0, cvr: 0, roas14d: 0 };
+      prev.impressions += pd.impressions; prev.clicks += pd.clicks; prev.cost += pd.cost;
+      prev.orders14d += pd.orders14d; prev.revenue14d += pd.revenue14d;
+      plMap.set(key, prev);
+    }
+    const placements = [...plMap.values()].map(p => ({
+      ...p,
+      ctr: p.impressions > 0 ? p.clicks / p.impressions : 0,
+      cpc: p.clicks > 0 ? p.cost / p.clicks : 0,
+      cvr: p.clicks > 0 ? p.orders14d / p.clicks : 0,
+      roas14d: p.cost > 0 ? p.revenue14d / p.cost : 0,
+    }));
+    return { ...filtered, daily, totals, rows: filteredRows, keywords, placements };
+  }, [filtered, dateFrom, dateTo]);
+
   // Aggregated chart data
   const chartData = useMemo(() => {
-    if (!filtered.daily.length) return [];
-    const buckets = aggregateByGranularity(filtered.daily, gran, filtered.rows);
+    if (!dateFiltered.daily.length) return [];
+    const buckets = aggregateByGranularity(dateFiltered.daily, gran, dateFiltered.rows);
     return buckets.map((b) => {
       const row: any = { ...b };
       for (const m of METRICS) {
@@ -949,7 +1043,7 @@ export default function AdAnalysisPage() {
       }
       return row;
     });
-  }, [filtered.daily, filtered.rows, gran]);
+  }, [dateFiltered.daily, dateFiltered.rows, gran]);
 
   // Sorted trend table data
   const sortedTrendData = useMemo(() => {
@@ -989,15 +1083,19 @@ export default function AdAnalysisPage() {
   const needsPct = activeDefs.some((m) => m.unit === 'pct');
   const needsCnt = activeDefs.some((m) => m.unit === 'cnt');
 
-  // Map unit → yAxisId (max 2 axes, won gets left, pct/cnt get right)
+  // Map unit → yAxisId (max 2 axes)
   const leftUnit = needsWon ? 'won' : needsCnt ? 'cnt' : 'pct';
   const rightUnit = needsPct && leftUnit !== 'pct' ? 'pct' : needsCnt && leftUnit !== 'cnt' ? 'cnt' : null;
-  const unitToAxis = (u: string) => u === leftUnit ? 'left' : 'right';
+  const hasCustomRight = rightAxisKeys.size > 0 && activeMetrics.some(k => rightAxisKeys.has(k));
+  const unitToAxis = (u: string, key?: string) => {
+    if (key && rightAxisKeys.has(key)) return 'right';
+    return u === leftUnit ? 'left' : 'right';
+  };
 
   // Sorted keywords
   const sortedKeywords = useMemo(() => {
-    if (!filtered.keywords.length) return [];
-    let list = filtered.keywords;
+    if (!dateFiltered.keywords.length) return [];
+    let list = dateFiltered.keywords;
     if (kwOnlyOrders) list = list.filter((k) => k.orders14d > 0);
     if (kwSearch) {
       const q = kwSearch.toLowerCase();
@@ -1009,7 +1107,7 @@ export default function AdAnalysisPage() {
       return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
     return sorted.slice(0, kwLimit);
-  }, [filtered.keywords, sortKey, sortAsc, kwSearch, kwLimit, kwOnlyOrders]);
+  }, [dateFiltered.keywords, sortKey, sortAsc, kwSearch, kwLimit, kwOnlyOrders]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -1054,7 +1152,7 @@ export default function AdAnalysisPage() {
       }));
       downloadXlsx(rows, `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } else if (tab === 'placements') {
-      const rows = filtered.placements.map((p) => ({
+      const rows = dateFiltered.placements.map((p) => ({
         노출지면: p.placement, 노출: p.impressions, 클릭: p.clicks,
         CTR: p.impressions > 0 ? +(p.clicks / p.impressions * 100).toFixed(2) : 0,
         광고비: p.cost, '주문(14일)': p.orders14d, '매출(14일)': p.revenue14d,
@@ -1062,11 +1160,11 @@ export default function AdAnalysisPage() {
       }));
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
-  }, [tab, gran, chartData, sortedKeywords, filtered.placements, downloadXlsx]);
+  }, [tab, gran, chartData, sortedKeywords, dateFiltered.placements, downloadXlsx]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
-  const t = filtered.totals;
+  const t = dateFiltered.totals;
   const hasData = data && t && (t.cost > 0 || t.impressions > 0);
   const roas14d = t && t.cost > 0 ? t.revenue14d / t.cost : 0;
 
@@ -1436,7 +1534,7 @@ export default function AdAnalysisPage() {
             if (cvr > 0 && cvr < 0.01) insights.push({ type: 'warn', text: `CVR ${(cvr*100).toFixed(2)}% 저조 — 상세페이지/가격/리뷰 점검 필요` });
 
             // Per-keyword insights
-            const topKw = filtered.keywords.filter(k => k.cost > 0).sort((a, b) => {
+            const topKw = dateFiltered.keywords.filter(k => k.cost > 0).sort((a, b) => {
               const ra = a.cost > 0 ? a.revenue14d / a.cost : 0;
               const rb = b.cost > 0 ? b.revenue14d / b.cost : 0;
               return ra - rb;
@@ -1468,7 +1566,7 @@ export default function AdAnalysisPage() {
 
             // Product-level insight
             const prodMap = new Map<string, { cost: number; revenue: number; orders: number }>();
-            for (const r of filtered.rows) {
+            for (const r of dateFiltered.rows) {
               const p = prodMap.get(r.product) ?? { cost: 0, revenue: 0, orders: 0 };
               p.cost += r.cost; p.revenue += r.revenue14d; p.orders += r.orders14d;
               prodMap.set(r.product, p);
@@ -1511,6 +1609,25 @@ export default function AdAnalysisPage() {
             ))}
           </div>
 
+          {/* 기간 선택 (전체 탭 공통) */}
+          <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-[#F2F4F6] px-4 py-2.5">
+            <span className="text-[12px] font-semibold text-[#191F28]">기간</span>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+            <span className="text-[11px] text-[#6B7684]">~</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
+            )}
+            {(dateFrom || dateTo) && (
+              <span className="text-[10px] text-[#6B7684] ml-1">
+                {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
+              </span>
+            )}
+          </div>
+
           {/* ─── Tab: Daily / Trend ───────────────────────────────────── */}
           {tab === 'daily' && (
             <div className="space-y-4">
@@ -1534,11 +1651,52 @@ export default function AdAnalysisPage() {
                   </div>
                 </div>
 
-                {/* Metric filter chips */}
+                {/* Metric filter chips: 클릭 → 막대 → 꺾은선 → 숨김 */}
                 <div className="flex flex-wrap gap-2">
-                  {METRICS.map((m) => (
-                    <MetricChip key={m.key} m={m} active={activeMetrics.includes(m.key)} onClick={() => toggleMetric(m.key)} />
-                  ))}
+                  {METRICS.map((m) => {
+                    const active = activeMetrics.includes(m.key);
+                    const currentType = metricTypes[m.key] || m.type;
+                    const handleClick = () => {
+                      if (!active) {
+                        // 숨김 → 막대
+                        setActiveMetrics(prev => [...prev, m.key]);
+                        setMetricTypes(prev => ({ ...prev, [m.key]: 'bar' }));
+                      } else if (currentType === 'bar') {
+                        // 막대 → 꺾은선
+                        setMetricTypes(prev => ({ ...prev, [m.key]: 'line' }));
+                      } else {
+                        // 꺾은선 → 숨김
+                        setActiveMetrics(prev => prev.filter(k => k !== m.key));
+                      }
+                    };
+                    return (
+                      <button key={m.key}
+                        onClick={handleClick}
+                        className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
+                          active ? 'text-white shadow-sm' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                        }`}
+                        style={active ? { backgroundColor: m.color } : {}}>
+                        {m.label} {active ? (currentType === 'bar' ? '▊' : '━') : ''}
+                      </button>
+                    );
+                  })}
+                  {activeMetrics.length > 0 && (
+                    <div className="flex items-center gap-1 ml-1 border-l border-[#E5E8EB] pl-2">
+                      <span className="text-[10px] text-[#6B7684]">보조축:</span>
+                      {activeMetrics.map(key => {
+                        const m = METRICS.find(x => x.key === key);
+                        if (!m) return null;
+                        const isRight = rightAxisKeys.has(key);
+                        return (
+                          <button key={key} onClick={() => setRightAxisKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
+                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}
+                            style={isRight ? { backgroundColor: m.color } : {}}>
+                            {m.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Chart */}
@@ -1553,19 +1711,20 @@ export default function AdAnalysisPage() {
                           tick={{ fontSize: 11 }}
                           tickFormatter={yAxisFormatter(leftUnit)}
                         />
-                        {rightUnit && (
+                        {(rightUnit || hasCustomRight) && (
                           <YAxis
                             yAxisId="right"
                             orientation="right"
                             tick={{ fontSize: 11 }}
-                            tickFormatter={yAxisFormatter(rightUnit)}
+                            tickFormatter={yAxisFormatter(rightUnit || leftUnit)}
                           />
                         )}
                         <Tooltip formatter={tooltipFormatter} />
                         <Legend />
                         {activeDefs.map((m) => {
-                          const yId = unitToAxis(m.unit);
-                          if (m.type === 'bar') {
+                          const yId = unitToAxis(m.unit, m.key);
+                          const chartType = metricTypes[m.key] || m.type;
+                          if (chartType === 'bar') {
                             return (
                               <Bar
                                 key={m.key}
@@ -1648,17 +1807,27 @@ export default function AdAnalysisPage() {
                           {col.label} <TrendSortIcon k={col.key} />
                         </th>
                       ))}
+                      <th className="px-2 py-2.5 text-[#6B7684] font-semibold text-left whitespace-nowrap">메모</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedTrendData.map((d: any) => (
-                      <tr key={d.date} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
-                        <td className="px-3 py-2.5 font-medium text-[#191F28]">{d.label}</td>
+                      <tr key={d.date} className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] ${memos[d.date] ? 'bg-amber-50/30' : ''}`}>
+                        <td className="px-3 py-2.5 font-medium text-[#191F28]">
+                          <div className="flex items-center gap-1.5">
+                            {d.label}
+                            {memos[d.date] && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
+                          </div>
+                        </td>
                         {visibleCols.map((col) => (
                           <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-[#6B7684]'}`}>
                             {col.render(d)}
                           </td>
                         ))}
+                        <td className="px-1 py-1">
+                          <input value={memos[d.date] ?? ''} onChange={e => saveMemo(d.date, e.target.value)}
+                            placeholder="메모" className="w-24 h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:outline-none bg-transparent" />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1737,7 +1906,7 @@ export default function AdAnalysisPage() {
                   <Download className="h-3.5 w-3.5" /> xlsx
                 </button>
                 <span className="text-[12px] text-[#8B95A1]">
-                  {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {filtered.keywords.length}개 키워드
+                  {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
                 </span>
               </div>
 
@@ -1801,12 +1970,12 @@ export default function AdAnalysisPage() {
               const map = new Map<string, any>();
               // 합산 데이터
               const totals = new Map<string, any>();
-              for (const p of filtered.placements) {
+              for (const p of dateFiltered.placements) {
                 totals.set(p.placement, { ...p });
               }
               // 기간별은 placementDaily에서 집계 (price 매칭된 revenue14d 포함)
               if (placeGran !== 'total') {
-                for (const r of filtered.placementDaily) {
+                for (const r of dateFiltered.placementDaily) {
                   const period = placeGran === 'daily' ? r.date : placeGran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
                   const key = `${r.placement}||${period}`;
                   if (!map.has(key)) map.set(key, { placement: r.placement, period, periodLabel: placeGran === 'daily' ? period.slice(5) : placeGran === 'monthly' ? period : bucketLabel(period, 'weekly'), impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
@@ -1851,7 +2020,7 @@ export default function AdAnalysisPage() {
             const chartGranForPlace = placeGran === 'total' ? 'weekly' as Granularity : placeGran as Granularity;
             const chartByPeriod = (() => {
               const map = new Map<string, any>();
-              for (const r of filtered.placementDaily) {
+              for (const r of dateFiltered.placementDaily) {
                 const period = chartGranForPlace === 'daily' ? r.date : chartGranForPlace === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
                 const label = chartGranForPlace === 'daily' ? period.slice(5) : chartGranForPlace === 'monthly' ? period : bucketLabel(period, 'weekly');
                 if (!map.has(period)) map.set(period, { period, label, _cost: 0, _revenue: 0 });
@@ -2030,7 +2199,7 @@ export default function AdAnalysisPage() {
               const gran = pivotGran === 'total' ? 'total' : pivotGran;
 
               if (pivotDim === 'keyword' && gran !== 'total') {
-                for (const r of filtered.keywordDaily) {
+                for (const r of dateFiltered.keywordDaily) {
                   const period = gran === 'daily' ? r.date : gran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
                   const key = `${period}||${r.keyword}`;
                   if (!map.has(key)) map.set(key, { period, periodLabel: gran === 'daily' ? period.slice(5) : gran === 'monthly' ? period : bucketLabel(period, 'weekly'), dim: r.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
@@ -2047,13 +2216,13 @@ export default function AdAnalysisPage() {
               }
 
               if (pivotDim === 'keyword' && gran === 'total') {
-                for (const k of filtered.keywords) {
+                for (const k of dateFiltered.keywords) {
                   map.set(k.keyword, { period: 'total', periodLabel: '합계', dim: k.keyword, impressions: k.impressions, clicks: k.clicks, cost: k.cost, orders14d: k.orders14d, revenue14d: k.revenue14d, cogs14d: 0, commission14d: 0 });
                 }
                 return [...map.values()];
               }
 
-              for (const r of filtered.rows) {
+              for (const r of dateFiltered.rows) {
                 const period = gran === 'total' ? 'total' : gran === 'daily' ? r.date : gran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
                 const dim = pivotDim === 'product' ? r.product : r.campaign;
                 const key = `${period}||${dim}`;
@@ -2091,7 +2260,7 @@ export default function AdAnalysisPage() {
             const chartGran = pivotGran === 'total' ? 'weekly' as Granularity : pivotGran as Granularity;
             const chartPeriods = [...new Set(pivotRows.filter((r: any) => r.period !== 'total').map((r: any) => r.period))].sort();
             // 기간이 없으면 filtered.rows에서 생성
-            const chartPeriodsFromRows = chartPeriods.length > 0 ? chartPeriods : [...new Set(filtered.rows.map((r) => {
+            const chartPeriodsFromRows = chartPeriods.length > 0 ? chartPeriods : [...new Set(dateFiltered.rows.map((r) => {
               return chartGran === 'daily' ? r.date : chartGran === 'monthly' ? r.date.slice(0, 7) : isoWeekKey(r.date);
             }))].sort();
 
@@ -2099,7 +2268,7 @@ export default function AdAnalysisPage() {
               if (pivotGran === 'total') {
                 // total 모드에서도 차트는 주간으로 보여줌
                 const map = new Map<string, any>();
-                for (const r of filtered.rows) {
+                for (const r of dateFiltered.rows) {
                   const period = isoWeekKey(r.date);
                   if (!map.has(period)) map.set(period, { period, label: bucketLabel(period, 'weekly') });
                   const row = map.get(period)!;
