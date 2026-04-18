@@ -102,7 +102,7 @@ const SPEC_ALIASES: Record<string, string[]> = {
   '크기': ['크기', 'size', '사이즈', '치수', 'dimensions', '제품크기'],
   '재질': ['재질', 'material', '소재', '본체소재'],
   '색상': ['색상', 'color', '컬러'],
-  '용량': ['용량', 'capacity', '수용량', '내부용량', '저장용량'],
+  '용량': ['용량', 'capacity', '수용량', '내부용량', '저장용량', '물통', '수통', '물탱크', '탱크용량'],
   '원산지': ['원산지', '제조국', 'origin', '생산지'],
   '방수': ['방수', '방수성', 'waterproof', '방수등급', '방진'],
   '소음': ['소음', '소음도', 'db', '데시벨', '소음수준'],
@@ -110,10 +110,14 @@ const SPEC_ALIASES: Record<string, string[]> = {
   '전압': ['전압', 'voltage', 'v', '입력전압'],
   '배터리': ['배터리', 'battery', '배터리용량', 'mah'],
   '충전시간': ['충전시간', 'charging', '완충시간'],
-  '수압': ['수압', '맥동수', '분사횟수', '분사강도', '수류세기'],
-  '분사모드': ['분사모드', '분사', '모드', '워터모드'],
+  '충전방식': ['충전방식', '충전타입', '충전포트', '충전단자'],
+  '사용시간': ['사용시간', '연속사용', '작동시간', '사용가능'],
+  '수압': ['수압', '맥동수', '분사횟수', '분사강도', '수류세기', '수압강도'],
+  '분사모드': ['분사모드', '분사', '모드', '워터모드', '세정모드', '사용모드'],
+  '노즐': ['노즐', '노즐개수', '노즐기능', '노즐타입', '노즐종류', '팁'],
+  '인증': ['인증', '전기안전', '전자파'],
   '내하중': ['내하중', '하중', '최대하중', 'load'],
-  '보증': ['보증', '보증기간', '워런티', 'warranty', 'as'],
+  '보증': ['보증', '보증기간', '워런티', 'warranty', 'as', 'a/s', 'A/S'],
   '에너지등급': ['에너지등급', '에너지효율'],
   '주성분': ['주성분', '성분', '유효성분', 'ingredient'],
   '제형': ['제형', '타입', 'texture'],
@@ -127,19 +131,60 @@ const SPEC_ALIASES: Record<string, string[]> = {
   '노트북칸': ['노트북칸', '노트북', '랩탑', 'laptop'],
   '수납포켓': ['수납포켓', '포켓', '주머니', '내부수납'],
   '끈길이': ['끈길이', '스트랩', 'strap', '어깨끈'],
+  '모델명': ['모델명', '모델번호', 'model'],
+};
+
+/* ─── 차원 그룹 정규화 (Gemini가 자유롭게 붙인 차원명을 표준으로 묶음) ─── */
+const DIMENSION_ALIASES: Record<string, string[]> = {
+  '수압/세정력': ['수압', '세정력', '세정', '워터제트', '워터압력'],
+  '휴대성': ['휴대', '크기', '무게', '사이즈', '부피', '그립'],
+  '배터리/충전': ['배터리', '충전', '사용시간', '지속시간', '수명'],
+  '물통/용량': ['물통', '용량', '수통', '탱크'],
+  '방수/내구성': ['방수', '내구', '품질', '마감', '견고', '방진'],
+  '노즐/모드': ['노즐', '모드', '분사', '팁'],
+  '소음': ['소음', '데시벨', 'db'],
+  '디자인/그립감': ['디자인', '외관', '스타일', '그립', '색상', '컬러'],
+  '사용편의성': ['편의', '사용감', '조작', '사용법', '직관'],
+  '위생/청소': ['위생', '청소', '세척', '관리', '분리'],
+  'A/S': ['as', 'a/s', '보증', '애프터', '서비스'],
+  '가격대비가치': ['가성비', '가격대비', '가치', '비용효율'],
+  // 일반 (카테고리 무관)
+  '내구성/품질': ['내구', '품질', '마감', '튼튼'],
+  '수납력': ['수납', '공간', '포켓'],
+  '착용감': ['착용', '착화', '핏'],
 };
 
 // 키를 표준 키로 정규화. 매칭 안 되면 원본 키.
 function normalizeKey(rawKey: string): string {
   if (!rawKey || rawKey.startsWith('_')) return rawKey;
-  const lower = rawKey.toLowerCase().replace(/[\s_\-]/g, '');
+  const lower = rawKey.toLowerCase().replace(/[\s_\-/·,·]/g, '');
   for (const [canonical, aliases] of Object.entries(SPEC_ALIASES)) {
     for (const a of aliases) {
-      const al = a.toLowerCase().replace(/[\s_\-]/g, '');
+      const al = a.toLowerCase().replace(/[\s_\-/·,·]/g, '');
       if (lower === al || lower.includes(al) || al.includes(lower)) return canonical;
     }
   }
   return rawKey;
+}
+
+// 차원명 정규화. 키워드 매칭 점수 기반 — 가장 많이 겹치는 canonical로.
+function normalizeDimension(rawDim: string): string {
+  if (!rawDim) return rawDim;
+  const lower = rawDim.toLowerCase().replace(/[\s_\-/·,·()]/g, '');
+  let bestKey = rawDim;
+  let bestScore = 0;
+  for (const [canonical, keywords] of Object.entries(DIMENSION_ALIASES)) {
+    let score = 0;
+    for (const kw of keywords) {
+      const kl = kw.toLowerCase().replace(/[\s_\-/·,·]/g, '');
+      if (lower.includes(kl)) score += kl.length; // 긴 키워드 우선
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = canonical;
+    }
+  }
+  return bestKey;
 }
 
 function findSpec(specs: any, aliases: string[]): any {
@@ -198,14 +243,31 @@ export default function ComparePage() {
     const capacityValues = capacities.map((c) => c?.value ?? null);
     const capacityWinner = findWinner(capacityValues, 'higher');
 
-    // 차원별 점수 비교 (승자 표시)
-    const allDimensions = Array.from(new Set(items.flatMap((it) => (it.review_analysis?.category_dimensions_scored || []).map((d: any) => d.dimension))));
+    // 차원별 점수 비교 — 정규화된 차원명으로 묶기
+    // itemDimMap[itemIdx][canonicalDim] = { score, verdict, spec_evidence, original_labels: [] }
+    const itemDimMap: Record<string, { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] }>[] = items.map((it) => {
+      const byCanonical: Record<string, { score: number | null; verdict?: string; spec_evidence?: string; originals: string[] }> = {};
+      for (const d of (it.review_analysis?.category_dimensions_scored || []) as any[]) {
+        const canonical = normalizeDimension(d.dimension || '');
+        const score = d.score != null ? Number(d.score) : null;
+        if (!byCanonical[canonical]) {
+          byCanonical[canonical] = { score, verdict: d.verdict, spec_evidence: d.spec_evidence, originals: [d.dimension].filter(Boolean) };
+        } else {
+          // 동일 canonical 중복 시: 높은 점수 우선, spec_evidence/verdict 병합
+          if (score != null && (byCanonical[canonical].score == null || score > (byCanonical[canonical].score as number))) {
+            byCanonical[canonical].score = score;
+            byCanonical[canonical].verdict = d.verdict;
+          }
+          if (d.spec_evidence && !byCanonical[canonical].spec_evidence) byCanonical[canonical].spec_evidence = d.spec_evidence;
+          if (d.dimension) byCanonical[canonical].originals.push(d.dimension);
+        }
+      }
+      return byCanonical;
+    });
+    const allDimensions = Array.from(new Set(itemDimMap.flatMap((m) => Object.keys(m))));
     const dimensionWinners: Record<string, number | null> = {};
     allDimensions.forEach((dim) => {
-      const scores = items.map((it) => {
-        const d = (it.review_analysis?.category_dimensions_scored || []).find((x: any) => x.dimension === dim);
-        return d?.score != null ? Number(d.score) : null;
-      });
+      const scores = itemDimMap.map((m) => (m[dim]?.score ?? null));
       dimensionWinners[dim] = findWinner(scores, 'higher');
     });
 
@@ -229,7 +291,7 @@ export default function ComparePage() {
       neutralScores, neutralWinner,
       weights, weightWinner,
       capacities, capacityWinner,
-      allDimensions, dimensionWinners,
+      allDimensions, dimensionWinners, itemDimMap,
       allSpecKeys,
       keyOriginalsMap,
     };
@@ -394,9 +456,9 @@ export default function ComparePage() {
               <>
                 <SectionHead label={`차원별 평가 (${items[0].detail_analysis?.category || '카테고리'})`} cols={items.length + 1} />
                 {c.allDimensions.map((dim: string) => (
-                  <Row key={dim} label={dim} items={items} render={(it, i) => {
-                    const d = (it.review_analysis?.category_dimensions_scored || []).find((x: any) => x.dimension === dim);
-                    if (!d) return <Missing />;
+                  <Row key={dim} label={dim} items={items} render={(_it, i) => {
+                    const d = c.itemDimMap[i][dim];
+                    if (!d || d.score == null) return <Missing />;
                     return (
                       <div>
                         <WinnerCell isWinner={i === c.dimensionWinners[dim]}>
@@ -405,6 +467,9 @@ export default function ComparePage() {
                         </WinnerCell>
                         {d.spec_evidence && (
                           <div className="text-[10px] text-blue-600 mt-0.5">📐 {d.spec_evidence}</div>
+                        )}
+                        {d.originals.length > 1 && (
+                          <div className="text-[9px] text-gray-400 mt-0.5 italic">merged: {d.originals.join(' / ')}</div>
                         )}
                       </div>
                     );
