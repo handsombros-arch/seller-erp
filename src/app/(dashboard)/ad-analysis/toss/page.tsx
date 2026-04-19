@@ -176,6 +176,7 @@ export default function TossAdAnalysisPage() {
   // 탭
   const [tab, setTab] = useState<TabKey>('trend');
   const [gran, setGran] = useState<Gran>('daily');
+  const [memos, setMemos] = useState<Record<string, string>>({});
 
   // 리스트 정렬/검색
   const [sortKey, setSortKey] = useState<SortKey>('cost');
@@ -295,6 +296,24 @@ export default function TossAdAnalysisPage() {
 
   // 기간별 추이 차트
   const daily = useMemo(() => aggregateDaily(filteredRows, gran), [filteredRows, gran]);
+
+  // 토스 채널 메모 로드
+  useEffect(() => {
+    fetch('/api/ad-analysis/memos?channel=toss').then(r => r.ok ? r.json() : []).then((list: { date: string; memo: string }[]) => {
+      const map: Record<string, string> = {};
+      for (const m of list) map[m.date] = m.memo;
+      setMemos(map);
+    }).catch(() => {});
+  }, []);
+
+  const saveMemo = useCallback((date: string, memo: string) => {
+    setMemos(prev => ({ ...prev, [date]: memo }));
+    fetch('/api/ad-analysis/memos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, memo, channel: 'toss' }),
+    }).catch(() => {});
+  }, []);
 
   // 탭별 집계 리스트
   const listRows = useMemo(() => {
@@ -447,14 +466,11 @@ export default function TossAdAnalysisPage() {
               {products.length > 1 && (
                 <div className="flex items-center gap-2">
                   <label className="text-[12px] font-medium text-[#6B7684]">상품</label>
-                  <select
+                  <ProductCombobox
                     value={productFilter}
-                    onChange={(e) => setProductFilter(e.target.value)}
-                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] max-w-[300px] truncate"
-                  >
-                    <option value="">전체 ({products.length})</option>
-                    {products.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                    onChange={setProductFilter}
+                    options={products}
+                  />
                 </div>
               )}
               {(campaignFilter || productFilter) && (
@@ -646,7 +662,7 @@ export default function TossAdAnalysisPage() {
                     </button>
                   </div>
                 </div>
-                <DailyTable rows={daily} gran={gran} />
+                <DailyTable rows={daily} gran={gran} memos={memos} onSaveMemo={saveMemo} />
               </div>
             </>
           )}
@@ -751,8 +767,10 @@ export default function TossAdAnalysisPage() {
   );
 }
 
-function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gran; dense?: boolean }) {
+function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: DailyRow[]; gran: Gran; dense?: boolean; memos?: Record<string, string>; onSaveMemo?: (date: string, memo: string) => void }) {
   const pad = dense ? 'py-1.5' : 'py-2.5';
+  const hasMemo = !!memos && !!onSaveMemo;
+  const colSpan = hasMemo ? 12 : 11;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]">
@@ -769,28 +787,48 @@ function DailyTable({ rows, gran, dense = false }: { rows: DailyRow[]; gran: Gra
             <th className={`text-right px-3 ${pad} font-medium`}>광고비</th>
             <th className={`text-right px-3 ${pad} font-medium`}>매출</th>
             <th className={`text-right px-3 ${pad} font-medium`}>ROAS</th>
+            {hasMemo && <th className={`text-left px-3 ${pad} font-medium whitespace-nowrap`}>메모</th>}
           </tr>
         </thead>
         <tbody>
-          {rows.map((d, i) => (
-            <tr key={i} className="border-b border-[#F1F3F5] hover:bg-[#F8FAFF]">
-              <td className={`px-3 ${pad} text-[#333D4B]`}>{d.date}</td>
-              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.impressions)}</td>
-              <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtN(d.cpm)}</td>
-              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.clicks)}</td>
-              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.ctr)}</td>
-              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtN(d.cpc)}</td>
-              <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.orderCount)}</td>
-              <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.cvr)}</td>
-              <td className={`px-3 ${pad} text-right text-[#EF4444] font-medium`}>{fmtW(d.cost)}</td>
-              <td className={`px-3 ${pad} text-right text-[#10B981] font-medium`}>{fmtW(d.revenue)}</td>
-              <td className={`px-3 ${pad} text-right font-bold ${
-                d.roas >= 300 ? 'text-[#10B981]' : d.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
-              }`}>{d.roas.toFixed(0)}%</td>
-            </tr>
-          ))}
+          {rows.map((d, i) => {
+            const memo = hasMemo ? (memos![d.date] ?? '') : '';
+            const hasValue = hasMemo && memo.length > 0;
+            return (
+              <tr key={i} className={`border-b border-[#F1F3F5] hover:bg-[#F8FAFF] ${hasValue ? 'bg-amber-50/30' : ''}`}>
+                <td className={`px-3 ${pad} text-[#333D4B]`}>
+                  <div className="flex items-center gap-1.5">
+                    {d.date}
+                    {hasValue && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
+                  </div>
+                </td>
+                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.impressions)}</td>
+                <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtN(d.cpm)}</td>
+                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.clicks)}</td>
+                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.ctr)}</td>
+                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtN(d.cpc)}</td>
+                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.orderCount)}</td>
+                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.cvr)}</td>
+                <td className={`px-3 ${pad} text-right text-[#EF4444] font-medium`}>{fmtW(d.cost)}</td>
+                <td className={`px-3 ${pad} text-right text-[#10B981] font-medium`}>{fmtW(d.revenue)}</td>
+                <td className={`px-3 ${pad} text-right font-bold ${
+                  d.roas >= 300 ? 'text-[#10B981]' : d.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
+                }`}>{d.roas.toFixed(0)}%</td>
+                {hasMemo && (
+                  <td className={`px-3 ${pad}`}>
+                    <input
+                      value={memo}
+                      onChange={(e) => onSaveMemo!(d.date, e.target.value)}
+                      placeholder="메모"
+                      className="w-full min-w-[120px] h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:outline-none bg-transparent"
+                    />
+                  </td>
+                )}
+              </tr>
+            );
+          })}
           {rows.length === 0 && (
-            <tr><td colSpan={11} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
+            <tr><td colSpan={colSpan} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
           )}
         </tbody>
       </table>
@@ -816,6 +854,96 @@ function KPICard({ icon, label, value, sub, accent = 'gray' }: { icon?: React.Re
       </div>
       <p className="text-[20px] font-bold text-[#191F28] mt-1">{value}</p>
       {sub && <p className="text-[11px] text-[#B0B8C1]">{sub}</p>}
+    </div>
+  );
+}
+
+function ProductCombobox({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        // 미선택 상태로 닫히면 query를 실제 value 로 복원
+        setQuery(value);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [value]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || q === value.toLowerCase()) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [query, value, options]);
+
+  const selectItem = (v: string) => {
+    onChange(v);
+    setQuery(v);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="relative flex items-center">
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && filtered.length > 0) {
+              e.preventDefault();
+              selectItem(filtered[0]);
+            }
+            if (e.key === 'Escape') { setOpen(false); setQuery(value); }
+          }}
+          placeholder={`전체 (${options.length}) · 검색`}
+          className="h-9 pl-3 pr-7 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] w-[280px]"
+        />
+        {(value || query) && (
+          <button
+            onClick={() => { onChange(''); setQuery(''); setOpen(false); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full text-[#B0B8C1] hover:bg-[#F2F4F6] hover:text-[#6B7684] flex items-center justify-center text-[14px] leading-none"
+            aria-label="필터 초기화"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-20 top-full mt-1 left-0 w-[340px] max-h-64 overflow-y-auto bg-white border border-[#E5E8EB] rounded-lg shadow-lg">
+          <button
+            onClick={() => selectItem('')}
+            className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#F8FAFF] border-b border-[#F2F4F6] ${!value ? 'bg-[#EBF5FF] text-[#3182F6] font-medium' : 'text-[#6B7684]'}`}
+          >
+            전체 ({options.length})
+          </button>
+          {filtered.length === 0 && (
+            <div className="px-3 py-4 text-[12px] text-[#B0B8C1] text-center">일치하는 상품 없음</div>
+          )}
+          {filtered.slice(0, 100).map((o) => (
+            <button
+              key={o}
+              onClick={() => selectItem(o)}
+              className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#F8FAFF] truncate ${o === value ? 'bg-[#EBF5FF] text-[#3182F6] font-medium' : 'text-[#333D4B]'}`}
+              title={o}
+            >
+              {o}
+            </button>
+          ))}
+          {filtered.length > 100 && (
+            <div className="px-3 py-1.5 text-[10px] text-[#B0B8C1] bg-[#FAFBFC] border-t border-[#F2F4F6]">
+              상위 100개만 표시 · 더 좁히려면 검색어 입력
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
