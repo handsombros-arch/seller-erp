@@ -11,7 +11,7 @@ export async function GET() {
     .from('snapshot_keywords')
     .select('*')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const ids = (data || []).map((k) => k.id);
@@ -41,6 +41,29 @@ export async function POST(request: NextRequest) {
   if (!keyword) return NextResponse.json({ error: 'keyword 필수' }, { status: 400 });
 
   const admin = await createAdminClient();
+
+  // 기존 있으면 queue로 전환, 없으면 신규 생성 (upsert-like)
+  const { data: existing } = await admin
+    .from('snapshot_keywords')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('platform', 'coupang')
+    .eq('keyword', keyword)
+    .maybeSingle();
+
+  if (existing) {
+    const patch: Record<string, unknown> = { status: 'queued', last_error: null, top_n: topN };
+    if (body.auto_interval_minutes !== undefined) patch.auto_interval_minutes = auto;
+    const { data, error } = await admin
+      .from('snapshot_keywords')
+      .update(patch)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ...data, existed: true });
+  }
+
   const { data, error } = await admin
     .from('snapshot_keywords')
     .insert({
@@ -53,9 +76,6 @@ export async function POST(request: NextRequest) {
     })
     .select()
     .single();
-  if (error) {
-    if (error.code === '23505') return NextResponse.json({ error: '이미 등록된 키워드입니다.' }, { status: 409 });
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-  return NextResponse.json(data);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ...data, existed: false });
 }
