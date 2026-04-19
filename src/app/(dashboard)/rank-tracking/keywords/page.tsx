@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Search, ExternalLink, Trash2, Clock } from 'lucide-react';
+import { Search, ExternalLink, Clock, LayoutGrid, TableProperties, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 
 type Progress = {
   phase?: string;
@@ -49,6 +49,23 @@ type Item = {
   review_count: number | null;
 };
 
+type MatrixCell = {
+  snapshot_id: string;
+  rank: number;
+  product_id: string | null;
+  title: string | null;
+  price: string | null;
+  is_ad: boolean;
+  is_rocket: boolean;
+  thumbnail_url: string | null;
+};
+
+type MatrixData = {
+  snapshots: { id: string; checked_at: string; items_count: number | null }[];
+  rows: { rank: number; cells: (MatrixCell | null)[] }[];
+  traces: { product_id: string; title: string | null; ranksBySnap: (number | null)[]; bestRank: number }[];
+};
+
 function TabNav() {
   return (
     <div className="flex gap-1 border-b">
@@ -81,6 +98,9 @@ export default function KeywordSearchPage() {
   const [running, setRunning] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [runStartAt, setRunStartAt] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'single' | 'matrix'>('single');
+  const [matrix, setMatrix] = useState<MatrixData | null>(null);
+  const [loadingMatrix, setLoadingMatrix] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadSaved = useCallback(async () => {
@@ -112,6 +132,16 @@ export default function KeywordSearchPage() {
     setLoadingItems(false);
   }, []);
 
+  const loadMatrix = useCallback(async (kwId: string) => {
+    setLoadingMatrix(true);
+    const r = await fetch(`/api/keyword-snapshots/${kwId}/matrix?limit=8`);
+    if (r.ok) {
+      const data = await r.json();
+      setMatrix(data);
+    }
+    setLoadingMatrix(false);
+  }, []);
+
   useEffect(() => {
     loadSaved();
     return () => {
@@ -126,6 +156,12 @@ export default function KeywordSearchPage() {
       setItems([]);
     }
   }, [currentKw, selectedSnapId, loadItems]);
+
+  useEffect(() => {
+    if (currentKw && viewMode === 'matrix') {
+      loadMatrix(currentKw.id);
+    }
+  }, [currentKw, viewMode, snapshots.length, loadMatrix]);
 
   async function runSearch(keyword?: string) {
     const kw = (keyword ?? input).trim();
@@ -292,28 +328,155 @@ export default function KeywordSearchPage() {
         )}
       </div>
 
-      {/* 이력 선택 */}
+      {/* 뷰 토글 + 이력 선택 */}
       {currentKw && snapshots.length > 0 && (
-        <div className="bg-white border rounded-lg p-3 flex items-center gap-3">
-          <Clock className="w-4 h-4 text-gray-400" />
-          <label className="text-sm font-medium">시점:</label>
-          <select
-            value={selectedSnapId || ''}
-            onChange={(e) => setSelectedSnapId(e.target.value || null)}
-            className="border rounded px-2 py-1 text-sm min-w-[260px]"
-          >
-            {snapshots.map((s) => (
-              <option key={s.id} value={s.id}>
-                {formatChecked(s.checked_at)} · {s.items_count ?? 0}개
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-gray-400">총 {snapshots.length}회 수집</span>
+        <div className="bg-white border rounded-lg p-3 flex items-center gap-3 flex-wrap">
+          <div className="flex gap-1 border rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('single')}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${viewMode === 'single' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <TableProperties className="w-3.5 h-3.5" />
+              단일 시점
+            </button>
+            <button
+              onClick={() => setViewMode('matrix')}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${viewMode === 'matrix' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              시점 비교 (최근 8회)
+            </button>
+          </div>
+          {viewMode === 'single' && (
+            <>
+              <div className="w-px h-6 bg-gray-200" />
+              <Clock className="w-4 h-4 text-gray-400" />
+              <label className="text-sm font-medium">시점:</label>
+              <select
+                value={selectedSnapId || ''}
+                onChange={(e) => setSelectedSnapId(e.target.value || null)}
+                className="border rounded px-2 py-1 text-sm min-w-[260px]"
+              >
+                {snapshots.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {formatChecked(s.checked_at)} · {s.items_count ?? 0}개
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          <span className="text-xs text-gray-400 ml-auto">총 {snapshots.length}회 수집</span>
         </div>
       )}
 
-      {/* 결과 테이블 */}
-      {currentKw && (
+      {/* 시점 비교 매트릭스 */}
+      {currentKw && viewMode === 'matrix' && (
+        <div className="bg-white border rounded-lg overflow-auto">
+          {loadingMatrix && <div className="text-center py-8 text-gray-500">불러오는 중...</div>}
+          {!loadingMatrix && matrix && matrix.snapshots.length === 0 && (
+            <div className="text-center py-8 text-gray-500">스냅샷이 아직 없습니다.</div>
+          )}
+          {!loadingMatrix && matrix && matrix.snapshots.length > 0 && (
+            <table className="text-xs border-collapse min-w-full">
+              <thead className="bg-gray-50 border-b sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-2 py-2 font-medium w-12 sticky left-0 bg-gray-50 z-20 border-r">#</th>
+                  {matrix.snapshots.map((s) => (
+                    <th key={s.id} className="text-left px-2 py-2 font-medium border-r min-w-[160px]">
+                      <div className="font-semibold">{formatChecked(s.checked_at).replace(/년.*월/, '월').slice(4)}</div>
+                      <div className="text-[10px] text-gray-400 font-normal">{s.items_count ?? 0}개</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.rows.map((row) => (
+                  <tr key={row.rank} className="border-b hover:bg-blue-50/30">
+                    <td className="px-2 py-1.5 font-semibold text-gray-700 sticky left-0 bg-white border-r">{row.rank}</td>
+                    {row.cells.map((cell, i) => {
+                      const prev = i > 0 ? row.cells[i - 1] : null;
+                      const changed = prev && cell && prev.product_id !== cell.product_id;
+                      return (
+                        <td key={i} className={`px-2 py-1.5 border-r align-top ${changed ? 'bg-yellow-50' : ''}`}>
+                          {cell ? (
+                            <div>
+                              <div className="font-medium line-clamp-2 leading-tight" title={cell.title || ''}>
+                                {cell.title || '(제목없음)'}
+                              </div>
+                              <div className="flex gap-1 mt-0.5 items-center">
+                                {cell.price && <span className="text-[10px] text-gray-600 font-semibold">{cell.price}원</span>}
+                                {cell.is_ad && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded">광고</span>}
+                                {cell.is_rocket && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">로켓</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!loadingMatrix && matrix && matrix.traces.length > 0 && (
+            <div className="border-t">
+              <div className="px-3 py-2 text-xs font-semibold bg-gray-50 border-b flex items-center gap-2">
+                <span>상품별 순위 변동 (Top 20 제품)</span>
+                <span className="text-gray-400 font-normal">· 노란 셀 = 직전 시점 대비 상품 변경</span>
+              </div>
+              <table className="text-xs w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left px-2 py-1.5 font-medium">상품</th>
+                    {matrix.snapshots.map((s) => (
+                      <th key={s.id} className="text-center px-2 py-1.5 font-medium w-14">
+                        {new Date(s.checked_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      </th>
+                    ))}
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.traces.slice(0, 20).map((t) => {
+                    const latestRank = t.ranksBySnap[t.ranksBySnap.length - 1];
+                    const prevRank = t.ranksBySnap[t.ranksBySnap.length - 2];
+                    const delta = prevRank != null && latestRank != null ? prevRank - latestRank : null;
+                    return (
+                      <tr key={t.product_id} className="border-b hover:bg-gray-50">
+                        <td className="px-2 py-1.5">
+                          <div className="line-clamp-1" title={t.title || ''}>{t.title || t.product_id}</div>
+                          <div className="text-[10px] text-gray-400">pid: {t.product_id}</div>
+                        </td>
+                        {t.ranksBySnap.map((r, i) => (
+                          <td key={i} className="text-center px-1 py-1.5">
+                            {r != null ? (
+                              <span className={`inline-block px-1.5 py-0.5 rounded ${r <= 10 ? 'bg-green-100 text-green-700 font-semibold' : r <= 20 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {r}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </td>
+                        ))}
+                        <td className="px-1 py-1.5 text-center">
+                          {delta != null && delta > 0 && <ArrowUpRight className="w-3.5 h-3.5 text-green-600 inline" />}
+                          {delta != null && delta < 0 && <ArrowDownRight className="w-3.5 h-3.5 text-red-600 inline" />}
+                          {delta === 0 && <Minus className="w-3.5 h-3.5 text-gray-400 inline" />}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 결과 테이블 (단일 시점) */}
+      {currentKw && viewMode === 'single' && (
         <div className="bg-white border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">

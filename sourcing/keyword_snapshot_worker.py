@@ -186,86 +186,134 @@ def _attr(el, name):
 
 def parse_items_from_page(page, start_rank: int, limit: int):
     """검색 결과 페이지에서 상품 리스트 추출.
-    start_rank: 이 페이지 첫 항목의 절대 순위
-    limit: 더 수집할 최대 개수
-    반환: items (dict list), consumed_count
+    쿠팡이 li → div/a 등으로 태그를 바꿔도 동작하도록 [data-product-id] 전체 대상.
+    동일 pid는 최초 출현만 기록 (중복 요소 무시).
     """
     items = []
+    seen_pids = set()
     try:
-        lis = page.css("li[data-product-id]")
+        elements = page.css("[data-product-id]")
     except Exception:
-        lis = []
+        elements = []
     count = 0
-    for idx, li in enumerate(lis):
+    for el in elements:
         if len(items) >= limit: break
-        pid = _attr(li, "data-product-id")
-        if not pid: continue
-        is_ad = (_attr(li, "data-is-ad") or "").lower() == "true"
+        pid = _attr(el, "data-product-id")
+        if not pid or not pid.isdigit(): continue
+        if pid in seen_pids: continue
+        seen_pids.add(pid)
+        is_ad = (_attr(el, "data-is-ad") or "").lower() == "true"
 
         title = None
-        for sel in [".name", ".search-product-name", "div[class*='productName']"]:
-            el = _first(li, sel)
-            t = _text(el)
-            if t:
+        for sel in [".name", ".search-product-name", "div[class*='productName']",
+                    "div[class*='ProductName']", "div[class*='title']", "[class*='name']"]:
+            sub = _first(el, sel)
+            t = _text(sub)
+            if t and len(t) > 3:
                 title = t
                 break
         if not title:
-            # 대체: img alt
-            img = _first(li, "img")
+            img = _first(el, "img")
             alt = _attr(img, "alt")
             if alt: title = alt.strip()
 
-        # 가격
-        price = None
-        for sel in [".price-value", "strong.price-value", ".price em strong", ".price strong"]:
-            el = _first(li, sel)
-            t = _text(el)
-            if t:
-                price = t
-                break
+        # 전체 텍스트 (fallback용)
+        try:
+            all_text = el.text or ""
+        except Exception:
+            try: all_text = el.get_all_text() or ""
+            except Exception: all_text = ""
 
-        # 평점/리뷰수
+        # 가격 — 최종 표시가. CSS → 텍스트 regex fallback
+        price = None
+        for sel in [
+            "[class*='finalPrice'] strong", "[class*='FinalPrice'] strong",
+            ".price-value", "strong.price-value",
+            "[class*='priceValue']", "[class*='PriceValue']",
+            ".price em strong", ".price strong",
+            "[class*='salePrice'] strong", "[class*='price'] strong",
+            "strong", "em",
+        ]:
+            sub = _first(el, sel)
+            t = _text(sub)
+            if t:
+                m = re.search(r"(\d{1,3}(?:,\d{3})+|\d{4,})", t)
+                if m:
+                    n = int(m.group(1).replace(",", ""))
+                    if 100 <= n <= 100_000_000:
+                        price = m.group(1)
+                        break
+        if not price and all_text:
+            # 상품 카드 전체 텍스트에서 "...원" 또는 천단위 콤마 숫자 최초
+            m = re.search(r"(\d{1,3}(?:,\d{3})+)\s*원", all_text)
+            if not m:
+                m = re.search(r"(\d{1,3}(?:,\d{3})+)", all_text)
+            if m:
+                n = int(m.group(1).replace(",", ""))
+                if 100 <= n <= 100_000_000:
+                    price = m.group(1)
+
+        # 평점/리뷰수 — CSS → regex fallback
         rating = None
         review_count = None
-        el_rating = _first(li, ".rating")
-        if el_rating:
-            t = _text(el_rating)
+        for sel in [".rating", "[class*='rating']", "em[class*='rating']"]:
+            sub = _first(el, sel)
+            t = _text(sub)
             if t:
                 m = re.search(r"([\d.]+)", t)
                 if m:
-                    try: rating = float(m.group(1))
+                    try:
+                        v = float(m.group(1))
+                        if 0 < v <= 5: rating = v; break
                     except: pass
-        el_rcount = _first(li, ".rating-total-count, .rating-count")
-        if el_rcount:
-            t = _text(el_rcount)
-            m = re.search(r"(\d[\d,]*)", t)
+        for sel in [".rating-total-count", ".rating-count", "[class*='ratingCount']",
+                    "[class*='RatingCount']", "[class*='reviewCount']"]:
+            sub = _first(el, sel)
+            t = _text(sub)
+            if t:
+                m = re.search(r"\(?(\d[\d,]*)\)?", t)
+                if m:
+                    try: review_count = int(m.group(1).replace(",", "")); break
+                    except: pass
+        # 텍스트 fallback: "(1,234)" 패턴
+        if review_count is None and all_text:
+            m = re.search(r"\((\d{1,3}(?:,\d{3})*|\d+)\)", all_text)
             if m:
                 try: review_count = int(m.group(1).replace(",", ""))
+                except: pass
+        # rating fallback: "4.5" 같은 소수점 별점 단독 숫자
+        if rating is None and all_text:
+            for m in re.finditer(r"(\d\.\d)", all_text):
+                try:
+                    v = float(m.group(1))
+                    if 0 < v <= 5: rating = v; break
                 except: pass
 
         # 썸네일
         thumb = None
-        img = _first(li, "img.search-product-wrap-img, dt img, img")
+        img = _first(el, "img")
         if img:
-            for k in ("src", "data-img-src", "data-src"):
+            for k in ("src", "data-img-src", "data-src", "data-original"):
                 v = _attr(img, k)
-                if v:
+                if v and v.startswith(("http", "//")):
                     if v.startswith("//"): v = "https:" + v
                     thumb = v
                     break
 
-        # URL
+        # URL — el 자신이 <a>일 수도, 내부에 a 있을 수도
         url = None
-        a = _first(li, "a")
-        href = _attr(a, "href")
+        href = _attr(el, "href")
+        if not href:
+            a = _first(el, "a")
+            href = _attr(a, "href")
         if href:
             if href.startswith("/"): url = "https://www.coupang.com" + href
             elif href.startswith("http"): url = href
 
-        # 로켓배송 뱃지
+        # 로켓배송
         is_rocket = False
         try:
-            rocket = li.css("span[class*='rocket'], img[alt*='로켓'], img[src*='rocket']")
+            rocket = el.css("[class*='rocket'], [class*='Rocket'], img[alt*='로켓'], img[src*='rocket']")
             is_rocket = bool(rocket)
         except Exception:
             pass
@@ -283,24 +331,29 @@ def parse_items_from_page(page, start_rank: int, limit: int):
             "review_count": review_count,
         })
         count += 1
-    return items, len(lis)
+    return items, len(seen_pids)
 
 
 def collect_top_n(sess, keyword: str, top_n: int, page_size: int = 72, progress_cb=None):
     all_items = []
     max_pages = max(1, (top_n + page_size - 1) // page_size + 1)
+    debug_dir = ROOT / "results"
+    debug_dir.mkdir(parents=True, exist_ok=True)
     for page_num in range(1, max_pages + 1):
         if progress_cb:
             progress_cb({"phase": "loading", "page": page_num, "collected": len(all_items), "target": top_n})
         url = f"https://www.coupang.com/np/search?q={quote_plus(keyword)}&page={page_num}&listSize={page_size}"
         print(f"    page {page_num}: {url}")
-        resp = sess.fetch(url, wait=2500)
+        resp = sess.fetch(url, wait=5000)
+        print(f"      status={resp.status} body={len(resp.body)} bytes")
         if resp.status != 200:
-            snippet = resp.body[:200].decode("utf-8", errors="ignore")
+            snippet = resp.body[:300].decode("utf-8", errors="ignore")
             raise RuntimeError(f"status {resp.status} p{page_num}: {snippet}")
         text_check = resp.body[:2000].decode("utf-8", errors="ignore")
         if "Access Denied" in text_check or "captcha" in text_check.lower() or len(resp.body) < 5000:
-            raise RuntimeError(f"차단/캡차 감지 p{page_num} (body={len(resp.body)})")
+            dump = debug_dir / f"blocked-{keyword}-p{page_num}-{int(time.time())}.html"
+            dump.write_bytes(resp.body)
+            raise RuntimeError(f"차단/캡차 감지 p{page_num} (body={len(resp.body)}) → {dump.name}")
 
         if progress_cb:
             progress_cb({"phase": "parsing", "page": page_num, "collected": len(all_items), "target": top_n})
@@ -309,26 +362,64 @@ def collect_top_n(sess, keyword: str, top_n: int, page_size: int = 72, progress_
         items, li_count = parse_items_from_page(resp, start_rank, remaining)
         all_items.extend(items)
         print(f"      수집 {len(items)}개 (li {li_count}), 누적 {len(all_items)}/{top_n}")
+        if li_count == 0:
+            dump = debug_dir / f"empty-{keyword}-p{page_num}-{int(time.time())}.html"
+            dump.write_bytes(resp.body)
+            print(f"      상품 0 — HTML 덤프: {dump.name}")
+            # 대체 selector 시도: ul#productList, .search-product 등 전역 grep
+            html = resp.body.decode("utf-8", errors="ignore")
+            count_alt1 = html.count('data-product-id=')
+            count_alt2 = html.count('class="search-product')
+            count_alt3 = html.count('id="productList"')
+            print(f"      HTML 힌트: data-product-id={count_alt1}, search-product class={count_alt2}, productList id={count_alt3}")
+            break
         if progress_cb:
             progress_cb({"phase": "scanning", "page": page_num, "collected": len(all_items), "target": top_n})
-        if li_count == 0:
-            print("      상품 0 — 중단")
-            break
         if len(all_items) >= top_n:
             break
         time.sleep(1.0)
     return all_items[:top_n]
 
 
-def process_item(item: dict):
+class SessionHolder:
+    """Chrome 세션을 워커 수명 동안 재사용. 시크릿은 '로그인/히스토리 없음' 기준이며,
+    세션 쿠키가 누적되더라도 쿠팡 개인화에는 영향 없음.
+    --fresh-session 플래그나 쌓인 쿠키 문제 의심 시 recreate() 호출.
+    """
+    def __init__(self, fresh_each_item: bool = False):
+        self.fresh_each_item = fresh_each_item
+        self.sess = None
+        self.temp_profile: Path | None = None
+
+    def ensure(self):
+        if self.sess is not None: return self.sess
+        self.temp_profile = Path(tempfile.mkdtemp(prefix="kwsnap-incognito-"))
+        self.sess = make_incognito_session(self.temp_profile)
+        self.sess.__enter__()
+        print(f"  [session] Chrome 기동 완료 ({self.temp_profile.name})")
+        return self.sess
+
+    def recreate(self):
+        self.close()
+        return self.ensure()
+
+    def close(self):
+        if self.sess is not None:
+            try: self.sess.__exit__(None, None, None)
+            except Exception: pass
+            self.sess = None
+        if self.temp_profile is not None:
+            shutil.rmtree(self.temp_profile, ignore_errors=True)
+            self.temp_profile = None
+
+
+def process_item(item: dict, holder: SessionHolder):
     item_id = item["id"]
     keyword = item["keyword"]
     top_n = int(item.get("top_n") or 40)
     user_id = item.get("user_id")
     print(f"\n--- [{item_id[:8]}] '{keyword}' Top-{top_n} ---")
 
-    temp_profile = Path(tempfile.mkdtemp(prefix="kwsnap-incognito-"))
-    sess = None
     snapshot_id = None
 
     def emit_progress(p: dict):
@@ -336,13 +427,15 @@ def process_item(item: dict):
         except Exception as e: print(f"    [progress] 업데이트 실패: {e}")
 
     try:
-        emit_progress({"phase": "launching_chrome", "page": 0, "collected": 0, "target": top_n})
-        sess = make_incognito_session(temp_profile)
-        sess.__enter__()
+        if holder.sess is None:
+            emit_progress({"phase": "launching_chrome", "page": 0, "collected": 0, "target": top_n})
+        sess = holder.ensure()
+        if holder.fresh_each_item:
+            sess = holder.recreate()
+
         items = collect_top_n(sess, keyword, top_n, progress_cb=emit_progress)
 
         emit_progress({"phase": "saving", "page": 0, "collected": len(items), "target": top_n})
-        # snapshot 행 생성
         snap = db_request("POST", "/keyword_snapshots", body={
             "keyword_id": item_id,
             "user_id": user_id,
@@ -354,7 +447,6 @@ def process_item(item: dict):
             raise RuntimeError("keyword_snapshots insert returned empty")
         snapshot_id = snap[0]["id"]
 
-        # items 배치 삽입
         if items:
             rows = [{**r, "snapshot_id": snapshot_id} for r in items]
             db_request("POST", "/keyword_snapshot_items", body=rows)
@@ -367,11 +459,13 @@ def process_item(item: dict):
             progress=None,
         )
         print(f"  완료: {len(items)}개 저장 (snapshot {snapshot_id[:8]})")
-    finally:
-        if sess is not None:
-            try: sess.__exit__(None, None, None)
-            except Exception: pass
-        shutil.rmtree(temp_profile, ignore_errors=True)
+    except Exception as e:
+        # Chrome 크래시/연결 끊김 의심 시 세션 재생성
+        msg = str(e).lower()
+        if any(x in msg for x in ["connection", "disconnect", "crashed", "closed", "timeout"]):
+            print(f"  [session] 세션 이상 감지 → 재생성")
+            holder.close()
+        raise
 
 
 def main():
@@ -379,49 +473,52 @@ def main():
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--id", type=str)
-    parser.add_argument("--interval", type=int, default=30, help="폴링 간격(초)")
+    parser.add_argument("--interval", type=int, default=10, help="폴링 간격(초)")
+    parser.add_argument("--fresh-session", action="store_true", help="매 키워드마다 Chrome 재기동 (느리지만 쿠키 완전 초기화)")
     args = parser.parse_args()
     if not (args.watch or args.once or args.id):
         args.once = True
 
     print(f"[kw-snapshot] supabase: {SUPABASE_URL}")
     print(f"[kw-snapshot] mode: {'watch' if args.watch else ('id=' + args.id if args.id else 'once')}")
-    print(f"[kw-snapshot] incognito: ON (temp profile per run)")
+    print(f"[kw-snapshot] session: {'fresh per item (slow)' if args.fresh_session else 'reuse (fast)'}")
 
-    COOLDOWN = int(os.environ.get("PER_ITEM_COOLDOWN", "5"))
+    COOLDOWN = int(os.environ.get("PER_ITEM_COOLDOWN", "3"))
+    holder = SessionHolder(fresh_each_item=args.fresh_session)
 
-    while True:
-        try:
-            # 자동 스케줄 (auto_interval_minutes) 체크 → queue 전환
-            if args.watch:
-                try: auto_enqueue_due()
-                except Exception as e: print(f"  [auto] 체크 실패: {e}")
-
-            item = claim_queued(args.id)
-            if not item:
-                if args.once or args.id:
-                    print("[kw-snapshot] 처리할 항목 없음. 종료.")
-                    break
-                time.sleep(args.interval)
-                continue
+    try:
+        while True:
             try:
-                process_item(item)
-            except Exception as e:
-                err = f"{type(e).__name__}: {e}"
-                print(f"  실패: {err}")
-                traceback.print_exc()
-                update_keyword(item["id"], status="failed", last_error=err[:500])
-            if args.once or args.id:
+                if args.watch:
+                    try: auto_enqueue_due()
+                    except Exception as e: print(f"  [auto] 체크 실패: {e}")
+
+                item = claim_queued(args.id)
+                if not item:
+                    if args.once or args.id:
+                        print("[kw-snapshot] 처리할 항목 없음. 종료.")
+                        break
+                    time.sleep(args.interval)
+                    continue
+                try:
+                    process_item(item, holder)
+                except Exception as e:
+                    err = f"{type(e).__name__}: {e}"
+                    print(f"  실패: {err}")
+                    traceback.print_exc()
+                    update_keyword(item["id"], status="failed", last_error=err[:500], progress=None)
+                if args.once or args.id:
+                    break
+                if COOLDOWN > 0:
+                    time.sleep(COOLDOWN)
+            except KeyboardInterrupt:
+                print("\n[kw-snapshot] 종료")
                 break
-            if COOLDOWN > 0:
-                print(f"[kw-snapshot] 다음 항목 전 {COOLDOWN}s...")
-                time.sleep(COOLDOWN)
-        except KeyboardInterrupt:
-            print("\n[kw-snapshot] 종료")
-            break
-        except Exception as e:
-            print(f"[kw-snapshot] 폴링 에러: {e}")
-            time.sleep(args.interval)
+            except Exception as e:
+                print(f"[kw-snapshot] 폴링 에러: {e}")
+                time.sleep(args.interval)
+    finally:
+        holder.close()
 
 
 if __name__ == "__main__":
