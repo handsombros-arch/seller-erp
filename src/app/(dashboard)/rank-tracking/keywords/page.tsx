@@ -5,6 +5,13 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Search, ExternalLink, Trash2, Clock } from 'lucide-react';
 
+type Progress = {
+  phase?: string;
+  page?: number;
+  collected?: number;
+  target?: number;
+};
+
 type Keyword = {
   id: string;
   keyword: string;
@@ -13,6 +20,18 @@ type Keyword = {
   last_snapshot_at: string | null;
   last_error: string | null;
   auto_interval_minutes: number | null;
+  progress: Progress | null;
+  queued_at: string | null;
+  started_at: string | null;
+};
+
+const PHASE_LABEL: Record<string, string> = {
+  starting: '시작 준비',
+  launching_chrome: '시크릿 Chrome 기동',
+  loading: '페이지 로딩',
+  parsing: '상품 파싱',
+  scanning: '상품 수집',
+  saving: 'DB 저장',
 };
 
 type SnapshotMeta = { id: string; checked_at: string; top_n: number; items_count: number | null };
@@ -202,11 +221,44 @@ export default function KeywordSearchPage() {
             {running ? `실행중 ${elapsedSec}s` : '검색'}
           </Button>
         </div>
-        {running && (
-          <div className="mt-2 text-xs text-blue-600">
-            워커가 쿠팡에서 {topN}위까지 수집 중입니다 (보통 10~40초)... 상태: {currentKw?.status || 'queued'}
-          </div>
-        )}
+        {running && currentKw && (() => {
+          const queuedSec = currentKw.queued_at ? Math.floor((Date.now() - new Date(currentKw.queued_at).getTime()) / 1000) : elapsedSec;
+          const isQueued = currentKw.status === 'queued';
+          const workerStuck = isQueued && queuedSec > 15;
+          if (workerStuck) {
+            return (
+              <div className="mt-2 p-2 border border-orange-300 bg-orange-50 rounded text-xs text-orange-900">
+                <div className="font-semibold">⚠️ 워커가 큐를 잡지 않습니다 ({queuedSec}s 대기).</div>
+                <div className="mt-1">
+                  본인 PC 터미널에서 <code className="bg-white px-1">python sourcing/keyword_snapshot_worker.py --watch</code> 가 실행 중인지 확인하세요.
+                </div>
+              </div>
+            );
+          }
+          const p = currentKw.progress;
+          const phaseTxt = p?.phase ? (PHASE_LABEL[p.phase] || p.phase) : '큐 대기';
+          const pct = p?.target ? Math.min(100, Math.round(((p.collected || 0) / p.target) * 100)) : null;
+          return (
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center gap-2 text-xs text-blue-700">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                <span className="font-medium">
+                  {isQueued ? '큐 대기' : phaseTxt}
+                </span>
+                {p?.page ? <span className="text-gray-500">· 페이지 {p.page}</span> : null}
+                {p?.collected != null && p?.target ? (
+                  <span className="text-gray-500">· {p.collected}/{p.target}개</span>
+                ) : null}
+                <span className="text-gray-400 ml-auto">경과 {elapsedSec}s</span>
+              </div>
+              {pct != null && (
+                <div className="w-full bg-gray-200 rounded-full h-1">
+                  <div className="bg-blue-500 h-1 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {currentKw?.last_error && !running && (
           <div className="mt-2 text-xs text-red-600">오류: {currentKw.last_error}</div>
         )}

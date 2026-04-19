@@ -51,8 +51,16 @@ export async function POST(request: NextRequest) {
     .eq('keyword', keyword)
     .maybeSingle();
 
+  const nowIso = new Date().toISOString();
   if (existing) {
-    const patch: Record<string, unknown> = { status: 'queued', last_error: null, top_n: topN };
+    const patch: Record<string, unknown> = {
+      status: 'queued',
+      last_error: null,
+      top_n: topN,
+      queued_at: nowIso,
+      started_at: null,
+      progress: null,
+    };
     if (body.auto_interval_minutes !== undefined) patch.auto_interval_minutes = auto;
     const { data, error } = await admin
       .from('snapshot_keywords')
@@ -73,6 +81,7 @@ export async function POST(request: NextRequest) {
       top_n: topN,
       auto_interval_minutes: auto,
       status: 'queued',
+      queued_at: nowIso,
     })
     .select()
     .single();

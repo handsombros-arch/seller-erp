@@ -118,8 +118,14 @@ def claim_queued(item_id: str | None = None):
     rows = db_request("GET", "/snapshot_keywords", params=params)
     if not rows: return None
     item = rows[0]
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
     upd = db_request("PATCH", "/snapshot_keywords",
-                     body={"status": "running", "last_error": None},
+                     body={
+                         "status": "running",
+                         "last_error": None,
+                         "started_at": now_iso,
+                         "progress": {"phase": "starting", "page": 0, "collected": 0, "target": item.get("top_n")},
+                     },
                      params={"id": f"eq.{item['id']}", "status": f"eq.{item['status']}"})
     if not upd: return None
     return upd[0]
@@ -280,10 +286,12 @@ def parse_items_from_page(page, start_rank: int, limit: int):
     return items, len(lis)
 
 
-def collect_top_n(sess, keyword: str, top_n: int, page_size: int = 72):
+def collect_top_n(sess, keyword: str, top_n: int, page_size: int = 72, progress_cb=None):
     all_items = []
     max_pages = max(1, (top_n + page_size - 1) // page_size + 1)
     for page_num in range(1, max_pages + 1):
+        if progress_cb:
+            progress_cb({"phase": "loading", "page": page_num, "collected": len(all_items), "target": top_n})
         url = f"https://www.coupang.com/np/search?q={quote_plus(keyword)}&page={page_num}&listSize={page_size}"
         print(f"    page {page_num}: {url}")
         resp = sess.fetch(url, wait=2500)
@@ -294,11 +302,15 @@ def collect_top_n(sess, keyword: str, top_n: int, page_size: int = 72):
         if "Access Denied" in text_check or "captcha" in text_check.lower() or len(resp.body) < 5000:
             raise RuntimeError(f"차단/캡차 감지 p{page_num} (body={len(resp.body)})")
 
+        if progress_cb:
+            progress_cb({"phase": "parsing", "page": page_num, "collected": len(all_items), "target": top_n})
         start_rank = len(all_items) + 1
         remaining = top_n - len(all_items)
         items, li_count = parse_items_from_page(resp, start_rank, remaining)
         all_items.extend(items)
         print(f"      수집 {len(items)}개 (li {li_count}), 누적 {len(all_items)}/{top_n}")
+        if progress_cb:
+            progress_cb({"phase": "scanning", "page": page_num, "collected": len(all_items), "target": top_n})
         if li_count == 0:
             print("      상품 0 — 중단")
             break
@@ -318,11 +330,18 @@ def process_item(item: dict):
     temp_profile = Path(tempfile.mkdtemp(prefix="kwsnap-incognito-"))
     sess = None
     snapshot_id = None
+
+    def emit_progress(p: dict):
+        try: update_keyword(item_id, progress=p)
+        except Exception as e: print(f"    [progress] 업데이트 실패: {e}")
+
     try:
+        emit_progress({"phase": "launching_chrome", "page": 0, "collected": 0, "target": top_n})
         sess = make_incognito_session(temp_profile)
         sess.__enter__()
-        items = collect_top_n(sess, keyword, top_n)
+        items = collect_top_n(sess, keyword, top_n, progress_cb=emit_progress)
 
+        emit_progress({"phase": "saving", "page": 0, "collected": len(items), "target": top_n})
         # snapshot 행 생성
         snap = db_request("POST", "/keyword_snapshots", body={
             "keyword_id": item_id,
@@ -345,6 +364,7 @@ def process_item(item: dict):
             status="done",
             last_snapshot_at=time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()),
             last_error=None,
+            progress=None,
         )
         print(f"  완료: {len(items)}개 저장 (snapshot {snapshot_id[:8]})")
     finally:
