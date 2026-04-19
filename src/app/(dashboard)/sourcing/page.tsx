@@ -4,7 +4,22 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, RefreshCw, Trash2, ExternalLink, GitCompareArrows } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, ExternalLink, GitCompareArrows, FolderOpen, ChevronRight } from 'lucide-react';
+
+type BatchStats = { total: number; done: number; failed: number; pending: number; crawling: number; analyzing: number };
+type Batch = {
+  id: string;
+  source_url: string;
+  source_type: string;
+  title: string | null;
+  expand_limit: number;
+  total_items: number | null;
+  status: 'pending' | 'expanding' | 'expanded' | 'failed';
+  error: string | null;
+  progress: Record<string, unknown> | null;
+  created_at: string;
+  expanded_at: string | null;
+};
 
 type Item = {
   id: string;
@@ -47,8 +62,11 @@ const STATUS_PERCENT: Record<Item['status'], number> = {
 export default function SourcingListPage() {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [batchStats, setBatchStats] = useState<Record<string, BatchStats>>({});
   const [loading, setLoading] = useState(true);
   const [urls, setUrls] = useState('');
+  const [expandLimit, setExpandLimit] = useState('40');
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -72,33 +90,48 @@ export default function SourcingListPage() {
   }
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/sourcing');
-    if (r.ok) setItems(await r.json());
+    const [r1, r2] = await Promise.all([
+      fetch('/api/sourcing'),
+      fetch('/api/sourcing/batches'),
+    ]);
+    if (r1.ok) setItems(await r1.json());
+    if (r2.ok) {
+      const data = await r2.json();
+      setBatches(data.batches || []);
+      setBatchStats(data.statsByBatch || {});
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
-    // 진행 중 항목 있으면 5초마다 폴링
     const id = setInterval(() => {
       setItems((cur) => {
-        if (cur.some((i) => i.status === 'pending' || i.status === 'crawling' || i.status === 'analyzing')) {
-          load();
-        }
+        const hasActiveItem = cur.some((i) => i.status === 'pending' || i.status === 'crawling' || i.status === 'analyzing');
+        const hasActiveBatch = batches.some((b) => b.status === 'pending' || b.status === 'expanding');
+        if (hasActiveItem || hasActiveBatch) load();
         return cur;
       });
     }, 5000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, batches]);
 
   async function submit() {
     const list = urls.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
     if (list.length === 0) return;
     setSubmitting(true);
-    const r = await fetch('/api/sourcing', { method: 'POST', body: JSON.stringify({ urls: list }), headers: { 'Content-Type': 'application/json' } });
+    const r = await fetch('/api/sourcing', {
+      method: 'POST',
+      body: JSON.stringify({ urls: list, expand_limit: Number(expandLimit) || 40 }),
+      headers: { 'Content-Type': 'application/json' },
+    });
     if (r.ok) {
+      const data = await r.json();
       setUrls('');
       load();
+      if (data.batches?.length) {
+        alert(`카테고리 URL ${data.batches.length}개 감지. expand_category 워커가 상품 ${expandLimit}개씩 추출합니다.`);
+      }
     } else {
       alert('추가 실패: ' + (await r.text()));
     }
@@ -137,21 +170,92 @@ export default function SourcingListPage() {
       <div className="bg-white border rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
-          <h2 className="font-semibold">URL 추가 (여러 개는 줄바꿈 또는 쉼표로 구분)</h2>
+          <h2 className="font-semibold">URL 추가</h2>
+          <span className="text-xs text-gray-500 ml-2">상품 URL · 베스트100 · 카테고리 · 캠페인 URL 모두 OK (줄바꿈/쉼표로 여러 개)</span>
         </div>
         <textarea
           value={urls}
           onChange={(e) => setUrls(e.target.value)}
-          placeholder={'https://www.coupang.com/vp/products/...\nhttps://smartstore.naver.com/.../products/...'}
+          placeholder={'https://www.coupang.com/vp/products/...  (단일 상품)\nhttps://www.coupang.com/np/best100/bestseller/178591  (카테고리 40개 자동 확장)'}
           className="w-full min-h-[100px] border rounded p-2 text-sm font-mono"
         />
-        <div className="flex justify-between items-center">
-          <p className="text-xs text-gray-500">⚠️ 워커 (`python sourcing/worker.py --watch`) 가 켜져있어야 분석이 진행됩니다.</p>
+        <div className="flex justify-between items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>카테고리는 상위</span>
+            <input
+              type="number"
+              value={expandLimit}
+              onChange={(e) => setExpandLimit(e.target.value)}
+              className="w-16 border rounded px-2 py-1 text-xs"
+              min={5}
+              max={100}
+            />
+            <span>개 자동 추출</span>
+          </div>
+          <p className="text-xs text-gray-500 flex-1">
+            ⚠️ 워커 2개 필요: <code className="bg-gray-100 px-1">worker.py --watch</code> (상품 분석) +
+            <code className="bg-gray-100 px-1 ml-1">expand_category.py --watch</code> (카테고리 확장)
+          </p>
           <Button onClick={submit} disabled={submitting || !urls.trim()}>
             {submitting ? '추가 중...' : '큐에 추가'}
           </Button>
         </div>
       </div>
+
+      {/* 배치 섹션 */}
+      {batches.length > 0 && (
+        <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-gray-600" />
+            <h2 className="font-semibold text-sm">카테고리 배치 (묶음)</h2>
+            <span className="text-xs text-gray-500">{batches.length}개</span>
+          </div>
+          <div className="divide-y">
+            {batches.map((b) => {
+              const stats = batchStats[b.id] || { total: 0, done: 0, failed: 0, pending: 0, crawling: 0, analyzing: 0 };
+              const inProgress = stats.pending + stats.crawling + stats.analyzing;
+              const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+              return (
+                <Link
+                  key={b.id}
+                  href={`/sourcing/batches/${b.id}`}
+                  className="block px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">{b.source_type}</span>
+                        <span className="font-medium">{b.title || '(제목 분석중)'}</span>
+                        {b.status === 'pending' && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">확장 대기</span>}
+                        {b.status === 'expanding' && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">확장 중</span>}
+                        {b.status === 'failed' && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">확장 실패</span>}
+                      </div>
+                      <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={b.source_url}>{b.source_url}</div>
+                      {b.error && <div className="text-xs text-red-600 mt-1">{b.error}</div>}
+                      {b.status === 'expanded' && stats.total > 0 && (
+                        <div className="mt-2 flex items-center gap-3 text-xs">
+                          <div className="flex-1 max-w-md">
+                            <div className="flex justify-between mb-0.5">
+                              <span className="text-gray-600">{stats.done}/{stats.total} 완료</span>
+                              <span className="text-gray-400">{pct}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
+                              <div className="bg-green-500 h-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                          {inProgress > 0 && <span className="text-blue-600">진행중 {inProgress}</span>}
+                          {stats.failed > 0 && <span className="text-red-600">실패 {stats.failed}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 목록 */}
       <div className="bg-white border rounded-lg overflow-hidden">
