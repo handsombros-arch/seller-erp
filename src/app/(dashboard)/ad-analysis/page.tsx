@@ -338,7 +338,8 @@ export default function AdAnalysisPage() {
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
-  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products' | 'pivot'>('daily');
+  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
+  const [kwView, setKwView] = useState<'drill' | 'pivot'>('drill');
   const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
   const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
@@ -1257,7 +1258,6 @@ export default function AdAnalysisPage() {
   const tabs = [
     { key: 'daily' as const, label: '기간별 추이' },
     { key: 'keywords' as const, label: '키워드 분석' },
-    { key: 'pivot' as const, label: '키워드 × 일자 피벗' },
     { key: 'placements' as const, label: '지면별' },
     { key: 'products' as const, label: '상품별' },
   ];
@@ -2024,6 +2024,22 @@ export default function AdAnalysisPage() {
           {/* ─── Tab: Keywords ──────────────────────────────────────────── */}
           {tab === 'keywords' && (
             <div className="space-y-4">
+              {/* 뷰 토글: 키워드별 (드릴다운) / 피벗 매트릭스 */}
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                  <button onClick={() => setKwView('drill')}
+                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${kwView === 'drill' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                    키워드별 (행 클릭 → 일자 펼침)
+                  </button>
+                  <button onClick={() => setKwView('pivot')}
+                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${kwView === 'pivot' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                    피벗 (키워드 × 일자)
+                  </button>
+                </div>
+                <span className="text-[11px] text-[#B0B8C1]">
+                  {kwView === 'drill' ? '· 키워드를 선택해 일자별 추이 확인' : '· 축을 반대로 뒤집어 일자 × 키워드 매트릭스로 조회'}
+                </span>
+              </div>
               {/* Keyword count trend chart */}
               <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
                 <div className="flex items-center justify-between mb-4">
@@ -2059,6 +2075,7 @@ export default function AdAnalysisPage() {
                 </div>
               </div>
 
+              {kwView === 'drill' && (
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px] max-w-[360px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#B0B8C1]" />
@@ -2081,7 +2098,9 @@ export default function AdAnalysisPage() {
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
                 </span>
               </div>
+              )}
 
+              {kwView === 'drill' && (<>
               <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[70vh] overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
@@ -2210,11 +2229,10 @@ export default function AdAnalysisPage() {
                   </button>
                 </div>
               )}
-            </div>
-          )}
+              </>)}
 
-          {/* ─── Tab: Pivot (키워드 × 일자) ──────────────────────────────── */}
-          {tab === 'pivot' && (() => {
+              {/* ─── 피벗 매트릭스 (키워드 분석 내부) ─── */}
+              {kwView === 'pivot' && (() => {
             type Cell = { impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number };
             const emptyCell: Cell = { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
             const addCell = (a: Cell, b: Cell): Cell => ({
@@ -2369,6 +2387,8 @@ export default function AdAnalysisPage() {
               </div>
             );
           })()}
+            </div>
+          )}
 
           {/* ─── Tab: Placements (지면별) ──────────────────────────────── */}
           {tab === 'placements' && (() => {
