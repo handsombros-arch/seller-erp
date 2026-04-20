@@ -471,15 +471,14 @@ export default function ComparePage() {
                 return String(v);
               };
               const wb = new ExcelJS.Workbook();
-              const ws = wb.addWorksheet('상품 비교', { views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }] });
-              const nCols = items.length + 1;
-              ws.columns = [{ width: 22 }, ...items.map(() => ({ width: 42 }))];
+              const ws = wb.addWorksheet('상품 비교', { views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }] });
+              ws.columns = [{ width: 16 }, { width: 22 }, ...items.map(() => ({ width: 42 }))];
 
               const thinBorder = { style: 'thin' as const, color: { argb: 'FFE5E7EB' } };
               const cellBorder = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
 
-              // ── 헤더 행 (상품 제목) ──
-              const headerValues = ['항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
+              // ── 헤더 행 (A: 섹션, B: 항목, C~: 상품 제목) ──
+              const headerValues = ['섹션', '항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
               const headerRow = ws.addRow(headerValues);
               headerRow.height = 48;
               headerRow.eachCell((cell) => {
@@ -489,35 +488,56 @@ export default function ComparePage() {
                 cell.border = cellBorder;
               });
 
-              // ── 섹션 헤더 (배경 회색 + 병합) ──
-              const addSection = (name: string) => {
-                const r = ws.addRow([name]);
-                r.height = 22;
-                ws.mergeCells(r.number, 1, r.number, nCols);
-                const cell = r.getCell(1);
-                cell.value = name;
-                cell.font = { bold: true, color: { argb: 'FF111827' }, size: 11 };
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1D5DB' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'left' };
-                cell.border = cellBorder;
-                // 병합된 나머지 셀에도 border
-                for (let i = 2; i <= nCols; i++) r.getCell(i).border = cellBorder;
+              // ── 섹션 상태 추적 + 세로 병합 ──
+              let currentSection: string | null = null;
+              let sectionStartRow: number | null = null;
+              let sectionLastRow: number | null = null;
+
+              const closeSection = () => {
+                if (currentSection && sectionStartRow !== null && sectionLastRow !== null) {
+                  if (sectionLastRow > sectionStartRow) {
+                    ws.mergeCells(sectionStartRow, 1, sectionLastRow, 1);
+                  }
+                  const cell = ws.getCell(sectionStartRow, 1);
+                  cell.value = currentSection;
+                  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1D5DB' } };
+                  cell.font = { bold: true, color: { argb: 'FF111827' }, size: 11 };
+                  cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                  cell.border = cellBorder;
+                }
+              };
+
+              const startSection = (name: string) => {
+                closeSection();
+                currentSection = name;
+                sectionStartRow = null;
+                sectionLastRow = null;
               };
 
               // ── 데이터 행 ──
               const addDataRow = (label: string, getter: (it: any, idx: number) => unknown, winnerIdx?: (idx: number) => boolean) => {
                 const vals = items.map((it: any, idx: number) => toText(getter(it, idx)));
-                const r = ws.addRow([label, ...vals]);
+                const r = ws.addRow(['', label, ...vals]);
                 r.alignment = { vertical: 'top', wrapText: true };
-                // 라벨 셀
-                const first = r.getCell(1);
-                first.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
-                first.font = { bold: true, color: { argb: 'FF4B5563' }, size: 10 };
-                first.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
-                first.border = cellBorder;
+                if (sectionStartRow === null) sectionStartRow = r.number;
+                sectionLastRow = r.number;
+
+                // A열 섹션 셀 (스타일만, 값은 closeSection에서 merge 후 설정)
+                const secCell = r.getCell(1);
+                secCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1D5DB' } };
+                secCell.border = cellBorder;
+
+                // B열 라벨
+                const labelCell = r.getCell(2);
+                labelCell.value = label;
+                labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+                labelCell.font = { bold: true, color: { argb: 'FF4B5563' }, size: 10 };
+                labelCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                labelCell.border = cellBorder;
+
                 // 값 셀
                 for (let i = 0; i < items.length; i++) {
-                  const cell = r.getCell(i + 2);
+                  const cell = r.getCell(i + 3);
                   cell.font = { size: 10, color: { argb: 'FF111827' } };
                   cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
                   cell.border = cellBorder;
@@ -526,10 +546,12 @@ export default function ComparePage() {
                     cell.font = { size: 10, bold: true, color: { argb: 'FF166534' } };
                   }
                 }
-                // 높이 자동 (긴 텍스트면 increase)
                 const maxLen = Math.max(...vals.map((v) => v.length));
                 if (maxLen > 60) r.height = Math.min(120, Math.ceil(maxLen / 40) * 16);
               };
+
+              // 기존 addSection 이름 유지
+              const addSection = startSection;
 
               // ── 섹션들 ──
               addSection('기본 정보');
@@ -621,6 +643,9 @@ export default function ComparePage() {
                 addSection('수기 비교 항목');
                 for (const cr of customRows) addDataRow(cr.label || '(제목 없음)', (it) => cr.values[it.id] || '');
               }
+
+              // 마지막 섹션 닫기
+              closeSection();
 
               const buffer = await wb.xlsx.writeBuffer();
               const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
