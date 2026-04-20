@@ -338,7 +338,10 @@ export default function AdAnalysisPage() {
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
-  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
+  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products' | 'pivot'>('daily');
+  const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
+  const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc'>('cost');
+  const [pivotTopN, setPivotTopN] = useState(50);
   const [gran, setGran] = useState<Granularity>('daily');
   const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
   const [filterCampaign, setFilterCampaign] = useState('all');
@@ -1254,6 +1257,7 @@ export default function AdAnalysisPage() {
   const tabs = [
     { key: 'daily' as const, label: '기간별 추이' },
     { key: 'keywords' as const, label: '키워드 분석' },
+    { key: 'pivot' as const, label: '키워드 × 일자 피벗' },
     { key: 'placements' as const, label: '지면별' },
     { key: 'products' as const, label: '상품별' },
   ];
@@ -2208,6 +2212,163 @@ export default function AdAnalysisPage() {
               )}
             </div>
           )}
+
+          {/* ─── Tab: Pivot (키워드 × 일자) ──────────────────────────────── */}
+          {tab === 'pivot' && (() => {
+            type Cell = { impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number };
+            const emptyCell: Cell = { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
+            const addCell = (a: Cell, b: Cell): Cell => ({
+              impressions: a.impressions + b.impressions,
+              clicks: a.clicks + b.clicks,
+              cost: a.cost + b.cost,
+              orders14d: a.orders14d + b.orders14d,
+              revenue14d: a.revenue14d + b.revenue14d,
+            });
+            const kwDaily = dateFiltered.keywordDaily ?? [];
+            const byKw = new Map<string, Cell>();
+            const byDate = new Map<string, Cell>();
+            const cellMap = new Map<string, Cell>();
+            const dateSet = new Set<string>();
+            for (const kd of kwDaily) {
+              dateSet.add(kd.date);
+              const cellKey = `${kd.keyword}||${kd.date}`;
+              const c: Cell = { impressions: kd.impressions, clicks: kd.clicks, cost: kd.cost, orders14d: kd.orders14d, revenue14d: kd.revenue14d };
+              cellMap.set(cellKey, addCell(cellMap.get(cellKey) ?? emptyCell, c));
+              byKw.set(kd.keyword, addCell(byKw.get(kd.keyword) ?? emptyCell, c));
+              byDate.set(kd.date, addCell(byDate.get(kd.date) ?? emptyCell, c));
+            }
+            const dates = [...dateSet].sort();
+            const allKeywords = [...byKw.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([k]) => k);
+            const keywords = allKeywords.slice(0, pivotTopN);
+
+            const cellValue = (c: Cell): number => {
+              switch (pivotMetric) {
+                case 'cost': case 'impressions': case 'clicks': case 'orders14d': case 'revenue14d':
+                  return c[pivotMetric];
+                case 'ctr': return c.impressions > 0 ? c.clicks / c.impressions : 0;
+                case 'cvr': return c.clicks > 0 ? c.orders14d / c.clicks : 0;
+                case 'roas': return c.cost > 0 ? c.revenue14d / c.cost : 0;
+                case 'cpc': return c.clicks > 0 ? Math.round(c.cost / c.clicks) : 0;
+              }
+              return 0;
+            };
+            const fmtCell = (v: number): string => {
+              if (v === 0) return '-';
+              switch (pivotMetric) {
+                case 'cost': case 'revenue14d': case 'cpc': return fmtW(Math.round(v));
+                case 'impressions': case 'clicks': case 'orders14d': return formatNumber(Math.round(v));
+                case 'ctr': case 'cvr': return pct(v);
+                case 'roas': return `${Math.round(v * 100)}%`;
+              }
+              return '-';
+            };
+            const metrics: { key: typeof pivotMetric; label: string }[] = [
+              { key: 'cost', label: '광고비' },
+              { key: 'impressions', label: '노출' },
+              { key: 'clicks', label: '클릭' },
+              { key: 'orders14d', label: '주문(14d)' },
+              { key: 'revenue14d', label: '매출(14d)' },
+              { key: 'ctr', label: 'CTR' },
+              { key: 'cvr', label: 'CVR' },
+              { key: 'roas', label: 'ROAS' },
+              { key: 'cpc', label: 'CPC' },
+            ];
+
+            // 축: kw-date → rows=keywords, cols=dates. date-kw → rows=dates, cols=keywords
+            const isKwRow = pivotAxis === 'kw-date';
+            const rowItems = isKwRow ? keywords : dates;
+            const colItems = isKwRow ? dates : keywords;
+            const rowTotal = (rowKey: string): Cell => isKwRow ? (byKw.get(rowKey) ?? emptyCell) : (byDate.get(rowKey) ?? emptyCell);
+            const getCell = (rowKey: string, colKey: string): Cell => {
+              const k = isKwRow ? `${rowKey}||${colKey}` : `${colKey}||${rowKey}`;
+              return cellMap.get(k) ?? emptyCell;
+            };
+
+            // 색상 강도 (숫자 메트릭 기준)
+            const maxVal = Math.max(1, ...rowItems.flatMap((r) => colItems.map((c) => cellValue(getCell(r, c)))));
+            const bgFor = (v: number): string => {
+              if (v === 0) return '';
+              const ratio = Math.min(1, v / maxVal);
+              const alpha = 0.08 + ratio * 0.32; // 0.08~0.40
+              return `rgba(49, 130, 246, ${alpha.toFixed(2)})`;
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 bg-white rounded-xl border border-[#F2F4F6] p-3">
+                  <div className="flex items-center gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                    <button onClick={() => setPivotAxis('kw-date')}
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotAxis === 'kw-date' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                      키워드 × 일자
+                    </button>
+                    <button onClick={() => setPivotAxis('date-kw')}
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotAxis === 'date-kw' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                      일자 × 키워드
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[12px] font-medium text-[#6B7684]">지표</label>
+                    <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
+                      className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6]">
+                      {metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[12px] font-medium text-[#6B7684]">상위</label>
+                    <input type="number" value={pivotTopN} onChange={(e) => setPivotTopN(Math.max(5, Math.min(500, Number(e.target.value) || 50)))}
+                      className="h-9 w-20 px-2 rounded-lg border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6]" />
+                    <span className="text-[11px] text-[#8B95A1]">키워드 / {allKeywords.length}개 중</span>
+                  </div>
+                  <span className="text-[11px] text-[#B0B8C1] ml-auto">행 {rowItems.length} × 열 {colItems.length}</span>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[75vh] overflow-auto">
+                  <table className="text-[11px] border-collapse">
+                    <thead className="sticky top-0 z-20">
+                      <tr>
+                        <th className="sticky left-0 z-30 bg-[#FAFBFC] border-b border-r border-[#E5E8EB] px-3 py-2 text-left font-semibold text-[#6B7684] min-w-[180px]">
+                          {isKwRow ? '키워드' : '날짜'}
+                        </th>
+                        <th className="sticky bg-[#FAFBFC] border-b border-r border-[#E5E8EB] px-3 py-2 text-right font-semibold text-[#6B7684] min-w-[90px]">합계</th>
+                        {colItems.map((c) => (
+                          <th key={c} className="bg-[#FAFBFC] border-b border-[#E5E8EB] px-2 py-2 text-right font-medium text-[#6B7684] whitespace-nowrap min-w-[90px]" title={c}>
+                            {isKwRow ? c.slice(5) /* MM-DD */ : (c.length > 12 ? c.slice(0, 12) + '…' : c)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rowItems.length === 0 && (
+                        <tr><td colSpan={colItems.length + 2} className="text-center py-6 text-[#B0B8C1]">데이터 없음</td></tr>
+                      )}
+                      {rowItems.map((r) => {
+                        const total = rowTotal(r);
+                        const totalV = cellValue(total);
+                        return (
+                          <tr key={r}>
+                            <td className="sticky left-0 z-10 bg-white border-b border-r border-[#F2F4F6] px-3 py-1.5 font-medium text-[#191F28] max-w-[260px] truncate" title={r}>{r}</td>
+                            <td className="border-b border-r border-[#F2F4F6] px-3 py-1.5 text-right font-semibold text-[#333D4B] bg-[#F8FAFC]">{fmtCell(totalV)}</td>
+                            {colItems.map((c) => {
+                              const v = cellValue(getCell(r, c));
+                              return (
+                                <td key={c} className="border-b border-[#F5F6F7] px-2 py-1.5 text-right text-[#333D4B] whitespace-nowrap"
+                                  style={{ backgroundColor: bgFor(v) }}>
+                                  {fmtCell(v)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-[11px] text-[#8B95A1]">
+                  · 첫 열과 헤더는 스크롤 시 고정됩니다. 셀 색상 진하기 = 해당 지표의 상대값.
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ─── Tab: Placements (지면별) ──────────────────────────────── */}
           {tab === 'placements' && (() => {
