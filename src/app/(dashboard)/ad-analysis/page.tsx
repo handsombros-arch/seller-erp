@@ -339,7 +339,6 @@ export default function AdAnalysisPage() {
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
-  const [kwView, setKwView] = useState<'drill' | 'pivot'>('drill');
   const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
   const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc' | 'keywordCount' | 'clickKeywordCount'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
@@ -2024,20 +2023,22 @@ export default function AdAnalysisPage() {
           {/* ─── Tab: Keywords ──────────────────────────────────────────── */}
           {tab === 'keywords' && (
             <div className="space-y-4">
-              {/* 뷰 토글 + 공통 지표 선택 (그래프/피벗 매트릭스 모두 반영) */}
+              {/* 행 전환 버튼 + 공통 지표 선택 (엑셀 피벗 스타일) */}
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
-                  <button onClick={() => setKwView('drill')}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${kwView === 'drill' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
-                    키워드별 (행 클릭 → 일자 펼침)
-                  </button>
-                  <button onClick={() => setKwView('pivot')}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${kwView === 'pivot' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
-                    피벗 (키워드 × 일자)
-                  </button>
-                </div>
+                <button
+                  onClick={() => setPivotAxis(pivotAxis === 'kw-date' ? 'date-kw' : 'kw-date')}
+                  className="flex items-center gap-2 h-8 px-3 rounded-lg border border-[#3182F6] bg-white hover:bg-[#EBF1FE] text-[#3182F6] text-[12px] font-medium transition-colors"
+                  title="행/열 전환 (엑셀 피벗처럼 축 바꾸기)"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  {pivotAxis === 'kw-date' ? '행: 키워드 → 열: 일자' : '행: 일자 → 열: 키워드'}
+                  <span className="text-[#B0B8C1]">↔</span>
+                </button>
+                <span className="text-[11px] text-[#8B95A1]">
+                  {pivotAxis === 'kw-date' ? '키워드 클릭 → 일자별 펼침' : '일자 클릭 → 키워드별 펼침'}
+                </span>
                 <div className="flex items-center gap-2 ml-auto">
-                  <label className="text-[12px] font-medium text-[#6B7684]">지표 (차트 · 피벗 공통)</label>
+                  <label className="text-[12px] font-medium text-[#6B7684]">차트 지표</label>
                   <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
                     className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white focus:outline-none focus:border-[#3182F6]">
                     <option value="cost">광고비</option>
@@ -2122,7 +2123,7 @@ export default function AdAnalysisPage() {
                 );
               })()}
 
-              {kwView === 'drill' && (
+              {pivotAxis === 'kw-date' && (
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px] max-w-[360px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#B0B8C1]" />
@@ -2147,7 +2148,7 @@ export default function AdAnalysisPage() {
               </div>
               )}
 
-              {kwView === 'drill' && (<>
+              {pivotAxis === 'kw-date' && (<>
               <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[70vh] overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
@@ -2278,155 +2279,135 @@ export default function AdAnalysisPage() {
               )}
               </>)}
 
-              {/* ─── 피벗 매트릭스 (키워드 분석 내부) ─── */}
-              {kwView === 'pivot' && (() => {
-            type Cell = { impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number };
-            const emptyCell: Cell = { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
-            const addCell = (a: Cell, b: Cell): Cell => ({
-              impressions: a.impressions + b.impressions,
-              clicks: a.clicks + b.clicks,
-              cost: a.cost + b.cost,
-              orders14d: a.orders14d + b.orders14d,
-              revenue14d: a.revenue14d + b.revenue14d,
-            });
-            const kwDaily = dateFiltered.keywordDaily ?? [];
-            const byKw = new Map<string, Cell>();
-            const byDate = new Map<string, Cell>();
-            const cellMap = new Map<string, Cell>();
-            const dateSet = new Set<string>();
-            for (const kd of kwDaily) {
-              dateSet.add(kd.date);
-              const cellKey = `${kd.keyword}||${kd.date}`;
-              const c: Cell = { impressions: kd.impressions, clicks: kd.clicks, cost: kd.cost, orders14d: kd.orders14d, revenue14d: kd.revenue14d };
-              cellMap.set(cellKey, addCell(cellMap.get(cellKey) ?? emptyCell, c));
-              byKw.set(kd.keyword, addCell(byKw.get(kd.keyword) ?? emptyCell, c));
-              byDate.set(kd.date, addCell(byDate.get(kd.date) ?? emptyCell, c));
-            }
-            const dates = [...dateSet].sort();
-            const allKeywords = [...byKw.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([k]) => k);
-            const keywords = allKeywords.slice(0, pivotTopN);
-
-            const cellValue = (c: Cell): number => {
-              switch (pivotMetric) {
-                case 'cost': case 'impressions': case 'clicks': case 'orders14d': case 'revenue14d':
-                  return c[pivotMetric];
-                case 'ctr': return c.impressions > 0 ? c.clicks / c.impressions : 0;
-                case 'cvr': return c.clicks > 0 ? c.orders14d / c.clicks : 0;
-                case 'roas': return c.cost > 0 ? c.revenue14d / c.cost : 0;
-                case 'cpc': return c.clicks > 0 ? Math.round(c.cost / c.clicks) : 0;
-              }
-              return 0;
-            };
-            const fmtCell = (v: number): string => {
-              if (v === 0) return '-';
-              switch (pivotMetric) {
-                case 'cost': case 'revenue14d': case 'cpc': return fmtW(Math.round(v));
-                case 'impressions': case 'clicks': case 'orders14d': return formatNumber(Math.round(v));
-                case 'ctr': case 'cvr': return pct(v);
-                case 'roas': return `${Math.round(v * 100)}%`;
-              }
-              return '-';
-            };
-            const metrics: { key: typeof pivotMetric; label: string }[] = [
-              { key: 'cost', label: '광고비' },
-              { key: 'impressions', label: '노출' },
-              { key: 'clicks', label: '클릭' },
-              { key: 'orders14d', label: '주문(14d)' },
-              { key: 'revenue14d', label: '매출(14d)' },
-              { key: 'ctr', label: 'CTR' },
-              { key: 'cvr', label: 'CVR' },
-              { key: 'roas', label: 'ROAS' },
-              { key: 'cpc', label: 'CPC' },
-            ];
-
-            // 축: kw-date → rows=keywords, cols=dates. date-kw → rows=dates, cols=keywords
-            const isKwRow = pivotAxis === 'kw-date';
-            const rowItems = isKwRow ? keywords : dates;
-            const colItems = isKwRow ? dates : keywords;
-            const rowTotal = (rowKey: string): Cell => isKwRow ? (byKw.get(rowKey) ?? emptyCell) : (byDate.get(rowKey) ?? emptyCell);
-            const getCell = (rowKey: string, colKey: string): Cell => {
-              const k = isKwRow ? `${rowKey}||${colKey}` : `${colKey}||${rowKey}`;
-              return cellMap.get(k) ?? emptyCell;
-            };
-
-            // 색상 강도 (숫자 메트릭 기준)
-            const maxVal = Math.max(1, ...rowItems.flatMap((r) => colItems.map((c) => cellValue(getCell(r, c)))));
-            const bgFor = (v: number): string => {
-              if (v === 0) return '';
-              const ratio = Math.min(1, v / maxVal);
-              const alpha = 0.08 + ratio * 0.32; // 0.08~0.40
-              return `rgba(49, 130, 246, ${alpha.toFixed(2)})`;
-            };
-
-            return (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-3 bg-white rounded-xl border border-[#F2F4F6] p-3">
-                  <div className="flex items-center gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
-                    <button onClick={() => setPivotAxis('kw-date')}
-                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotAxis === 'kw-date' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
-                      키워드 × 일자
-                    </button>
-                    <button onClick={() => setPivotAxis('date-kw')}
-                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotAxis === 'date-kw' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
-                      일자 × 키워드
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[12px] font-medium text-[#6B7684]">상위</label>
-                    <input type="number" value={pivotTopN} onChange={(e) => setPivotTopN(Math.max(5, Math.min(500, Number(e.target.value) || 50)))}
-                      className="h-9 w-20 px-2 rounded-lg border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6]" />
-                    <span className="text-[11px] text-[#8B95A1]">키워드 / {allKeywords.length}개 중</span>
-                  </div>
-                  <span className="text-[11px] text-[#B0B8C1] ml-auto">행 {rowItems.length} × 열 {colItems.length}</span>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[75vh] overflow-auto">
-                  <table className="text-[11px] border-collapse">
-                    <thead className="sticky top-0 z-20">
-                      <tr>
-                        <th className="sticky left-0 z-30 bg-[#FAFBFC] border-b border-r border-[#E5E8EB] px-3 py-2 text-left font-semibold text-[#6B7684] min-w-[180px]">
-                          {isKwRow ? '키워드' : '날짜'}
-                        </th>
-                        <th className="sticky bg-[#FAFBFC] border-b border-r border-[#E5E8EB] px-3 py-2 text-right font-semibold text-[#6B7684] min-w-[90px]">합계</th>
-                        {colItems.map((c) => (
-                          <th key={c} className="bg-[#FAFBFC] border-b border-[#E5E8EB] px-2 py-2 text-right font-medium text-[#6B7684] whitespace-nowrap min-w-[90px]" title={c}>
-                            {isKwRow ? c.slice(5) /* MM-DD */ : (c.length > 12 ? c.slice(0, 12) + '…' : c)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rowItems.length === 0 && (
-                        <tr><td colSpan={colItems.length + 2} className="text-center py-6 text-[#B0B8C1]">데이터 없음</td></tr>
-                      )}
-                      {rowItems.map((r) => {
-                        const total = rowTotal(r);
-                        const totalV = cellValue(total);
-                        return (
-                          <tr key={r}>
-                            <td className="sticky left-0 z-10 bg-white border-b border-r border-[#F2F4F6] px-3 py-1.5 font-medium text-[#191F28] max-w-[260px] truncate" title={r}>{r}</td>
-                            <td className="border-b border-r border-[#F2F4F6] px-3 py-1.5 text-right font-semibold text-[#333D4B] bg-[#F8FAFC]">{fmtCell(totalV)}</td>
-                            {colItems.map((c) => {
-                              const v = cellValue(getCell(r, c));
-                              return (
-                                <td key={c} className="border-b border-[#F5F6F7] px-2 py-1.5 text-right text-[#333D4B] whitespace-nowrap"
-                                  style={{ backgroundColor: bgFor(v) }}>
-                                  {fmtCell(v)}
+              {/* ─── 일자 → 키워드 드릴다운 (행 전환) ─── */}
+              {pivotAxis === 'date-kw' && (() => {
+                const daily = (dateFiltered.daily ?? []).slice().sort((a: any, b: any) => a.date.localeCompare(b.date));
+                const kwForDate = (date: string) => {
+                  const map: Record<string, any> = {};
+                  for (const kd of (dateFiltered.keywordDaily ?? [])) {
+                    if (kd.date !== date) continue;
+                    if (!map[kd.keyword]) map[kd.keyword] = { keyword: kd.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
+                    map[kd.keyword].impressions += kd.impressions;
+                    map[kd.keyword].clicks += kd.clicks;
+                    map[kd.keyword].cost += kd.cost;
+                    map[kd.keyword].orders14d += kd.orders14d;
+                    map[kd.keyword].revenue14d += kd.revenue14d;
+                  }
+                  return Object.values(map).sort((a: any, b: any) => b.cost - a.cost);
+                };
+                return (
+                  <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[70vh] overflow-auto">
+                    <table className="w-full text-[12px]">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC] shadow-sm">
+                          <th className="w-6 bg-[#FAFBFC]"></th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] min-w-[120px] bg-[#FAFBFC]">일자</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">노출</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">클릭</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">CTR</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">CPC</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">광고비</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">주문(14d)</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">매출(14d)</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">CVR</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-[#6B7684] bg-[#FAFBFC]">ROAS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {daily.length === 0 && (
+                          <tr><td colSpan={11} className="text-center py-6 text-[#B0B8C1]">일자 데이터 없음</td></tr>
+                        )}
+                        {daily.map((d: any) => {
+                          const isExpanded = expandedDate === d.date;
+                          const ctr = d.impressions > 0 ? d.clicks / d.impressions : 0;
+                          const cpc = d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
+                          const cvr = d.clicks > 0 ? d.orders14d / d.clicks : 0;
+                          const roas = d.cost > 0 ? d.revenue14d / d.cost : 0;
+                          const kws = isExpanded ? kwForDate(d.date) : [];
+                          return (
+                            <Fragment key={d.date}>
+                              <tr className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                                  onClick={() => setExpandedDate(isExpanded ? null : d.date)}>
+                                <td className="px-1.5 py-2 text-center text-[#B0B8C1]">
+                                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
                                 </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="text-[11px] text-[#8B95A1]">
-                  · 첫 열과 헤더는 스크롤 시 고정됩니다. 셀 색상 진하기 = 해당 지표의 상대값.
-                </div>
-              </div>
-            );
-          })()}
+                                <td className="px-3 py-2 font-mono text-[#191F28]">{d.date}</td>
+                                <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(d.impressions)}</td>
+                                <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(d.clicks)}</td>
+                                <td className="px-3 py-2 text-right text-[#6B7684]">{pct(ctr)}</td>
+                                <td className="px-3 py-2 text-right text-[#6B7684]">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
+                                <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(d.cost)}</td>
+                                <td className="px-3 py-2 text-right text-[#191F28]">{d.orders14d}</td>
+                                <td className="px-3 py-2 text-right text-[#3182F6]">{fmtW(d.revenue14d)}</td>
+                                <td className="px-3 py-2 text-right text-[#6B7684]">{pct(cvr)}</td>
+                                <td className={`px-3 py-2 text-right font-bold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                                  {d.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={11} className="p-0 bg-[#FAFBFC] border-b border-[#E5E8EB]">
+                                    <div className="px-6 py-3">
+                                      <div className="text-[11px] font-semibold text-[#6B7684] mb-2">
+                                        {d.date} — 키워드별 성과 ({kws.length}개 · 광고비 순)
+                                      </div>
+                                      <div className="overflow-auto max-h-96">
+                                        <table className="w-full text-[11px]">
+                                          <thead className="bg-white sticky top-0">
+                                            <tr className="text-[#8B95A1] border-b border-[#F2F4F6]">
+                                              <th className="text-left px-2 py-1.5 font-medium">키워드</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">노출</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">클릭</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">CTR</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">CPC</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">광고비</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">주문(14d)</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">매출(14d)</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">CVR</th>
+                                              <th className="text-right px-2 py-1.5 font-medium">ROAS</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {kws.length === 0 && (
+                                              <tr><td colSpan={10} className="text-center py-3 text-[#B0B8C1]">키워드 데이터 없음</td></tr>
+                                            )}
+                                            {kws.map((kd: any) => {
+                                              const kctr = kd.impressions > 0 ? kd.clicks / kd.impressions : 0;
+                                              const kcpc = kd.clicks > 0 ? Math.round(kd.cost / kd.clicks) : 0;
+                                              const kcvr = kd.clicks > 0 ? kd.orders14d / kd.clicks : 0;
+                                              const kroas = kd.cost > 0 ? kd.revenue14d / kd.cost : 0;
+                                              return (
+                                                <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-white">
+                                                  <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-[#333D4B]" title={kd.keyword}>{kd.keyword}</td>
+                                                  <td className="px-2 py-1.5 text-right">{formatNumber(kd.impressions)}</td>
+                                                  <td className="px-2 py-1.5 text-right">{formatNumber(kd.clicks)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(kctr)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-[#6B7684]">{kd.clicks > 0 ? fmtW(kcpc) : '-'}</td>
+                                                  <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(kd.cost)}</td>
+                                                  <td className="px-2 py-1.5 text-right">{kd.orders14d}</td>
+                                                  <td className="px-2 py-1.5 text-right text-[#3182F6]">{fmtW(kd.revenue14d)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(kcvr)}</td>
+                                                  <td className={`px-2 py-1.5 text-right font-semibold ${kroas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                                                    {kd.cost > 0 ? `${(kroas * 100).toFixed(0)}%` : '-'}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
