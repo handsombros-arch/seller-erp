@@ -65,6 +65,7 @@ interface ParsedRow {
   cogs14d: number;
   commission14d: number;
   keywordCount: number;
+  clickKeywordCount: number;
 }
 
 interface AnalysisData {
@@ -126,6 +127,7 @@ function bucketLabel(key: string, gran: Granularity): string {
 interface BucketRow extends DailyRow {
   label: string;
   keywordCount: number;
+  clickKeywordCount: number;
 }
 
 function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRows?: ParsedRow[]): BucketRow[] {
@@ -141,6 +143,7 @@ function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRow
         cogs14d: 0,
         commission14d: 0,
         keywordCount: 0,
+        clickKeywordCount: 0,
       });
     }
     const b = map.get(key)!;
@@ -155,17 +158,22 @@ function aggregateByGranularity(daily: DailyRow[], gran: Granularity, compactRow
   }
 
   // Sum keyword counts from compact rows per bucket
-  // Note: when daily bucket == compactRow date, keywordCount is per date+campaign+product
-  // For daily gran this is exact; for weekly/monthly it's an approximation (may overcount if same keyword appears in different campaign/product combos)
+  // 일별 bucket 에서는 정확, 주/월 bucket 은 캠페인·상품별 중복 가능 (근사치)
   if (compactRows) {
     const kwMap = new Map<string, number>();
+    const kwClickMap = new Map<string, number>();
     for (const r of compactRows) {
       const key = bucketKey(r.date, gran);
       kwMap.set(key, (kwMap.get(key) ?? 0) + (r.keywordCount ?? 0));
+      kwClickMap.set(key, (kwClickMap.get(key) ?? 0) + (r.clickKeywordCount ?? 0));
     }
     for (const [key, count] of kwMap) {
       const b = map.get(key);
       if (b) b.keywordCount = count;
+    }
+    for (const [key, count] of kwClickMap) {
+      const b = map.get(key);
+      if (b) b.clickKeywordCount = count;
     }
   }
 
@@ -390,7 +398,7 @@ export default function AdAnalysisPage() {
   };
 
   // ─── 데이터 테이블 컬럼 ──────────────────────────────────────────
-  type TableColKey = 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cost' | 'orders14d' | 'revenue14d' | 'roas' | 'cvr' | 'cpm' | 'cpa' | 'profit' | 'adRatio' | 'aov' | 'keywordCount';
+  type TableColKey = 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cost' | 'orders14d' | 'revenue14d' | 'roas' | 'cvr' | 'cpm' | 'cpa' | 'profit' | 'adRatio' | 'aov' | 'keywordCount' | 'clickKeywordCount';
 
   interface TableColDef {
     key: TableColKey;
@@ -443,12 +451,15 @@ export default function AdAnalysisPage() {
     { key: 'profit', label: '순이익(14d)',
       render: (d) => { const p = d.revenue14d - (d.cogs14d ?? 0) - (d.commission14d ?? 0) - d.cost; return <span className={p >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>{fmtW(p)}</span>; },
       renderTotal: (t) => { const p = t.revenue14d - t.cogs14d - (t.commission14d ?? 0) - t.cost; return <span className={p >= 0 ? 'text-green-600' : 'text-red-500'}>{fmtW(p)}</span>; } },
-    { key: 'keywordCount', label: '키워드수',
+    { key: 'keywordCount', label: '노출 키워드수',
       render: (d) => formatNumber(d.keywordCount ?? 0),
       renderTotal: () => '-', className: 'text-[#8B5CF6] font-medium' },
+    { key: 'clickKeywordCount', label: '유입 키워드수',
+      render: (d) => formatNumber(d.clickKeywordCount ?? 0),
+      renderTotal: () => '-', className: 'text-[#10B981] font-medium' },
   ];
 
-  const DEFAULT_TABLE_COLS: TableColKey[] = ['impressions', 'clicks', 'ctr', 'cpc', 'cost', 'orders14d', 'revenue14d', 'roas', 'keywordCount'];
+  const DEFAULT_TABLE_COLS: TableColKey[] = ['impressions', 'clicks', 'ctr', 'cpc', 'cost', 'orders14d', 'revenue14d', 'roas', 'keywordCount', 'clickKeywordCount'];
   const TABLE_COL_STORAGE = 'lv-erp-ad-table-cols';
 
   const [activeCols, setActiveCols] = useState<TableColKey[]>(() => {
@@ -586,13 +597,14 @@ export default function AdAnalysisPage() {
 
         // Compact rows (date+campaign+product)
         const cKey = `${date}|${campaign}|${product}`;
-        if (!compactMap.has(cKey)) compactMap.set(cKey, { date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0, _kw: new Set<string>() });
+        if (!compactMap.has(cKey)) compactMap.set(cKey, { date, campaign, product, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0, _kw: new Set<string>(), _kwClick: new Set<string>() });
         const c = compactMap.get(cKey)!;
         c.impressions += impressions; c.clicks += clicks; c.cost += cost;
         c.orders14d += orders14d; c.revenue14d += revenue14d; c.revenue14d_raw += revenue14d_raw;
         c.cogs14d += cogs14d;
         c.commission14d += commission14d;
         if (keyword !== '-' && impressions > 0) c._kw.add(keyword);
+        if (keyword !== '-' && clicks > 0) c._kwClick.add(keyword);
       }
 
       const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -611,7 +623,7 @@ export default function AdAnalysisPage() {
       const placements = [...plMap.values()].sort((a, b) => b.cost - a.cost);
       const placementDaily = [...plDateMap.values()];
       const keywordDaily = [...kwDateMap.values()];
-      const rows = [...compactMap.values()].map(({ _kw, ...rest }: any) => ({ ...rest, keywordCount: _kw.size }));
+      const rows = [...compactMap.values()].map(({ _kw, _kwClick, ...rest }: any) => ({ ...rest, keywordCount: _kw.size, clickKeywordCount: _kwClick.size }));
 
       const totals = daily.reduce((acc: any, d: any) => {
         acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
@@ -1163,6 +1175,7 @@ export default function AdAnalysisPage() {
         광고비: d.cost, '주문(14일)': d.orders14d, '매출(14일)': d.revenue14d,
         'ROAS(14일)': d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0,
         ...(d.keywordCount !== undefined ? { '노출 키워드수': d.keywordCount } : {}),
+        ...(d.clickKeywordCount !== undefined ? { '유입 키워드수': d.clickKeywordCount } : {}),
       }));
       // 일자×키워드 long format: 날짜 오름차순 → 광고비 내림차순
       const byDateKw = new Map<string, { date: string; keyword: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
@@ -1941,6 +1954,7 @@ export default function AdAnalysisPage() {
                                           <th className="text-right px-2 py-1.5 font-medium">노출</th>
                                           <th className="text-right px-2 py-1.5 font-medium">클릭</th>
                                           <th className="text-right px-2 py-1.5 font-medium">CTR</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">CPC</th>
                                           <th className="text-right px-2 py-1.5 font-medium">광고비</th>
                                           <th className="text-right px-2 py-1.5 font-medium">주문(14d)</th>
                                           <th className="text-right px-2 py-1.5 font-medium">매출(14d)</th>
@@ -1950,10 +1964,11 @@ export default function AdAnalysisPage() {
                                       </thead>
                                       <tbody>
                                         {kwForDate.length === 0 && (
-                                          <tr><td colSpan={9} className="text-center py-3 text-[#B0B8C1]">키워드 데이터 없음</td></tr>
+                                          <tr><td colSpan={10} className="text-center py-3 text-[#B0B8C1]">키워드 데이터 없음</td></tr>
                                         )}
                                         {kwForDate.map((kd) => {
                                           const ctr = kd.impressions > 0 ? kd.clicks / kd.impressions : 0;
+                                          const cpc = kd.clicks > 0 ? Math.round(kd.cost / kd.clicks) : 0;
                                           const cvr = kd.clicks > 0 ? kd.orders14d / kd.clicks : 0;
                                           const roas = kd.cost > 0 ? kd.revenue14d / kd.cost : 0;
                                           return (
@@ -1962,6 +1977,7 @@ export default function AdAnalysisPage() {
                                               <td className="px-2 py-1.5 text-right">{formatNumber(kd.impressions)}</td>
                                               <td className="px-2 py-1.5 text-right">{formatNumber(kd.clicks)}</td>
                                               <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(ctr)}</td>
+                                              <td className="px-2 py-1.5 text-right text-[#6B7684]">{kd.clicks > 0 ? fmtW(cpc) : '-'}</td>
                                               <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(kd.cost)}</td>
                                               <td className="px-2 py-1.5 text-right">{kd.orders14d}</td>
                                               <td className="px-2 py-1.5 text-right text-[#3182F6]">{fmtW(kd.revenue14d)}</td>
@@ -2064,10 +2080,10 @@ export default function AdAnalysisPage() {
 
               <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
                 <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
-                      <th className="w-6"></th>
-                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] min-w-[180px]">키워드</th>
+                  <thead className="sticky top-0 z-10">
+                    <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC] shadow-sm">
+                      <th className="w-6 bg-[#FAFBFC]"></th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] min-w-[180px] bg-[#FAFBFC]">키워드</th>
                       {([
                         ['impressions', '노출'], ['clicks', '클릭'], ['cost', '광고비'],
                         ['ctr', 'CTR'], ['cpc', 'CPC'], ['orders14d', '주문(14d)'],
@@ -2075,7 +2091,7 @@ export default function AdAnalysisPage() {
                       ] as [SortKey, string][]).map(([k, label]) => (
                         <th key={k}
                           onClick={() => toggleSort(k)}
-                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none"
+                          className="text-right px-3 py-2.5 font-semibold text-[#6B7684] cursor-pointer hover:text-[#191F28] whitespace-nowrap select-none bg-[#FAFBFC]"
                         >
                           <span className="inline-flex items-center gap-1">{label} <SortIcon k={k} /></span>
                         </th>
@@ -2133,6 +2149,7 @@ export default function AdAnalysisPage() {
                                         <th className="text-right px-2 py-1.5 font-medium">노출</th>
                                         <th className="text-right px-2 py-1.5 font-medium">클릭</th>
                                         <th className="text-right px-2 py-1.5 font-medium">CTR</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">CPC</th>
                                         <th className="text-right px-2 py-1.5 font-medium">광고비</th>
                                         <th className="text-right px-2 py-1.5 font-medium">주문(14d)</th>
                                         <th className="text-right px-2 py-1.5 font-medium">매출(14d)</th>
@@ -2142,10 +2159,11 @@ export default function AdAnalysisPage() {
                                     </thead>
                                     <tbody>
                                       {dailyList.length === 0 && (
-                                        <tr><td colSpan={9} className="text-center py-3 text-[#B0B8C1]">해당 기간 노출 없음</td></tr>
+                                        <tr><td colSpan={10} className="text-center py-3 text-[#B0B8C1]">해당 기간 노출 없음</td></tr>
                                       )}
                                       {dailyList.map((d) => {
                                         const ctr = d.impressions > 0 ? d.clicks / d.impressions : 0;
+                                        const cpc = d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
                                         const cvr = d.clicks > 0 ? d.orders14d / d.clicks : 0;
                                         const roas = d.cost > 0 ? d.revenue14d / d.cost : 0;
                                         return (
@@ -2154,6 +2172,7 @@ export default function AdAnalysisPage() {
                                             <td className="px-2 py-1.5 text-right">{formatNumber(d.impressions)}</td>
                                             <td className="px-2 py-1.5 text-right">{formatNumber(d.clicks)}</td>
                                             <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(ctr)}</td>
+                                            <td className="px-2 py-1.5 text-right text-[#6B7684]">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
                                             <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(d.cost)}</td>
                                             <td className="px-2 py-1.5 text-right">{d.orders14d}</td>
                                             <td className="px-2 py-1.5 text-right text-[#3182F6]">{fmtW(d.revenue14d)}</td>
