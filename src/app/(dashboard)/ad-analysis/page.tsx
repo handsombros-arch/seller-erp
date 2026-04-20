@@ -341,7 +341,7 @@ export default function AdAnalysisPage() {
   const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
   const [kwView, setKwView] = useState<'drill' | 'pivot'>('drill');
   const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
-  const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc'>('cost');
+  const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc' | 'keywordCount' | 'clickKeywordCount'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
   const [gran, setGran] = useState<Granularity>('daily');
   const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
@@ -2024,8 +2024,8 @@ export default function AdAnalysisPage() {
           {/* ─── Tab: Keywords ──────────────────────────────────────────── */}
           {tab === 'keywords' && (
             <div className="space-y-4">
-              {/* 뷰 토글: 키워드별 (드릴다운) / 피벗 매트릭스 */}
-              <div className="flex items-center gap-2">
+              {/* 뷰 토글 + 공통 지표 선택 (그래프/피벗 매트릭스 모두 반영) */}
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
                   <button onClick={() => setKwView('drill')}
                     className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${kwView === 'drill' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
@@ -2036,44 +2036,91 @@ export default function AdAnalysisPage() {
                     피벗 (키워드 × 일자)
                   </button>
                 </div>
-                <span className="text-[11px] text-[#B0B8C1]">
-                  {kwView === 'drill' ? '· 키워드를 선택해 일자별 추이 확인' : '· 축을 반대로 뒤집어 일자 × 키워드 매트릭스로 조회'}
-                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <label className="text-[12px] font-medium text-[#6B7684]">지표 (차트 · 피벗 공통)</label>
+                  <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
+                    className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white focus:outline-none focus:border-[#3182F6]">
+                    <option value="cost">광고비</option>
+                    <option value="revenue14d">매출(14d)</option>
+                    <option value="impressions">노출</option>
+                    <option value="clicks">클릭</option>
+                    <option value="orders14d">주문(14d)</option>
+                    <option value="ctr">CTR</option>
+                    <option value="cvr">CVR</option>
+                    <option value="roas">ROAS</option>
+                    <option value="cpc">CPC</option>
+                    <option value="keywordCount">노출 키워드수</option>
+                    <option value="clickKeywordCount">유입 키워드수</option>
+                  </select>
+                </div>
               </div>
-              {/* Keyword count trend chart */}
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 노출 키워드 수</h3>
-                  <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
-                    {([
-                      { key: 'daily' as Granularity, label: '일' },
-                      { key: 'weekly' as Granularity, label: '주' },
-                      { key: 'monthly' as Granularity, label: '월' },
-                    ]).map((g) => (
-                      <button
-                        key={g.key}
-                        onClick={() => setGran(g.key)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-                          gran === g.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
-                        }`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
+              {/* 지표 기반 트렌드 차트 */}
+              {(() => {
+                const metricInfo: Record<typeof pivotMetric, { label: string; type: 'bar' | 'line'; unit: 'won' | 'cnt' | 'pct'; color: string }> = {
+                  cost: { label: '광고비', type: 'bar', unit: 'won', color: '#F43F5E' },
+                  revenue14d: { label: '매출(14d)', type: 'bar', unit: 'won', color: '#3182F6' },
+                  impressions: { label: '노출', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
+                  clicks: { label: '클릭', type: 'bar', unit: 'cnt', color: '#06B6D4' },
+                  orders14d: { label: '주문(14d)', type: 'bar', unit: 'cnt', color: '#10B981' },
+                  ctr: { label: 'CTR', type: 'line', unit: 'pct', color: '#EAB308' },
+                  cvr: { label: 'CVR', type: 'line', unit: 'pct', color: '#F59E0B' },
+                  roas: { label: 'ROAS', type: 'line', unit: 'pct', color: '#A855F7' },
+                  cpc: { label: 'CPC', type: 'line', unit: 'won', color: '#EF4444' },
+                  keywordCount: { label: '노출 키워드수', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
+                  clickKeywordCount: { label: '유입 키워드수', type: 'bar', unit: 'cnt', color: '#10B981' },
+                };
+                const info = metricInfo[pivotMetric];
+                const enhancedData = chartData.map((d: any) => ({
+                  ...d,
+                  ctr: d.impressions > 0 ? d.clicks / d.impressions : 0,
+                  cvr: d.clicks > 0 ? d.orders14d / d.clicks : 0,
+                  roas: d.cost > 0 ? d.revenue14d / d.cost : 0,
+                  cpc: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
+                }));
+                const fmtY = (v: number) => {
+                  if (info.unit === 'won') return v >= 10000 ? `${Math.round(v / 10000).toLocaleString()}만` : v.toLocaleString();
+                  if (info.unit === 'pct') return `${Math.round(v * 100)}%`;
+                  return formatNumber(v);
+                };
+                const fmtTooltip = (v: number) => {
+                  if (info.unit === 'won') return [fmtW(Math.round(v)), info.label];
+                  if (info.unit === 'pct') return [pct(v), info.label];
+                  return [formatNumber(v), info.label];
+                };
+                return (
+                  <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-[13px] font-bold text-[#191F28]">기간별 {info.label} 추이</h3>
+                      <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+                        {([
+                          { key: 'daily' as Granularity, label: '일' },
+                          { key: 'weekly' as Granularity, label: '주' },
+                          { key: 'monthly' as Granularity, label: '월' },
+                        ]).map((g) => (
+                          <button key={g.key} onClick={() => setGran(g.key)}
+                            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${gran === g.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'}`}>
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={enhancedData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtY} />
+                          <Tooltip formatter={(v: number) => fmtTooltip(v)} />
+                          {info.type === 'bar'
+                            ? <Bar dataKey={pivotMetric} name={info.label} fill={info.color} opacity={0.8} radius={[4, 4, 0, 0]} />
+                            : <Line type="monotone" dataKey={pivotMetric} name={info.label} stroke={info.color} strokeWidth={2.5} dot={{ r: 3, fill: info.color }} />
+                          }
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F2F4F6" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => [formatNumber(v), '키워드 수']} />
-                      <Bar dataKey="keywordCount" name="키워드 수" fill="#8B5CF6" opacity={0.7} radius={[4, 4, 0, 0]} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+                );
+              })()}
 
               {kwView === 'drill' && (
               <div className="flex flex-wrap items-center gap-3">
@@ -2323,13 +2370,6 @@ export default function AdAnalysisPage() {
                       className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotAxis === 'date-kw' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
                       일자 × 키워드
                     </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[12px] font-medium text-[#6B7684]">지표</label>
-                    <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
-                      className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6]">
-                      {metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                    </select>
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="text-[12px] font-medium text-[#6B7684]">상위</label>
