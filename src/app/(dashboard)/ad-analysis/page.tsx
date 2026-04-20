@@ -1853,8 +1853,8 @@ export default function AdAnalysisPage() {
                       }`}>
                       <Settings className="h-3 w-3" /> 컬럼
                     </button>
-                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-[#E5E8EB] text-[#6B7684] hover:border-[#B0B8C1]">
-                      <Download className="h-3 w-3" /> xlsx
+                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-[#3182F6] text-[#3182F6] bg-white hover:bg-[#EBF1FE] transition-colors">
+                      <Download className="h-3 w-3" /> xlsx · 일자 + 일자×키워드
                     </button>
                   </div>
                 </div>
@@ -2070,8 +2070,8 @@ export default function AdAnalysisPage() {
                   className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-all ${kwOnlyOrders ? 'border-[#3182F6] bg-[#EBF1FE] text-[#3182F6]' : 'border-[#E5E8EB] text-[#6B7684]'}`}>
                   구매 키워드만
                 </button>
-                <button onClick={handleDownload} className="flex items-center gap-1.5 text-[12px] text-[#3182F6] font-medium hover:underline">
-                  <Download className="h-3.5 w-3.5" /> xlsx
+                <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-[#3182F6] text-[#3182F6] bg-white hover:bg-[#EBF1FE] transition-colors">
+                  <Download className="h-3.5 w-3.5" /> xlsx · 키워드 + 키워드×일자
                 </button>
                 <span className="text-[12px] text-[#8B95A1]">
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
