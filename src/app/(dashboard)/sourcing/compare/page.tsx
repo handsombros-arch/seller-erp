@@ -463,133 +463,175 @@ export default function ComparePage() {
           </button>
           <button
             onClick={async () => {
-              const XLSX = await import('xlsx');
+              const ExcelJS = (await import('exceljs')).default;
               const toText = (v: unknown): string => {
                 if (v == null) return '';
-                if (Array.isArray(v)) return v.map((x) => toText(x)).filter(Boolean).join(' · ');
-                if (typeof v === 'object') {
-                  try { return JSON.stringify(v); } catch { return ''; }
-                }
+                if (Array.isArray(v)) return v.map((x) => toText(x)).filter(Boolean).join('\n· ');
+                if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return ''; } }
                 return String(v);
               };
-              const headers = ['항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
-              const rows: (string | number)[][] = [headers];
-              const pushSection = (name: string) => {
-                rows.push([`━━ ${name} ━━`, ...items.map(() => '')]);
-              };
-              const push = (label: string, getter: (it: any, idx: number) => unknown) => {
-                rows.push([label, ...items.map((it: any, idx: number) => toText(getter(it, idx)))]);
+              const wb = new ExcelJS.Workbook();
+              const ws = wb.addWorksheet('상품 비교', { views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }] });
+              const nCols = items.length + 1;
+              ws.columns = [{ width: 22 }, ...items.map(() => ({ width: 42 }))];
+
+              const thinBorder = { style: 'thin' as const, color: { argb: 'FFE5E7EB' } };
+              const cellBorder = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+
+              // ── 헤더 행 (상품 제목) ──
+              const headerValues = ['항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
+              const headerRow = ws.addRow(headerValues);
+              headerRow.height = 48;
+              headerRow.eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                cell.border = cellBorder;
+              });
+
+              // ── 섹션 헤더 (배경 회색 + 병합) ──
+              const addSection = (name: string) => {
+                const r = ws.addRow([name]);
+                r.height = 22;
+                ws.mergeCells(r.number, 1, r.number, nCols);
+                const cell = r.getCell(1);
+                cell.value = name;
+                cell.font = { bold: true, color: { argb: 'FF111827' }, size: 11 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1D5DB' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'left' };
+                cell.border = cellBorder;
+                // 병합된 나머지 셀에도 border
+                for (let i = 2; i <= nCols; i++) r.getCell(i).border = cellBorder;
               };
 
-              // 기본 정보
-              pushSection('기본 정보');
-              push('플랫폼', (it) => it.platform);
-              push('상품ID', (it) => it.product_id);
-              push('URL', (it) => it.url);
-              push('카테고리', (it) => it.detail_analysis?.category);
+              // ── 데이터 행 ──
+              const addDataRow = (label: string, getter: (it: any, idx: number) => unknown, winnerIdx?: (idx: number) => boolean) => {
+                const vals = items.map((it: any, idx: number) => toText(getter(it, idx)));
+                const r = ws.addRow([label, ...vals]);
+                r.alignment = { vertical: 'top', wrapText: true };
+                // 라벨 셀
+                const first = r.getCell(1);
+                first.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+                first.font = { bold: true, color: { argb: 'FF4B5563' }, size: 10 };
+                first.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                first.border = cellBorder;
+                // 값 셀
+                for (let i = 0; i < items.length; i++) {
+                  const cell = r.getCell(i + 2);
+                  cell.font = { size: 10, color: { argb: 'FF111827' } };
+                  cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                  cell.border = cellBorder;
+                  if (winnerIdx && winnerIdx(i)) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+                    cell.font = { size: 10, bold: true, color: { argb: 'FF166534' } };
+                  }
+                }
+                // 높이 자동 (긴 텍스트면 increase)
+                const maxLen = Math.max(...vals.map((v) => v.length));
+                if (maxLen > 60) r.height = Math.min(120, Math.ceil(maxLen / 40) * 16);
+              };
 
-              // 가격
-              pushSection('가격');
-              push('최종가', (it) => it.product_info?.finalPrice || it.product_info?.price);
-              push('정가', (it) => it.product_info?.originalPrice);
-              push('최저가 대비 +%', (_it, i) => {
+              // ── 섹션들 ──
+              addSection('기본 정보');
+              addDataRow('플랫폼', (it) => it.platform);
+              addDataRow('상품ID', (it) => it.product_id);
+              addDataRow('URL', (it) => it.url);
+              addDataRow('카테고리', (it) => it.detail_analysis?.category);
+
+              addSection('가격');
+              addDataRow('최종가', (it) => it.product_info?.finalPrice || it.product_info?.price, (i) => i === c.priceWinner);
+              addDataRow('정가', (it) => it.product_info?.originalPrice);
+              addDataRow('최저가 대비 +%', (_it, i) => {
                 if (c.prices[i] == null || c.priceWinner === null || c.prices[c.priceWinner!] == null) return '';
                 if (i === c.priceWinner) return '(최저가)';
                 const base = c.prices[c.priceWinner!]!;
                 return `+${(((c.prices[i]! - base) / base) * 100).toFixed(0)}%`;
               });
 
-              // 리뷰 신뢰도
-              pushSection('리뷰 신뢰도');
-              push('총 리뷰 수', (it) => it.review_stats?.total);
-              push('공식 리뷰 수', (it) => it.review_stats?.officialReviewCount);
-              push('평균 별점', (it) => it.review_stats?.avgRating);
-              push('공식 평점', (it) => it.review_stats?.officialAvgRating);
-              push('중립 종합점수', (it) => it.review_analysis?.neutral_score);
-              push('문의 수', (it) => it.inquiries_count);
-              push('긍정 %', (it) => it.review_analysis?.sentiment_breakdown?.positive_pct);
-              push('중립 %', (it) => it.review_analysis?.sentiment_breakdown?.neutral_pct);
-              push('부정 %', (it) => it.review_analysis?.sentiment_breakdown?.negative_pct);
+              addSection('리뷰 신뢰도');
+              addDataRow('총 리뷰 수', (it) => it.review_stats?.total, (i) => i === c.reviewCountWinner);
+              addDataRow('공식 리뷰 수', (it) => it.review_stats?.officialReviewCount);
+              addDataRow('평균 별점', (it) => it.review_stats?.avgRating, (i) => i === c.ratingWinner);
+              addDataRow('공식 평점', (it) => it.review_stats?.officialAvgRating);
+              addDataRow('중립 종합점수', (it) => it.review_analysis?.neutral_score, (i) => i === c.neutralWinner);
+              addDataRow('문의 수', (it) => it.inquiries_count);
+              addDataRow('긍정 %', (it) => it.review_analysis?.sentiment_breakdown?.positive_pct);
+              addDataRow('중립 %', (it) => it.review_analysis?.sentiment_breakdown?.neutral_pct);
+              addDataRow('부정 %', (it) => it.review_analysis?.sentiment_breakdown?.negative_pct);
 
-              // 소싱 판단
-              pushSection('소싱 판단');
-              push('판단', (it) => it.review_analysis?.sourcing_decision?.verdict);
-              push('신뢰도', (it) => it.review_analysis?.sourcing_decision?.confidence);
-              push('핵심 근거', (it) => it.review_analysis?.sourcing_decision?.primary_reasoning);
-              push('차별화 전략', (it) => it.review_analysis?.sourcing_decision?.differentiation_strategy);
+              addSection('소싱 판단');
+              addDataRow('판단', (it) => it.review_analysis?.sourcing_decision?.verdict);
+              addDataRow('신뢰도', (it) => it.review_analysis?.sourcing_decision?.confidence);
+              addDataRow('핵심 근거', (it) => it.review_analysis?.sourcing_decision?.primary_reasoning);
+              addDataRow('차별화 전략', (it) => it.review_analysis?.sourcing_decision?.differentiation_strategy);
 
-              // 시장 신호
-              pushSection('시장 신호');
-              push('수요 강도', (it) => it.review_analysis?.market_signals?.demand_strength);
-              push('시장 포화', (it) => it.review_analysis?.market_signals?.saturation_risk);
-              push('가격 포지션', (it) => it.review_analysis?.market_signals?.price_position);
-              push('트렌드 지속', (it) => it.review_analysis?.market_signals?.trend_durability);
+              addSection('시장 신호');
+              addDataRow('수요 강도', (it) => it.review_analysis?.market_signals?.demand_strength);
+              addDataRow('시장 포화', (it) => it.review_analysis?.market_signals?.saturation_risk);
+              addDataRow('가격 포지션', (it) => it.review_analysis?.market_signals?.price_position);
+              addDataRow('트렌드 지속', (it) => it.review_analysis?.market_signals?.trend_durability);
 
-              // 차원별 평가 (표준 + 기타)
               if (c.canonicalDims?.length) {
-                pushSection(`차원별 평가 (${c.primaryCategory || '카테고리'} 표준)`);
+                addSection(`차원별 평가 (${c.primaryCategory || '카테고리'} 표준)`);
                 for (const dim of c.canonicalDims) {
-                  push(dim, (_it, i) => {
+                  addDataRow(dim, (_it, i) => {
                     const d = c.itemDimMap[i]?.[dim];
                     if (!d) return '';
                     const score = d.score ?? '-';
                     const note = (d.note || '').toString().replace(/\n/g, ' ').slice(0, 300);
                     return `${score}/10${note ? ` · ${note}` : ''}`;
-                  });
+                  }, (i) => c.dimensionWinners?.[dim] === i);
                 }
               }
               if (c.extraDims?.length) {
-                pushSection('기타 차원');
+                addSection('기타 차원');
                 for (const dim of c.extraDims) {
-                  push(dim, (_it, i) => {
+                  addDataRow(dim, (_it, i) => {
                     const d = c.itemDimMap[i]?.[dim];
                     if (!d) return '';
                     const score = d.score ?? '-';
                     const note = (d.note || '').toString().replace(/\n/g, ' ').slice(0, 300);
                     return `${score}/10${note ? ` · ${note}` : ''}`;
-                  });
+                  }, (i) => c.dimensionWinners?.[dim] === i);
                 }
               }
 
-              // 장단점 (Top 3)
-              pushSection('장단점 (Top 3)');
-              push('장점', (it) => (it.review_analysis?.pros_ranked || []).slice(0, 3).map((x: any) => x.point).filter(Boolean));
-              push('단점', (it) => (it.review_analysis?.cons_ranked || []).slice(0, 3).map((x: any) => `${x.point}${x.severity ? ` [${x.severity}]` : ''}`).filter(Boolean));
-              push('해결 가능 포인트', (it) => (it.review_analysis?.solvable_pain_points || []).slice(0, 3).map((x: any) => x.issue).filter(Boolean));
+              addSection('장단점 (Top 3)');
+              addDataRow('장점', (it) => (it.review_analysis?.pros_ranked || []).slice(0, 3).map((x: any) => x.point).filter(Boolean));
+              addDataRow('단점', (it) => (it.review_analysis?.cons_ranked || []).slice(0, 3).map((x: any) => `${x.point}${x.severity ? ` [${x.severity}]` : ''}`).filter(Boolean));
+              addDataRow('해결 가능 포인트', (it) => (it.review_analysis?.solvable_pain_points || []).slice(0, 3).map((x: any) => x.issue).filter(Boolean));
 
-              // 물리 스펙
-              pushSection('물리 스펙');
-              push('무게', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['무게']));
-              push('용량', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['용량']));
-              push('크기', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['크기']));
-              push('재질', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['재질']));
-              push('색상', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['색상']));
-              push('원산지', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['원산지']));
-              push('방수', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['방수']));
+              addSection('물리 스펙');
+              addDataRow('무게', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['무게']), (i) => i === c.weightWinner);
+              addDataRow('용량', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['용량']), (i) => i === c.capacityWinner);
+              addDataRow('크기', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['크기']));
+              addDataRow('재질', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['재질']));
+              addDataRow('색상', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['색상']));
+              addDataRow('원산지', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['원산지']));
+              addDataRow('방수', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['방수']));
 
-              // 카테고리별 핵심 스펙 (물리 스펙 외)
               const shownInPhysical = new Set(['무게', '용량', '크기', '재질', '색상', '원산지', '방수']);
               const remainingKeys = (c.allSpecKeys || []).filter((k: string) => !shownInPhysical.has(k));
               if (remainingKeys.length > 0) {
-                pushSection('카테고리별 핵심 스펙');
-                for (const key of remainingKeys) {
-                  push(key, (it) => getSpecValue(it, key));
-                }
+                addSection('카테고리별 핵심 스펙');
+                for (const key of remainingKeys) addDataRow(key, (it) => getSpecValue(it, key));
               }
 
-              // 수기 비교 항목
               if (customRows.length > 0) {
-                pushSection('수기 비교 항목');
-                for (const cr of customRows) {
-                  push(cr.label || '(제목 없음)', (it) => cr.values[it.id] || '');
-                }
+                addSection('수기 비교 항목');
+                for (const cr of customRows) addDataRow(cr.label || '(제목 없음)', (it) => cr.values[it.id] || '');
               }
 
-              const ws = XLSX.utils.aoa_to_sheet(rows);
-              ws['!cols'] = [{ wch: 24 }, ...items.map(() => ({ wch: 42 }))];
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, '상품 비교');
-              XLSX.writeFile(wb, `상품비교_${new Date().toISOString().slice(0, 10)}.xlsx`);
+              const buffer = await wb.xlsx.writeBuffer();
+              const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `상품비교_${new Date().toISOString().slice(0, 10)}.xlsx`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
             }}
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-green-600 bg-white text-green-700 hover:bg-green-50"
             title="비교 표 모든 섹션을 xlsx 로 다운로드"
