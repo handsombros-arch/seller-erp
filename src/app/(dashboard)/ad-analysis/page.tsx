@@ -354,6 +354,7 @@ export default function AdAnalysisPage() {
   const [pivotSearch, setPivotSearch] = useState('');
   const [kwOnlyOrders, setKwOnlyOrders] = useState(false);
   const [expandedKw, setExpandedKw] = useState<string | null>(null);
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [placeGran, setPlaceGran] = useState<Granularity | 'total'>('weekly');
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
@@ -1036,7 +1037,10 @@ export default function AdAnalysisPage() {
       cvr: p.clicks > 0 ? p.orders14d / p.clicks : 0,
       roas14d: p.cost > 0 ? p.revenue14d / p.cost : 0,
     }));
-    return { ...filtered, daily, totals, rows: filteredRows, keywords, placements };
+    // 일자별 breakdown 배열들도 기간 필터 적용 (드릴다운/xlsx 에서 사용)
+    const keywordDaily = (filtered.keywordDaily ?? []).filter(d => dateInRange(d.date));
+    const placementDaily = (filtered.placementDaily ?? []).filter(d => dateInRange(d.date));
+    return { ...filtered, daily, totals, rows: filteredRows, keywords, placements, keywordDaily, placementDaily };
   }, [filtered, dateFrom, dateTo]);
 
   // Aggregated chart data
@@ -1150,7 +1154,7 @@ export default function AdAnalysisPage() {
 
   const handleDownload = useCallback(() => {
     if (tab === 'daily') {
-      const rows = chartData.map((d: any) => ({
+      const summary = chartData.map((d: any) => ({
         [gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월']: d.label,
         노출: d.impressions, 클릭: d.clicks,
         CTR: d.impressions > 0 ? +(d.clicks / d.impressions * 100).toFixed(2) : 0,
@@ -1160,7 +1164,30 @@ export default function AdAnalysisPage() {
         'ROAS(14일)': d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0,
         ...(d.keywordCount !== undefined ? { '노출 키워드수': d.keywordCount } : {}),
       }));
-      downloadXlsx(rows, `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      // 일자×키워드 long format: 날짜 오름차순 → 광고비 내림차순
+      const byDateKw = new Map<string, { date: string; keyword: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
+      for (const d of (dateFiltered.keywordDaily ?? [])) {
+        const key = `${d.date}||${d.keyword}`;
+        if (!byDateKw.has(key)) byDateKw.set(key, { date: d.date, keyword: d.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+        const x = byDateKw.get(key)!;
+        x.impressions += d.impressions; x.clicks += d.clicks; x.cost += d.cost;
+        x.orders14d += d.orders14d; x.revenue14d += d.revenue14d;
+      }
+      const dateKw = Array.from(byDateKw.values())
+        .sort((a, b) => a.date === b.date ? b.cost - a.cost : a.date.localeCompare(b.date))
+        .map((r) => ({
+          날짜: r.date, 키워드: r.keyword,
+          노출: r.impressions, 클릭: r.clicks, 광고비: r.cost,
+          CTR: r.impressions > 0 ? +(r.clicks / r.impressions * 100).toFixed(2) : 0,
+          CPC: r.clicks > 0 ? Math.round(r.cost / r.clicks) : 0,
+          '주문(14일)': r.orders14d, '매출(14일)': r.revenue14d,
+          CVR: r.clicks > 0 ? +(r.orders14d / r.clicks * 100).toFixed(2) : 0,
+          ROAS: r.cost > 0 ? +(r.revenue14d / r.cost * 100).toFixed(1) : 0,
+        }));
+      downloadXlsxMulti(
+        [{ name: gran === 'daily' ? '일자' : gran === 'weekly' ? '주차' : '월', data: summary }, { name: '일자×키워드', data: dateKw }],
+        `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
     } else if (tab === 'keywords') {
       const summary = sortedKeywords.map((k) => ({
         키워드: k.keyword, 노출: k.impressions, 클릭: k.clicks, 광고비: k.cost,
@@ -1854,25 +1881,107 @@ export default function AdAnalysisPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedTrendData.map((d: any) => (
-                      <tr key={d.date} className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] ${memos[d.date] ? 'bg-amber-50/30' : ''}`}>
-                        <td className="px-3 py-2.5 font-medium text-[#191F28]">
-                          <div className="flex items-center gap-1.5">
-                            {d.label}
-                            {memos[d.date] && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
-                          </div>
-                        </td>
-                        {visibleCols.map((col) => (
-                          <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-[#6B7684]'}`}>
-                            {col.render(d)}
-                          </td>
-                        ))}
-                        <td className="px-1 py-1">
-                          <input value={memos[d.date] ?? ''} onChange={e => saveMemo(d.date, e.target.value)}
-                            placeholder="메모" className="w-24 h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:outline-none bg-transparent" />
-                        </td>
-                      </tr>
-                    ))}
+                    {sortedTrendData.map((d: any) => {
+                      const canDrill = gran === 'daily';
+                      const isExpanded = canDrill && expandedDate === d.date;
+                      // 해당 일자의 키워드 breakdown 집계
+                      const kwForDate = isExpanded
+                        ? Object.values((dateFiltered.keywordDaily ?? [])
+                            .filter((kd) => kd.date === d.date)
+                            .reduce((acc: Record<string, { keyword: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>, kd) => {
+                              if (!acc[kd.keyword]) acc[kd.keyword] = { keyword: kd.keyword, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
+                              acc[kd.keyword].impressions += kd.impressions;
+                              acc[kd.keyword].clicks += kd.clicks;
+                              acc[kd.keyword].cost += kd.cost;
+                              acc[kd.keyword].orders14d += kd.orders14d;
+                              acc[kd.keyword].revenue14d += kd.revenue14d;
+                              return acc;
+                            }, {}))
+                            .sort((a, b) => b.cost - a.cost)
+                        : [];
+                      return (
+                        <Fragment key={d.date}>
+                          <tr className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] ${memos[d.date] ? 'bg-amber-50/30' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''} ${canDrill ? 'cursor-pointer' : ''}`}
+                            onClick={(e) => {
+                              if (!canDrill) return;
+                              const t = e.target as HTMLElement;
+                              if (t.tagName === 'INPUT') return;
+                              setExpandedDate(isExpanded ? null : d.date);
+                            }}>
+                            <td className="px-3 py-2.5 font-medium text-[#191F28]">
+                              <div className="flex items-center gap-1.5">
+                                {canDrill && <span className="text-[#B0B8C1]">{isExpanded ? '▾' : '▸'}</span>}
+                                {d.label}
+                                {memos[d.date] && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
+                              </div>
+                            </td>
+                            {visibleCols.map((col) => (
+                              <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-[#6B7684]'}`}>
+                                {col.render(d)}
+                              </td>
+                            ))}
+                            <td className="px-1 py-1">
+                              <input value={memos[d.date] ?? ''} onChange={e => saveMemo(d.date, e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="메모" className="w-24 h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:outline-none bg-transparent" />
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={visibleCols.length + 2} className="p-0 bg-[#FAFBFC] border-b border-[#E5E8EB]">
+                                <div className="px-6 py-3">
+                                  <div className="text-[11px] font-semibold text-[#6B7684] mb-2">
+                                    {d.label} — 키워드별 성과 ({kwForDate.length}개 키워드, 광고비 순)
+                                  </div>
+                                  <div className="overflow-auto max-h-96">
+                                    <table className="w-full text-[11px]">
+                                      <thead className="bg-white sticky top-0">
+                                        <tr className="text-[#8B95A1] border-b border-[#F2F4F6]">
+                                          <th className="text-left px-2 py-1.5 font-medium">키워드</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">노출</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">클릭</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">CTR</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">광고비</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">주문(14d)</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">매출(14d)</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">CVR</th>
+                                          <th className="text-right px-2 py-1.5 font-medium">ROAS</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {kwForDate.length === 0 && (
+                                          <tr><td colSpan={9} className="text-center py-3 text-[#B0B8C1]">키워드 데이터 없음</td></tr>
+                                        )}
+                                        {kwForDate.map((kd) => {
+                                          const ctr = kd.impressions > 0 ? kd.clicks / kd.impressions : 0;
+                                          const cvr = kd.clicks > 0 ? kd.orders14d / kd.clicks : 0;
+                                          const roas = kd.cost > 0 ? kd.revenue14d / kd.cost : 0;
+                                          return (
+                                            <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-white">
+                                              <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-[#333D4B]" title={kd.keyword}>{kd.keyword}</td>
+                                              <td className="px-2 py-1.5 text-right">{formatNumber(kd.impressions)}</td>
+                                              <td className="px-2 py-1.5 text-right">{formatNumber(kd.clicks)}</td>
+                                              <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(ctr)}</td>
+                                              <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(kd.cost)}</td>
+                                              <td className="px-2 py-1.5 text-right">{kd.orders14d}</td>
+                                              <td className="px-2 py-1.5 text-right text-[#3182F6]">{fmtW(kd.revenue14d)}</td>
+                                              <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(cvr)}</td>
+                                              <td className={`px-2 py-1.5 text-right font-semibold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                                                {kd.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {/* 플로팅 합계 */}
