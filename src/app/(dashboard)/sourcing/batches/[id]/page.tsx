@@ -164,6 +164,186 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
         {batch.error && <div className="mt-3 text-xs text-red-600">오류: {batch.error}</div>}
       </div>
 
+      {/* 상위 상품 공통점 요약 (완료된 상품 대상) */}
+      {(() => {
+        const done = items.filter((i) => i.status === 'done');
+        if (done.length < 2) return null;
+
+        const parsePrice = (v: unknown): number | null => {
+          if (v == null) return null;
+          const s = String(v).replace(/[^\d.]/g, '');
+          const n = parseFloat(s);
+          return isFinite(n) && n > 0 ? n : null;
+        };
+
+        const prices = done.map((i) => parsePrice(i.product_info?.finalPrice) ?? parsePrice(i.product_info?.price)).filter((n): n is number => n != null).sort((a, b) => a - b);
+        const avgPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null;
+        const medPrice = prices.length ? (prices.length % 2 ? prices[(prices.length - 1) / 2] : Math.round((prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2)) : null;
+
+        const ratings = done.map((i) => i.review_stats?.avgRating).filter((n): n is number => typeof n === 'number' && n > 0);
+        const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
+
+        const reviewCounts = done.map((i) => i.review_stats?.total).filter((n): n is number => typeof n === 'number' && n > 0);
+        const avgReviews = reviewCounts.length ? Math.round(reviewCounts.reduce((a, b) => a + b, 0) / reviewCounts.length) : null;
+
+        // 카테고리 분포
+        const catFreq = new Map<string, number>();
+        for (const i of done) {
+          const any = i as unknown as { detail_analysis?: { category?: string } };
+          const cat = any.detail_analysis?.category;
+          if (cat) catFreq.set(cat, (catFreq.get(cat) ?? 0) + 1);
+        }
+        const catSorted = [...catFreq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        // 공통 키워드 (top_keywords 교집합/빈도)
+        const keywordFreq = new Map<string, number>();
+        for (const i of done) {
+          const any = i as unknown as { review_analysis?: { top_keywords?: string[] } };
+          const kws = any.review_analysis?.top_keywords ?? [];
+          for (const k of kws) {
+            const key = k.toString().trim().slice(0, 20);
+            if (key) keywordFreq.set(key, (keywordFreq.get(key) ?? 0) + 1);
+          }
+        }
+        const commonKeywords = [...keywordFreq.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+        // 장점/단점 핵심 포인트 빈도 (ranked)
+        const prosFreq = new Map<string, number>();
+        const consFreq = new Map<string, number>();
+        for (const i of done) {
+          const any = i as unknown as { review_analysis?: { pros_ranked?: { point?: string }[]; cons_ranked?: { point?: string }[] } };
+          for (const p of (any.review_analysis?.pros_ranked ?? []).slice(0, 5)) {
+            const key = (p.point ?? '').toString().trim().slice(0, 30);
+            if (key) prosFreq.set(key, (prosFreq.get(key) ?? 0) + 1);
+          }
+          for (const p of (any.review_analysis?.cons_ranked ?? []).slice(0, 5)) {
+            const key = (p.point ?? '').toString().trim().slice(0, 30);
+            if (key) consFreq.set(key, (consFreq.get(key) ?? 0) + 1);
+          }
+        }
+        const commonPros = [...prosFreq.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const commonCons = [...consFreq.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        // 차원별 평균 점수 (모든 상품의 category_dimensions_scored 통합)
+        const dimScoreSum = new Map<string, { sum: number; n: number }>();
+        for (const i of done) {
+          const any = i as unknown as { review_analysis?: { category_dimensions_scored?: { dimension?: string; score?: number }[] } };
+          for (const d of any.review_analysis?.category_dimensions_scored ?? []) {
+            const dim = (d.dimension ?? '').toString().trim();
+            const s = typeof d.score === 'number' ? d.score : null;
+            if (!dim || s == null) continue;
+            const cur = dimScoreSum.get(dim) ?? { sum: 0, n: 0 };
+            cur.sum += s; cur.n += 1;
+            dimScoreSum.set(dim, cur);
+          }
+        }
+        const dimAvg = [...dimScoreSum.entries()]
+          .filter(([, v]) => v.n >= Math.max(2, Math.floor(done.length * 0.3)))
+          .map(([dim, v]) => ({ dim, avg: v.sum / v.n, n: v.n }))
+          .sort((a, b) => b.avg - a.avg);
+
+        return (
+          <div className="bg-white border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold">상위 {done.length}개 상품 공통점 요약</h3>
+              <span className="text-[11px] text-gray-400">분석 완료 기준 / 총 {stats.total}개 중</span>
+            </div>
+
+            {/* KPI 카드 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-[11px] text-gray-500">가격대</div>
+                <div className="text-sm font-bold mt-0.5">
+                  {prices.length ? `${prices[0].toLocaleString()} ~ ${prices[prices.length - 1].toLocaleString()}원` : '-'}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  평균 {avgPrice?.toLocaleString() ?? '-'}원 · 중위 {medPrice?.toLocaleString() ?? '-'}원
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-[11px] text-gray-500">평균 별점</div>
+                <div className="text-sm font-bold mt-0.5">{avgRating ? `${avgRating.toFixed(2)} ★` : '-'}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{ratings.length}개 상품 평균</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-[11px] text-gray-500">상품당 평균 리뷰</div>
+                <div className="text-sm font-bold mt-0.5">{avgReviews?.toLocaleString() ?? '-'}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">총 {totalReviews.toLocaleString()}건</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-[11px] text-gray-500">주요 카테고리</div>
+                <div className="text-sm font-bold mt-0.5 truncate" title={catSorted.map((c) => c[0]).join(', ')}>
+                  {catSorted[0]?.[0] ?? '-'}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  {catSorted.map((c) => `${c[0]} (${c[1]})`).slice(0, 3).join(' · ')}
+                </div>
+              </div>
+            </div>
+
+            {/* 공통 키워드 / 장점 / 단점 */}
+            <div className="grid md:grid-cols-3 gap-3">
+              <div>
+                <div className="text-[11px] font-semibold text-gray-600 mb-1.5">공통 키워드 ({commonKeywords.length})</div>
+                {commonKeywords.length === 0 && <div className="text-[11px] text-gray-400">2개 이상 상품에서 공통으로 나온 키워드 없음</div>}
+                <div className="flex flex-wrap gap-1">
+                  {commonKeywords.map(([k, n]) => (
+                    <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                      {k}<span className="text-blue-400 text-[10px]">×{n}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-green-700 mb-1.5">자주 언급된 장점 ({commonPros.length})</div>
+                {commonPros.length === 0 && <div className="text-[11px] text-gray-400">공통 장점 없음</div>}
+                <ul className="text-[11px] space-y-0.5">
+                  {commonPros.map(([k, n]) => (
+                    <li key={k} className="flex items-start gap-1">
+                      <span className="text-green-500 mt-0.5">✓</span>
+                      <span className="flex-1">{k}</span>
+                      <span className="text-gray-400">×{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-red-700 mb-1.5">자주 언급된 단점 ({commonCons.length})</div>
+                {commonCons.length === 0 && <div className="text-[11px] text-gray-400">공통 단점 없음</div>}
+                <ul className="text-[11px] space-y-0.5">
+                  {commonCons.map(([k, n]) => (
+                    <li key={k} className="flex items-start gap-1">
+                      <span className="text-red-500 mt-0.5">✗</span>
+                      <span className="flex-1">{k}</span>
+                      <span className="text-gray-400">×{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* 차원별 평균 점수 */}
+            {dimAvg.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-gray-600 mb-1.5">차원별 평균 점수 ({dimAvg.length})</div>
+                <div className="grid sm:grid-cols-2 gap-1.5">
+                  {dimAvg.map((d) => (
+                    <div key={d.dim} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-24 truncate text-gray-700" title={d.dim}>{d.dim}</span>
+                      <div className="flex-1 bg-gray-100 rounded h-2 overflow-hidden">
+                        <div className={`h-full ${d.avg >= 7 ? 'bg-green-500' : d.avg >= 5 ? 'bg-blue-400' : 'bg-orange-400'}`} style={{ width: `${(d.avg / 10) * 100}%` }} />
+                      </div>
+                      <span className="w-12 text-right font-semibold">{d.avg.toFixed(1)}/10</span>
+                      <span className="w-10 text-right text-gray-400 text-[10px]">n={d.n}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* 배치 상태 — 아직 확장 안 됨 */}
       {batch.status !== 'expanded' && items.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
