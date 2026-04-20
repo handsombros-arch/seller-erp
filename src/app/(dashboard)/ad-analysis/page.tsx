@@ -2078,7 +2078,7 @@ export default function AdAnalysisPage() {
                 </span>
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] overflow-x-auto">
+              <div className="bg-white rounded-2xl border border-[#F2F4F6] max-h-[70vh] overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC] shadow-sm">
