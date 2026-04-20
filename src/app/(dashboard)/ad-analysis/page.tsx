@@ -5,7 +5,7 @@ import { formatNumber } from '@/lib/utils';
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
-  ChevronDown, ChevronUp, Search, Download, Settings, GripVertical,
+  ChevronDown, ChevronUp, ChevronRight, Search, Download, Settings, GripVertical,
 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, Area, AreaChart, ReferenceLine,
@@ -353,6 +353,7 @@ export default function AdAnalysisPage() {
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
   const [pivotSearch, setPivotSearch] = useState('');
   const [kwOnlyOrders, setKwOnlyOrders] = useState(false);
+  const [expandedKw, setExpandedKw] = useState<string | null>(null);
   const [placeGran, setPlaceGran] = useState<Granularity | 'total'>('weekly');
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
@@ -1136,6 +1137,17 @@ export default function AdAnalysisPage() {
     });
   }, []);
 
+  const downloadXlsxMulti = useCallback((sheets: { name: string; data: Record<string, any>[] }[], filename: string) => {
+    import('xlsx').then((XLSX) => {
+      const wb = XLSX.utils.book_new();
+      for (const s of sheets) {
+        const ws = XLSX.utils.json_to_sheet(s.data);
+        XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+      }
+      XLSX.writeFile(wb, filename);
+    });
+  }, []);
+
   const handleDownload = useCallback(() => {
     if (tab === 'daily') {
       const rows = chartData.map((d: any) => ({
@@ -1150,13 +1162,38 @@ export default function AdAnalysisPage() {
       }));
       downloadXlsx(rows, `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } else if (tab === 'keywords') {
-      const rows = sortedKeywords.map((k) => ({
+      const summary = sortedKeywords.map((k) => ({
         키워드: k.keyword, 노출: k.impressions, 클릭: k.clicks, 광고비: k.cost,
         CTR: +(k.ctr * 100).toFixed(2), CPC: k.cpc,
         '주문(14일)': k.orders14d, '매출(14일)': k.revenue14d,
         CVR: +(k.cvr * 100).toFixed(2), 'ROAS(14일)': +(k.roas14d * 100).toFixed(1),
       }));
-      downloadXlsx(rows, `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      // 키워드×일자 long format (필터 적용된 키워드만 포함)
+      const kwSet = new Set(sortedKeywords.map((k) => k.keyword));
+      const byKwDate = new Map<string, { keyword: string; date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
+      for (const d of (dateFiltered.keywordDaily ?? [])) {
+        if (!kwSet.has(d.keyword)) continue;
+        const key = `${d.keyword}||${d.date}`;
+        if (!byKwDate.has(key)) byKwDate.set(key, { keyword: d.keyword, date: d.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+        const x = byKwDate.get(key)!;
+        x.impressions += d.impressions; x.clicks += d.clicks; x.cost += d.cost;
+        x.orders14d += d.orders14d; x.revenue14d += d.revenue14d;
+      }
+      const daily = Array.from(byKwDate.values())
+        .sort((a, b) => a.keyword === b.keyword ? a.date.localeCompare(b.date) : a.keyword.localeCompare(b.keyword))
+        .map((r) => ({
+          키워드: r.keyword, 날짜: r.date,
+          노출: r.impressions, 클릭: r.clicks, 광고비: r.cost,
+          CTR: r.impressions > 0 ? +(r.clicks / r.impressions * 100).toFixed(2) : 0,
+          CPC: r.clicks > 0 ? Math.round(r.cost / r.clicks) : 0,
+          '주문(14일)': r.orders14d, '매출(14일)': r.revenue14d,
+          CVR: r.clicks > 0 ? +(r.orders14d / r.clicks * 100).toFixed(2) : 0,
+          ROAS: r.cost > 0 ? +(r.revenue14d / r.cost * 100).toFixed(1) : 0,
+        }));
+      downloadXlsxMulti(
+        [{ name: '키워드', data: summary }, { name: '키워드×일자', data: daily }],
+        `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
     } else if (tab === 'placements') {
       const rows = dateFiltered.placements.map((p) => ({
         노출지면: p.placement, 노출: p.impressions, 클릭: p.clicks,
@@ -1166,7 +1203,7 @@ export default function AdAnalysisPage() {
       }));
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
-  }, [tab, gran, chartData, sortedKeywords, dateFiltered.placements, downloadXlsx]);
+  }, [tab, gran, chartData, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -1920,6 +1957,7 @@ export default function AdAnalysisPage() {
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-[#F2F4F6] bg-[#FAFBFC]">
+                      <th className="w-6"></th>
                       <th className="text-left px-3 py-2.5 font-semibold text-[#6B7684] min-w-[180px]">키워드</th>
                       {([
                         ['impressions', '노출'], ['clicks', '클릭'], ['cost', '광고비'],
@@ -1936,22 +1974,96 @@ export default function AdAnalysisPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedKeywords.map((k) => (
-                      <tr key={k.keyword} className="border-b border-[#F2F4F6] hover:bg-[#FAFBFC]">
-                        <td className="px-3 py-2 font-medium text-[#191F28] max-w-[260px] truncate">{k.keyword}</td>
-                        <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(k.impressions)}</td>
-                        <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(k.clicks)}</td>
-                        <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(k.cost)}</td>
-                        <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.ctr)}</td>
-                        <td className="px-3 py-2 text-right text-[#6B7684]">{fmtW(k.cpc)}</td>
-                        <td className="px-3 py-2 text-right text-[#191F28]">{k.orders14d}</td>
-                        <td className="px-3 py-2 text-right text-[#3182F6]">{fmtW(k.revenue14d)}</td>
-                        <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.cvr)}</td>
-                        <td className={`px-3 py-2 text-right font-bold ${k.roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
-                          {k.cost > 0 ? `${(k.roas14d * 100).toFixed(0)}%` : '-'}
-                        </td>
-                      </tr>
-                    ))}
+                    {sortedKeywords.map((k) => {
+                      const isExpanded = expandedKw === k.keyword;
+                      const dailyRows = isExpanded
+                        ? (dateFiltered.keywordDaily ?? [])
+                            .filter((d) => d.keyword === k.keyword)
+                            .reduce((acc: Record<string, { date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>, d) => {
+                              if (!acc[d.date]) acc[d.date] = { date: d.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 };
+                              acc[d.date].impressions += d.impressions;
+                              acc[d.date].clicks += d.clicks;
+                              acc[d.date].cost += d.cost;
+                              acc[d.date].orders14d += d.orders14d;
+                              acc[d.date].revenue14d += d.revenue14d;
+                              return acc;
+                            }, {})
+                        : {};
+                      const dailyList = isExpanded ? Object.values(dailyRows).sort((a, b) => a.date.localeCompare(b.date)) : [];
+                      return (
+                        <Fragment key={k.keyword}>
+                          <tr
+                            className={`border-b border-[#F2F4F6] hover:bg-[#FAFBFC] cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                            onClick={() => setExpandedKw(isExpanded ? null : k.keyword)}
+                          >
+                            <td className="px-1.5 py-2 text-center text-[#B0B8C1]">
+                              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-[#191F28] max-w-[260px] truncate">{k.keyword}</td>
+                            <td className="px-3 py-2 text-right text-[#6B7684]">{formatNumber(k.impressions)}</td>
+                            <td className="px-3 py-2 text-right text-[#191F28]">{formatNumber(k.clicks)}</td>
+                            <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(k.cost)}</td>
+                            <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.ctr)}</td>
+                            <td className="px-3 py-2 text-right text-[#6B7684]">{fmtW(k.cpc)}</td>
+                            <td className="px-3 py-2 text-right text-[#191F28]">{k.orders14d}</td>
+                            <td className="px-3 py-2 text-right text-[#3182F6]">{fmtW(k.revenue14d)}</td>
+                            <td className="px-3 py-2 text-right text-[#6B7684]">{pct(k.cvr)}</td>
+                            <td className={`px-3 py-2 text-right font-bold ${k.roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                              {k.cost > 0 ? `${(k.roas14d * 100).toFixed(0)}%` : '-'}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={11} className="p-0 bg-[#FAFBFC] border-b border-[#E5E8EB]">
+                                <div className="px-6 py-3">
+                                  <div className="text-[11px] font-semibold text-[#6B7684] mb-2">{k.keyword} — 일자별 성과 ({dailyList.length}일)</div>
+                                  <table className="w-full text-[11px]">
+                                    <thead>
+                                      <tr className="text-[#8B95A1] border-b border-[#F2F4F6]">
+                                        <th className="text-left px-2 py-1.5 font-medium">날짜</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">노출</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">클릭</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">CTR</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">광고비</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">주문(14d)</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">매출(14d)</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">CVR</th>
+                                        <th className="text-right px-2 py-1.5 font-medium">ROAS</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {dailyList.length === 0 && (
+                                        <tr><td colSpan={9} className="text-center py-3 text-[#B0B8C1]">해당 기간 노출 없음</td></tr>
+                                      )}
+                                      {dailyList.map((d) => {
+                                        const ctr = d.impressions > 0 ? d.clicks / d.impressions : 0;
+                                        const cvr = d.clicks > 0 ? d.orders14d / d.clicks : 0;
+                                        const roas = d.cost > 0 ? d.revenue14d / d.cost : 0;
+                                        return (
+                                          <tr key={d.date} className="border-b border-[#F5F6F7] hover:bg-white">
+                                            <td className="px-2 py-1.5 font-mono text-[#333D4B]">{d.date}</td>
+                                            <td className="px-2 py-1.5 text-right">{formatNumber(d.impressions)}</td>
+                                            <td className="px-2 py-1.5 text-right">{formatNumber(d.clicks)}</td>
+                                            <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(ctr)}</td>
+                                            <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(d.cost)}</td>
+                                            <td className="px-2 py-1.5 text-right">{d.orders14d}</td>
+                                            <td className="px-2 py-1.5 text-right text-[#3182F6]">{fmtW(d.revenue14d)}</td>
+                                            <td className="px-2 py-1.5 text-right text-[#6B7684]">{pct(cvr)}</td>
+                                            <td className={`px-2 py-1.5 text-right font-semibold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
+                                              {d.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
