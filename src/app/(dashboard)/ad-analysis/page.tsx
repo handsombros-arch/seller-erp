@@ -2041,17 +2041,25 @@ export default function AdAnalysisPage() {
                   <label className="text-[12px] font-medium text-[#6B7684]">차트 지표</label>
                   <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
                     className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white focus:outline-none focus:border-[#3182F6]">
-                    <option value="cost">광고비</option>
-                    <option value="revenue14d">매출(14d)</option>
-                    <option value="impressions">노출</option>
-                    <option value="clicks">클릭</option>
-                    <option value="orders14d">주문(14d)</option>
-                    <option value="ctr">CTR</option>
-                    <option value="cvr">CVR</option>
-                    <option value="roas">ROAS</option>
-                    <option value="cpc">CPC</option>
-                    <option value="keywordCount">노출 키워드수</option>
-                    <option value="clickKeywordCount">유입 키워드수</option>
+                    <optgroup label="볼륨">
+                      <option value="impressions">노출수 (impressions)</option>
+                      <option value="clicks">유입수 (clicks)</option>
+                      <option value="orders14d">주문수 (14d)</option>
+                    </optgroup>
+                    <optgroup label="금액">
+                      <option value="cost">광고비 (VAT)</option>
+                      <option value="revenue14d">매출 (14d)</option>
+                      <option value="cpc">CPC (클릭당 비용)</option>
+                    </optgroup>
+                    <optgroup label="비율">
+                      <option value="ctr">CTR (노출→클릭)</option>
+                      <option value="cvr">CVR (클릭→주문)</option>
+                      <option value="roas">ROAS</option>
+                    </optgroup>
+                    <optgroup label="키워드 다양성">
+                      <option value="keywordCount">노출된 키워드 수</option>
+                      <option value="clickKeywordCount">유입된 키워드 수</option>
+                    </optgroup>
                   </select>
                 </div>
               </div>
@@ -2060,15 +2068,15 @@ export default function AdAnalysisPage() {
                 const metricInfo: Record<typeof pivotMetric, { label: string; type: 'bar' | 'line'; unit: 'won' | 'cnt' | 'pct'; color: string }> = {
                   cost: { label: '광고비', type: 'bar', unit: 'won', color: '#F43F5E' },
                   revenue14d: { label: '매출(14d)', type: 'bar', unit: 'won', color: '#3182F6' },
-                  impressions: { label: '노출', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
-                  clicks: { label: '클릭(유입)', type: 'bar', unit: 'cnt', color: '#06B6D4' },
-                  orders14d: { label: '주문(14d)', type: 'bar', unit: 'cnt', color: '#10B981' },
+                  impressions: { label: '노출수', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
+                  clicks: { label: '유입수(클릭)', type: 'bar', unit: 'cnt', color: '#06B6D4' },
+                  orders14d: { label: '주문수(14d)', type: 'bar', unit: 'cnt', color: '#10B981' },
                   ctr: { label: 'CTR', type: 'line', unit: 'pct', color: '#EAB308' },
                   cvr: { label: 'CVR', type: 'line', unit: 'pct', color: '#F59E0B' },
                   roas: { label: 'ROAS', type: 'line', unit: 'pct', color: '#A855F7' },
                   cpc: { label: 'CPC', type: 'line', unit: 'won', color: '#EF4444' },
-                  keywordCount: { label: '노출 키워드수', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
-                  clickKeywordCount: { label: '유입 키워드수', type: 'bar', unit: 'cnt', color: '#10B981' },
+                  keywordCount: { label: '노출된 키워드 수', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
+                  clickKeywordCount: { label: '유입된 키워드 수', type: 'bar', unit: 'cnt', color: '#10B981' },
                 };
                 const info = metricInfo[pivotMetric];
 
