@@ -835,21 +835,21 @@ export default function AdAnalysisPage() {
     (async () => {
       try {
         setInitialLoading(true);
-        // 1차: IndexedDB에서 복원
-        let cachedRows = await loadFromIdb();
-        // 2차: IndexedDB 없으면 DB에서 복원
-        if (!cachedRows?.length) {
-          try {
-            const dbRes = await fetch('/api/ad-analysis/rows');
-            if (dbRes.ok) {
-              const { rows: dbRows } = await dbRes.json();
-              if (dbRows?.length) {
-                cachedRows = dbRows;
-                // IndexedDB에도 캐시
-                saveToIdb(dbRows);
-              }
+        // 1차: DB (원본 소스) — PC 이동/브라우저 변경 시에도 즉시 복원
+        let cachedRows: any[] | null = null;
+        try {
+          const dbRes = await fetch('/api/ad-analysis/rows');
+          if (dbRes.ok) {
+            const { rows: dbRows } = await dbRes.json();
+            if (dbRows?.length) {
+              cachedRows = dbRows;
+              saveToIdb(dbRows);
             }
-          } catch {}
+          }
+        } catch {}
+        // 2차: DB 실패/0건이면 IndexedDB fallback (오프라인 대비)
+        if (!cachedRows?.length) {
+          cachedRows = await loadFromIdb();
         }
         if (!cachedRows?.length) return;
         const [pricesRes, mappingsRes] = await Promise.all([
