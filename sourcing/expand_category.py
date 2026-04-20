@@ -263,9 +263,20 @@ def process_batch(batch: dict):
                     title = t[:100]; break
         except Exception: pass
 
-        # sourcing_analyses 에 일괄 insert
+        # 중복 재사용: 동일 user + coupang + product_id 이미 분석된 것은 sourcing_analyses 새 insert 없이 배치 링크만
+        emit("checking_duplicates", count=len(rows))
+        pids = [r["product_id"] for r in rows]
+        existing_rows = db_request("GET", "/sourcing_analyses", params={
+            "select": "id,product_id,status",
+            "user_id": f"eq.{user_id}",
+            "platform": "eq.coupang",
+            "product_id": f"in.({','.join(pids)})",
+        }) or []
+        existing_map = {x["product_id"]: x for x in existing_rows}
+        print(f"    중복(재사용): {len(existing_map)}개 / 신규 insert: {len(rows) - len(existing_map)}개")
+
         emit("inserting", count=len(rows))
-        insert_rows = [{
+        new_rows = [{
             "user_id": user_id,
             "url": r["url"],
             "platform": "coupang",
@@ -273,8 +284,35 @@ def process_batch(batch: dict):
             "status": "pending",
             "batch_id": batch_id,
             "batch_rank": r["rank"],
-        } for r in rows]
-        db_request("POST", "/sourcing_analyses", body=insert_rows)
+        } for r in rows if r["product_id"] not in existing_map]
+
+        new_inserted = []
+        if new_rows:
+            res = db_request("POST", "/sourcing_analyses", body=new_rows)
+            new_inserted = res or []
+
+        # pid → analysis_id 매핑 (기존 + 신규)
+        pid_to_analysis_id: dict[str, str] = {pid: ex["id"] for pid, ex in existing_map.items()}
+        for row in new_inserted:
+            pid_to_analysis_id[row["product_id"]] = row["id"]
+
+        # sourcing_batch_items 에 일괄 링크 (rank 보존)
+        links = []
+        for r in rows:
+            aid = pid_to_analysis_id.get(r["product_id"])
+            if not aid: continue
+            links.append({"batch_id": batch_id, "analysis_id": aid, "batch_rank": r["rank"]})
+        if links:
+            # upsert — 이미 링크된 경우 ignoreDuplicates
+            try:
+                db_request("POST", "/sourcing_batch_items?on_conflict=batch_id,analysis_id",
+                           body=links)
+            except Exception as e:
+                # 일부 중복 시 하나씩 fallback
+                print(f"    [link] batch 일괄 실패 → 개별 시도: {e}")
+                for link in links:
+                    try: db_request("POST", "/sourcing_batch_items", body=link)
+                    except Exception: pass
 
         update_batch(
             batch_id,
@@ -284,7 +322,7 @@ def process_batch(batch: dict):
             expanded_at=time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime()),
             progress=None,
         )
-        print(f"  완료: {len(rows)}개 pending 등록됨. worker.py 가 순차 처리합니다.")
+        print(f"  완료: 신규 {len(new_rows)} + 재사용 {len(existing_map)} = 총 {len(rows)}개 배치에 연결됨.")
     finally:
         try: sess.__exit__(None, None, None)
         except Exception: pass

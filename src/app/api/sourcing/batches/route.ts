@@ -16,18 +16,18 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const ids = (batches || []).map((b) => b.id);
-  // 각 배치별 자식 상태 집계
   let statsByBatch: Record<string, { total: number; done: number; failed: number; pending: number; crawling: number; analyzing: number }> = {};
   if (ids.length) {
-    const { data: children } = await admin
-      .from('sourcing_analyses')
-      .select('batch_id, status')
+    // batch_items 를 통해 analysis 상태 집계
+    const { data: links } = await admin
+      .from('sourcing_batch_items')
+      .select('batch_id, analysis:sourcing_analyses(status)')
       .in('batch_id', ids);
-    for (const c of children || []) {
-      const bid = c.batch_id as string;
+    for (const l of (links || []) as Array<{ batch_id: string; analysis: { status: string } | null }>) {
+      const bid = l.batch_id;
       if (!statsByBatch[bid]) statsByBatch[bid] = { total: 0, done: 0, failed: 0, pending: 0, crawling: 0, analyzing: 0 };
       statsByBatch[bid].total++;
-      const s = c.status as keyof typeof statsByBatch[string];
+      const s = (l.analysis?.status ?? '') as keyof typeof statsByBatch[string];
       if (s in statsByBatch[bid]) statsByBatch[bid][s]++;
     }
   }
