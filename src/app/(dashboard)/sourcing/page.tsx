@@ -69,6 +69,8 @@ export default function SourcingListPage() {
   const [expandLimit, setExpandLimit] = useState('40');
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -257,6 +259,45 @@ export default function SourcingListPage() {
         </div>
       )}
 
+      {/* 생성일자 필터 */}
+      {(() => {
+        const filteredItems = items.filter((it) => {
+          if (!dateFrom && !dateTo) return true;
+          const d = it.created_at.slice(0, 10);
+          if (dateFrom && d < dateFrom) return false;
+          if (dateTo && d > dateTo) return false;
+          return true;
+        });
+        const quickRange = (days: number) => {
+          const to = new Date();
+          const from = new Date();
+          from.setDate(from.getDate() - (days - 1));
+          setDateFrom(from.toISOString().slice(0, 10));
+          setDateTo(to.toISOString().slice(0, 10));
+        };
+        return (
+          <>
+            <div className="bg-white border rounded-lg p-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-700">생성일자</span>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 px-2 rounded border border-gray-300 text-xs" />
+              <span className="text-xs text-gray-400">~</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 px-2 rounded border border-gray-300 text-xs" />
+              <div className="flex gap-1 ml-2">
+                <button onClick={() => quickRange(7)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">7일</button>
+                <button onClick={() => quickRange(30)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">30일</button>
+                <button onClick={() => quickRange(90)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">90일</button>
+              </div>
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="text-[11px] px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">초기화</button>
+              )}
+              <span className="text-[11px] text-gray-500 ml-auto">
+                {filteredItems.length}개 {(dateFrom || dateTo) ? `(전체 ${items.length}개 중)` : ''}
+              </span>
+            </div>
+
       {/* 목록 */}
       <div className="bg-white border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -265,7 +306,7 @@ export default function SourcingListPage() {
               <th className="px-3 py-2 w-8">
                 <input
                   type="checkbox"
-                  checked={selected.size > 0 && selected.size === items.filter((i) => i.status === 'done').length}
+                  checked={selected.size > 0 && selected.size === filteredItems.filter((i) => i.status === 'done').length}
                   onChange={toggleAll}
                   className="cursor-pointer"
                 />
@@ -283,10 +324,12 @@ export default function SourcingListPage() {
             {loading && (
               <tr><td colSpan={8} className="text-center py-6 text-gray-500">로딩...</td></tr>
             )}
-            {!loading && items.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-500">아직 등록된 항목이 없습니다.</td></tr>
+            {!loading && filteredItems.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-6 text-gray-500">
+                {items.length === 0 ? '아직 등록된 항목이 없습니다.' : '해당 기간에 생성된 항목이 없습니다.'}
+              </td></tr>
             )}
-            {items.map((it) => {
+            {filteredItems.map((it) => {
               const pct = STATUS_PERCENT[it.status];
               const inProgress = it.status === 'pending' || it.status === 'crawling' || it.status === 'analyzing';
               return (
@@ -358,6 +401,9 @@ export default function SourcingListPage() {
           </tbody>
         </table>
       </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
