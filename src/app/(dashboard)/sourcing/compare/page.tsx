@@ -464,63 +464,135 @@ export default function ComparePage() {
           <button
             onClick={async () => {
               const XLSX = await import('xlsx');
+              const toText = (v: unknown): string => {
+                if (v == null) return '';
+                if (Array.isArray(v)) return v.map((x) => toText(x)).filter(Boolean).join(' · ');
+                if (typeof v === 'object') {
+                  try { return JSON.stringify(v); } catch { return ''; }
+                }
+                return String(v);
+              };
               const headers = ['항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
               const rows: (string | number)[][] = [headers];
-              const push = (label: string, getter: (it: any, idx: number) => unknown) => {
-                rows.push([label, ...items.map((it: any, idx: number) => {
-                  const v = getter(it, idx);
-                  if (v == null || v === '') return '';
-                  if (typeof v === 'object') {
-                    try { return JSON.stringify(v); } catch { return ''; }
-                  }
-                  return v as string | number;
-                })]);
+              const pushSection = (name: string) => {
+                rows.push([`━━ ${name} ━━`, ...items.map(() => '')]);
               };
-              push('URL', (it) => it.url);
+              const push = (label: string, getter: (it: any, idx: number) => unknown) => {
+                rows.push([label, ...items.map((it: any, idx: number) => toText(getter(it, idx)))]);
+              };
+
+              // 기본 정보
+              pushSection('기본 정보');
               push('플랫폼', (it) => it.platform);
               push('상품ID', (it) => it.product_id);
+              push('URL', (it) => it.url);
               push('카테고리', (it) => it.detail_analysis?.category);
+
+              // 가격
+              pushSection('가격');
               push('최종가', (it) => it.product_info?.finalPrice || it.product_info?.price);
               push('정가', (it) => it.product_info?.originalPrice);
+              push('최저가 대비 +%', (_it, i) => {
+                if (c.prices[i] == null || c.priceWinner === null || c.prices[c.priceWinner!] == null) return '';
+                if (i === c.priceWinner) return '(최저가)';
+                const base = c.prices[c.priceWinner!]!;
+                return `+${(((c.prices[i]! - base) / base) * 100).toFixed(0)}%`;
+              });
+
+              // 리뷰 신뢰도
+              pushSection('리뷰 신뢰도');
               push('총 리뷰 수', (it) => it.review_stats?.total);
               push('공식 리뷰 수', (it) => it.review_stats?.officialReviewCount);
-              push('평균 평점', (it) => it.review_stats?.avgRating);
+              push('평균 별점', (it) => it.review_stats?.avgRating);
               push('공식 평점', (it) => it.review_stats?.officialAvgRating);
-              push('중립 점수', (it) => it.review_analysis?.neutral_score);
-              push('총 문의 수', (it) => it.inquiries_count);
-              // 사이즈/무게/용량 등 물리 속성
-              push('크기(WxHxD)', (it) => it.detail_analysis?.size || it.detail_analysis?.dimensions);
-              push('무게', (it) => it.detail_analysis?.weight);
-              push('용량', (it) => it.detail_analysis?.capacity);
-              // 차원별 평가 점수
+              push('중립 종합점수', (it) => it.review_analysis?.neutral_score);
+              push('문의 수', (it) => it.inquiries_count);
+              push('긍정 %', (it) => it.review_analysis?.sentiment_breakdown?.positive_pct);
+              push('중립 %', (it) => it.review_analysis?.sentiment_breakdown?.neutral_pct);
+              push('부정 %', (it) => it.review_analysis?.sentiment_breakdown?.negative_pct);
+
+              // 소싱 판단
+              pushSection('소싱 판단');
+              push('판단', (it) => it.review_analysis?.sourcing_decision?.verdict);
+              push('신뢰도', (it) => it.review_analysis?.sourcing_decision?.confidence);
+              push('핵심 근거', (it) => it.review_analysis?.sourcing_decision?.primary_reasoning);
+              push('차별화 전략', (it) => it.review_analysis?.sourcing_decision?.differentiation_strategy);
+
+              // 시장 신호
+              pushSection('시장 신호');
+              push('수요 강도', (it) => it.review_analysis?.market_signals?.demand_strength);
+              push('시장 포화', (it) => it.review_analysis?.market_signals?.saturation_risk);
+              push('가격 포지션', (it) => it.review_analysis?.market_signals?.price_position);
+              push('트렌드 지속', (it) => it.review_analysis?.market_signals?.trend_durability);
+
+              // 차원별 평가 (표준 + 기타)
               if (c.canonicalDims?.length) {
+                pushSection(`차원별 평가 (${c.primaryCategory || '카테고리'} 표준)`);
                 for (const dim of c.canonicalDims) {
-                  push(`[차원] ${dim}`, (it) => {
-                    const scored = ((it.review_analysis?.category_dimensions_scored || []) as any[])
-                      .find((s) => matchDimension(s.dimension, dim));
-                    if (!scored) return '';
-                    const note = (scored.note || '').toString().replace(/\n/g, ' ').slice(0, 200);
-                    return `${scored.score ?? '-'}/10${note ? ` · ${note}` : ''}`;
+                  push(dim, (_it, i) => {
+                    const d = c.itemDimMap[i]?.[dim];
+                    if (!d) return '';
+                    const score = d.score ?? '-';
+                    const note = (d.note || '').toString().replace(/\n/g, ' ').slice(0, 300);
+                    return `${score}/10${note ? ` · ${note}` : ''}`;
                   });
                 }
               }
-              // 장단점·리뷰 인사이트 주요 요약
-              push('요약 (긍정)', (it) => (it.review_analysis?.pros || []).join(' · '));
-              push('요약 (부정)', (it) => (it.review_analysis?.cons || []).join(' · '));
-              push('핵심 키워드', (it) => (it.review_analysis?.top_keywords || []).join(', '));
-              // 수기 비교 항목
-              for (const cr of customRows) {
-                push(`[수기] ${cr.label}`, (it) => cr.values[it.id] || '');
+              if (c.extraDims?.length) {
+                pushSection('기타 차원');
+                for (const dim of c.extraDims) {
+                  push(dim, (_it, i) => {
+                    const d = c.itemDimMap[i]?.[dim];
+                    if (!d) return '';
+                    const score = d.score ?? '-';
+                    const note = (d.note || '').toString().replace(/\n/g, ' ').slice(0, 300);
+                    return `${score}/10${note ? ` · ${note}` : ''}`;
+                  });
+                }
               }
+
+              // 장단점 (Top 3)
+              pushSection('장단점 (Top 3)');
+              push('장점', (it) => (it.review_analysis?.pros_ranked || []).slice(0, 3).map((x: any) => x.point).filter(Boolean));
+              push('단점', (it) => (it.review_analysis?.cons_ranked || []).slice(0, 3).map((x: any) => `${x.point}${x.severity ? ` [${x.severity}]` : ''}`).filter(Boolean));
+              push('해결 가능 포인트', (it) => (it.review_analysis?.solvable_pain_points || []).slice(0, 3).map((x: any) => x.issue).filter(Boolean));
+
+              // 물리 스펙
+              pushSection('물리 스펙');
+              push('무게', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['무게']));
+              push('용량', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['용량']));
+              push('크기', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['크기']));
+              push('재질', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['재질']));
+              push('색상', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['색상']));
+              push('원산지', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['원산지']));
+              push('방수', (it) => findSpec(it.detail_analysis?.specs, SPEC_ALIASES['방수']));
+
+              // 카테고리별 핵심 스펙 (물리 스펙 외)
+              const shownInPhysical = new Set(['무게', '용량', '크기', '재질', '색상', '원산지', '방수']);
+              const remainingKeys = (c.allSpecKeys || []).filter((k: string) => !shownInPhysical.has(k));
+              if (remainingKeys.length > 0) {
+                pushSection('카테고리별 핵심 스펙');
+                for (const key of remainingKeys) {
+                  push(key, (it) => getSpecValue(it, key));
+                }
+              }
+
+              // 수기 비교 항목
+              if (customRows.length > 0) {
+                pushSection('수기 비교 항목');
+                for (const cr of customRows) {
+                  push(cr.label || '(제목 없음)', (it) => cr.values[it.id] || '');
+                }
+              }
+
               const ws = XLSX.utils.aoa_to_sheet(rows);
-              // 첫 열 넓이
-              ws['!cols'] = [{ wch: 22 }, ...items.map(() => ({ wch: 36 }))];
+              ws['!cols'] = [{ wch: 24 }, ...items.map(() => ({ wch: 42 }))];
               const wb = XLSX.utils.book_new();
               XLSX.utils.book_append_sheet(wb, ws, '상품 비교');
               XLSX.writeFile(wb, `상품비교_${new Date().toISOString().slice(0, 10)}.xlsx`);
             }}
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-green-600 bg-white text-green-700 hover:bg-green-50"
-            title="현재 비교 표 전체를 xlsx 로 다운로드"
+            title="비교 표 모든 섹션을 xlsx 로 다운로드"
           >
             <Download className="w-3.5 h-3.5" /> xlsx 다운로드
           </button>
