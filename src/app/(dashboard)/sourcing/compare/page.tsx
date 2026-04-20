@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ExternalLink, Trophy, Minus, Plus, Save, FolderOpen, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trophy, Minus, Plus, Save, FolderOpen, Trash2, X, Download } from 'lucide-react';
 import { getCategoryDimensions, matchDimension } from '@/lib/sourcing-dimensions';
 
 interface CustomRow {
@@ -460,6 +460,69 @@ export default function ComparePage() {
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-blue-500 bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60"
           >
             <Save className="w-3.5 h-3.5" /> {currentSnapshotId ? '업데이트 저장' : '스냅샷 저장'}
+          </button>
+          <button
+            onClick={async () => {
+              const XLSX = await import('xlsx');
+              const headers = ['항목', ...items.map((it: any) => it.product_info?.title || '(제목 없음)')];
+              const rows: (string | number)[][] = [headers];
+              const push = (label: string, getter: (it: any, idx: number) => unknown) => {
+                rows.push([label, ...items.map((it: any, idx: number) => {
+                  const v = getter(it, idx);
+                  if (v == null || v === '') return '';
+                  if (typeof v === 'object') {
+                    try { return JSON.stringify(v); } catch { return ''; }
+                  }
+                  return v as string | number;
+                })]);
+              };
+              push('URL', (it) => it.url);
+              push('플랫폼', (it) => it.platform);
+              push('상품ID', (it) => it.product_id);
+              push('카테고리', (it) => it.detail_analysis?.category);
+              push('최종가', (it) => it.product_info?.finalPrice || it.product_info?.price);
+              push('정가', (it) => it.product_info?.originalPrice);
+              push('총 리뷰 수', (it) => it.review_stats?.total);
+              push('공식 리뷰 수', (it) => it.review_stats?.officialReviewCount);
+              push('평균 평점', (it) => it.review_stats?.avgRating);
+              push('공식 평점', (it) => it.review_stats?.officialAvgRating);
+              push('중립 점수', (it) => it.review_analysis?.neutral_score);
+              push('총 문의 수', (it) => it.inquiries_count);
+              // 사이즈/무게/용량 등 물리 속성
+              push('크기(WxHxD)', (it) => it.detail_analysis?.size || it.detail_analysis?.dimensions);
+              push('무게', (it) => it.detail_analysis?.weight);
+              push('용량', (it) => it.detail_analysis?.capacity);
+              // 차원별 평가 점수
+              if (c.canonicalDims?.length) {
+                for (const dim of c.canonicalDims) {
+                  push(`[차원] ${dim}`, (it) => {
+                    const scored = ((it.review_analysis?.category_dimensions_scored || []) as any[])
+                      .find((s) => matchDimension(s.dimension, dim));
+                    if (!scored) return '';
+                    const note = (scored.note || '').toString().replace(/\n/g, ' ').slice(0, 200);
+                    return `${scored.score ?? '-'}/10${note ? ` · ${note}` : ''}`;
+                  });
+                }
+              }
+              // 장단점·리뷰 인사이트 주요 요약
+              push('요약 (긍정)', (it) => (it.review_analysis?.pros || []).join(' · '));
+              push('요약 (부정)', (it) => (it.review_analysis?.cons || []).join(' · '));
+              push('핵심 키워드', (it) => (it.review_analysis?.top_keywords || []).join(', '));
+              // 수기 비교 항목
+              for (const cr of customRows) {
+                push(`[수기] ${cr.label}`, (it) => cr.values[it.id] || '');
+              }
+              const ws = XLSX.utils.aoa_to_sheet(rows);
+              // 첫 열 넓이
+              ws['!cols'] = [{ wch: 22 }, ...items.map(() => ({ wch: 36 }))];
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, '상품 비교');
+              XLSX.writeFile(wb, `상품비교_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-green-600 bg-white text-green-700 hover:bg-green-50"
+            title="현재 비교 표 전체를 xlsx 로 다운로드"
+          >
+            <Download className="w-3.5 h-3.5" /> xlsx 다운로드
           </button>
         </div>
       </div>
