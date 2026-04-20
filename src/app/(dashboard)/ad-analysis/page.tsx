@@ -205,7 +205,7 @@ const DEFAULT_METRICS: MetricKey[] = ['cost', 'revenue14d', 'roas14d'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const pct = (n: number) => (n * 100).toFixed(1) + '%';
+const pct = (n: number) => (n * 100).toFixed(2) + '%';
 // 원 기호 없는 금액 포맷
 const fmtW = (n: number) => Math.round(n).toLocaleString('ko-KR');
 
