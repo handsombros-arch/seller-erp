@@ -2055,13 +2055,13 @@ export default function AdAnalysisPage() {
                   </select>
                 </div>
               </div>
-              {/* 지표 기반 트렌드 차트 */}
+              {/* 지표 기반 트렌드 차트 — 선택된 키워드 있으면 그 키워드의 일자별로 필터 */}
               {(() => {
                 const metricInfo: Record<typeof pivotMetric, { label: string; type: 'bar' | 'line'; unit: 'won' | 'cnt' | 'pct'; color: string }> = {
                   cost: { label: '광고비', type: 'bar', unit: 'won', color: '#F43F5E' },
                   revenue14d: { label: '매출(14d)', type: 'bar', unit: 'won', color: '#3182F6' },
                   impressions: { label: '노출', type: 'bar', unit: 'cnt', color: '#8B5CF6' },
-                  clicks: { label: '클릭', type: 'bar', unit: 'cnt', color: '#06B6D4' },
+                  clicks: { label: '클릭(유입)', type: 'bar', unit: 'cnt', color: '#06B6D4' },
                   orders14d: { label: '주문(14d)', type: 'bar', unit: 'cnt', color: '#10B981' },
                   ctr: { label: 'CTR', type: 'line', unit: 'pct', color: '#EAB308' },
                   cvr: { label: 'CVR', type: 'line', unit: 'pct', color: '#F59E0B' },
@@ -2071,7 +2071,25 @@ export default function AdAnalysisPage() {
                   clickKeywordCount: { label: '유입 키워드수', type: 'bar', unit: 'cnt', color: '#10B981' },
                 };
                 const info = metricInfo[pivotMetric];
-                const enhancedData = chartData.map((d: any) => ({
+
+                // 키워드 선택 중이면 그 키워드의 일자별(버킷별) 집계만 사용
+                const baseData: any[] = expandedKw
+                  ? (() => {
+                      const m = new Map<string, any>();
+                      for (const kd of (dateFiltered.keywordDaily ?? [])) {
+                        if (kd.keyword !== expandedKw) continue;
+                        const k = bucketKey(kd.date, gran);
+                        if (!m.has(k)) m.set(k, { date: k, label: bucketLabel(k, gran), impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, keywordCount: 1, clickKeywordCount: 0 });
+                        const b = m.get(k)!;
+                        b.impressions += kd.impressions; b.clicks += kd.clicks; b.cost += kd.cost;
+                        b.orders14d += kd.orders14d; b.revenue14d += kd.revenue14d;
+                        if (kd.clicks > 0) b.clickKeywordCount = 1;
+                      }
+                      return [...m.values()].sort((a, b) => a.date.localeCompare(b.date));
+                    })()
+                  : chartData;
+
+                const enhancedData = baseData.map((d: any) => ({
                   ...d,
                   ctr: d.impressions > 0 ? d.clicks / d.impressions : 0,
                   cvr: d.clicks > 0 ? d.orders14d / d.clicks : 0,
@@ -2090,8 +2108,22 @@ export default function AdAnalysisPage() {
                 };
                 return (
                   <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-[13px] font-bold text-[#191F28]">기간별 {info.label} 추이</h3>
+                    <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[13px] font-bold text-[#191F28]">
+                          기간별 {info.label} 추이
+                        </h3>
+                        {expandedKw && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] bg-[#EBF1FE] text-[#3182F6] px-2 py-0.5 rounded-full font-medium">
+                            <Search className="h-3 w-3" />
+                            {expandedKw}
+                            <button onClick={() => setExpandedKw(null)} className="ml-0.5 hover:bg-white/50 rounded-full w-4 h-4 flex items-center justify-center" title="선택 해제">
+                              ×
+                            </button>
+                          </span>
+                        )}
+                        {!expandedKw && <span className="text-[11px] text-[#8B95A1]">· 키워드 클릭 시 해당 키워드 기준 차트로 전환</span>}
+                      </div>
                       <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
                         {([
                           { key: 'daily' as Granularity, label: '일' },
