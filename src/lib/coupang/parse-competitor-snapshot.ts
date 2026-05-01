@@ -2,6 +2,7 @@
 // 사용자가 페이지에서 텍스트를 통째로 복사해 붙여넣은 입력을 그대로 받는다.
 
 export type ParsedKeyword = {
+  rank: number;
   keyword: string;
   contributing_count: number | null;
   search_volume: number | null;
@@ -34,7 +35,18 @@ export type ParsedProduct = {
   keywords: ParsedKeyword[];
 };
 
+export type ParsedCategoryHeader = {
+  category_name: string;          // "여성백팩"
+  category_path: string[];        // ["패션의류잡화","여성패션","여성잡화","가방","여성백팩"]
+  total_impression: number | null;
+  top100_impression: number | null;
+  top100_search_pct: number | null;
+  top100_ad_pct: number | null;
+  total_click: number | null;
+};
+
 export type ParseResult = {
+  category: ParsedCategoryHeader | null;
   products: ParsedProduct[];
   warnings: string[];
 };
@@ -159,6 +171,88 @@ function exact(label: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Category header parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 카테고리 헤더 라인 패턴:
+//   "여성백팩" 카테고리 결과
+//   패션의류잡화
+//   여성패션
+//   ...
+//   여성백팩
+//   impression
+//   1733.99만
+//   검색어 노출
+//   6.11%             ← 변화율(부호 없음, 무시)
+//   415.26만          ← top100_impression
+//   Top 100에 대한
+//   검색어 노출
+//   Search
+//   63.07%
+//   Ad
+//   36.92%
+//   click
+//   118.42만
+//   클릭
+//   10.18%            ← 변화율(부호 없음, 무시)
+function parseCategoryHeaderFromLines(lines: string[]): ParsedCategoryHeader | null {
+  const titleIdx = lines.findIndex((l) => /^["“'].+["”']\s*카테고리\s*결과/.test(l));
+  if (titleIdx < 0) return null;
+  const titleMatch = lines[titleIdx].match(/^["“'](.+?)["”']\s*카테고리\s*결과/);
+  if (!titleMatch) return null;
+  const categoryName = titleMatch[1];
+
+  // 'impression' 마커 (없으면 헤더 미완)
+  const impressionIdx = lines.findIndex((l, i) => i > titleIdx && l === 'impression');
+  if (impressionIdx < 0) return null;
+
+  // 브레드크럼: titleIdx+1 ~ impressionIdx-1
+  const path = lines.slice(titleIdx + 1, impressionIdx).filter((l) => l.length > 0);
+
+  // 총 검색어 노출: impression 라벨 다음 줄
+  const totalImpression = parseKoreanNumber(lines[impressionIdx + 1]);
+
+  // top100 노출: 'Top 100에 대한' 마커의 직전 라인
+  const top100MarkerIdx = lines.findIndex(
+    (l, i) => i > impressionIdx && /^Top\s*100에\s*대한/.test(l),
+  );
+  const top100Impression =
+    top100MarkerIdx > 0 ? parseKoreanNumber(lines[top100MarkerIdx - 1]) : null;
+
+  // Search / Ad 비율
+  const searchIdx = lines.findIndex((l, i) => i > impressionIdx && l === 'Search');
+  const adIdx = lines.findIndex((l, i) => i > impressionIdx && l === 'Ad');
+  const top100SearchPct =
+    searchIdx >= 0 && searchIdx + 1 < lines.length ? parsePercent(lines[searchIdx + 1]) : null;
+  const top100AdPct =
+    adIdx >= 0 && adIdx + 1 < lines.length ? parsePercent(lines[adIdx + 1]) : null;
+
+  // 클릭: 'click' 라벨 다음 줄
+  const clickIdx = lines.findIndex((l, i) => i > impressionIdx && l === 'click');
+  const totalClick =
+    clickIdx >= 0 && clickIdx + 1 < lines.length ? parseKoreanNumber(lines[clickIdx + 1]) : null;
+
+  return {
+    category_name: categoryName,
+    category_path: path,
+    total_impression: totalImpression,
+    top100_impression: top100Impression,
+    top100_search_pct: top100SearchPct,
+    top100_ad_pct: top100AdPct,
+    total_click: totalClick,
+  };
+}
+
+export function parseCategoryHeader(rawText: string): ParsedCategoryHeader | null {
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  return parseCategoryHeaderFromLines(lines);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -170,9 +264,15 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
+  const category = parseCategoryHeaderFromLines(lines);
+
   const anchors = findAnchors(lines);
   if (anchors.length === 0) {
-    return { products: [], warnings: ['텍스트에서 상품/키워드 마커를 찾지 못했습니다.'] };
+    return {
+      category,
+      products: [],
+      warnings: ['텍스트에서 상품/키워드 마커를 찾지 못했습니다.'],
+    };
   }
 
   const products: ParsedProduct[] = [];
@@ -280,6 +380,7 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
         : { min: null, max: null };
 
       currentProduct.keywords.push({
+        rank: currentProduct.keywords.length + 1,
         keyword: keywordName,
         contributing_count: contributingCount,
         search_volume: searchVolume,
@@ -295,5 +396,5 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
     }
   }
 
-  return { products, warnings };
+  return { category, products, warnings };
 }

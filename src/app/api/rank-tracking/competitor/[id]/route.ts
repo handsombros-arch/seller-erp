@@ -32,7 +32,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     const { data: keywords } = await admin
       .from('competitor_snapshot_keywords')
       .select('*')
-      .in('product_id', productIds);
+      .in('product_id', productIds)
+      .order('rank', { ascending: true, nullsFirst: false });
     for (const k of keywords || []) {
       (keywordsByProduct[k.product_id] ??= []).push(k);
     }

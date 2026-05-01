@@ -14,9 +14,6 @@ function TabNav() {
       <Link href="/rank-tracking/keywords" className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900">
         키워드 Top N 스냅샷
       </Link>
-      <Link href="/rank-tracking/competitor" className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900">
-        경쟁상품 스냅샷
-      </Link>
     </div>
   );
 }

@@ -11,7 +11,7 @@ export async function GET() {
   const admin = await createAdminClient();
   const { data: snapshots, error } = await admin
     .from('competitor_snapshots')
-    .select('id, captured_at, my_product_name, my_product_id, memo, created_at')
+    .select('id, captured_at, my_product_name, my_product_id, memo, created_at, category_name, category_path, total_impression, top100_impression, top100_search_pct, top100_ad_pct, total_click')
     .eq('user_id', user.id)
     .order('captured_at', { ascending: false })
     .limit(200);
@@ -93,6 +93,13 @@ export async function POST(request: NextRequest) {
       my_product_id: myProductId,
       memo,
       raw_text: rawText,
+      category_name: parsed.category?.category_name ?? null,
+      category_path: parsed.category?.category_path ?? null,
+      total_impression: parsed.category?.total_impression ?? null,
+      top100_impression: parsed.category?.top100_impression ?? null,
+      top100_search_pct: parsed.category?.top100_search_pct ?? null,
+      top100_ad_pct: parsed.category?.top100_ad_pct ?? null,
+      total_click: parsed.category?.total_click ?? null,
     })
     .select()
     .single();
@@ -140,6 +147,7 @@ export async function POST(request: NextRequest) {
     if (!pid) return [];
     return p.keywords.map((k) => ({
       product_id: pid,
+      rank: k.rank,
       keyword: k.keyword,
       contributing_count: k.contributing_count,
       search_volume: k.search_volume,

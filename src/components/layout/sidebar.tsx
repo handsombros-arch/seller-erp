@@ -21,6 +21,7 @@ import {
   Moon,
   Search,
   TrendingUp,
+  BarChart3,
 } from 'lucide-react';
 
 const navItems = [
@@ -35,6 +36,7 @@ const navItems = [
   { title: '가격 분석',   href: '/price-tool',    icon: Tag,             exact: false, section: 'sales' },
   { title: '소싱 분석',   href: '/sourcing',      icon: Search,          exact: false, section: 'sales' },
   { title: '순위 추적',   href: '/rank-tracking', icon: TrendingUp,      exact: false, section: 'sales' },
+  { title: '데이터 분석', href: '/data-analysis', icon: BarChart3,       exact: false, section: 'sales' },
   { title: '정산',        href: '/settlement',    icon: Calculator,      exact: false, section: 'etc' },
   { title: '설정',        href: '/settings',      icon: Settings,        exact: false, section: 'etc' },
 ];
