@@ -4,8 +4,68 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronRight, Download, Loader2, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download, Loader2, Save, Trash2 } from 'lucide-react';
 import { parseCompetitorSnapshot } from '@/lib/coupang/parse-competitor-snapshot';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Sorting helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+type SortDir = 'asc' | 'desc';
+type SortState<K extends string> = { key: K; dir: SortDir } | null;
+
+// null/undefined는 항상 끝으로
+function cmp(a: unknown, b: unknown, dir: SortDir): number {
+  const aNull = a == null;
+  const bNull = b == null;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  let res = 0;
+  if (typeof a === 'number' && typeof b === 'number') res = a - b;
+  else res = String(a).localeCompare(String(b), 'ko');
+  return dir === 'asc' ? res : -res;
+}
+
+function nextSort<K extends string>(prev: SortState<K>, key: K): SortState<K> {
+  if (!prev || prev.key !== key) return { key, dir: 'asc' };
+  if (prev.dir === 'asc') return { key, dir: 'desc' };
+  return null; // 다시 클릭 시 정렬 해제 → 원래 순서
+}
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir | null }) {
+  if (!active) return <ArrowUpDown className="w-3 h-3 inline ml-1 text-gray-300" />;
+  return dir === 'asc' ? (
+    <ArrowUp className="w-3 h-3 inline ml-1 text-blue-600" />
+  ) : (
+    <ArrowDown className="w-3 h-3 inline ml-1 text-blue-600" />
+  );
+}
+
+function SortableTh<K extends string>({
+  sortKey,
+  sort,
+  onSort,
+  children,
+  className,
+}: {
+  sortKey: K;
+  sort: SortState<K>;
+  onSort: (k: K) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      className={`cursor-pointer select-none hover:text-gray-900 ${className || ''}`}
+    >
+      {children}
+      <SortIcon active={active} dir={active ? sort!.dir : null} />
+    </th>
+  );
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -97,6 +157,79 @@ function top100Share(top: number | null, total: number | null): number | null {
   return (top / total) * 100;
 }
 
+type CategoryColKey =
+  | 'category_name'
+  | 'captured_at'
+  | 'total_impression'
+  | 'total_click'
+  | 'ctr'
+  | 'top100_impression'
+  | 'top100_share'
+  | 'top100_search_pct'
+  | 'top100_ad_pct';
+
+function getCategoryValue(s: SnapshotMeta, key: CategoryColKey): unknown {
+  switch (key) {
+    case 'category_name': return s.category_name;
+    case 'captured_at': return s.captured_at;
+    case 'total_impression': return s.total_impression;
+    case 'total_click': return s.total_click;
+    case 'ctr': return ctr(s.total_click, s.total_impression);
+    case 'top100_impression': return s.top100_impression;
+    case 'top100_share': return top100Share(s.top100_impression, s.total_impression);
+    case 'top100_search_pct': return s.top100_search_pct;
+    case 'top100_ad_pct': return s.top100_ad_pct;
+  }
+}
+
+type ProductColKey =
+  | 'rank'
+  | 'name'
+  | 'exposure'
+  | 'clicks'
+  | 'ctr'
+  | 'winner_price'
+  | 'review_score'
+  | 'review_count'
+  | 'keywords_count';
+
+function getProductValue(p: ProductDetail, key: ProductColKey): unknown {
+  switch (key) {
+    case 'rank': return p.rank;
+    case 'name': return p.name;
+    case 'exposure': return p.exposure;
+    case 'clicks': return p.clicks;
+    case 'ctr': return p.ctr;
+    case 'winner_price': return p.winner_price;
+    case 'review_score': return p.review_score;
+    case 'review_count': return p.review_count;
+    case 'keywords_count': return p.keywords.length;
+  }
+}
+
+type KeywordColKey =
+  | 'rank'
+  | 'keyword'
+  | 'search_volume'
+  | 'exposure'
+  | 'clicks'
+  | 'ctr'
+  | 'avg_price'
+  | 'contributing_count';
+
+function getKeywordValue(k: KeywordDetail, key: KeywordColKey): unknown {
+  switch (key) {
+    case 'rank': return k.rank;
+    case 'keyword': return k.keyword;
+    case 'search_volume': return k.search_volume;
+    case 'exposure': return k.exposure;
+    case 'clicks': return k.clicks;
+    case 'ctr': return ctr(k.clicks, k.exposure);
+    case 'avg_price': return k.avg_price;
+    case 'contributing_count': return k.contributing_count;
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Page
 // ────────────────────────────────────────────────────────────────────────────
@@ -120,6 +253,9 @@ export default function DataAnalysisPage() {
 
   // 비교용 선택
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // 카테고리 표 정렬
+  const [catSort, setCatSort] = useState<SortState<CategoryColKey>>(null);
 
   const preview = useMemo(() => {
     if (!rawText.trim()) return null;
@@ -185,6 +321,27 @@ export default function DataAnalysisPage() {
     });
   };
 
+  const handleWinnerPriceChange = useCallback(
+    async (snapId: string, productId: string, next: number | null) => {
+      const r = await fetch(`/api/rank-tracking/competitor/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winner_price: next }),
+      });
+      if (!r.ok) return;
+      // 캐시 갱신
+      setProductsBySnap((prev) => {
+        const list = prev[snapId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [snapId]: list.map((p) => (p.id === productId ? { ...p, winner_price: next } : p)),
+        };
+      });
+    },
+    [],
+  );
+
   const handleToggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelected((prev) => {
@@ -247,10 +404,16 @@ export default function DataAnalysisPage() {
     window.location.href = `/api/rank-tracking/competitor/compare/csv?ids=${ids}`;
   };
 
-  const withCategory = useMemo(
+  const withCategoryRaw = useMemo(
     () => snapshots.filter((s) => s.category_name),
     [snapshots],
   );
+  const withCategory = useMemo(() => {
+    if (!catSort) return withCategoryRaw;
+    const k = catSort.key;
+    const d = catSort.dir;
+    return [...withCategoryRaw].sort((a, b) => cmp(getCategoryValue(a, k), getCategoryValue(b, k), d));
+  }, [withCategoryRaw, catSort]);
   const withoutCategory = useMemo(
     () => snapshots.filter((s) => !s.category_name),
     [snapshots],
@@ -378,15 +541,15 @@ export default function DataAnalysisPage() {
                 <tr>
                   <th className="p-2 w-8"></th>
                   <th className="p-2 w-8"></th>
-                  <th className="p-2 text-left">카테고리</th>
-                  <th className="p-2 text-left">캡처일</th>
-                  <th className="p-2 text-right">전체 노출</th>
-                  <th className="p-2 text-right">전체 클릭</th>
-                  <th className="p-2 text-right">전체 CTR</th>
-                  <th className="p-2 text-right">Top100 노출</th>
-                  <th className="p-2 text-right">Top100 점유율</th>
-                  <th className="p-2 text-right">Search</th>
-                  <th className="p-2 text-right">Ad</th>
+                  <SortableTh sortKey="category_name" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-left">카테고리</SortableTh>
+                  <SortableTh sortKey="captured_at" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-left">캡처일</SortableTh>
+                  <SortableTh sortKey="total_impression" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 노출</SortableTh>
+                  <SortableTh sortKey="total_click" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 클릭</SortableTh>
+                  <SortableTh sortKey="ctr" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 CTR</SortableTh>
+                  <SortableTh sortKey="top100_impression" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 노출</SortableTh>
+                  <SortableTh sortKey="top100_share" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 점유율</SortableTh>
+                  <SortableTh sortKey="top100_search_pct" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Search</SortableTh>
+                  <SortableTh sortKey="top100_ad_pct" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Ad</SortableTh>
                   <th className="p-2 text-right">상품/키워드</th>
                   <th className="p-2 text-left">메모</th>
                   <th className="p-2 w-10"></th>
@@ -452,6 +615,9 @@ export default function DataAnalysisPage() {
                                   products={products}
                                   openProductIds={openProductIds}
                                   onToggleProduct={handleToggleProduct}
+                                  onWinnerPriceChange={(pid, v) =>
+                                    handleWinnerPriceChange(s.id, pid, v)
+                                  }
                                 />
                               )}
                             </div>
@@ -506,61 +672,118 @@ function ProductsTable({
   products,
   openProductIds,
   onToggleProduct,
+  onWinnerPriceChange,
 }: {
   products: ProductDetail[];
   openProductIds: Set<string>;
   onToggleProduct: (id: string) => void;
+  onWinnerPriceChange: (productId: string, value: number | null) => void;
 }) {
+  const [sort, setSort] = useState<SortState<ProductColKey>>(null);
+  const sorted = useMemo(() => {
+    if (!sort) return products;
+    const k = sort.key;
+    const d = sort.dir;
+    return [...products].sort((a, b) => cmp(getProductValue(a, k), getProductValue(b, k), d));
+  }, [products, sort]);
+
   if (products.length === 0) {
     return <div className="text-sm text-gray-500">상품이 없습니다.</div>;
   }
+  const onSort = (k: ProductColKey) => setSort((p) => nextSort(p, k));
   return (
     <div className="overflow-x-auto bg-white border rounded">
       <table className="w-full text-xs">
         <thead className="bg-gray-100 text-gray-600">
           <tr>
             <th className="p-2 w-8"></th>
-            <th className="p-2 w-12 text-left">순위</th>
-            <th className="p-2 text-left">상품명</th>
-            <th className="p-2 text-right">검색어 노출</th>
-            <th className="p-2 text-right">클릭</th>
-            <th className="p-2 text-right">CTR</th>
-            <th className="p-2 text-right">위너가</th>
-            <th className="p-2 text-right">리뷰</th>
-            <th className="p-2 text-right">키워드</th>
+            <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
+            <SortableTh sortKey="name" sort={sort} onSort={onSort} className="p-2 text-left">상품명</SortableTh>
+            <SortableTh sortKey="exposure" sort={sort} onSort={onSort} className="p-2 text-right">검색어 노출</SortableTh>
+            <SortableTh sortKey="clicks" sort={sort} onSort={onSort} className="p-2 text-right">클릭</SortableTh>
+            <SortableTh sortKey="ctr" sort={sort} onSort={onSort} className="p-2 text-right">CTR</SortableTh>
+            <SortableTh sortKey="winner_price" sort={sort} onSort={onSort} className="p-2 text-right">위너가</SortableTh>
+            <SortableTh sortKey="review_score" sort={sort} onSort={onSort} className="p-2 text-right">평점</SortableTh>
+            <SortableTh sortKey="review_count" sort={sort} onSort={onSort} className="p-2 text-right">리뷰 수</SortableTh>
+            <SortableTh sortKey="keywords_count" sort={sort} onSort={onSort} className="p-2 text-right">키워드</SortableTh>
           </tr>
         </thead>
         <tbody>
-          {products.map((p) => {
+          {sorted.map((p) => {
             const isOpen = openProductIds.has(p.id);
             return (
               <Fragment key={p.id}>
                 <tr
-                  className={`border-t cursor-pointer hover:bg-gray-50 ${p.is_my_product ? 'bg-blue-50' : ''}`}
-                  onClick={() => onToggleProduct(p.id)}
+                  className={`border-t hover:bg-gray-50 ${p.is_my_product ? 'bg-blue-50' : ''}`}
                 >
-                  <td className="p-2 text-center">
+                  <td
+                    className="p-2 text-center cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
                     {p.keywords.length > 0 ? (
                       isOpen ? <ChevronDown className="w-3 h-3 inline" /> : <ChevronRight className="w-3 h-3 inline" />
                     ) : null}
                   </td>
-                  <td className="p-2 font-medium">
+                  <td
+                    className="p-2 font-medium cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
                     {p.rank}
                     {p.is_my_product && <span className="ml-1 text-blue-600 font-semibold">내</span>}
                   </td>
-                  <td className="p-2 max-w-[400px] truncate" title={p.name}>{p.name}</td>
-                  <td className="p-2 text-right">{fmt(p.exposure)}</td>
-                  <td className="p-2 text-right">{fmt(p.clicks)}</td>
-                  <td className="p-2 text-right">{fmtPct(p.ctr)}</td>
-                  <td className="p-2 text-right">{fmtWon(p.winner_price)}</td>
-                  <td className="p-2 text-right">
-                    {p.review_score ?? '-'} ({fmt(p.review_count)})
+                  <td
+                    className="p-2 max-w-[400px] truncate cursor-pointer"
+                    title={p.name}
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {p.name}
                   </td>
-                  <td className="p-2 text-right">{p.keywords.length}</td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {fmt(p.exposure)}
+                  </td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {fmt(p.clicks)}
+                  </td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {fmtPct(p.ctr)}
+                  </td>
+                  <td className="p-2 text-right">
+                    <WinnerPriceCell
+                      value={p.winner_price}
+                      onSave={(v) => onWinnerPriceChange(p.id, v)}
+                    />
+                  </td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {p.review_score ?? '-'}
+                  </td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {fmt(p.review_count)}
+                  </td>
+                  <td
+                    className="p-2 text-right cursor-pointer"
+                    onClick={() => onToggleProduct(p.id)}
+                  >
+                    {p.keywords.length}
+                  </td>
                 </tr>
                 {isOpen && p.keywords.length > 0 && (
                   <tr>
-                    <td colSpan={9} className="p-0">
+                    <td colSpan={10} className="p-0">
                       <div className="bg-blue-50/40 px-4 py-2 border-l-4 border-blue-300">
                         <KeywordsTable keywords={p.keywords} />
                       </div>
@@ -576,28 +799,110 @@ function ProductsTable({
   );
 }
 
+// 위너가 셀 — 클릭하면 input으로 전환, blur/Enter 시 저장
+function WinnerPriceCell({
+  value,
+  onSave,
+}: {
+  value: number | null;
+  onSave: (next: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(value == null ? '' : String(value));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(value == null ? '' : String(value));
+  }, [value]);
+
+  const commit = async () => {
+    const trimmed = draft.trim();
+    const next = trimmed === '' ? null : Number(trimmed.replace(/[,\s₩]/g, ''));
+    if (next !== null && !Number.isFinite(next)) {
+      setDraft(value == null ? '' : String(value));
+      setEditing(false);
+      return;
+    }
+    if (next === value) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') {
+            setDraft(value == null ? '' : String(value));
+            setEditing(false);
+          }
+        }}
+        disabled={saving}
+        className="w-24 px-1 py-0.5 text-xs text-right border border-blue-400 rounded outline-none"
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="hover:bg-yellow-50 hover:underline px-1 rounded"
+      title="클릭하여 수정"
+    >
+      {fmtWon(value)}
+    </button>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // 키워드 표
 // ────────────────────────────────────────────────────────────────────────────
 
 function KeywordsTable({ keywords }: { keywords: KeywordDetail[] }) {
+  const [sort, setSort] = useState<SortState<KeywordColKey>>(null);
+  const sorted = useMemo(() => {
+    if (!sort) return keywords;
+    const k = sort.key;
+    const d = sort.dir;
+    return [...keywords].sort((a, b) => cmp(getKeywordValue(a, k), getKeywordValue(b, k), d));
+  }, [keywords, sort]);
+  const onSort = (k: KeywordColKey) => setSort((p) => nextSort(p, k));
+
   return (
     <div className="overflow-x-auto bg-white border rounded">
       <table className="w-full text-xs">
         <thead className="bg-gray-100 text-gray-600">
           <tr>
-            <th className="p-2 w-12 text-left">순위</th>
-            <th className="p-2 text-left">키워드</th>
-            <th className="p-2 text-right">검색량</th>
-            <th className="p-2 text-right">노출</th>
-            <th className="p-2 text-right">클릭</th>
-            <th className="p-2 text-right">CTR</th>
-            <th className="p-2 text-right">평균가</th>
-            <th className="p-2 text-right">기여 #</th>
+            <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
+            <SortableTh sortKey="keyword" sort={sort} onSort={onSort} className="p-2 text-left">키워드</SortableTh>
+            <SortableTh sortKey="search_volume" sort={sort} onSort={onSort} className="p-2 text-right">검색량</SortableTh>
+            <SortableTh sortKey="exposure" sort={sort} onSort={onSort} className="p-2 text-right">노출</SortableTh>
+            <SortableTh sortKey="clicks" sort={sort} onSort={onSort} className="p-2 text-right">클릭</SortableTh>
+            <SortableTh sortKey="ctr" sort={sort} onSort={onSort} className="p-2 text-right">CTR</SortableTh>
+            <SortableTh sortKey="avg_price" sort={sort} onSort={onSort} className="p-2 text-right">평균가</SortableTh>
+            <SortableTh sortKey="contributing_count" sort={sort} onSort={onSort} className="p-2 text-right">기여 #</SortableTh>
           </tr>
         </thead>
         <tbody>
-          {keywords.map((k, idx) => (
+          {sorted.map((k, idx) => (
             <tr key={k.id} className="border-t">
               <td className="p-2 font-medium">{k.rank ?? idx + 1}</td>
               <td className="p-2">{k.keyword}</td>
