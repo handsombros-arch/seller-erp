@@ -18,17 +18,26 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 각 스냅샷의 상품/키워드 카운트도 함께 (간단 집계)
+  // 각 스냅샷의 상품/키워드 카운트 + 평균 판매가(상품 winner_price 평균) 집계
   const ids = (snapshots || []).map((s) => s.id);
-  const countsBySnapshot: Record<string, { products: number; keywords: number }> = {};
+  const aggBySnapshot: Record<string, { products: number; keywords: number; avg_winner_price: number | null }> = {};
   if (ids.length) {
     const { data: prodRows } = await admin
       .from('competitor_snapshot_products')
-      .select('id, snapshot_id')
+      .select('id, snapshot_id, winner_price')
       .in('snapshot_id', ids);
     const prodIdsBySnap: Record<string, string[]> = {};
+    const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
     for (const row of prodRows || []) {
       (prodIdsBySnap[row.snapshot_id] ??= []).push(row.id);
+      if (row.winner_price != null) {
+        const wp = Number(row.winner_price);
+        if (Number.isFinite(wp)) {
+          (winnerSumBySnap[row.snapshot_id] ??= { sum: 0, count: 0 });
+          winnerSumBySnap[row.snapshot_id].sum += wp;
+          winnerSumBySnap[row.snapshot_id].count += 1;
+        }
+      }
     }
     const allProdIds = (prodRows || []).map((p) => p.id);
     let kwBy: Record<string, number> = {};
@@ -43,17 +52,20 @@ export async function GET() {
     }
     for (const sid of ids) {
       const pids = prodIdsBySnap[sid] || [];
-      countsBySnapshot[sid] = {
+      const w = winnerSumBySnap[sid];
+      aggBySnapshot[sid] = {
         products: pids.length,
         keywords: pids.reduce((sum, pid) => sum + (kwBy[pid] ?? 0), 0),
+        avg_winner_price: w && w.count > 0 ? Math.round(w.sum / w.count) : null,
       };
     }
   }
 
   const enriched = (snapshots || []).map((s) => ({
     ...s,
-    products_count: countsBySnapshot[s.id]?.products ?? 0,
-    keywords_count: countsBySnapshot[s.id]?.keywords ?? 0,
+    products_count: aggBySnapshot[s.id]?.products ?? 0,
+    keywords_count: aggBySnapshot[s.id]?.keywords ?? 0,
+    avg_winner_price: aggBySnapshot[s.id]?.avg_winner_price ?? null,
   }));
 
   return NextResponse.json({ snapshots: enriched });

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,6 +85,7 @@ type SnapshotMeta = {
   total_click: number | null;
   products_count: number;
   keywords_count: number;
+  avg_winner_price: number | null;
 };
 
 type ProductDetail = {
@@ -157,114 +159,122 @@ function top100Share(top: number | null, total: number | null): number | null {
   return (top / total) * 100;
 }
 
-type CategoryColKey =
-  | 'category_name'
-  | 'captured_at'
-  | 'total_impression'
-  | 'total_click'
-  | 'ctr'
-  | 'top100_impression'
-  | 'top100_share'
-  | 'top100_search_pct'
-  | 'top100_ad_pct';
-
-function getCategoryValue(s: SnapshotMeta, key: CategoryColKey): unknown {
-  switch (key) {
-    case 'category_name': return s.category_name;
-    case 'captured_at': return s.captured_at;
-    case 'total_impression': return s.total_impression;
-    case 'total_click': return s.total_click;
-    case 'ctr': return ctr(s.total_click, s.total_impression);
-    case 'top100_impression': return s.top100_impression;
-    case 'top100_share': return top100Share(s.top100_impression, s.total_impression);
-    case 'top100_search_pct': return s.top100_search_pct;
-    case 'top100_ad_pct': return s.top100_ad_pct;
-  }
-}
-
 // ────────────────────────────────────────────────────────────────────────────
-// Group rows (카테고리 path prefix N개로 묶음)
+// Tree (카테고리 path 5단계 트리)
 // ────────────────────────────────────────────────────────────────────────────
 
-type GroupRow = {
-  key: string;
-  pathPrefix: string[];
-  leafs: SnapshotMeta[];
+type TreeNode = {
+  key: string;              // path joined ('패션의류잡화|여성패션')
+  segment: string;          // 마지막 path 한 칸
+  fullPath: string[];
+  depth: number;            // 1~5
+  isLeaf: boolean;          // depth === path.length (저장된 카테고리 자체)
+  leafSnapshot: SnapshotMeta | null; // isLeaf 인 경우 그 snap
+  children: TreeNode[];
+  // 합산 (자기 노드 산하 모든 leaf snapshot 기준)
   total_impression: number;
   top100_impression: number;
   total_click: number;
-  top100_search_pct: number | null;
-  top100_ad_pct: number | null;
+  top100_search_pct: number | null; // top100_impression 가중평균
+  top100_ad_pct: number | null;     // top100_impression 가중평균
+  avg_winner_price: number | null;  // 산하 leaf의 avg_winner_price 단순평균
+  leaf_count: number;
 };
 
-function buildGroupRows(leafs: SnapshotMeta[], level: number): GroupRow[] {
-  const m = new Map<string, GroupRow>();
-  for (const s of leafs) {
-    const path = (s.category_path || []).slice(0, level);
+function buildTree(leafs: SnapshotMeta[]): TreeNode[] {
+  const all = new Map<string, TreeNode>();
+
+  // 1) 모든 노드 생성
+  for (const snap of leafs) {
+    const path = snap.category_path || [];
+    for (let i = 0; i < path.length; i++) {
+      const cur = path.slice(0, i + 1);
+      const key = cur.join('|');
+      if (!all.has(key)) {
+        all.set(key, {
+          key,
+          segment: path[i],
+          fullPath: cur,
+          depth: i + 1,
+          isLeaf: false,
+          leafSnapshot: null,
+          children: [],
+          total_impression: 0,
+          top100_impression: 0,
+          total_click: 0,
+          top100_search_pct: null,
+          top100_ad_pct: null,
+          avg_winner_price: null,
+          leaf_count: 0,
+        });
+      }
+    }
+  }
+
+  // 2) leaf 표시 + parent-child 연결
+  for (const snap of leafs) {
+    const path = snap.category_path || [];
     if (path.length === 0) continue;
-    const key = path.join('|');
-    let row = m.get(key);
-    if (!row) {
-      row = {
-        key,
-        pathPrefix: path,
-        leafs: [],
-        total_impression: 0,
-        top100_impression: 0,
-        total_click: 0,
-        top100_search_pct: null,
-        top100_ad_pct: null,
-      };
-      m.set(key, row);
+    const leafKey = path.join('|');
+    const leafNode = all.get(leafKey);
+    if (leafNode) {
+      leafNode.isLeaf = true;
+      leafNode.leafSnapshot = snap;
     }
-    row.leafs.push(s);
-    row.total_impression += s.total_impression || 0;
-    row.top100_impression += s.top100_impression || 0;
-    row.total_click += s.total_click || 0;
-  }
-  // Search/Ad 비율: top100_impression 가중평균
-  for (const row of m.values()) {
-    let sumSearch = 0;
-    let sumAd = 0;
-    let wSum = 0;
-    let hasSearch = false;
-    let hasAd = false;
-    for (const s of row.leafs) {
-      const w = s.top100_impression || 0;
-      if (w === 0) continue;
-      wSum += w;
-      if (s.top100_search_pct != null) { sumSearch += s.top100_search_pct * w; hasSearch = true; }
-      if (s.top100_ad_pct != null) { sumAd += s.top100_ad_pct * w; hasAd = true; }
+    for (let i = 1; i < path.length; i++) {
+      const parent = all.get(path.slice(0, i).join('|'));
+      const child = all.get(path.slice(0, i + 1).join('|'));
+      if (parent && child && !parent.children.includes(child)) parent.children.push(child);
     }
-    row.top100_search_pct = hasSearch && wSum > 0 ? sumSearch / wSum : null;
-    row.top100_ad_pct = hasAd && wSum > 0 ? sumAd / wSum : null;
   }
-  return Array.from(m.values());
-}
 
-type GroupColKey =
-  | 'path'
-  | 'leaf_count'
-  | 'total_impression'
-  | 'total_click'
-  | 'ctr'
-  | 'top100_impression'
-  | 'top100_share'
-  | 'top100_search_pct'
-  | 'top100_ad_pct';
-
-function getGroupValue(g: GroupRow, key: GroupColKey): unknown {
-  switch (key) {
-    case 'path': return g.pathPrefix.join(' > ');
-    case 'leaf_count': return g.leafs.length;
-    case 'total_impression': return g.total_impression;
-    case 'total_click': return g.total_click;
-    case 'ctr': return ctr(g.total_click, g.total_impression);
-    case 'top100_impression': return g.top100_impression;
-    case 'top100_share': return top100Share(g.top100_impression, g.total_impression);
-    case 'top100_search_pct': return g.top100_search_pct;
-    case 'top100_ad_pct': return g.top100_ad_pct;
+  // 3) 합산: 각 snap이 그 path의 모든 ancestor에 가산
+  for (const snap of leafs) {
+    const path = snap.category_path || [];
+    for (let i = 0; i < path.length; i++) {
+      const node = all.get(path.slice(0, i + 1).join('|'));
+      if (!node) continue;
+      node.total_impression += snap.total_impression || 0;
+      node.top100_impression += snap.top100_impression || 0;
+      node.total_click += snap.total_click || 0;
+      node.leaf_count += 1;
+    }
   }
+
+  // 4) 가중평균 (Search/Ad는 top100_imp 가중) + 평균판매가 단순평균
+  for (const node of all.values()) {
+    let sumSearchW = 0, sumAdW = 0, wSum = 0;
+    let hasSearch = false, hasAd = false;
+    let sumPrice = 0, countPrice = 0;
+    for (const snap of leafs) {
+      const sp = snap.category_path || [];
+      if (sp.length < node.depth) continue;
+      let under = true;
+      for (let i = 0; i < node.depth; i++) {
+        if (sp[i] !== node.fullPath[i]) { under = false; break; }
+      }
+      if (!under) continue;
+      const w = snap.top100_impression || 0;
+      if (w > 0) {
+        wSum += w;
+        if (snap.top100_search_pct != null) { sumSearchW += snap.top100_search_pct * w; hasSearch = true; }
+        if (snap.top100_ad_pct != null) { sumAdW += snap.top100_ad_pct * w; hasAd = true; }
+      }
+      if (snap.avg_winner_price != null) { sumPrice += snap.avg_winner_price; countPrice += 1; }
+    }
+    node.top100_search_pct = hasSearch && wSum > 0 ? sumSearchW / wSum : null;
+    node.top100_ad_pct = hasAd && wSum > 0 ? sumAdW / wSum : null;
+    node.avg_winner_price = countPrice > 0 ? Math.round(sumPrice / countPrice) : null;
+  }
+
+  // 5) children 정렬 (한글 가나다)
+  for (const node of all.values()) {
+    node.children.sort((a, b) => a.segment.localeCompare(b.segment, 'ko'));
+  }
+
+  return Array.from(all.values())
+    .filter((n) => n.depth === 1)
+    .sort((a, b) => a.segment.localeCompare(b.segment, 'ko'));
 }
 
 type ProductColKey =
@@ -339,13 +349,8 @@ export default function DataAnalysisPage() {
   // 비교용 선택
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // 카테고리 표 정렬
-  const [catSort, setCatSort] = useState<SortState<CategoryColKey>>(null);
-
-  // 그룹화 단계 (0=없음, 1~4)
-  const [groupLevel, setGroupLevel] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [openGroupKeys, setOpenGroupKeys] = useState<Set<string>>(new Set());
-  const [groupSort, setGroupSort] = useState<SortState<GroupColKey>>(null);
+  // 트리뷰 펼침 상태 (각 노드 key)
+  const [openTreeKeys, setOpenTreeKeys] = useState<Set<string>>(new Set());
 
   const preview = useMemo(() => {
     if (!rawText.trim()) return null;
@@ -498,14 +503,8 @@ export default function DataAnalysisPage() {
     () => snapshots.filter((s) => s.category_name),
     [snapshots],
   );
-  const withCategory = useMemo(() => {
-    if (!catSort) return withCategoryRaw;
-    const k = catSort.key;
-    const d = catSort.dir;
-    return [...withCategoryRaw].sort((a, b) => cmp(getCategoryValue(a, k), getCategoryValue(b, k), d));
-  }, [withCategoryRaw, catSort]);
 
-  // 그룹 모드: 카테고리당 최신 1개씩만 뽑은 leaf
+  // 트리: 카테고리당 최신 1개씩만 뽑은 leaf
   const leafSnapshots = useMemo(() => {
     const seen = new Set<string>();
     const out: SnapshotMeta[] = [];
@@ -518,19 +517,10 @@ export default function DataAnalysisPage() {
     return out;
   }, [withCategoryRaw]);
 
-  const groupRowsRaw = useMemo(
-    () => (groupLevel === 0 ? [] : buildGroupRows(leafSnapshots, groupLevel)),
-    [groupLevel, leafSnapshots],
-  );
-  const groupRows = useMemo(() => {
-    if (!groupSort) return groupRowsRaw;
-    const k = groupSort.key;
-    const d = groupSort.dir;
-    return [...groupRowsRaw].sort((a, b) => cmp(getGroupValue(a, k), getGroupValue(b, k), d));
-  }, [groupRowsRaw, groupSort]);
+  const tree = useMemo(() => buildTree(leafSnapshots), [leafSnapshots]);
 
-  const handleToggleGroup = (key: string) => {
-    setOpenGroupKeys((prev) => {
+  const handleToggleTreeNode = (key: string) => {
+    setOpenTreeKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -538,139 +528,119 @@ export default function DataAnalysisPage() {
     });
   };
 
-  // leaf 카테고리 표 (그룹 모드/비그룹 모드 양쪽에서 재사용)
-  // nested=true 면 그룹 행 펼친 안에 들어가는 형태(인덴트 표시)
-  const renderLeafTable = (rows: SnapshotMeta[], nested: boolean) => (
-    <table className="w-full text-xs">
-      <thead className="bg-gray-50 text-gray-600">
-        <tr>
-          <th className="p-2 w-8"></th>
-          <th className="p-2 w-8"></th>
-          {nested ? (
-            <th className="p-2 text-left">카테고리</th>
-          ) : (
-            <SortableTh sortKey="category_name" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-left">카테고리</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-left">캡처일</th>
-          ) : (
-            <SortableTh sortKey="captured_at" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-left">캡처일</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">전체 노출</th>
-          ) : (
-            <SortableTh sortKey="total_impression" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 노출</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">전체 클릭</th>
-          ) : (
-            <SortableTh sortKey="total_click" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 클릭</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">전체 CTR</th>
-          ) : (
-            <SortableTh sortKey="ctr" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">전체 CTR</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">Top100 노출</th>
-          ) : (
-            <SortableTh sortKey="top100_impression" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 노출</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">Top100 점유율</th>
-          ) : (
-            <SortableTh sortKey="top100_share" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 점유율</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">Search</th>
-          ) : (
-            <SortableTh sortKey="top100_search_pct" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Search</SortableTh>
-          )}
-          {nested ? (
-            <th className="p-2 text-right">Ad</th>
-          ) : (
-            <SortableTh sortKey="top100_ad_pct" sort={catSort} onSort={(k) => setCatSort((p) => nextSort(p, k))} className="p-2 text-right">Ad</SortableTh>
-          )}
-          <th className="p-2 text-right">상품/키워드</th>
-          <th className="p-2 text-left">메모</th>
-          <th className="p-2 w-10"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((s) => {
-          const isOpen = openSnapId === s.id;
-          const isSel = selected.has(s.id);
-          const products = productsBySnap[s.id];
-          return (
-            <Fragment key={s.id}>
-              <tr
-                className={`border-t hover:bg-gray-50 cursor-pointer ${nested ? 'bg-white' : ''}`}
-                onClick={() => handleToggleSnap(s.id)}
+  const expandAllTree = () => {
+    const keys = new Set<string>();
+    const walk = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        if (n.children.length > 0) {
+          keys.add(n.key);
+          walk(n.children);
+        }
+      }
+    };
+    walk(tree);
+    setOpenTreeKeys(keys);
+  };
+  const collapseAllTree = () => setOpenTreeKeys(new Set());
+
+  // 트리 노드 렌더링 (재귀)
+  const renderTreeNode = (node: TreeNode): ReactNode => {
+    const isOpen = openTreeKeys.has(node.key);
+    const hasChildren = node.children.length > 0;
+    const snap = node.leafSnapshot;
+    const isSnapOpen = snap ? openSnapId === snap.id : false;
+    const isSel = snap ? selected.has(snap.id) : false;
+    const products = snap ? productsBySnap[snap.id] : null;
+    // 클릭 동작: 자식 있으면 트리 펼침, 없으면(leaf) 상품 표 펼침
+    const onRowClick = () => {
+      if (hasChildren) handleToggleTreeNode(node.key);
+      else if (snap) handleToggleSnap(snap.id);
+    };
+
+    const showChevron = hasChildren || (node.isLeaf && snap);
+    const chevronOpen = hasChildren ? isOpen : isSnapOpen;
+
+    return (
+      <Fragment key={node.key}>
+        <tr
+          className={`border-t hover:bg-gray-50 cursor-pointer ${
+            node.depth === 1 ? 'bg-emerald-50/30' : node.depth === 2 ? 'bg-blue-50/20' : ''
+          }`}
+          onClick={onRowClick}
+        >
+          <td className="p-2 text-center">
+            {node.isLeaf && snap ? (
+              <input
+                type="checkbox"
+                checked={isSel}
+                onChange={() => {}}
+                onClick={(e) => handleToggleSelect(snap.id, e)}
+              />
+            ) : null}
+          </td>
+          <td className="p-2 text-center">
+            {showChevron ? (
+              chevronOpen ? <ChevronDown className="w-3 h-3 inline" /> : <ChevronRight className="w-3 h-3 inline" />
+            ) : null}
+          </td>
+          <td
+            className={`p-2 ${node.depth === 1 ? 'font-semibold text-emerald-900' : node.isLeaf ? 'text-emerald-800' : 'text-gray-700'}`}
+            style={{ paddingLeft: `${0.5 + (node.depth - 1) * 1.25}rem` }}
+          >
+            {node.segment}
+          </td>
+          <td className="p-2 text-right text-gray-500">
+            {node.isLeaf && snap ? fmtDate(snap.captured_at) : `${node.leaf_count}개`}
+          </td>
+          <td className="p-2 text-right font-medium">{fmt(node.total_impression)}</td>
+          <td className="p-2 text-right">{fmt(node.total_click)}</td>
+          <td className="p-2 text-right">{fmtPct(ctr(node.total_click, node.total_impression))}</td>
+          <td className="p-2 text-right">{fmt(node.top100_impression)}</td>
+          <td className="p-2 text-right">{fmtPct(top100Share(node.top100_impression, node.total_impression))}</td>
+          <td className="p-2 text-right">{fmtPct(node.top100_search_pct)}</td>
+          <td className="p-2 text-right">{fmtPct(node.top100_ad_pct)}</td>
+          <td className="p-2 text-right">{fmtWon(node.avg_winner_price)}</td>
+          <td className="p-2 text-gray-500 truncate max-w-[140px]">
+            {node.isLeaf && snap ? snap.memo || '' : ''}
+          </td>
+          <td className="p-2 text-center">
+            {node.isLeaf && snap ? (
+              <button
+                onClick={(e) => handleDelete(snap.id, e)}
+                className="text-red-500 hover:text-red-700"
+                title="삭제"
               >
-                <td className="p-2 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isSel}
-                    onChange={() => {}}
-                    onClick={(e) => handleToggleSelect(s.id, e)}
+                <Trash2 className="w-4 h-4 inline" />
+              </button>
+            ) : null}
+          </td>
+        </tr>
+
+        {/* 트리 자식 펼침 */}
+        {hasChildren && isOpen && node.children.map((c) => renderTreeNode(c))}
+
+        {/* leaf 카테고리의 상품 표 펼침 */}
+        {node.isLeaf && snap && isSnapOpen && (
+          <tr>
+            <td colSpan={14} className="p-0 bg-gray-50">
+              <div className="p-3">
+                {loadingDetailFor === snap.id || !products ? (
+                  <div className="text-sm text-gray-500">상품 불러오는 중...</div>
+                ) : (
+                  <ProductsTable
+                    products={products}
+                    openProductIds={openProductIds}
+                    onToggleProduct={handleToggleProduct}
+                    onWinnerPriceChange={(pid, v) => handleWinnerPriceChange(snap.id, pid, v)}
                   />
-                </td>
-                <td className="p-2 text-center">
-                  {isOpen ? (
-                    <ChevronDown className="w-3 h-3 inline" />
-                  ) : (
-                    <ChevronRight className="w-3 h-3 inline" />
-                  )}
-                </td>
-                <td className="p-2 font-medium text-emerald-800">{s.category_name}</td>
-                <td className="p-2 text-gray-600">{fmtDate(s.captured_at)}</td>
-                <td className="p-2 text-right">{fmt(s.total_impression)}</td>
-                <td className="p-2 text-right">{fmt(s.total_click)}</td>
-                <td className="p-2 text-right">{fmtPct(ctr(s.total_click, s.total_impression))}</td>
-                <td className="p-2 text-right">{fmt(s.top100_impression)}</td>
-                <td className="p-2 text-right">{fmtPct(top100Share(s.top100_impression, s.total_impression))}</td>
-                <td className="p-2 text-right">{fmtPct(s.top100_search_pct)}</td>
-                <td className="p-2 text-right">{fmtPct(s.top100_ad_pct)}</td>
-                <td className="p-2 text-right text-gray-500">
-                  {s.products_count} / {s.keywords_count}
-                </td>
-                <td className="p-2 text-gray-500 truncate max-w-[160px]">{s.memo || ''}</td>
-                <td className="p-2 text-center">
-                  <button
-                    onClick={(e) => handleDelete(s.id, e)}
-                    className="text-red-500 hover:text-red-700"
-                    title="삭제"
-                  >
-                    <Trash2 className="w-4 h-4 inline" />
-                  </button>
-                </td>
-              </tr>
-              {isOpen && (
-                <tr>
-                  <td colSpan={14} className="p-0 bg-gray-50">
-                    <div className="p-3">
-                      {loadingDetailFor === s.id || !products ? (
-                        <div className="text-sm text-gray-500">상품 불러오는 중...</div>
-                      ) : (
-                        <ProductsTable
-                          products={products}
-                          openProductIds={openProductIds}
-                          onToggleProduct={handleToggleProduct}
-                          onWinnerPriceChange={(pid, v) =>
-                            handleWinnerPriceChange(s.id, pid, v)
-                          }
-                        />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  };
   const withoutCategory = useMemo(
     () => snapshots.filter((s) => !s.category_name),
     [snapshots],
@@ -775,94 +745,50 @@ export default function DataAnalysisPage() {
         </div>
       </div>
 
-      {/* 카테고리 표 (드릴다운) */}
+      {/* 카테고리 트리 분석 */}
       <div className="border rounded-lg bg-white overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="font-medium">카테고리 분석 ({withCategory.length})</h2>
-            <label className="flex items-center gap-2 text-xs text-gray-600">
-              그룹화:
-              <select
-                value={groupLevel}
-                onChange={(e) => setGroupLevel(Number(e.target.value) as 0 | 1 | 2 | 3 | 4)}
-                className="border rounded px-2 py-1 text-xs bg-white"
-              >
-                <option value={0}>없음</option>
-                <option value={1}>1단계</option>
-                <option value={2}>2단계</option>
-                <option value={3}>3단계</option>
-                <option value={4}>4단계</option>
-              </select>
-            </label>
-            {groupLevel === 0 && <span className="text-xs text-gray-500">선택 {selected.size}개</span>}
-            {groupLevel > 0 && (
-              <span className="text-xs text-emerald-700">
-                {groupRows.length}개 그룹 · 카테고리별 최신 1건만 합산
-              </span>
-            )}
+            <h2 className="font-medium">카테고리 분석 ({leafSnapshots.length}개 카테고리)</h2>
+            <span className="text-xs text-gray-500">선택 {selected.size}개</span>
+            <span className="text-xs text-gray-400">트리 합산은 카테고리당 최신 1건 기준</span>
           </div>
-          <Button onClick={handleDownloadCsv} disabled={selected.size === 0 || groupLevel > 0} size="sm">
-            <Download className="w-4 h-4 mr-1" />
-            선택 카테고리 CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={expandAllTree}>전체 펼침</Button>
+            <Button variant="outline" size="sm" onClick={collapseAllTree}>전체 접기</Button>
+            <Button onClick={handleDownloadCsv} disabled={selected.size === 0} size="sm">
+              <Download className="w-4 h-4 mr-1" />
+              선택 카테고리 CSV
+            </Button>
+          </div>
         </div>
         {loading ? (
           <div className="p-6 text-center text-gray-500 text-sm">불러오는 중...</div>
-        ) : withCategory.length === 0 ? (
+        ) : tree.length === 0 ? (
           <div className="p-6 text-center text-gray-500 text-sm">저장된 카테고리가 없습니다.</div>
-        ) : groupLevel === 0 ? (
-          <div className="overflow-x-auto">{renderLeafTable(withCategory, false)}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="p-2 w-8"></th>
-                  <SortableTh sortKey="path" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-left">카테고리 path ({groupLevel}단계)</SortableTh>
-                  <SortableTh sortKey="leaf_count" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">하위 카테고리</SortableTh>
-                  <SortableTh sortKey="total_impression" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">전체 노출 합</SortableTh>
-                  <SortableTh sortKey="total_click" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">전체 클릭 합</SortableTh>
-                  <SortableTh sortKey="ctr" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">CTR</SortableTh>
-                  <SortableTh sortKey="top100_impression" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 노출 합</SortableTh>
-                  <SortableTh sortKey="top100_share" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">Top100 점유율</SortableTh>
-                  <SortableTh sortKey="top100_search_pct" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">Search (가중)</SortableTh>
-                  <SortableTh sortKey="top100_ad_pct" sort={groupSort} onSort={(k) => setGroupSort((p) => nextSort(p, k))} className="p-2 text-right">Ad (가중)</SortableTh>
+                  <th className="p-2 w-8"></th>
+                  <th className="p-2 text-left">카테고리</th>
+                  <th className="p-2 text-right">캡처일/하위</th>
+                  <th className="p-2 text-right">전체 노출</th>
+                  <th className="p-2 text-right">전체 클릭</th>
+                  <th className="p-2 text-right">CTR</th>
+                  <th className="p-2 text-right">Top100 노출</th>
+                  <th className="p-2 text-right">Top100 점유율</th>
+                  <th className="p-2 text-right">Search</th>
+                  <th className="p-2 text-right">Ad</th>
+                  <th className="p-2 text-right">평균 판매가</th>
+                  <th className="p-2 text-left">메모</th>
+                  <th className="p-2 w-10"></th>
                 </tr>
               </thead>
               <tbody>
-                {groupRows.map((g) => {
-                  const isGroupOpen = openGroupKeys.has(g.key);
-                  return (
-                    <Fragment key={g.key}>
-                      <tr
-                        className="border-t bg-emerald-50/30 hover:bg-emerald-50 cursor-pointer"
-                        onClick={() => handleToggleGroup(g.key)}
-                      >
-                        <td className="p-2 text-center">
-                          {isGroupOpen ? <ChevronDown className="w-3 h-3 inline" /> : <ChevronRight className="w-3 h-3 inline" />}
-                        </td>
-                        <td className="p-2 font-semibold text-emerald-900">
-                          {g.pathPrefix.join(' > ')}
-                        </td>
-                        <td className="p-2 text-right">{g.leafs.length}</td>
-                        <td className="p-2 text-right font-medium">{fmt(g.total_impression)}</td>
-                        <td className="p-2 text-right font-medium">{fmt(g.total_click)}</td>
-                        <td className="p-2 text-right">{fmtPct(ctr(g.total_click, g.total_impression))}</td>
-                        <td className="p-2 text-right">{fmt(g.top100_impression)}</td>
-                        <td className="p-2 text-right">{fmtPct(top100Share(g.top100_impression, g.total_impression))}</td>
-                        <td className="p-2 text-right">{fmtPct(g.top100_search_pct)}</td>
-                        <td className="p-2 text-right">{fmtPct(g.top100_ad_pct)}</td>
-                      </tr>
-                      {isGroupOpen && (
-                        <tr>
-                          <td colSpan={10} className="p-0 bg-gray-50">
-                            <div className="p-3">{renderLeafTable(g.leafs, true)}</div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                {tree.map((node) => renderTreeNode(node))}
               </tbody>
             </table>
           </div>
