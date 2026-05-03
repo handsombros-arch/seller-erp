@@ -706,12 +706,26 @@ export default function AdAnalysisPage() {
   // ─── 청크 업로드 (Vercel serverless body 4.5MB 제한 회피) ────────────
   // 단일 거대 POST 가 조용히 413 으로 실패하던 문제 해결.
   const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
+  // 본문 gzip 압축 (CompressionStream 지원하는 모던 브라우저). 실패 시 raw JSON.
+  const gzipJson = async (obj: unknown): Promise<{ body: BodyInit; gzipped: boolean }> => {
+    const json = JSON.stringify(obj);
+    if (typeof CompressionStream === 'undefined') return { body: json, gzipped: false };
+    try {
+      const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+      const blob = await new Response(stream).blob();
+      return { body: blob, gzipped: true };
+    } catch {
+      return { body: json, gzipped: false };
+    }
+  };
+
   const uploadRowsInChunks = useCallback(async (
     rows: any[],
     filename: string,
     opts: { abortOnFirstFail?: boolean } = {},
   ) => {
-    const CHUNK = 5000; // Vercel 4.5MB body 한도 내. 청크 수 ↓ → 빠름
+    // gzip 5-10배 압축 → 5000 행도 ~0.5-1MB 로 안정. 압축 안되면 자동으로 작게 잘라야 안전.
+    const CHUNK = 5000;
     const totalChunks = Math.ceil(rows.length / CHUNK);
     let inserted = 0, attempted = 0, failedChunks = 0;
     let firstServerError: string | null = null;
@@ -719,16 +733,17 @@ export default function AdAnalysisPage() {
     for (let i = 0; i < rows.length; i += CHUNK) {
       const batch = rows.slice(i, i + CHUNK);
       try {
+        const { body, gzipped } = await gzipJson({ rows: batch, filename });
         const res = await fetch('/api/ad-analysis/rows', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: batch, filename }),
+          headers: { 'Content-Type': gzipped ? 'application/gzip' : 'application/json' },
+          body,
         });
         const j = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (!firstServerError) firstServerError = j.error || `HTTP ${res.status}`;
           failedChunks++;
-          if (opts.abortOnFirstFail) break; // 첫 실패 즉시 중단 → 진단 빠르게
+          if (opts.abortOnFirstFail) break;
         } else {
           inserted += j.inserted ?? 0;
           attempted += j.attempted ?? batch.length;
