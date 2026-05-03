@@ -851,11 +851,25 @@ export default function AdAnalysisPage() {
       const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
-      // 백그라운드: 원본 파일을 Storage에 저장
-      for (const file of files) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fetch('/api/ad-analysis/upload', { method: 'POST', body: fd }).catch(() => {});
+      // 백그라운드: 원본 파일을 Storage 에 저장 (실패하면 경고 — 과거에 버킷 미생성으로
+      // 모든 백업이 조용히 실패했던 사고가 있었음. 절대 silent catch 금지)
+      const storageFailures: string[] = [];
+      await Promise.all(files.map(async (file) => {
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res = await fetch('/api/ad-analysis/upload', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            storageFailures.push(`${file.name}: ${j.error || `HTTP ${res.status}`}`);
+          }
+        } catch (e: any) {
+          storageFailures.push(`${file.name}: ${e?.message ?? '네트워크 오류'}`);
+        }
+      }));
+      if (storageFailures.length > 0) {
+        setError(`Storage 백업 실패 (DB 데이터는 정상). ${storageFailures[0]}` +
+          (storageFailures.length > 1 ? ` 외 ${storageFailures.length - 1}건` : ''));
       }
       // IndexedDB에 전체 누적 저장 + DB에 신규분만 백업 (청크로 — Vercel 4.5MB body 제한 회피)
       saveToIdb(raw);
@@ -971,28 +985,44 @@ export default function AdAnalysisPage() {
   // ─── 페이지 로드 시 IndexedDB → DB fallback 복원 ─────────────────────────
   const [initialLoading, setInitialLoading] = useState(false);
   const initialLoadDone = useRef(false);
+  // IDB 에 있지만 DB 에 없는 행 수 (배너 + 자동 동기화 트리거)
+  const [idbOnlyCount, setIdbOnlyCount] = useState(0);
   useEffect(() => {
     if (initialLoadDone.current || data) return;
     initialLoadDone.current = true;
     (async () => {
       try {
         setInitialLoading(true);
-        // 1차: DB (원본 소스) — PC 이동/브라우저 변경 시에도 즉시 복원
-        let cachedRows: any[] | null = null;
+        // DB + IDB 를 모두 받아서 dedupKey 로 union — 어느 한 쪽도 손실되지 않도록.
+        // 과거에 DB 로딩 성공이 IDB 의 누적 데이터를 덮어써 322k → 62k 로 데이터 유실된 사고가 있었음.
+        let dbRows: any[] = [];
+        let dbOk = false;
         try {
           const dbRes = await fetch('/api/ad-analysis/rows');
           if (dbRes.ok) {
-            const { rows: dbRows } = await dbRes.json();
-            if (dbRows?.length) {
-              cachedRows = dbRows;
-              saveToIdb(dbRows);
-            }
+            const j = await dbRes.json();
+            dbRows = j.rows ?? [];
+            dbOk = true;
           }
         } catch {}
-        // 2차: DB 실패/0건이면 IndexedDB fallback (오프라인 대비)
-        if (!cachedRows?.length) {
-          cachedRows = await loadFromIdb();
+        const idbRows = (await loadFromIdb()) ?? [];
+
+        const seen = new Set<string>();
+        const merged: any[] = [];
+        let idbOnly = 0;
+        for (const r of dbRows) {
+          const k = `${r['날짜']}|${r['키워드'] ?? ''}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
+          if (!seen.has(k)) { seen.add(k); merged.push(r); }
         }
+        for (const r of idbRows) {
+          const k = `${r['날짜']}|${r['키워드'] ?? ''}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
+          if (!seen.has(k)) { seen.add(k); merged.push(r); idbOnly++; }
+        }
+
+        let cachedRows: any[] | null = merged.length ? merged : null;
+        if (cachedRows) saveToIdb(cachedRows); // 항상 union 결과 저장 (덮어쓰기 X)
+        // DB 가 정상이고 IDB 만 가진 행이 있으면 → 다음 PC 가 못 보는 상태
+        if (dbOk && idbOnly > 0) setIdbOnlyCount(idbOnly);
         if (!cachedRows?.length) return;
         const [pricesRes, mappingsRes] = await Promise.all([
           fetch('/api/ad-analysis'),
@@ -1546,6 +1576,23 @@ export default function AdAnalysisPage() {
               {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
             </span>
           )}
+        </div>
+      )}
+
+      {/* IDB 에만 있는 행 경고 — 다른 PC 에서 안 보이는 상태 */}
+      {idbOnlyCount > 0 && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-[12px] text-orange-900 space-y-2">
+          <div className="font-semibold text-[13px]">⚠ 로컬에 DB 미동기 데이터 {idbOnlyCount.toLocaleString()}행</div>
+          <div className="text-orange-800">
+            이 PC 의 IndexedDB 에는 있지만 Supabase 에는 없는 행입니다. 다른 PC 에서 이 데이터가 안 보이고,
+            IndexedDB 가 비워지면(브라우저 데이터 삭제 등) 영구 손실됩니다.
+          </div>
+          <button
+            onClick={async () => { await handleForceSyncToDb(); setIdbOnlyCount(0); }}
+            className="px-3 py-1.5 rounded-lg bg-orange-600 text-white text-[11px] font-semibold hover:bg-orange-700"
+          >
+            지금 DB 로 동기화
+          </button>
         </div>
       )}
 
