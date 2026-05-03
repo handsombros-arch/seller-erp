@@ -709,7 +709,8 @@ export default function AdAnalysisPage() {
   const uploadRowsInChunks = useCallback(async (rows: any[], filename: string) => {
     const CHUNK = 2000;
     const totalChunks = Math.ceil(rows.length / CHUNK);
-    let inserted = 0, failedChunks = 0;
+    let inserted = 0, attempted = 0, failedChunks = 0;
+    let firstServerError: string | null = null;
     setSyncProgress({ done: 0, total: totalChunks });
     for (let i = 0; i < rows.length; i += CHUNK) {
       const batch = rows.slice(i, i + CHUNK);
@@ -719,16 +720,23 @@ export default function AdAnalysisPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rows: batch, filename }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const j = await res.json();
-        inserted += j.inserted ?? batch.length;
-      } catch {
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (!firstServerError) firstServerError = j.error || `HTTP ${res.status}`;
+          failedChunks++;
+        } else {
+          inserted += j.inserted ?? 0;
+          attempted += j.attempted ?? batch.length;
+          if (j.partialError && !firstServerError) firstServerError = j.partialError;
+        }
+      } catch (e: any) {
         failedChunks++;
+        if (!firstServerError) firstServerError = e?.message ?? '네트워크 오류';
       }
       setSyncProgress({ done: Math.floor(i / CHUNK) + 1, total: totalChunks });
     }
     setSyncProgress(null);
-    return { inserted, failedChunks, totalChunks };
+    return { inserted, attempted, failedChunks, totalChunks, firstServerError };
   }, []);
 
   // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
@@ -922,10 +930,12 @@ export default function AdAnalysisPage() {
     }
     setError('');
     const sync = await uploadRowsInChunks(data._rawRows, 'force-sync');
-    if (sync.failedChunks > 0) {
-      setError(`DB 동기화 부분 실패: ${sync.failedChunks}/${sync.totalChunks} 청크 실패. 다시 시도하세요.`);
+    const head = `시도 ${sync.attempted.toLocaleString()}행 / 신규 ${sync.inserted.toLocaleString()}행 (중복 제외)`;
+    if (sync.failedChunks > 0 || sync.firstServerError) {
+      setError(`DB 동기화 실패 — ${head} · 실패 청크 ${sync.failedChunks}/${sync.totalChunks}` +
+        (sync.firstServerError ? ` · 서버 오류: ${sync.firstServerError}` : ''));
     } else {
-      setError(`DB 동기화 완료: ${sync.inserted.toLocaleString()}행 처리 (${sync.totalChunks} 청크)`);
+      setError(`DB 동기화 완료 — ${head} (${sync.totalChunks} 청크)`);
     }
   }, [data, uploadRowsInChunks]);
 

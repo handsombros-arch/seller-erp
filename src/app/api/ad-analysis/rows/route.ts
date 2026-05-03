@@ -73,13 +73,23 @@ export async function POST(request: NextRequest) {
     filename,
   }));
 
-  let inserted = 0;
+  // upsert with ignoreDuplicates: true 일 때 .select() 를 추가하면
+  // 실제로 INSERT 된 행만 반환됨 (중복은 제외) — 진짜 inserted 카운트.
+  let actuallyInserted = 0;
+  let attempted = 0;
+  let firstError: string | null = null;
   for (let i = 0; i < upsertRows.length; i += 1000) {
     const batch = upsertRows.slice(i, i + 1000);
-    const { error } = await admin
+    attempted += batch.length;
+    const { data: ins, error } = await admin
       .from('ad_raw_rows')
-      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: true });
-    if (!error) inserted += batch.length;
+      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: true })
+      .select('dedup_key');
+    if (error) {
+      if (!firstError) firstError = `${error.code ?? ''} ${error.message}`.trim();
+    } else {
+      actuallyInserted += ins?.length ?? 0;
+    }
   }
 
   // ad_uploads 이력 기록 (user_id + filename UNIQUE 로 upsert)
@@ -90,7 +100,20 @@ export async function POST(request: NextRequest) {
     uploaded_at: new Date().toISOString(),
   }, { onConflict: 'user_id,filename' });
 
-  return NextResponse.json({ inserted, total: rows.length });
+  // 모든 배치가 에러였다면 500 으로 반환 (클라이언트가 조용한 실패로 오인하지 않도록)
+  if (firstError && actuallyInserted === 0) {
+    return NextResponse.json(
+      { error: firstError, attempted, inserted: 0, total: rows.length },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    inserted: actuallyInserted, // 진짜로 새로 들어간 행 수 (중복 제외)
+    attempted,                  // 시도한 행 수
+    total: rows.length,
+    ...(firstError ? { partialError: firstError } : {}),
+  });
 }
 
 // DELETE: 파일 삭제 (user 자기 데이터만)
