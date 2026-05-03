@@ -88,6 +88,13 @@ type SnapshotMeta = {
   avg_winner_price: number | null;
 };
 
+// 카테고리 dedup 키. 같은 leaf 이름이라도 path 가 한 단계라도 다르면 다른 카테고리.
+// 예: 해외직구>가방>여성백팩 vs 여성잡화>여성백팩 — leaf 이름은 같아도 별개여야 함.
+const categoryKey = (s: SnapshotMeta): string => {
+  if (s.category_path && s.category_path.length > 0) return s.category_path.join('|');
+  return s.category_name ?? '';
+};
+
 type ProductDetail = {
   id: string;
   rank: number;
@@ -363,11 +370,14 @@ export default function DataAnalysisPage() {
       const data = await r.json();
       const list: SnapshotMeta[] = data.snapshots || [];
       setSnapshots(list);
-      // 디폴트: 카테고리별 가장 최신 스냅샷 1개씩 선택
+      // 디폴트: 카테고리별 가장 최신 스냅샷 1개씩 선택 (full path 기준 — 같은 leaf 이름이라도
+      // 한 단계라도 path 가 다르면 별개로 취급)
       const latest = new Map<string, string>();
       for (const s of list) {
         if (!s.category_name) continue;
-        if (!latest.has(s.category_name)) latest.set(s.category_name, s.id);
+        const k = categoryKey(s);
+        if (!k) continue;
+        if (!latest.has(k)) latest.set(k, s.id);
       }
       setSelected(new Set(latest.values()));
     }
@@ -505,13 +515,15 @@ export default function DataAnalysisPage() {
   );
 
   // 트리: 카테고리당 최신 1개씩만 뽑은 leaf
+  // dedup 키는 full path. 같은 leaf 이름이라도 path 가 한 단계라도 다르면 다른 카테고리로 별도 보존.
   const leafSnapshots = useMemo(() => {
     const seen = new Set<string>();
     const out: SnapshotMeta[] = [];
     // snapshots는 captured_at desc이므로 첫 등장이 최신
     for (const s of withCategoryRaw) {
-      if (!s.category_name || seen.has(s.category_name)) continue;
-      seen.add(s.category_name);
+      const k = categoryKey(s);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
       out.push(s);
     }
     return out;

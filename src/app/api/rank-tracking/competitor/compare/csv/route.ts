@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 type Row = {
   category_name: string | null;
+  category_path: string[] | null;
   captured_at: string;
   total_impression: number | null;
   total_click: number | null;
@@ -41,16 +42,18 @@ export async function GET(request: NextRequest) {
   const admin = await createAdminClient();
   const { data, error } = await admin
     .from('competitor_snapshots')
-    .select('category_name, captured_at, total_impression, total_click, top100_impression, top100_search_pct, top100_ad_pct, memo')
+    .select('category_name, category_path, captured_at, total_impression, total_click, top100_impression, top100_search_pct, top100_ad_pct, memo')
     .in('id', ids)
     .eq('user_id', user.id)
-    .order('category_name', { ascending: true })
+    // path 전체로 정렬해야 같은 leaf 이름이라도 다른 path 가 별도로 모임
+    .order('category_path', { ascending: true })
     .order('captured_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const header = [
     '카테고리',
+    '카테고리 경로',
     '캡처일',
     '전체 노출',
     '전체 클릭',
@@ -70,9 +73,13 @@ export async function GET(request: NextRequest) {
       r.top100_impression && r.total_impression
         ? (r.top100_impression / r.total_impression) * 100
         : null;
+    const fullPath = r.category_path && r.category_path.length > 0
+      ? r.category_path.join(' > ')
+      : '';
     lines.push(
       [
         csvEscape(r.category_name),
+        csvEscape(fullPath),
         csvEscape(new Date(r.captured_at).toISOString().slice(0, 10)),
         num(r.total_impression),
         num(r.total_click),
