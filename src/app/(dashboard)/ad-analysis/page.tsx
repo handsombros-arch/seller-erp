@@ -83,11 +83,43 @@ interface AnalysisData {
   placementDaily: PlacementDailyRow[];
   keywordDaily: KeywordDailyRow[];
   _rawRows?: any[]; // 누적 업로드용 원본 데이터
+  _diagnostics?: {
+    skippedNoDate: number;     // 날짜 파싱 실패로 버려진 행 수
+    sampleKeys: string[];      // 첫 행의 컬럼명들 (디버깅)
+    missingCols: string[];     // 기대 컬럼 중 빠진 것
+  };
 }
 
 // ─── Granularity helpers ────────────────────────────────────────────────────
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
+
+// 쿠팡 광고 xlsx '날짜' 컬럼을 'YYYY-MM-DD'로 정규화.
+// 받을 수 있는 형태: 'YYYYMMDD' / 'YYYY-MM-DD' / 'YYYY/MM/DD' / Date 객체 / Excel 날짜 시리얼(숫자)
+function normalizeDate(raw: unknown): string {
+  if (raw == null || raw === '') return '';
+  // Date 객체
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    const y = raw.getFullYear(), m = raw.getMonth() + 1, d = raw.getDate();
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  // Excel 날짜 시리얼 (1900-01-01 기준, 1900 윤년 버그 보정)
+  if (typeof raw === 'number' && raw > 0 && raw < 90000) {
+    const ms = Math.round((raw - 25569) * 86400 * 1000);
+    const dt = new Date(ms);
+    if (!isNaN(dt.getTime())) {
+      const y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+  const s = String(raw).trim();
+  // 'YYYYMMDD' (8자리 숫자)
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  // 'YYYY-MM-DD' / 'YYYY/MM/DD' / 'YYYY.MM.DD'
+  const m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return '';
+}
 
 function isoWeekKey(dateStr: string): string {
   const d = new Date(dateStr);
@@ -378,6 +410,10 @@ export default function AdAnalysisPage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
+  // 사용자가 직접 기간을 만진 적이 있으면 자동 핏을 멈춘다
+  const dateTouchedRef = useRef(false);
+  const setDateFromUser = (v: string) => { dateTouchedRef.current = true; setDateFrom(v); };
+  const setDateToUser = (v: string) => { dateTouchedRef.current = true; setDateTo(v); };
   const [metricTypes, setMetricTypes] = useState<Record<string, 'bar' | 'line'>>({});
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
@@ -529,9 +565,10 @@ export default function AdAnalysisPage() {
     const kwDateMap = new Map<string, any>();
     const compactMap = new Map<string, any>();
 
+    let skippedNoDate = 0;
     for (const r of raw) {
-      const dateStr = String(r['날짜']);
-      const date = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+      const date = normalizeDate(r['날짜']);
+      if (!date) { skippedNoDate++; continue; }
       const keyword = r['키워드'] || '-';
       const placement = r['광고 노출 지면'] || '기타';
       const campaign = r['캠페인명'] || '기타';
@@ -644,6 +681,12 @@ export default function AdAnalysisPage() {
         return info ? { optionId: id, ...info } : null;
       }).filter(Boolean) as PriceInfo[];
 
+      // 진단: 컬럼 매칭 점검 (이름이 바뀌면 노출/광고비/주문이 모두 0이 됨)
+      const sample = raw[0] ?? {};
+      const sampleKeys = Object.keys(sample);
+      const expectedCols = ['날짜', '노출수', '클릭수', '광고비', '총 주문수(14일)', '총 전환매출액(14일)'];
+      const missingCols = expectedCols.filter(c => !(c in sample));
+
       return {
         totalRows: raw.length,
         dateRange: { from: daily[0]?.date, to: daily[daily.length - 1]?.date },
@@ -651,6 +694,7 @@ export default function AdAnalysisPage() {
         unmatchedOptionIds: [...unmatchedIds],
         campaigns, products, rows, totals, daily, keywords, placements, placementDaily, keywordDaily,
         _rawRows: raw,
+        _diagnostics: { skippedNoDate, sampleKeys, missingCols },
       } as AnalysisData;
     }, []);
 
@@ -896,6 +940,19 @@ export default function AdAnalysisPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 메모 로드
+  // 데이터 로드 시 기간 자동 핏: 사용자가 한 번도 안 건드렸을 때만,
+  // 그리고 현재 dateFrom/dateTo 가 데이터 범위와 겹치지 않을 때만 자동 보정
+  useEffect(() => {
+    if (dateTouchedRef.current) return;
+    const from = data?.dateRange?.from;
+    const to = data?.dateRange?.to;
+    if (!from || !to) return;
+    const overlaps = !(dateTo && dateTo < from) && !(dateFrom && dateFrom > to);
+    if (overlaps) return; // 현재 필터 안에 데이터가 들어있으면 그대로 둠
+    setDateFrom(from);
+    setDateTo(to);
+  }, [data?.dateRange?.from, data?.dateRange?.to, dateFrom, dateTo]);
+
   useEffect(() => {
     fetch('/api/ad-analysis/memos').then(r => r.ok ? r.json() : []).then((list: any[]) => {
       const map: Record<string, string> = {};
@@ -1359,8 +1416,78 @@ export default function AdAnalysisPage() {
 
       {/* 데이터 요약 */}
       {data?._rawRows && (
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#8B95A1]">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8B95A1]">
           <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨</span>
+          {data.dateRange?.from && data.dateRange?.to && (
+            <span>· 데이터 기간: {data.dateRange.from} ~ {data.dateRange.to}</span>
+          )}
+          {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
+            <span className="text-amber-600">· 날짜 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
+          )}
+        </div>
+      )}
+
+      {/* 기간 선택 (데이터 있으면 항상 노출 — hasData 와 무관) */}
+      {data && (
+        <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-[#F2F4F6] px-4 py-2.5">
+          <span className="text-[12px] font-semibold text-[#191F28]">기간</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFromUser(e.target.value)}
+            className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+          <span className="text-[11px] text-[#6B7684]">~</span>
+          <input type="date" value={dateTo} onChange={e => setDateToUser(e.target.value)}
+            className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); }}
+              className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
+          )}
+          {data.dateRange?.from && data.dateRange?.to && (
+            <button onClick={() => {
+              dateTouchedRef.current = false;
+              setDateFrom(data.dateRange.from);
+              setDateTo(data.dateRange.to);
+            }} className="h-8 px-2 rounded-lg text-[10px] text-[#3182F6] hover:bg-[#F0F6FF] border border-[#BFD7FF]">데이터 전체 기간</button>
+          )}
+          {(dateFrom || dateTo) && (
+            <span className="text-[10px] text-[#6B7684] ml-1">
+              {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 빈 결과 진단 배너: 데이터는 있는데 hasData=false 일 때 */}
+      {data && !hasData && !loading && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-[12px] text-amber-900 space-y-2">
+          <div className="font-semibold text-[13px]">표시할 데이터가 없습니다.</div>
+          <div className="text-amber-800">
+            {data._rawRows?.length?.toLocaleString() ?? 0}행 로드됨 · 데이터 기간 <b>{data.dateRange?.from ?? '?'} ~ {data.dateRange?.to ?? '?'}</b>
+            {(dateFrom || dateTo) && <> · 현재 필터 <b>{dateFrom || '~'} ~ {dateTo || '~'}</b></>}
+          </div>
+          {data._diagnostics?.missingCols && data._diagnostics.missingCols.length > 0 && (
+            <div className="text-red-700">
+              ⚠ 기대 컬럼이 누락됨: <b>{data._diagnostics.missingCols.join(', ')}</b>
+              <div className="text-[11px] text-red-600 mt-0.5">
+                업로드한 파일의 컬럼명: {data._diagnostics.sampleKeys.slice(0, 12).join(' / ')}
+                {data._diagnostics.sampleKeys.length > 12 && ' …'}
+              </div>
+              <div className="text-[11px] text-red-600 mt-0.5">→ 쿠팡 리포트 양식이 바뀐 것 같습니다. 컬럼명 매핑을 업데이트해야 합니다.</div>
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            {data.dateRange?.from && data.dateRange?.to && (
+              <button onClick={() => {
+                dateTouchedRef.current = false;
+                setDateFrom(data.dateRange.from);
+                setDateTo(data.dateRange.to);
+              }} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700">
+                데이터 전체 기간으로 보기
+              </button>
+            )}
+            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); }}
+              className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 text-[11px] font-semibold hover:bg-amber-100">
+              기간 필터 해제
+            </button>
+          </div>
         </div>
       )}
 
@@ -1693,25 +1820,6 @@ export default function AdAnalysisPage() {
                 {tb.label}
               </button>
             ))}
-          </div>
-
-          {/* 기간 선택 (전체 탭 공통) */}
-          <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-[#F2F4F6] px-4 py-2.5">
-            <span className="text-[12px] font-semibold text-[#191F28]">기간</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
-            <span className="text-[11px] text-[#6B7684]">~</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo(''); }}
-                className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
-            )}
-            {(dateFrom || dateTo) && (
-              <span className="text-[10px] text-[#6B7684] ml-1">
-                {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
-              </span>
-            )}
           </div>
 
           {/* ─── Tab: Daily / Trend ───────────────────────────────────── */}
