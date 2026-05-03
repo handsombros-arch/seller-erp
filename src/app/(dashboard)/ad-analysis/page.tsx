@@ -706,8 +706,12 @@ export default function AdAnalysisPage() {
   // ─── 청크 업로드 (Vercel serverless body 4.5MB 제한 회피) ────────────
   // 단일 거대 POST 가 조용히 413 으로 실패하던 문제 해결.
   const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
-  const uploadRowsInChunks = useCallback(async (rows: any[], filename: string) => {
-    const CHUNK = 2000;
+  const uploadRowsInChunks = useCallback(async (
+    rows: any[],
+    filename: string,
+    opts: { abortOnFirstFail?: boolean } = {},
+  ) => {
+    const CHUNK = 5000; // Vercel 4.5MB body 한도 내. 청크 수 ↓ → 빠름
     const totalChunks = Math.ceil(rows.length / CHUNK);
     let inserted = 0, attempted = 0, failedChunks = 0;
     let firstServerError: string | null = null;
@@ -724,14 +728,22 @@ export default function AdAnalysisPage() {
         if (!res.ok) {
           if (!firstServerError) firstServerError = j.error || `HTTP ${res.status}`;
           failedChunks++;
+          if (opts.abortOnFirstFail) break; // 첫 실패 즉시 중단 → 진단 빠르게
         } else {
           inserted += j.inserted ?? 0;
           attempted += j.attempted ?? batch.length;
-          if (j.partialError && !firstServerError) firstServerError = j.partialError;
+          if (j.partialError && !firstServerError) {
+            firstServerError = j.partialError;
+            if (opts.abortOnFirstFail) {
+              setSyncProgress({ done: Math.floor(i / CHUNK) + 1, total: totalChunks });
+              break;
+            }
+          }
         }
       } catch (e: any) {
         failedChunks++;
         if (!firstServerError) firstServerError = e?.message ?? '네트워크 오류';
+        if (opts.abortOnFirstFail) break;
       }
       setSyncProgress({ done: Math.floor(i / CHUNK) + 1, total: totalChunks });
     }
@@ -929,11 +941,13 @@ export default function AdAnalysisPage() {
       return;
     }
     setError('');
-    const sync = await uploadRowsInChunks(data._rawRows, 'force-sync');
+    // 첫 청크 실패 즉시 중단 → 3분 기다리지 않고 1-2초로 진단
+    const sync = await uploadRowsInChunks(data._rawRows, 'force-sync', { abortOnFirstFail: true });
     const head = `시도 ${sync.attempted.toLocaleString()}행 / 신규 ${sync.inserted.toLocaleString()}행 (중복 제외)`;
     if (sync.failedChunks > 0 || sync.firstServerError) {
       setError(`DB 동기화 실패 — ${head} · 실패 청크 ${sync.failedChunks}/${sync.totalChunks}` +
-        (sync.firstServerError ? ` · 서버 오류: ${sync.firstServerError}` : ''));
+        (sync.firstServerError ? ` · 서버 오류: ${sync.firstServerError}` : '') +
+        ` · (첫 실패 시 즉시 중단 — 동일 원인이면 나머지도 실패하므로)`);
     } else {
       setError(`DB 동기화 완료 — ${head} (${sync.totalChunks} 청크)`);
     }
