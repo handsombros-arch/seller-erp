@@ -16,17 +16,24 @@ export async function GET() {
     .eq('user_id', user.id)
     .order('uploaded_at', { ascending: false });
 
-  let allRows: unknown[] = [];
+  // Supabase 기본 max-rows 제한(보통 1000)에 맞춰 안전하게 페이지네이션.
+  // (user_id, dedup_key) PK 정렬 — unique 정렬 키라 페이지 경계가 절대 안 흔들림.
+  const allRows: unknown[] = [];
+  const PAGE = 1000;
   let from = 0;
-  const PAGE = 10000;
-  while (true) {
+  // 무한 루프 방지 안전장치
+  for (let guard = 0; guard < 10000; guard++) {
     const { data, error } = await admin
       .from('ad_raw_rows')
       .select('data')
       .eq('user_id', user.id)
+      .order('dedup_key', { ascending: true })
       .range(from, from + PAGE - 1);
-    if (error || !data?.length) break;
-    allRows = allRows.concat(data.map((r: { data: unknown }) => r.data));
+    if (error) {
+      return NextResponse.json({ error: error.message, fetched: allRows.length }, { status: 500 });
+    }
+    if (!data?.length) break;
+    for (const r of data) allRows.push((r as { data: unknown }).data);
     if (data.length < PAGE) break;
     from += PAGE;
   }
