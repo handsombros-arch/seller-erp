@@ -703,6 +703,34 @@ export default function AdAnalysisPage() {
     setData(result);
   }, []);
 
+  // ─── 청크 업로드 (Vercel serverless body 4.5MB 제한 회피) ────────────
+  // 단일 거대 POST 가 조용히 413 으로 실패하던 문제 해결.
+  const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
+  const uploadRowsInChunks = useCallback(async (rows: any[], filename: string) => {
+    const CHUNK = 2000;
+    const totalChunks = Math.ceil(rows.length / CHUNK);
+    let inserted = 0, failedChunks = 0;
+    setSyncProgress({ done: 0, total: totalChunks });
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const batch = rows.slice(i, i + CHUNK);
+      try {
+        const res = await fetch('/api/ad-analysis/rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: batch, filename }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const j = await res.json();
+        inserted += j.inserted ?? batch.length;
+      } catch {
+        failedChunks++;
+      }
+      setSyncProgress({ done: Math.floor(i / CHUNK) + 1, total: totalChunks });
+    }
+    setSyncProgress(null);
+    return { inserted, failedChunks, totalChunks };
+  }, []);
+
   // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
   const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
 
@@ -794,21 +822,20 @@ export default function AdAnalysisPage() {
         fd.append('file', file);
         fetch('/api/ad-analysis/upload', { method: 'POST', body: fd }).catch(() => {});
       }
-      // IndexedDB에 전체 누적 저장 + DB에 신규분만 백업
+      // IndexedDB에 전체 누적 저장 + DB에 신규분만 백업 (청크로 — Vercel 4.5MB body 제한 회피)
       saveToIdb(raw);
       if (allRows.length > 0) {
-        fetch('/api/ad-analysis/rows', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: allRows, filename: files[0]?.name ?? 'upload' }),
-        }).catch(() => {});
+        const sync = await uploadRowsInChunks(allRows, files[0]?.name ?? 'upload');
+        if (sync.failedChunks > 0) {
+          setError(`DB 동기화 부분 실패: ${sync.failedChunks}/${sync.totalChunks} 청크 실패. '${'DB 강제 동기화'}' 버튼으로 재시도하세요.`);
+        }
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [data, processData, saveResult]);
+  }, [data, processData, saveResult, uploadRowsInChunks]);
 
   // 매칭 확인 → DB 저장 → 재처리
   const handleConfirmMatches = useCallback(async () => {
@@ -886,6 +913,21 @@ export default function AdAnalysisPage() {
       });
     } catch { return null; }
   };
+
+  // ─── DB 강제 동기화: 로컬 IDB 전체를 DB 로 밀어넣음 (다른 PC 복원용) ───
+  const handleForceSyncToDb = useCallback(async () => {
+    if (!data?._rawRows?.length) {
+      setError('업로드된 데이터가 없습니다');
+      return;
+    }
+    setError('');
+    const sync = await uploadRowsInChunks(data._rawRows, 'force-sync');
+    if (sync.failedChunks > 0) {
+      setError(`DB 동기화 부분 실패: ${sync.failedChunks}/${sync.totalChunks} 청크 실패. 다시 시도하세요.`);
+    } else {
+      setError(`DB 동기화 완료: ${sync.inserted.toLocaleString()}행 처리 (${sync.totalChunks} 청크)`);
+    }
+  }, [data, uploadRowsInChunks]);
 
   // ─── 페이지 로드 시 IndexedDB → DB fallback 복원 ─────────────────────────
   const [initialLoading, setInitialLoading] = useState(false);
@@ -1414,7 +1456,7 @@ export default function AdAnalysisPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
       )}
 
-      {/* 데이터 요약 */}
+      {/* 데이터 요약 + DB 동기화 */}
       {data?._rawRows && (
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8B95A1]">
           <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨</span>
@@ -1423,6 +1465,19 @@ export default function AdAnalysisPage() {
           )}
           {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
             <span className="text-amber-600">· 날짜 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
+          )}
+          {syncProgress ? (
+            <span className="text-[#3182F6] font-medium">
+              · DB 동기화 중 {syncProgress.done}/{syncProgress.total} 청크
+            </span>
+          ) : (
+            <button
+              onClick={handleForceSyncToDb}
+              className="px-2 h-6 rounded-md border border-[#BFD7FF] text-[#3182F6] text-[10px] font-medium hover:bg-[#F0F6FF]"
+              title="다른 PC 에서 최신 데이터가 안 보일 때 — 이 PC 의 로컬 데이터를 DB 로 강제 푸시"
+            >
+              DB 강제 동기화
+            </button>
           )}
         </div>
       )}
