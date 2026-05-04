@@ -991,16 +991,9 @@ export default function DataAnalysisPage() {
       const data = await r.json();
       const list: SnapshotMeta[] = data.snapshots || [];
       setSnapshots(list);
-      // 디폴트: 카테고리별 가장 최신 스냅샷 1개씩 선택 (full path 기준 — 같은 leaf 이름이라도
-      // 한 단계라도 path 가 다르면 별개로 취급)
-      const latest = new Map<string, string>();
-      for (const s of list) {
-        if (!s.category_name) continue;
-        const k = categoryKey(s);
-        if (!k) continue;
-        if (!latest.has(k)) latest.set(k, s.id);
-      }
-      setSelected(new Set(latest.values()));
+      // 디폴트: 비선택. 사용자가 비교/CSV 할 카테고리만 선택하도록.
+      // (이전엔 모두 자동 선택돼 매번 해제해야 했음)
+      setSelected(new Set());
     }
     setLoading(false);
   }, []);
@@ -1077,6 +1070,31 @@ export default function DataAnalysisPage() {
       return next;
     });
   };
+
+  // 부모 노드 산하 leaf snapshot id 들 수집 (재귀)
+  const collectLeafSnapIds = useCallback((node: TreeNode): string[] => {
+    if (node.isLeaf && node.leafSnapshot) return [node.leafSnapshot.id];
+    return node.children.flatMap(collectLeafSnapIds);
+  }, []);
+
+  // 부모 노드 체크박스 클릭: 산하가 모두 선택돼있으면 해제, 아니면 모두 선택
+  const handleToggleParent = useCallback((node: TreeNode, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ids = collectLeafSnapIds(node);
+    if (ids.length === 0) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) {
+        for (const id of ids) next.delete(id);
+      } else {
+        for (const id of ids) next.add(id);
+      }
+      return next;
+    });
+  }, [collectLeafSnapIds]);
+
+  // (allLeafIds / handleSelectAll / handleClearAll 는 leafSnapshots 선언 뒤로 이동)
 
   const handleSave = async () => {
     // ── batch 모드: 여러 카테고리 한 번에 ───────────────────────
@@ -1219,6 +1237,14 @@ export default function DataAnalysisPage() {
 
   const tree = useMemo(() => buildTree(leafSnapshots), [leafSnapshots]);
 
+  // 트리 전체 leaf snapshot id 수집 (selected 일괄 토글용)
+  const allLeafIds = useMemo(
+    () => leafSnapshots.map((s) => s.id),
+    [leafSnapshots],
+  );
+  const handleSelectAll = () => setSelected(new Set(allLeafIds));
+  const handleClearAll = () => setSelected(new Set());
+
   // ── 카테고리 실시간 검색 ────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -1327,6 +1353,12 @@ export default function DataAnalysisPage() {
     const showChevron = hasChildren || (node.isLeaf && snap);
     const chevronOpen = hasChildren ? isOpen : isSnapOpen;
 
+    // 부모 노드 tristate (산하 leaf 중 몇 개가 선택됐는지)
+    const descendantLeafIds = hasChildren ? collectLeafSnapIds(node) : [];
+    const descSelectedCount = descendantLeafIds.filter((id) => selected.has(id)).length;
+    const descAllSelected = descendantLeafIds.length > 0 && descSelectedCount === descendantLeafIds.length;
+    const descPartialSelected = descSelectedCount > 0 && !descAllSelected;
+
     return (
       <Fragment key={node.key}>
         <tr
@@ -1342,6 +1374,22 @@ export default function DataAnalysisPage() {
                 checked={isSel}
                 onChange={() => {}}
                 onClick={(e) => handleToggleSelect(snap.id, e)}
+                title="비교/CSV 대상으로 선택"
+              />
+            ) : hasChildren && descendantLeafIds.length > 0 ? (
+              <input
+                type="checkbox"
+                checked={descAllSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = descPartialSelected;
+                }}
+                onChange={() => {}}
+                onClick={(e) => handleToggleParent(node, e)}
+                title={
+                  descAllSelected
+                    ? `산하 ${descendantLeafIds.length}개 모두 선택 해제`
+                    : `산하 ${descendantLeafIds.length}개 일괄 선택`
+                }
               />
             ) : null}
           </td>
@@ -1601,6 +1649,16 @@ export default function DataAnalysisPage() {
             </div>
             <Button variant="outline" size="sm" onClick={expandAllTree}>전체 펼침</Button>
             <Button variant="outline" size="sm" onClick={collapseAllTree}>전체 접기</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={selected.size === allLeafIds.length ? handleClearAll : handleSelectAll}
+              disabled={allLeafIds.length === 0}
+            >
+              {selected.size === allLeafIds.length && allLeafIds.length > 0
+                ? '선택 해제'
+                : '전체 선택'}
+            </Button>
             <Button
               onClick={handleOpenCompare}
               disabled={selected.size < 2}
