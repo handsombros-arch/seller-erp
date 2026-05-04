@@ -24,6 +24,7 @@ import {
   arrayMove,
   SortableContext,
   horizontalListSortingStrategy,
+  verticalListSortingStrategy,
   useSortable,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
@@ -589,21 +590,108 @@ function deltaPct(value: number | null, baseline: number | null): number | null 
   return ((value - baseline) / baseline) * 100;
 }
 
+// 드래그 가능한 값 행 — 맨 위가 기준점
+function SortableCompareRow({
+  snap,
+  isBaseline,
+}: {
+  snap: SnapshotMeta;
+  isBaseline: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: snap.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`border-b border-black/[0.06] ${
+        isBaseline ? 'bg-[#0071E3]/5' : 'hover:bg-[#F5F5F7] transition-colors'
+      }`}
+    >
+      <td className={`sticky left-0 z-10 p-2 ${isBaseline ? 'bg-[#0071E3]/5' : 'bg-white'}`}>
+        <div className="flex items-center gap-1.5">
+          <button
+            {...attributes}
+            {...listeners}
+            className="text-[#86868B] hover:text-[#1D1D1F] cursor-grab active:cursor-grabbing"
+            title="드래그해서 순서 바꾸기 (맨 위 = 기준점)"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+          {isBaseline && (
+            <span className="inline-flex items-center px-1.5 h-4 rounded bg-[#0071E3] text-white text-[10px] font-medium">
+              기준
+            </span>
+          )}
+          <span
+            className={`truncate max-w-[220px] ${isBaseline ? 'font-medium text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}
+            title={snap.category_path?.join(' › ')}
+          >
+            {snap.category_name}
+          </span>
+        </div>
+      </td>
+      {COMPARE_METRICS.map((m) => {
+        const v = m.get(snap);
+        return (
+          <td key={m.key} className={`p-2 text-right ${isBaseline ? 'font-medium text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}>
+            {m.format(v)}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+const COMPARE_LARGE_THRESHOLD = 10;
+
 function CompareDialog({
   open,
   onOpenChange,
   snapshots,
-  baselineId,
-  onChangeBaseline,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   snapshots: SnapshotMeta[];
-  baselineId: string | null;
-  onChangeBaseline: (id: string) => void;
 }) {
-  const baseline = snapshots.find((s) => s.id === baselineId) ?? snapshots[0] ?? null;
-  const others = baseline ? snapshots.filter((s) => s.id !== baseline.id) : [];
+  // 행 순서 = 비교 순서. orderedIds[0] = 기준점.
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  // 다이얼로그 열릴 때 / snapshots 변경될 때 순서 초기화
+  useEffect(() => {
+    if (open) setOrderedIds(snapshots.map((s) => s.id));
+  }, [open, snapshots]);
+
+  const ordered = useMemo(
+    () =>
+      orderedIds
+        .map((id) => snapshots.find((s) => s.id === id))
+        .filter((s): s is SnapshotMeta => !!s),
+    [orderedIds, snapshots],
+  );
+  const baseline = ordered[0] ?? null;
+  const others = ordered.slice(1);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setOrderedIds((prev) => {
+      const oldIdx = prev.indexOf(active.id as string);
+      const newIdx = prev.indexOf(over.id as string);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+  };
+
+  const isLarge = ordered.length > COMPARE_LARGE_THRESHOLD;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -611,116 +699,106 @@ function CompareDialog({
         <DialogHeader>
           <DialogTitle className="text-[#1D1D1F] flex items-center gap-2">
             <ArrowUpDown className="w-5 h-5 text-[#0071E3]" />
-            카테고리 직접 비교 ({snapshots.length}개)
+            카테고리 직접 비교 ({ordered.length}개)
           </DialogTitle>
           <DialogDescription className="text-[#6E6E73]">
-            기준점 카테고리에 비해 다른 카테고리들의 지표가 얼마나 차이나는지 즉시 보여줍니다.
-            상승은 초록, 하락은 빨강 (Ad% 는 반대 — 낮을수록 자연검색 강세).
+            행을 드래그해서 순서를 바꾸면 <b>맨 위</b>가 자동으로 기준점이 됩니다.
+            상승 초록 / 하락 빨강 (Ad% 는 반대 — 낮을수록 자연검색 강세).
           </DialogDescription>
         </DialogHeader>
 
-        {/* 기준점 선택 */}
-        <div className="flex items-center gap-3 py-2 border-b border-black/[0.06]">
-          <span className="text-xs text-[#6E6E73]">기준점</span>
-          <select
-            value={baseline?.id ?? ''}
-            onChange={(e) => onChangeBaseline(e.target.value)}
-            className="text-sm border rounded-md px-2 h-8 bg-white max-w-[60ch]"
+        {/* 큰 N 안내 */}
+        {isLarge && (
+          <div className="rounded-[12px] bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-900 space-y-1">
+            <div className="font-medium">
+              ⚠ {ordered.length}개 비교 — 가독성이 떨어집니다. 다음 중 하나 권장:
+            </div>
+            <ul className="list-disc list-inside text-[11px] text-amber-800 space-y-0.5">
+              <li>핵심 카테고리 8-10개로 추리기 (트리에서 체크 해제)</li>
+              <li>부모 카테고리 단위로 나눠 여러 번 비교 (예: 여성잡화 산하 → 패션잡화 산하)</li>
+              <li>차트로 시계열 추세 보기 (트리에서 leaf 클릭 → 펼침 영역의 시계열 차트)</li>
+            </ul>
+          </div>
+        )}
+
+        {ordered.length > 0 && baseline && (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            {snapshots.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.category_name}
-                {s.category_path && s.category_path.length > 1 && ` (${s.category_path.slice(0, -1).join(' › ')})`}
-              </option>
-            ))}
-          </select>
-          {baseline && (
-            <span className="text-[11px] text-[#86868B]">
-              {baseline.category_path?.join(' › ') ?? baseline.category_name} ·{' '}
-              {fmtDate(baseline.captured_at)}
-            </span>
-          )}
-        </div>
-
-        {/* 비교표 — 행: 카테고리, 열: 지표 */}
-        {baseline && (
-          <div className="overflow-x-auto pt-2">
-            <table className="w-full text-xs border-separate border-spacing-0">
-              <thead className="bg-[#F5F5F7] text-[#6E6E73]">
-                <tr>
-                  <th className="sticky left-0 z-10 bg-[#F5F5F7] p-2 text-left min-w-[200px] border-b border-black/[0.06]">
-                    카테고리
-                  </th>
-                  {COMPARE_METRICS.map((m) => (
-                    <th key={m.key} className="p-2 text-right min-w-[110px] border-b border-black/[0.06]">
-                      {m.label}
+            <div className="overflow-x-auto pt-2">
+              <table className="w-full text-xs border-separate border-spacing-0">
+                <thead className="bg-[#F5F5F7] text-[#6E6E73]">
+                  <tr>
+                    <th className="sticky left-0 z-10 bg-[#F5F5F7] p-2 text-left min-w-[260px] border-b border-black/[0.06]">
+                      카테고리
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {/* 기준점 행 */}
-                <tr className="bg-[#0071E3]/5">
-                  <td className="sticky left-0 z-10 bg-[#0071E3]/5 p-2 border-b border-black/[0.06]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-flex items-center px-1.5 h-4 rounded bg-[#0071E3] text-white text-[10px] font-medium">
-                        기준
-                      </span>
-                      <span className="font-medium text-[#1D1D1F] truncate max-w-[200px]" title={baseline.category_path?.join(' › ')}>
-                        {baseline.category_name}
-                      </span>
-                    </div>
-                  </td>
-                  {COMPARE_METRICS.map((m) => (
-                    <td key={m.key} className="p-2 text-right border-b border-black/[0.06] font-medium text-[#1D1D1F]">
-                      {m.format(m.get(baseline))}
-                    </td>
-                  ))}
-                </tr>
+                    {COMPARE_METRICS.map((m) => (
+                      <th key={m.key} className="p-2 text-right min-w-[110px] border-b border-black/[0.06]">
+                        {m.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
 
-                {/* 비교 대상 행 */}
-                {others.map((s) => (
-                  <tr key={s.id} className="hover:bg-[#F5F5F7] transition-colors">
-                    <td className="sticky left-0 z-10 bg-white p-2 border-b border-black/[0.06]">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-[#1D1D1F] truncate max-w-[200px]" title={s.category_path?.join(' › ')}>
-                          {s.category_name}
-                        </span>
-                        {s.category_path && s.category_path.length > 1 && (
-                          <span className="text-[10px] text-[#86868B] truncate max-w-[200px]">
-                            {s.category_path.slice(0, -1).join(' › ')}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    {COMPARE_METRICS.map((m) => {
-                      const v = m.get(s);
-                      const b = m.get(baseline);
-                      const d = deltaPct(v, b);
-                      // 색상: high direction 이면 양수=초록 음수=빨강. low 면 반대. neutral 은 회색.
-                      let deltaColor = 'text-[#86868B]';
-                      if (d != null && m.direction !== 'neutral' && Math.abs(d) >= 0.5) {
-                        const isGood =
-                          m.direction === 'high' ? d > 0 : d < 0;
-                        deltaColor = isGood ? 'text-emerald-600' : 'text-red-500';
-                      }
+                {/* 값 섹션 */}
+                <tbody>
+                  <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+                    {ordered.map((s, idx) => (
+                      <SortableCompareRow
+                        key={s.id}
+                        snap={s}
+                        isBaseline={idx === 0}
+                      />
+                    ))}
+                  </SortableContext>
+                </tbody>
+
+                {/* 변화율 섹션 (별도) */}
+                {others.length > 0 && (
+                  <tbody>
+                    <tr>
+                      <td
+                        colSpan={1 + COMPARE_METRICS.length}
+                        className="pt-4 pb-1 text-[11px] uppercase tracking-wider text-[#86868B]"
+                      >
+                        변화율 (vs 기준)
+                      </td>
+                    </tr>
+                    {others.map((s) => {
+                      // 변화율 행 — 드래그 X, 단순 표시
                       return (
-                        <td key={m.key} className="p-2 text-right border-b border-black/[0.06]">
-                          <div className="text-[#1D1D1F]">{m.format(v)}</div>
-                          {d != null && (
-                            <div className={`text-[10px] ${deltaColor}`}>
-                              {d > 0 ? '+' : ''}
-                              {d.toFixed(1)}%
-                            </div>
-                          )}
-                        </td>
+                        <tr key={s.id + ':delta'} className="border-b border-black/[0.06]">
+                          <td className="sticky left-0 z-10 bg-white p-2">
+                            <span
+                              className="text-[12px] text-[#6E6E73] truncate max-w-[220px] inline-block"
+                              title={s.category_path?.join(' › ')}
+                            >
+                              {s.category_name}
+                            </span>
+                          </td>
+                          {COMPARE_METRICS.map((m) => {
+                            const d = deltaPct(m.get(s), m.get(baseline));
+                            let deltaColor = 'text-[#86868B]';
+                            if (d != null && m.direction !== 'neutral' && Math.abs(d) >= 0.5) {
+                              const isGood = m.direction === 'high' ? d > 0 : d < 0;
+                              deltaColor = isGood ? 'text-emerald-600' : 'text-red-500';
+                            }
+                            return (
+                              <td key={m.key} className={`p-2 text-right text-[12px] ${deltaColor}`}>
+                                {d == null ? '-' : `${d > 0 ? '+' : ''}${d.toFixed(1)}%`}
+                              </td>
+                            );
+                          })}
+                        </tr>
                       );
                     })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </tbody>
+                )}
+              </table>
+            </div>
+          </DndContext>
         )}
 
         <DialogFooter>
@@ -1205,13 +1283,8 @@ export default function DataAnalysisPage() {
 
   // ── 카테고리 비교 ────────────────────────────────────────────────────
   const [compareOpen, setCompareOpen] = useState(false);
-  const [baselineId, setBaselineId] = useState<string | null>(null);
   const handleOpenCompare = () => {
     if (selected.size < 2) return;
-    // baseline 미설정이거나 이번 selected 에 안 들어가 있으면 첫 번째로 자동 지정
-    if (!baselineId || !selected.has(baselineId)) {
-      setBaselineId(Array.from(selected)[0]);
-    }
     setCompareOpen(true);
   };
 
@@ -1375,21 +1448,6 @@ export default function DataAnalysisPage() {
                 onChange={() => {}}
                 onClick={(e) => handleToggleSelect(snap.id, e)}
                 title="비교/CSV 대상으로 선택"
-              />
-            ) : hasChildren && descendantLeafIds.length > 0 ? (
-              <input
-                type="checkbox"
-                checked={descAllSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = descPartialSelected;
-                }}
-                onChange={() => {}}
-                onClick={(e) => handleToggleParent(node, e)}
-                title={
-                  descAllSelected
-                    ? `산하 ${descendantLeafIds.length}개 모두 선택 해제`
-                    : `산하 ${descendantLeafIds.length}개 일괄 선택`
-                }
               />
             ) : null}
           </td>
@@ -1774,8 +1832,6 @@ export default function DataAnalysisPage() {
         open={compareOpen}
         onOpenChange={setCompareOpen}
         snapshots={leafSnapshots.filter((s) => selected.has(s.id))}
-        baselineId={baselineId}
-        onChangeBaseline={setBaselineId}
       />
 
       {/* 삭제 확인 다이얼로그 — 카테고리명 정확히 타이핑해야 활성화 */}
