@@ -526,6 +526,13 @@ export default function DataAnalysisPage() {
       seen.add(k);
       out.push(s);
     }
+    if (typeof window !== 'undefined' && withCategoryRaw.length > 0) {
+      const bag = out.filter(s => s.category_path?.includes('가방'));
+      const bagPaths = bag.map(s => s.category_path?.join(' > '));
+      // 진단용 — 새 코드가 로드됐는지 즉시 확인 가능
+      console.log('[data-analysis dedup v2] withCategory:', withCategoryRaw.length,
+        '→ leaves:', out.length, '/ 가방 leaves:', bag.length, bagPaths);
+    }
     return out;
   }, [withCategoryRaw]);
 
@@ -764,6 +771,7 @@ export default function DataAnalysisPage() {
             <h2 className="font-medium">카테고리 분석 ({leafSnapshots.length}개 카테고리)</h2>
             <span className="text-xs text-gray-500">선택 {selected.size}개</span>
             <span className="text-xs text-gray-400">트리 합산은 카테고리당 최신 1건 기준</span>
+            <span className="text-[10px] text-emerald-600 font-mono bg-emerald-50 px-1.5 py-0.5 rounded">build: full-path-dedup-v2</span>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={expandAllTree}>전체 펼침</Button>
