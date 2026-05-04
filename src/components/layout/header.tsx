@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useVat } from '@/components/layout/vat-provider';
 import { LVLogoText } from '@/components/ui/lv-logo';
 import { PresenceIndicator } from '@/components/layout/presence';
+import { DeployStatus } from '@/components/layout/deploy-status';
 import { useState } from 'react';
 import {
   LayoutDashboard, Package, Warehouse, PackageCheck,
@@ -32,7 +33,7 @@ const navItems = [
   { title: '설정',         href: '/settings',  icon: Settings,        exact: false },
 ];
 
-export function Header({ email }: { email?: string }) {
+export function Header({ email, deployedSha }: { email?: string; deployedSha?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -88,6 +89,9 @@ export function Header({ email }: { email?: string }) {
         </div>
 
         <div className="flex items-center gap-2">
+        {/* 배포 상태 */}
+        <DeployStatus deployedSha={deployedSha} />
+
         {/* 동시 접속 표시 */}
         <PresenceIndicator currentEmail={email} />
 
