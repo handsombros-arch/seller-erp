@@ -8,6 +8,10 @@ interface ImportRow {
   reason?: string;
 }
 
+// 월별 실사용 reason prefix — applyOrders 가 cutoff 로 인식.
+// 일반 "수동 조정" 도 동일 효과지만 이 prefix 가 들어간 행은 history 화면에서 "월별 실사" 로 라벨링됨.
+export const PHYSICAL_COUNT_PREFIX = '__PHYSICAL_COUNT__:';
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -15,7 +19,10 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
     const body = await request.json();
-    const { rows } = body as { rows: ImportRow[] };
+    const { rows, physicalCount } = body as { rows: ImportRow[]; physicalCount?: boolean };
+    // physicalCount=true 면 reason 에 __PHYSICAL_COUNT__:<YYYY-MM-DD> prefix 자동 부여
+    const today = new Date().toISOString().slice(0, 10);
+    const physicalReason = `${PHYSICAL_COUNT_PREFIX}${today}`;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: '행 데이터가 없습니다' }, { status: 400 });
@@ -44,7 +51,11 @@ export async function POST(request: NextRequest) {
       const newQty = Number(row.quantity);
       if (isNaN(newQty) || newQty < 0) { errors.push({ row: i + 1, message: `수량이 올바르지 않음: ${row.quantity}` }); continue; }
 
-      const reason = String(row.reason ?? '').trim() || 'CSV 일괄 기입';
+      // physicalCount 모드면 우선 적용. row 별 reason 이 비어있으면 "CSV 일괄 기입" fallback.
+      const customReason = String(row.reason ?? '').trim();
+      const reason = physicalCount
+        ? (customReason ? `${physicalReason} ${customReason}` : physicalReason)
+        : (customReason || 'CSV 일괄 기입');
 
       // Get current quantity
       const { data: current } = await admin

@@ -44,6 +44,8 @@ export async function GET(request: NextRequest) {
     } else if (reason.startsWith('__EXCHANGE_DEDUCT__:')) {
       type = '교환 차감';
       orderNumber = reason.slice('__EXCHANGE_DEDUCT__:'.length);
+    } else if (reason.startsWith('__PHYSICAL_COUNT__:')) {
+      type = '월별 실사';
     } else if (reason === '수동 조정') {
       type = '수동 조정';
     }

@@ -223,6 +223,9 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: number; errors: { row: number; message: string }[] } | null>(null);
   const [parseError, setParseError] = useState('');
+  // 월별 실사 모드 — reason 에 __PHYSICAL_COUNT__:<오늘> prefix 추가.
+  // applyOrders 가 이를 cutoff 로 인식해 그 이후 주문만 자동 차감/복구.
+  const [physicalCount, setPhysicalCount] = useState(false);
 
   function parseCsv(text: string) {
     setResult(null); setParseError('');
@@ -257,7 +260,10 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
       const res = await fetch('/api/inventory/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: validRows.map((r) => ({ sku_code: r.sku_code, warehouse_name: r.warehouse_name, quantity: Number(r.quantity), reason: r.reason || undefined })) }),
+        body: JSON.stringify({
+          rows: validRows.map((r) => ({ sku_code: r.sku_code, warehouse_name: r.warehouse_name, quantity: Number(r.quantity), reason: r.reason || undefined })),
+          physicalCount,
+        }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
@@ -269,7 +275,7 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
   }
 
   function handleClose() {
-    setCsvText(''); setParsed([]); setResult(null); setParseError(''); onClose();
+    setCsvText(''); setParsed([]); setResult(null); setParseError(''); setPhysicalCount(false); onClose();
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -291,6 +297,31 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
   return (
     <Dialog open={open} onClose={handleClose} title="재고 CSV 일괄 기입">
       <div className="space-y-4">
+        {/* 월별 실사 모드 토글 */}
+        <label
+          className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+            physicalCount
+              ? 'border-[#0071E3] bg-[#0071E3]/5'
+              : 'border-[#E5E5EA] bg-white hover:bg-[#F5F5F7]'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={physicalCount}
+            onChange={(e) => setPhysicalCount(e.target.checked)}
+            className="mt-0.5"
+          />
+          <div className="flex-1 space-y-0.5">
+            <div className="text-[13px] font-medium text-[#1D1D1F]">
+              월별 실사 모드
+            </div>
+            <div className="text-[11px] text-[#6E6E73] leading-relaxed">
+              실사 결과로 재고를 덮어쓰고, 그 이후 발생한 주문/반품/쿠팡/토스/스마트스토어/기타마켓 변동만 자동 반영.
+              사유에 <span className="font-mono">__PHYSICAL_COUNT__:오늘날짜</span> 자동 추가됨.
+            </div>
+          </div>
+        </label>
+
         {/* Format hint */}
         <div className="bg-[#F8F9FB] rounded-xl p-3 space-y-1">
           <p className="text-[12px] font-semibold text-[#6B7684]">CSV 형식</p>

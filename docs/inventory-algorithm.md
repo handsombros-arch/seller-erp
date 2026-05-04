@@ -17,6 +17,7 @@
 - `__ORDER__:<order_number>` — 주문 차감
 - `__RESTORE__:<order_number>` — 반품 복구
 - `__EXCHANGE_DEDUCT__:<id>` / `__EXCHANGE_RESTORE__:<id>` — 교환 처리
+- `__PHYSICAL_COUNT__:<YYYY-MM-DD>` — 월별 실사 (덮어쓰기 + cutoff)
 - `수동 조정` 등 — 사용자가 UI 에서 직접 조정
 
 ## 차감 트리거 조건 (이게 핵심)
@@ -97,6 +98,23 @@ LEFT JOIN trigger_deduct td ON td.sku_id = src.sku_id
 WHERE COALESCE(td.qty, 0) > 0
 ORDER BY td.qty DESC;
 ```
+
+## 권장 운영 흐름 — 월별 실사
+
+매월 1회 실측 → CSV 업로드 → 그 이후 자동.
+
+1. **재고 페이지 → "CSV 일괄 기입" 다이얼로그**
+2. **"월별 실사 모드" 토글 ON**
+3. CSV 형식: `SKU코드, 창고명, 수량, 사유(선택)` 한 줄당 하나
+4. 업로드 → 각 행이 `inventory_adjustments` 에 reason `__PHYSICAL_COUNT__:<YYYY-MM-DD>` 로 기록 + `inventory.quantity` 덮어쓰기
+5. 그 이후 발생하는 모든 변동은 자동 적용:
+   - **신규 주문 (쿠팡 Wing/네이버/토스/기타)** — DB 트리거가 INSERT 시 자동 차감 (배송중 이상)
+   - **반품 완료** — UPDATE 트리거가 자동 복구
+   - **cron daily** — 트리거가 놓친 케이스 백필 + audit 행 보강
+
+실사 이전 주문은 `lastManualDate` 필터로 자동 무시 — 실사 수치에 이미 반영된 것으로 간주.
+
+다음 달 실사 때 같은 절차 반복. 매월 1회 실측이 baseline 이고, 사이는 자동.
 
 ## 알려진 한계
 

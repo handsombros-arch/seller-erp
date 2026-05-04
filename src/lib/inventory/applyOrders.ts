@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const ORDER_NOTE_PREFIX = '__ORDER__:';
 const RESTORE_NOTE_PREFIX = '__RESTORE__:';
+// 월별 실사 (physical count) reason prefix — 자동 차감 cutoff
+export const PHYSICAL_COUNT_PREFIX = '__PHYSICAL_COUNT__:';
 
 // 쿠팡RG는 자체 센터에서 출고 → 자사 창고 재고 불변
 const SKIP_CHANNELS = ['coupang_rg'];
