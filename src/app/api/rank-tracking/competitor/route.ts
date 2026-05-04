@@ -29,11 +29,39 @@ export async function GET() {
   // 셋 다 없는 경우만 카운트에서 제외.
   const ids = (snapshots || []).map((s) => s.id);
   const aggBySnapshot: Record<string, { products: number; keywords: number; avg_winner_price: number | null }> = {};
+
+  // Supabase 기본 max-rows(1000) 우회용 페이지네이션 헬퍼.
+  // .in() 결과도 1000행 캡되므로 직접 range 로 끊어 받아야 함.
+  // 5000개 chunk 안전장치: 무한루프 방지 + 1행/요청 절대 0 으로 끊기.
+  async function fetchAll<T>(
+    fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+  ): Promise<T[]> {
+    const all: T[] = [];
+    const PAGE = 1000;
+    let from = 0;
+    for (let guard = 0; guard < 5000; guard++) {
+      const { data, error } = await fetchPage(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      if (!data?.length) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }
+
   if (ids.length) {
-    const { data: prodRows } = await admin
-      .from('competitor_snapshot_products')
-      .select('id, snapshot_id, winner_price, price_min, price_max')
-      .in('snapshot_id', ids);
+    type ProdRow = { id: string; snapshot_id: string; winner_price: number | null; price_min: number | null; price_max: number | null };
+    // snapshot_id IN (ids) 자체는 OK 지만 응답 행 수가 1000+ 일 수 있음 → range 로 끊어 받기
+    const prodRows = await fetchAll<ProdRow>(async (from, to) => {
+      const r = await admin
+        .from('competitor_snapshot_products')
+        .select('id, snapshot_id, winner_price, price_min, price_max')
+        .in('snapshot_id', ids)
+        .order('id', { ascending: true })
+        .range(from, to);
+      return { data: r.data as ProdRow[] | null, error: r.error };
+    });
     const prodIdsBySnap: Record<string, string[]> = {};
     const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
     const pickProductPrice = (row: { winner_price: unknown; price_min: unknown; price_max: unknown }): number | null => {
@@ -46,7 +74,7 @@ export async function GET() {
       if (Number.isFinite(hi) && hi > 0) return hi;
       return null;
     };
-    for (const row of prodRows || []) {
+    for (const row of prodRows) {
       (prodIdsBySnap[row.snapshot_id] ??= []).push(row.id);
       const price = pickProductPrice(row);
       if (price != null) {
@@ -55,15 +83,27 @@ export async function GET() {
         winnerSumBySnap[row.snapshot_id].count += 1;
       }
     }
-    const allProdIds = (prodRows || []).map((p) => p.id);
+    const allProdIds = prodRows.map((p) => p.id);
     let kwBy: Record<string, number> = {};
+    // 키워드도 product_id IN (...) 결과가 1000+ 가능 → 페이지네이션 + product_id IN 자체도 chunk
     if (allProdIds.length) {
-      const { data: kwRows } = await admin
-        .from('competitor_snapshot_keywords')
-        .select('product_id')
-        .in('product_id', allProdIds);
-      for (const k of kwRows || []) {
-        kwBy[k.product_id] = (kwBy[k.product_id] ?? 0) + 1;
+      // .in() 의 IN list 길이는 32k 정도까지 안전하지만, URL 길이 한계가 있어 product 1000개씩 chunk.
+      const ID_CHUNK = 1000;
+      type KwRow = { product_id: string };
+      for (let i = 0; i < allProdIds.length; i += ID_CHUNK) {
+        const idChunk = allProdIds.slice(i, i + ID_CHUNK);
+        const kwRows = await fetchAll<KwRow>(async (from, to) => {
+          const r = await admin
+            .from('competitor_snapshot_keywords')
+            .select('product_id')
+            .in('product_id', idChunk)
+            .order('product_id', { ascending: true })
+            .range(from, to);
+          return { data: r.data as KwRow[] | null, error: r.error };
+        });
+        for (const k of kwRows) {
+          kwBy[k.product_id] = (kwBy[k.product_id] ?? 0) + 1;
+        }
       }
     }
     for (const sid of ids) {
