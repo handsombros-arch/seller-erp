@@ -33,32 +33,60 @@ async function fetchLatestMainCommit(): Promise<RemoteCommit | null> {
   }
 }
 
+async function fetchCurrentDeployedSha(): Promise<string | null> {
+  try {
+    const r = await fetch('/api/deploy-info', { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j?.sha ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function DeployStatus({ deployedSha }: { deployedSha?: string | null }) {
+  // 페이지 로드 시점의 deployedSha 는 HTML 에 박혀있어 stale 가능 →
+  // 클라이언트에서 /api/deploy-info 로 실제 현재 배포 SHA 를 따로 추적.
+  const [liveDeployed, setLiveDeployed] = useState<string | null>(deployedSha ?? null);
   const [latest, setLatest] = useState<RemoteCommit | null>(null);
   const [now, setNow] = useState(Date.now());
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 폴링: 동기화되지 않은 동안 10초 간격, 동기화되면 60초 간격으로 느슨히
+  // 폴링: 동기화 안된 동안 10초 (GitHub + 배포 SHA 둘 다), 동기화되면 60초로 느슨히.
   useEffect(() => {
     let alive = true;
     const inSync =
-      !!deployedSha && !!latest && deployedSha.slice(0, 7) === latest.sha.slice(0, 7);
+      !!liveDeployed && !!latest && liveDeployed.slice(0, 7) === latest.sha.slice(0, 7);
     const interval = inSync ? 60000 : POLL_INTERVAL_MS;
 
-    fetchLatestMainCommit().then((r) => alive && r && setLatest(r));
-    const id = setInterval(() => {
-      fetchLatestMainCommit().then((r) => alive && r && setLatest(r));
-    }, interval);
+    const tick = async () => {
+      const [gh, dep] = await Promise.all([fetchLatestMainCommit(), fetchCurrentDeployedSha()]);
+      if (!alive) return;
+      if (gh) setLatest(gh);
+      if (dep) {
+        setLiveDeployed((prev) => {
+          // 새 배포 완료 감지: 이전 SHA 와 다르면, 그리고 GitHub latest 와 매치되면
+          // 페이지 자동 새로고침 (사용자가 직접 새로고침 안 해도 새 코드 로드됨)
+          if (prev && dep !== prev && gh && dep.slice(0, 7) === gh.sha.slice(0, 7)) {
+            setTimeout(() => window.location.reload(), 500);
+          }
+          return dep;
+        });
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, interval);
     return () => {
       alive = false;
       clearInterval(id);
     };
-  }, [deployedSha, latest?.sha]);
+  }, [liveDeployed, latest?.sha]);
 
   // 진행률 갱신용 1초 ticker (배포 중일 때만 의미있게)
   useEffect(() => {
     const inSync =
-      !!deployedSha && !!latest && deployedSha.slice(0, 7) === latest.sha.slice(0, 7);
+      !!liveDeployed && !!latest && liveDeployed.slice(0, 7) === latest.sha.slice(0, 7);
     if (inSync) {
       if (tickerRef.current) {
         clearInterval(tickerRef.current);
@@ -75,35 +103,32 @@ export function DeployStatus({ deployedSha }: { deployedSha?: string | null }) {
         tickerRef.current = null;
       }
     };
-  }, [deployedSha, latest?.sha]);
+  }, [liveDeployed, latest?.sha]);
 
-  if (!deployedSha) return null;
+  if (!liveDeployed) return null;
 
-  const short = deployedSha.slice(0, 7);
+  const short = liveDeployed.slice(0, 7);
   if (!latest) {
-    // GitHub API 응답 전 — deployed 만 표시
     return (
       <span
         title={`배포된 버전: ${short}`}
         className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-[#6E6E73] border border-black/[0.08] bg-white"
       >
         <Check className="w-3 h-3 text-emerald-500" />
-        {short}
+        배포됨 {short}
       </span>
     );
   }
 
-  const inSync = deployedSha.slice(0, 7) === latest.sha.slice(0, 7);
+  const inSync = liveDeployed.slice(0, 7) === latest.sha.slice(0, 7);
   if (inSync) {
-    const ageMin = Math.max(0, Math.floor((now - latest.pushedAt) / 60000));
     return (
       <span
-        title={`배포 최신 — ${latest.message}`}
+        title={`최신 — ${latest.message}`}
         className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-emerald-700 border border-emerald-200 bg-emerald-50"
       >
         <Check className="w-3 h-3" />
-        {short}
-        {ageMin > 0 && <span className="text-emerald-600/70">· {ageMin}분 전</span>}
+        배포됨 <span className="font-mono">{short}</span>
       </span>
     );
   }
@@ -114,7 +139,7 @@ export function DeployStatus({ deployedSha }: { deployedSha?: string | null }) {
   const remaining = Math.max(0, EST_DEPLOY_SEC - elapsed);
   return (
     <span
-      title={`배포 중 — 새 commit ${latest.sha.slice(0, 7)} (${latest.message})\n현재 배포: ${short}\n경과 ${elapsed}초 / 예상 ${EST_DEPLOY_SEC}초`}
+      title={`배포 중 — 새 commit ${latest.sha.slice(0, 7)} (${latest.message})\n현재 배포: ${short}\n경과 ${elapsed}초 / 예상 ${EST_DEPLOY_SEC}초\n완료 후 자동으로 페이지를 새로고침합니다.`}
       className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] text-amber-800 border border-amber-300 bg-amber-50"
     >
       <RefreshCw className="w-3 h-3 animate-spin" />
