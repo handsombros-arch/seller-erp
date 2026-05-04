@@ -24,25 +24,35 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 각 스냅샷의 상품/키워드 카운트 + 평균 판매가(상품 winner_price 평균) 집계
+  // 각 스냅샷의 상품/키워드 카운트 + 평균 판매가 집계.
+  // 상품별 가격 우선순위: winner_price → (price_min + price_max) / 2 → price_min || price_max.
+  // 셋 다 없는 경우만 카운트에서 제외.
   const ids = (snapshots || []).map((s) => s.id);
   const aggBySnapshot: Record<string, { products: number; keywords: number; avg_winner_price: number | null }> = {};
   if (ids.length) {
     const { data: prodRows } = await admin
       .from('competitor_snapshot_products')
-      .select('id, snapshot_id, winner_price')
+      .select('id, snapshot_id, winner_price, price_min, price_max')
       .in('snapshot_id', ids);
     const prodIdsBySnap: Record<string, string[]> = {};
     const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
+    const pickProductPrice = (row: { winner_price: unknown; price_min: unknown; price_max: unknown }): number | null => {
+      const w = row.winner_price != null ? Number(row.winner_price) : NaN;
+      if (Number.isFinite(w) && w > 0) return w;
+      const lo = row.price_min != null ? Number(row.price_min) : NaN;
+      const hi = row.price_max != null ? Number(row.price_max) : NaN;
+      if (Number.isFinite(lo) && Number.isFinite(hi) && lo > 0 && hi > 0) return (lo + hi) / 2;
+      if (Number.isFinite(lo) && lo > 0) return lo;
+      if (Number.isFinite(hi) && hi > 0) return hi;
+      return null;
+    };
     for (const row of prodRows || []) {
       (prodIdsBySnap[row.snapshot_id] ??= []).push(row.id);
-      if (row.winner_price != null) {
-        const wp = Number(row.winner_price);
-        if (Number.isFinite(wp)) {
-          (winnerSumBySnap[row.snapshot_id] ??= { sum: 0, count: 0 });
-          winnerSumBySnap[row.snapshot_id].sum += wp;
-          winnerSumBySnap[row.snapshot_id].count += 1;
-        }
+      const price = pickProductPrice(row);
+      if (price != null) {
+        (winnerSumBySnap[row.snapshot_id] ??= { sum: 0, count: 0 });
+        winnerSumBySnap[row.snapshot_id].sum += price;
+        winnerSumBySnap[row.snapshot_id].count += 1;
       }
     }
     const allProdIds = (prodRows || []).map((p) => p.id);

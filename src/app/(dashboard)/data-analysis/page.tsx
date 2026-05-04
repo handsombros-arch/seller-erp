@@ -947,18 +947,9 @@ export default function DataAnalysisPage() {
               borderLeft: `2px solid ${DEPTH_COLORS[Math.min(node.depth - 1, DEPTH_COLORS.length - 1)]}`,
             }}
           >
-            {node.isLeaf && node.fullPath.length > 1 ? (
-              <span className="inline-flex items-center gap-1">
-                <span className="text-[#86868B] text-[11px]">
-                  {node.fullPath.slice(0, -1).join(' › ')} ›
-                </span>
-                <span className="font-medium">{node.segment}</span>
-              </span>
-            ) : (
-              <span className={node.depth === 1 ? 'font-semibold' : node.isLeaf ? 'font-medium' : ''}>
-                {node.segment}
-              </span>
-            )}
+            <span className={node.depth === 1 ? 'font-semibold' : node.isLeaf ? 'font-medium' : ''}>
+              {node.segment}
+            </span>
           </td>
           {columnOrder.map((key) => {
             const col = ALL_COLUMNS[key];
