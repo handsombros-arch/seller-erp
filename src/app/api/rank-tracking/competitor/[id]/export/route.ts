@@ -42,12 +42,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
+  // 공용 — user_id 필터 제거
   const admin = await createAdminClient();
   const { data: snapshot } = await admin
     .from('competitor_snapshots')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
     .single();
   if (!snapshot) return NextResponse.json({ error: '스냅샷 없음' }, { status: 404 });
 

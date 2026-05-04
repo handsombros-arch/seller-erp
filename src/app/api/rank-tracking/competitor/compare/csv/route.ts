@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'ids 가 비어있습니다.' }, { status: 400 });
   }
 
+  // 공용 — user_id 필터 제거
   const admin = await createAdminClient();
   const { data, error } = await admin
     .from('competitor_snapshots')
     .select('category_name, category_path, captured_at, total_impression, total_click, top100_impression, top100_search_pct, top100_ad_pct, memo')
     .in('id', ids)
-    .eq('user_id', user.id)
     // path 전체로 정렬해야 같은 leaf 이름이라도 다른 path 가 별도로 모임
     .order('category_path', { ascending: true })
     .order('captured_at', { ascending: false });

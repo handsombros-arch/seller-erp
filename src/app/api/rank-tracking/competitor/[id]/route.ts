@@ -8,12 +8,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
+  // 공용 — 인증만 확인하고 user_id 필터는 안 건다 (팀 공유 데이터)
   const admin = await createAdminClient();
   const { data: snapshot, error: snapErr } = await admin
     .from('competitor_snapshots')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
     .single();
   if (snapErr || !snapshot) {
     return NextResponse.json({ error: '스냅샷을 찾을 수 없습니다.' }, { status: 404 });
@@ -52,12 +52,12 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
+  // 공용 데이터 — 팀원 누구나 삭제 가능. 인증만 확인.
   const admin = await createAdminClient();
   const { error } = await admin
     .from('competitor_snapshots')
     .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -8,13 +8,14 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
+  // 공용(팀 전체)으로 보이게 — user_id 필터 제거.
+  // limit 도 200 → 5000 으로 (오래된 페이스트가 잘려나가던 문제). 이후 수천을 넘으면 페이지네이션으로.
   const admin = await createAdminClient();
   const { data: snapshots, error } = await admin
     .from('competitor_snapshots')
     .select('id, captured_at, my_product_name, my_product_id, memo, created_at, category_name, category_path, total_impression, top100_impression, top100_search_pct, top100_ad_pct, total_click')
-    .eq('user_id', user.id)
     .order('captured_at', { ascending: false })
-    .limit(200);
+    .limit(5000);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

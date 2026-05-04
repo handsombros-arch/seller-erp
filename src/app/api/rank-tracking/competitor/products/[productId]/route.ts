@@ -22,21 +22,13 @@ export async function PATCH(
   }
 
   const admin = await createAdminClient();
-  // 소유권 확인 (상품 → 스냅샷 → user_id)
+  // 상품 존재만 확인 — competitor_snapshots 는 팀 공용 데이터라 user_id 검증 안 함
   const { data: product } = await admin
     .from('competitor_snapshot_products')
     .select('id, snapshot_id')
     .eq('id', productId)
     .single();
   if (!product) return NextResponse.json({ error: '상품 없음' }, { status: 404 });
-
-  const { data: snapshot } = await admin
-    .from('competitor_snapshots')
-    .select('id')
-    .eq('id', product.snapshot_id)
-    .eq('user_id', user.id)
-    .single();
-  if (!snapshot) return NextResponse.json({ error: '권한 없음' }, { status: 403 });
 
   const { error } = await admin
     .from('competitor_snapshot_products')
