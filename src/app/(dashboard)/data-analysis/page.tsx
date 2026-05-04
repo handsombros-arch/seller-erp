@@ -11,6 +11,23 @@ import {
   parseCompetitorSnapshot,
   splitMultipleSnapshots,
 } from '@/lib/coupang/parse-competitor-snapshot';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sorting helpers
@@ -210,6 +227,136 @@ type TreeNode = {
   leaf_count: number;
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Reorderable columns
+// ────────────────────────────────────────────────────────────────────────────
+
+// 양 끝(체크박스, chevron, 카테고리 / 메모, 삭제)은 reorder 불가 — UX 일관성.
+// 가운데 데이터 9개만 사용자가 순서 변경 가능. 정의 순서가 default 순서.
+type ColumnKey =
+  | 'date'
+  | 'total_impression'
+  | 'total_click'
+  | 'ctr'
+  | 'top100_impression'
+  | 'top100_share'
+  | 'search_pct'
+  | 'ad_pct'
+  | 'avg_winner_price';
+
+type ColumnDef = {
+  key: ColumnKey;
+  label: string;
+  align: 'left' | 'right';
+  headerTitle?: string;
+  renderHeader?: () => ReactNode;
+  render: (node: TreeNode) => ReactNode;
+};
+
+const COLUMN_STORAGE_KEY = 'data-analysis.columnOrder.v1';
+
+const ALL_COLUMNS: Record<ColumnKey, ColumnDef> = {
+  date: {
+    key: 'date',
+    label: '캡처일/하위',
+    align: 'right',
+    render: (n) => (
+      <span className="text-gray-500">
+        {n.isLeaf && n.leafSnapshot ? fmtDate(n.leafSnapshot.captured_at) : `${n.leaf_count}개`}
+      </span>
+    ),
+  },
+  total_impression: {
+    key: 'total_impression',
+    label: '전체 노출',
+    align: 'right',
+    render: (n) => <span className="font-medium">{fmt(n.total_impression)}</span>,
+  },
+  total_click: {
+    key: 'total_click',
+    label: '전체 클릭',
+    align: 'right',
+    render: (n) => <>{fmt(n.total_click)}</>,
+  },
+  ctr: {
+    key: 'ctr',
+    label: 'CTR',
+    align: 'right',
+    render: (n) => <>{fmtCTR(ctr(n.total_click, n.total_impression))}</>,
+  },
+  top100_impression: {
+    key: 'top100_impression',
+    label: 'Top100 노출',
+    align: 'right',
+    render: (n) => <>{fmt(n.top100_impression)}</>,
+  },
+  top100_share: {
+    key: 'top100_share',
+    label: 'Top100 점유율',
+    align: 'right',
+    render: (n) => <>{fmtPct(top100Share(n.top100_impression, n.total_impression))}</>,
+  },
+  search_pct: {
+    key: 'search_pct',
+    label: 'Search',
+    align: 'right',
+    render: (n) => <>{fmtPct(n.top100_search_pct)}</>,
+  },
+  ad_pct: {
+    key: 'ad_pct',
+    label: 'Ad',
+    align: 'right',
+    render: (n) => <>{fmtPct(n.top100_ad_pct)}</>,
+  },
+  avg_winner_price: {
+    key: 'avg_winner_price',
+    label: '평균 판매가',
+    align: 'right',
+    headerTitle: "복사한 텍스트에서 '아이템위너' 가격을 추출하지 못한 상품이 있는 경우 비어있을 수 있습니다 (Coupang이 가격 범위만 표시했거나 광고제외 상품).",
+    renderHeader: () => (
+      <span className="inline-flex items-center gap-1">
+        평균 판매가
+        <Info className="w-3 h-3 text-gray-400" />
+      </span>
+    ),
+    render: (n) => <>{fmtWon(n.avg_winner_price)}</>,
+  },
+};
+
+const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
+  'date',
+  'total_impression',
+  'total_click',
+  'ctr',
+  'top100_impression',
+  'top100_share',
+  'search_pct',
+  'ad_pct',
+  'avg_winner_price',
+];
+
+function SortableHeaderCell({ col }: { col: ColumnDef }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <th
+      ref={setNodeRef}
+      style={style}
+      className={`p-2 ${col.align === 'right' ? 'text-right' : 'text-left'} group select-none`}
+      title={col.headerTitle}
+    >
+      <span className="inline-flex items-center gap-1 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
+        <GripVertical className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+        {col.renderHeader ? col.renderHeader() : col.label}
+      </span>
+    </th>
+  );
+}
+
 function buildTree(leafs: SnapshotMeta[]): TreeNode[] {
   const all = new Map<string, TreeNode>();
 
@@ -385,6 +532,44 @@ export default function DataAnalysisPage() {
 
   // 트리뷰 펼침 상태 (각 노드 key)
   const [openTreeKeys, setOpenTreeKeys] = useState<Set<string>>(new Set());
+
+  // 컬럼 순서 (체크박스/chevron/카테고리 + 메모/삭제 제외한 9개 데이터 컬럼)
+  // hydration mismatch 방지: 초기값은 default, useEffect 안에서 localStorage 로 덮어씀
+  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(DEFAULT_COLUMN_ORDER);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      // 알 수 없는 키 제거 + 빠진 키 끝에 append
+      const known = new Set(DEFAULT_COLUMN_ORDER);
+      const valid = parsed.filter((k: string): k is ColumnKey => known.has(k as ColumnKey));
+      const missing = DEFAULT_COLUMN_ORDER.filter((k) => !valid.includes(k));
+      setColumnOrder([...valid, ...missing]);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnOrder));
+    } catch {}
+  }, [columnOrder]);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const handleColumnDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setColumnOrder((prev) => {
+      const oldIdx = prev.indexOf(active.id as ColumnKey);
+      const newIdx = prev.indexOf(over.id as ColumnKey);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+  };
+  const resetColumnOrder = () => setColumnOrder(DEFAULT_COLUMN_ORDER);
 
   // 여러 카테고리 한 번에 paste 모드
   const [batchMode, setBatchMode] = useState(false);
@@ -775,26 +960,22 @@ export default function DataAnalysisPage() {
               </span>
             )}
           </td>
-          <td className="p-2 text-right text-gray-500">
-            {node.isLeaf && snap ? fmtDate(snap.captured_at) : `${node.leaf_count}개`}
-          </td>
-          <td className="p-2 text-right font-medium">{fmt(node.total_impression)}</td>
-          <td className="p-2 text-right">{fmt(node.total_click)}</td>
-          <td className="p-2 text-right">{fmtCTR(ctr(node.total_click, node.total_impression))}</td>
-          <td className="p-2 text-right">{fmt(node.top100_impression)}</td>
-          <td className="p-2 text-right">{fmtPct(top100Share(node.top100_impression, node.total_impression))}</td>
-          <td className="p-2 text-right">{fmtPct(node.top100_search_pct)}</td>
-          <td className="p-2 text-right">{fmtPct(node.top100_ad_pct)}</td>
-          <td
-            className="p-2 text-right"
-            title={
-              node.avg_winner_price == null
-                ? '아이템위너 가격이 파싱되지 않은 카테고리 — 페이스트 텍스트에 가격 범위만 있었거나 광고제외 상품들이라 winner_price 가 비어있습니다.'
-                : undefined
-            }
-          >
-            {fmtWon(node.avg_winner_price)}
-          </td>
+          {columnOrder.map((key) => {
+            const col = ALL_COLUMNS[key];
+            return (
+              <td
+                key={key}
+                className={`p-2 ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                title={
+                  key === 'avg_winner_price' && node.avg_winner_price == null
+                    ? '아이템위너 가격이 파싱되지 않은 카테고리 — 페이스트 텍스트에 가격 범위만 있었거나 광고제외 상품들이라 winner_price 가 비어있습니다.'
+                    : undefined
+                }
+              >
+                {col.render(node)}
+              </td>
+            );
+          })}
           <td className="p-2 text-gray-500 truncate max-w-[140px]">
             {node.isLeaf && snap ? snap.memo || '' : ''}
           </td>
@@ -842,17 +1023,16 @@ export default function DataAnalysisPage() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-8 space-y-8 max-w-[1400px] mx-auto text-[#1D1D1F]" style={{ fontFamily: 'var(--font-apple, -apple-system), BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard", system-ui, sans-serif' }}>
       <div>
-        <h1 className="text-xl font-semibold">데이터 분석</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#1D1D1F]">데이터 분석</h1>
+        <p className="text-[14px] text-[#6E6E73] mt-1.5 tracking-[-0.01em]">
           쿠팡 셀러 광고진단 페이지 텍스트를 카테고리 단위로 붙여넣어 카테고리/상품/키워드를 한 번에 저장합니다.
-          카테고리 → 상품 → 키워드 순으로 펼쳐서 봅니다.
         </p>
       </div>
 
       {/* 입력 */}
-      <div className="border rounded-lg p-4 bg-white space-y-3">
+      <div className="rounded-[18px] border border-black/[0.06] bg-white p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-medium">새 데이터 추가</h2>
           <label
@@ -982,8 +1162,8 @@ export default function DataAnalysisPage() {
       </div>
 
       {/* 카테고리 트리 분석 */}
-      <div className="border rounded-lg bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b flex items-center justify-between flex-wrap gap-2">
+      <div className="rounded-[18px] border border-black/[0.06] bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="px-5 py-4 border-b border-black/[0.06] flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-medium">카테고리 분석 ({leafSnapshots.length}개 카테고리)</h2>
             <span className="text-xs text-gray-500">선택 {selected.size}개</span>
@@ -1019,6 +1199,14 @@ export default function DataAnalysisPage() {
               <Download className="w-4 h-4 mr-1" />
               선택 카테고리 CSV
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetColumnOrder}
+              title="컬럼 순서를 기본값으로"
+            >
+              컬럼 초기화
+            </Button>
             <label
               className={`inline-flex items-center gap-1.5 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
                 adminMode
@@ -1050,30 +1238,24 @@ export default function DataAnalysisPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="p-2 w-8"></th>
-                  <th className="p-2 w-8"></th>
-                  <th className="p-2 text-left">카테고리</th>
-                  <th className="p-2 text-right">캡처일/하위</th>
-                  <th className="p-2 text-right">전체 노출</th>
-                  <th className="p-2 text-right">전체 클릭</th>
-                  <th className="p-2 text-right">CTR</th>
-                  <th className="p-2 text-right">Top100 노출</th>
-                  <th className="p-2 text-right">Top100 점유율</th>
-                  <th className="p-2 text-right">Search</th>
-                  <th className="p-2 text-right">Ad</th>
-                  <th
-                    className="p-2 text-right"
-                    title="복사한 텍스트에서 '아이템위너' 가격을 추출하지 못한 상품이 있는 경우 비어있을 수 있습니다 (Coupang이 가격 범위만 표시했거나 광고제외 상품)."
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      평균 판매가
-                      <Info className="w-3 h-3 text-gray-400" />
-                    </span>
-                  </th>
-                  <th className="p-2 text-left">메모</th>
-                  <th className="p-2 w-10"></th>
-                </tr>
+                <DndContext
+                  sensors={dndSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleColumnDragEnd}
+                >
+                  <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+                    <tr>
+                      <th className="p-2 w-8"></th>
+                      <th className="p-2 w-8"></th>
+                      <th className="p-2 text-left">카테고리</th>
+                      {columnOrder.map((key) => (
+                        <SortableHeaderCell key={key} col={ALL_COLUMNS[key]} />
+                      ))}
+                      <th className="p-2 text-left">메모</th>
+                      <th className="p-2 w-10"></th>
+                    </tr>
+                  </SortableContext>
+                </DndContext>
               </thead>
               <tbody>
                 {filteredTree.map((node) => renderTreeNode(node))}
@@ -1085,7 +1267,7 @@ export default function DataAnalysisPage() {
 
       {/* 카테고리 헤더 미인식 스냅샷 (옛 데이터 등) */}
       {withoutCategory.length > 0 && (
-        <div className="border rounded-lg bg-white overflow-hidden">
+        <div className="rounded-[18px] border border-black/[0.06] bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <div className="px-4 py-3 border-b">
             <h2 className="font-medium text-gray-700">카테고리 헤더 없는 스냅샷 ({withoutCategory.length})</h2>
             <p className="text-xs text-gray-500 mt-1">
