@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download, GripVertical, Info, Loader2, Save, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download, GripVertical, Info, Loader2, Save, Search, Star, Trash2 } from 'lucide-react';
 import {
   parseCompetitorSnapshot,
   splitMultipleSnapshots,
@@ -1342,6 +1342,35 @@ export default function DataAnalysisPage() {
   const handleSelectAll = () => setSelected(new Set(allLeafIds));
   const handleClearAll = () => setSelected(new Set());
 
+  // ── 북마크 (full path 기준, localStorage 영속화) ────────────────
+  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
+  const [bookmarkOnly, setBookmarkOnly] = useState(false);
+  // 초기 로드 (hydration mismatch 방지로 useEffect 안에서)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('data-analysis.bookmarks.v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setBookmarks(new Set(parsed));
+      }
+    } catch {}
+  }, []);
+  // 변경 시 저장
+  useEffect(() => {
+    try {
+      localStorage.setItem('data-analysis.bookmarks.v1', JSON.stringify([...bookmarks]));
+    } catch {}
+  }, [bookmarks]);
+  const toggleBookmark = (pathKey: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBookmarks((prev) => {
+      const next = new Set(prev);
+      if (next.has(pathKey)) next.delete(pathKey);
+      else next.add(pathKey);
+      return next;
+    });
+  };
+
   // ── 카테고리 실시간 검색 ────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -1358,21 +1387,38 @@ export default function DataAnalysisPage() {
   // 자식 중 매칭이 있으면 ancestor 도 keep. 매칭 없으면 prune.
   const { filteredTree, autoExpandKeys, matchCount } = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    if (!term) return { filteredTree: tree, autoExpandKeys: new Set<string>(), matchCount: 0 };
+    // 둘 중 하나라도 활성화면 필터 적용
+    if (!term && !bookmarkOnly) {
+      return { filteredTree: tree, autoExpandKeys: new Set<string>(), matchCount: 0 };
+    }
     const auto = new Set<string>();
     let matches = 0;
     const visit = (node: TreeNode): TreeNode | null => {
-      const segMatch = node.segment.toLowerCase().includes(term);
-      const pathMatch = node.fullPath.join(' > ').toLowerCase().includes(term);
+      // 검색어 매칭 (없으면 자동 통과)
+      const segMatch = term ? node.segment.toLowerCase().includes(term) : false;
+      const pathMatch = term ? node.fullPath.join(' > ').toLowerCase().includes(term) : false;
+      // 북마크 매칭: leaf 만 직접 매칭. 부모는 자식 매칭으로만 살아남음.
+      const pathKey = node.fullPath.join('|');
+      const isBookmarked = node.isLeaf && bookmarks.has(pathKey);
       const childResults: TreeNode[] = [];
       for (const c of node.children) {
         const r = visit(c);
         if (r) childResults.push(r);
       }
-      const keep = segMatch || pathMatch || childResults.length > 0;
+      // bookmarkOnly 면 직접 북마크 OR 자식이 살아남은 경우만 keep
+      // search 만이면 segMatch/pathMatch OR 자식
+      // 둘 다 활성: AND 조합 — 검색 매칭이고 북마크인 leaf 만
+      let directMatch: boolean;
+      if (term && bookmarkOnly) {
+        directMatch = (segMatch || pathMatch) && (node.isLeaf ? isBookmarked : false);
+      } else if (term) {
+        directMatch = segMatch || pathMatch;
+      } else {
+        directMatch = isBookmarked;
+      }
+      const keep = directMatch || childResults.length > 0;
       if (!keep) return null;
-      if (segMatch || pathMatch) matches += 1;
-      // 매칭된 자식이 있으면 이 노드 자동 펼침
+      if (directMatch) matches += 1;
       if (childResults.length > 0) auto.add(node.key);
       return { ...node, children: childResults };
     };
@@ -1382,11 +1428,11 @@ export default function DataAnalysisPage() {
       if (r) out.push(r);
     }
     return { filteredTree: out, autoExpandKeys: auto, matchCount: matches };
-  }, [tree, searchTerm]);
+  }, [tree, searchTerm, bookmarkOnly, bookmarks]);
 
-  // 검색어 변하면 자동 펼침 적용. 검색어 비우면 직전 사용자 펼침 상태로 복원.
+  // 검색어/북마크 필터 변하면 자동 펼침 적용. 둘 다 비우면 직전 사용자 펼침 상태로 복원.
   useEffect(() => {
-    if (searchTerm) {
+    if (searchTerm || bookmarkOnly) {
       // 검색 시작 시점 1회만 사용자 상태 백업
       if (expandSnapshotRef.current === null) {
         expandSnapshotRef.current = new Set(openTreeKeys);
@@ -1407,7 +1453,7 @@ export default function DataAnalysisPage() {
         lastAutoExpandRef.current = new Set();
       }
     }
-  }, [searchTerm, autoExpandKeys]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchTerm, bookmarkOnly, autoExpandKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleTreeNode = (key: string) => {
     setOpenTreeKeys((prev) => {
@@ -1487,9 +1533,26 @@ export default function DataAnalysisPage() {
               borderLeft: `2px solid ${DEPTH_COLORS[Math.min(node.depth - 1, DEPTH_COLORS.length - 1)]}`,
             }}
           >
-            <span className={node.depth === 1 ? 'font-semibold' : node.isLeaf ? 'font-medium' : ''}>
-              {node.segment}
-            </span>
+            <div className="inline-flex items-center gap-1.5">
+              {node.isLeaf && (() => {
+                const pathKey = node.fullPath.join('|');
+                const isBm = bookmarks.has(pathKey);
+                return (
+                  <button
+                    onClick={(e) => toggleBookmark(pathKey, e)}
+                    className={`shrink-0 transition-colors ${
+                      isBm ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'
+                    }`}
+                    title={isBm ? '북마크 해제' : '북마크'}
+                  >
+                    <Star className="w-3.5 h-3.5" fill={isBm ? 'currentColor' : 'none'} />
+                  </button>
+                );
+              })()}
+              <span className={node.depth === 1 ? 'font-semibold' : node.isLeaf ? 'font-medium' : ''}>
+                {node.segment}
+              </span>
+            </div>
           </td>
           {columnOrder.map((key) => {
             const col = ALL_COLUMNS[key];
@@ -1735,6 +1798,17 @@ export default function DataAnalysisPage() {
               {selected.size === allLeafIds.length && allLeafIds.length > 0
                 ? '선택 해제'
                 : '전체 선택'}
+            </Button>
+            <Button
+              variant={bookmarkOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setBookmarkOnly((v) => !v)}
+              disabled={bookmarks.size === 0}
+              className={bookmarkOnly ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+              title={bookmarks.size === 0 ? '북마크된 카테고리가 없습니다' : `북마크 ${bookmarks.size}개`}
+            >
+              <Star className="w-3.5 h-3.5 mr-1" fill={bookmarkOnly ? 'currentColor' : 'none'} />
+              북마크{bookmarks.size > 0 ? ` (${bookmarks.size})` : ''}
             </Button>
             <Button
               onClick={handleOpenCompare}
