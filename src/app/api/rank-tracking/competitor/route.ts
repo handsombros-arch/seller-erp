@@ -50,70 +50,57 @@ export async function GET() {
     return all;
   }
 
+  // 상품 집계 — 실패해도 snapshots 자체는 반환되도록 try/catch 격리.
+  // (트리에는 카테고리 메타만 있으면 표시 가능. 상품 카운트/평균가는 부가정보)
   if (ids.length) {
-    type ProdRow = { id: string; snapshot_id: string; winner_price: number | null; price_min: number | null; price_max: number | null };
-    // snapshot_id IN (ids) 자체는 OK 지만 응답 행 수가 1000+ 일 수 있음 → range 로 끊어 받기
-    const prodRows = await fetchAll<ProdRow>(async (from, to) => {
-      const r = await admin
-        .from('competitor_snapshot_products')
-        .select('id, snapshot_id, winner_price, price_min, price_max')
-        .in('snapshot_id', ids)
-        .order('id', { ascending: true })
-        .range(from, to);
-      return { data: r.data as ProdRow[] | null, error: r.error };
-    });
-    const prodIdsBySnap: Record<string, string[]> = {};
-    const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
-    const pickProductPrice = (row: { winner_price: unknown; price_min: unknown; price_max: unknown }): number | null => {
-      const w = row.winner_price != null ? Number(row.winner_price) : NaN;
-      if (Number.isFinite(w) && w > 0) return w;
-      const lo = row.price_min != null ? Number(row.price_min) : NaN;
-      const hi = row.price_max != null ? Number(row.price_max) : NaN;
-      if (Number.isFinite(lo) && Number.isFinite(hi) && lo > 0 && hi > 0) return (lo + hi) / 2;
-      if (Number.isFinite(lo) && lo > 0) return lo;
-      if (Number.isFinite(hi) && hi > 0) return hi;
-      return null;
-    };
-    for (const row of prodRows) {
-      (prodIdsBySnap[row.snapshot_id] ??= []).push(row.id);
-      const price = pickProductPrice(row);
-      if (price != null) {
-        (winnerSumBySnap[row.snapshot_id] ??= { sum: 0, count: 0 });
-        winnerSumBySnap[row.snapshot_id].sum += price;
-        winnerSumBySnap[row.snapshot_id].count += 1;
-      }
-    }
-    const allProdIds = prodRows.map((p) => p.id);
-    let kwBy: Record<string, number> = {};
-    // 키워드도 product_id IN (...) 결과가 1000+ 가능 → 페이지네이션 + product_id IN 자체도 chunk
-    if (allProdIds.length) {
-      // .in() 의 IN list 길이는 32k 정도까지 안전하지만, URL 길이 한계가 있어 product 1000개씩 chunk.
-      const ID_CHUNK = 1000;
-      type KwRow = { product_id: string };
-      for (let i = 0; i < allProdIds.length; i += ID_CHUNK) {
-        const idChunk = allProdIds.slice(i, i + ID_CHUNK);
-        const kwRows = await fetchAll<KwRow>(async (from, to) => {
-          const r = await admin
-            .from('competitor_snapshot_keywords')
-            .select('product_id')
-            .in('product_id', idChunk)
-            .order('product_id', { ascending: true })
-            .range(from, to);
-          return { data: r.data as KwRow[] | null, error: r.error };
-        });
-        for (const k of kwRows) {
-          kwBy[k.product_id] = (kwBy[k.product_id] ?? 0) + 1;
+    try {
+      type ProdRow = { id: string; snapshot_id: string; winner_price: number | null; price_min: number | null; price_max: number | null };
+      const prodRows = await fetchAll<ProdRow>(async (from, to) => {
+        const r = await admin
+          .from('competitor_snapshot_products')
+          .select('id, snapshot_id, winner_price, price_min, price_max')
+          .in('snapshot_id', ids)
+          .order('id', { ascending: true })
+          .range(from, to);
+        return { data: r.data as ProdRow[] | null, error: r.error };
+      });
+      const prodIdsBySnap: Record<string, string[]> = {};
+      const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
+      const pickProductPrice = (row: { winner_price: unknown; price_min: unknown; price_max: unknown }): number | null => {
+        const w = row.winner_price != null ? Number(row.winner_price) : NaN;
+        if (Number.isFinite(w) && w > 0) return w;
+        const lo = row.price_min != null ? Number(row.price_min) : NaN;
+        const hi = row.price_max != null ? Number(row.price_max) : NaN;
+        if (Number.isFinite(lo) && Number.isFinite(hi) && lo > 0 && hi > 0) return (lo + hi) / 2;
+        if (Number.isFinite(lo) && lo > 0) return lo;
+        if (Number.isFinite(hi) && hi > 0) return hi;
+        return null;
+      };
+      for (const row of prodRows) {
+        (prodIdsBySnap[row.snapshot_id] ??= []).push(row.id);
+        const price = pickProductPrice(row);
+        if (price != null) {
+          (winnerSumBySnap[row.snapshot_id] ??= { sum: 0, count: 0 });
+          winnerSumBySnap[row.snapshot_id].sum += price;
+          winnerSumBySnap[row.snapshot_id].count += 1;
         }
       }
-    }
-    for (const sid of ids) {
-      const pids = prodIdsBySnap[sid] || [];
-      const w = winnerSumBySnap[sid];
-      aggBySnapshot[sid] = {
-        products: pids.length,
-        keywords: pids.reduce((sum, pid) => sum + (kwBy[pid] ?? 0), 0),
-        avg_winner_price: w && w.count > 0 ? Math.round(w.sum / w.count) : null,
-      };
+      // 키워드 카운트는 리스트에서 안 쓰여 0 으로 둠 (단건 GET 에서 정확히 반환).
+      for (const sid of ids) {
+        const pids = prodIdsBySnap[sid] || [];
+        const w = winnerSumBySnap[sid];
+        aggBySnapshot[sid] = {
+          products: pids.length,
+          keywords: 0,
+          avg_winner_price: w && w.count > 0 ? Math.round(w.sum / w.count) : null,
+        };
+      }
+    } catch (e) {
+      // 집계 실패해도 트리 표시는 보존 — 빈 aggregate 로 폴백
+      console.error('[competitor GET] aggregation failed:', e);
+      for (const sid of ids) {
+        aggBySnapshot[sid] = { products: 0, keywords: 0, avg_winner_price: null };
+      }
     }
   }
 
