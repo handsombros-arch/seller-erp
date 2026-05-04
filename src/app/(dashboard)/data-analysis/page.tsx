@@ -1,12 +1,16 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download, Loader2, Save, Trash2 } from 'lucide-react';
-import { parseCompetitorSnapshot } from '@/lib/coupang/parse-competitor-snapshot';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Download, GripVertical, Info, Loader2, Save, Search, Trash2 } from 'lucide-react';
+import {
+  parseCompetitorSnapshot,
+  splitMultipleSnapshots,
+} from '@/lib/coupang/parse-competitor-snapshot';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sorting helpers
@@ -95,6 +99,17 @@ const categoryKey = (s: SnapshotMeta): string => {
   return s.category_name ?? '';
 };
 
+// depth 별 좌측 borderLeft 색상 — Apple Blue 톤 그라디언트.
+// depth 1 (최상위) 진한 파랑 → 깊을수록 옅어짐. cap 6.
+const DEPTH_COLORS = [
+  '#0071E3', // depth 1 — 패션의류잡화 등
+  '#3D8FE8',
+  '#7FB6EE',
+  '#B8D6F4',
+  '#DCE9F8',
+  '#EFF4FB', // depth 6+
+];
+
 type ProductDetail = {
   id: string;
   rank: number;
@@ -140,7 +155,14 @@ function fmt(n: number | null | undefined): string {
   return n.toLocaleString('ko-KR');
 }
 
+// 일반 퍼센트 (점유율, Search%, Ad%, 변화율 등) — 정수
 function fmtPct(n: number | null | undefined): string {
+  if (n == null) return '-';
+  return `${Math.round(n)}%`;
+}
+
+// CTR 만 소수 2자리 유지 (사용자가 정밀도 요구하는 단일 지표)
+function fmtCTR(n: number | null | undefined): string {
   if (n == null) return '-';
   return `${n.toFixed(2)}%`;
 }
@@ -347,6 +369,11 @@ export default function DataAnalysisPage() {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 관리 모드 — 끄면 삭제 버튼 자체가 안 보임. 켜도 삭제는 카테고리명 타이핑 확인 필요.
+  const [adminMode, setAdminMode] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; path: string[] } | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+
   // 드릴다운: 카테고리(=스냅샷) 펼침 / 상품 펼침
   const [openSnapId, setOpenSnapId] = useState<string | null>(null);
   const [productsBySnap, setProductsBySnap] = useState<Record<string, ProductDetail[]>>({});
@@ -359,10 +386,21 @@ export default function DataAnalysisPage() {
   // 트리뷰 펼침 상태 (각 노드 key)
   const [openTreeKeys, setOpenTreeKeys] = useState<Set<string>>(new Set());
 
+  // 여러 카테고리 한 번에 paste 모드
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchSaving, setBatchSaving] = useState<{ done: number; total: number } | null>(null);
+
   const preview = useMemo(() => {
     if (!rawText.trim()) return null;
     return parseCompetitorSnapshot(rawText);
   }, [rawText]);
+
+  // batch 모드: splitter 결과 수
+  const batchPreview = useMemo(() => {
+    if (!batchMode || !rawText.trim()) return null;
+    const chunks = splitMultipleSnapshots(rawText);
+    return { count: chunks.length };
+  }, [batchMode, rawText]);
 
   const loadSnapshots = useCallback(async () => {
     const r = await fetch('/api/rank-tracking/competitor');
@@ -458,6 +496,47 @@ export default function DataAnalysisPage() {
   };
 
   const handleSave = async () => {
+    // ── batch 모드: 여러 카테고리 한 번에 ───────────────────────
+    if (batchMode) {
+      if (!batchPreview || batchPreview.count === 0) {
+        setError('카테고리 헤더가 하나도 인식되지 않았습니다.');
+        return;
+      }
+      setError(null);
+      setSaving(true);
+      setBatchSaving({ done: 0, total: batchPreview.count });
+      try {
+        const r = await fetch('/api/rank-tracking/competitor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_text: rawText, memo: memo || null, batch: true }),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          setError(data.error || '저장 실패');
+          return;
+        }
+        const savedN = (data.saved ?? []).length;
+        const failedN = (data.failed ?? []).length;
+        if (failedN > 0) {
+          const firstErr = (data.failed ?? [])[0]?.error || '';
+          setError(`${savedN}개 저장됨, ${failedN}개 실패. ${firstErr}`);
+        } else {
+          setError(null);
+        }
+        if (savedN > 0) {
+          setRawText('');
+          setMemo('');
+        }
+        await loadSnapshots();
+      } finally {
+        setSaving(false);
+        setBatchSaving(null);
+      }
+      return;
+    }
+
+    // ── 단일 paste 모드: 기존 그대로 ────────────────────────────
     if (!preview || preview.products.length === 0) {
       setError('파싱된 상품이 없습니다. 텍스트를 확인하세요.');
       return;
@@ -487,20 +566,34 @@ export default function DataAnalysisPage() {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  // 삭제 트리거 — 다이얼로그 띄움 (실제 DELETE 는 다이얼로그 confirm 핸들러에서)
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('이 스냅샷을 삭제하시겠습니까?')) return;
-    const r = await fetch(`/api/rank-tracking/competitor/${id}`, { method: 'DELETE' });
+    const snap = snapshots.find((s) => s.id === id);
+    if (!snap) return;
+    setDeleteTarget({
+      id,
+      name: snap.category_name ?? '(이름 없음)',
+      path: snap.category_path ?? [],
+    });
+    setDeleteConfirmInput('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    if (deleteConfirmInput !== deleteTarget.name) return; // 안전장치
+    const r = await fetch(`/api/rank-tracking/competitor/${deleteTarget.id}`, { method: 'DELETE' });
     if (r.ok) {
-      if (openSnapId === id) setOpenSnapId(null);
+      if (openSnapId === deleteTarget.id) setOpenSnapId(null);
       await loadSnapshots();
-      // 캐시 정리
       setProductsBySnap((prev) => {
         const next = { ...prev };
-        delete next[id];
+        delete next[deleteTarget.id];
         return next;
       });
     }
+    setDeleteTarget(null);
+    setDeleteConfirmInput('');
   };
 
   const handleDownloadCsv = () => {
@@ -530,6 +623,73 @@ export default function DataAnalysisPage() {
   }, [withCategoryRaw]);
 
   const tree = useMemo(() => buildTree(leafSnapshots), [leafSnapshots]);
+
+  // ── 카테고리 실시간 검색 ────────────────────────────────────────────
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  // debounce 150ms — 빠른 타자에서 트리 재계산 부하 완화
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput.trim()), 150);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  // 검색 시작 전 사용자가 손으로 펼친 상태 보존 → 검색어 비우면 복원
+  const expandSnapshotRef = useRef<Set<string> | null>(null);
+  const lastAutoExpandRef = useRef<Set<string>>(new Set());
+
+  // 트리 필터: post-order. 자기 segment 또는 fullPath 가 term 포함하면 keep,
+  // 자식 중 매칭이 있으면 ancestor 도 keep. 매칭 없으면 prune.
+  const { filteredTree, autoExpandKeys, matchCount } = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    if (!term) return { filteredTree: tree, autoExpandKeys: new Set<string>(), matchCount: 0 };
+    const auto = new Set<string>();
+    let matches = 0;
+    const visit = (node: TreeNode): TreeNode | null => {
+      const segMatch = node.segment.toLowerCase().includes(term);
+      const pathMatch = node.fullPath.join(' > ').toLowerCase().includes(term);
+      const childResults: TreeNode[] = [];
+      for (const c of node.children) {
+        const r = visit(c);
+        if (r) childResults.push(r);
+      }
+      const keep = segMatch || pathMatch || childResults.length > 0;
+      if (!keep) return null;
+      if (segMatch || pathMatch) matches += 1;
+      // 매칭된 자식이 있으면 이 노드 자동 펼침
+      if (childResults.length > 0) auto.add(node.key);
+      return { ...node, children: childResults };
+    };
+    const out: TreeNode[] = [];
+    for (const n of tree) {
+      const r = visit(n);
+      if (r) out.push(r);
+    }
+    return { filteredTree: out, autoExpandKeys: auto, matchCount: matches };
+  }, [tree, searchTerm]);
+
+  // 검색어 변하면 자동 펼침 적용. 검색어 비우면 직전 사용자 펼침 상태로 복원.
+  useEffect(() => {
+    if (searchTerm) {
+      // 검색 시작 시점 1회만 사용자 상태 백업
+      if (expandSnapshotRef.current === null) {
+        expandSnapshotRef.current = new Set(openTreeKeys);
+      }
+      // 직전 자동 펼침 키들 빼고 새 자동 펼침 키들 추가
+      setOpenTreeKeys((prev) => {
+        const next = new Set(prev);
+        for (const k of lastAutoExpandRef.current) next.delete(k);
+        for (const k of autoExpandKeys) next.add(k);
+        return next;
+      });
+      lastAutoExpandRef.current = autoExpandKeys;
+    } else {
+      // 검색어 비움 — 백업된 사용자 상태 복원
+      if (expandSnapshotRef.current !== null) {
+        setOpenTreeKeys(expandSnapshotRef.current);
+        expandSnapshotRef.current = null;
+        lastAutoExpandRef.current = new Set();
+      }
+    }
+  }, [searchTerm, autoExpandKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleTreeNode = (key: string) => {
     setOpenTreeKeys((prev) => {
@@ -575,8 +735,8 @@ export default function DataAnalysisPage() {
     return (
       <Fragment key={node.key}>
         <tr
-          className={`border-t hover:bg-gray-50 cursor-pointer ${
-            node.depth === 1 ? 'bg-emerald-50/30' : node.depth === 2 ? 'bg-blue-50/20' : ''
+          className={`border-t border-black/5 hover:bg-[#F5F5F7] cursor-pointer transition-colors ${
+            node.depth === 1 ? 'bg-[#FBFBFD]' : ''
           }`}
           onClick={onRowClick}
         >
@@ -596,31 +756,54 @@ export default function DataAnalysisPage() {
             ) : null}
           </td>
           <td
-            className={`p-2 ${node.depth === 1 ? 'font-semibold text-emerald-900' : node.isLeaf ? 'text-emerald-800' : 'text-gray-700'}`}
-            style={{ paddingLeft: `${0.5 + (node.depth - 1) * 1.25}rem` }}
+            className={`p-2 ${node.depth === 1 ? 'font-semibold text-[#1D1D1F]' : node.isLeaf ? 'text-[#1D1D1F]' : 'text-[#6E6E73]'}`}
+            style={{
+              paddingLeft: `${0.5 + (node.depth - 1) * 1}rem`,
+              borderLeft: `2px solid ${DEPTH_COLORS[Math.min(node.depth - 1, DEPTH_COLORS.length - 1)]}`,
+            }}
           >
-            {node.segment}
+            {node.isLeaf && node.fullPath.length > 1 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[#86868B] text-[11px]">
+                  {node.fullPath.slice(0, -1).join(' › ')} ›
+                </span>
+                <span className="font-medium">{node.segment}</span>
+              </span>
+            ) : (
+              <span className={node.depth === 1 ? 'font-semibold' : node.isLeaf ? 'font-medium' : ''}>
+                {node.segment}
+              </span>
+            )}
           </td>
           <td className="p-2 text-right text-gray-500">
             {node.isLeaf && snap ? fmtDate(snap.captured_at) : `${node.leaf_count}개`}
           </td>
           <td className="p-2 text-right font-medium">{fmt(node.total_impression)}</td>
           <td className="p-2 text-right">{fmt(node.total_click)}</td>
-          <td className="p-2 text-right">{fmtPct(ctr(node.total_click, node.total_impression))}</td>
+          <td className="p-2 text-right">{fmtCTR(ctr(node.total_click, node.total_impression))}</td>
           <td className="p-2 text-right">{fmt(node.top100_impression)}</td>
           <td className="p-2 text-right">{fmtPct(top100Share(node.top100_impression, node.total_impression))}</td>
           <td className="p-2 text-right">{fmtPct(node.top100_search_pct)}</td>
           <td className="p-2 text-right">{fmtPct(node.top100_ad_pct)}</td>
-          <td className="p-2 text-right">{fmtWon(node.avg_winner_price)}</td>
+          <td
+            className="p-2 text-right"
+            title={
+              node.avg_winner_price == null
+                ? '아이템위너 가격이 파싱되지 않은 카테고리 — 페이스트 텍스트에 가격 범위만 있었거나 광고제외 상품들이라 winner_price 가 비어있습니다.'
+                : undefined
+            }
+          >
+            {fmtWon(node.avg_winner_price)}
+          </td>
           <td className="p-2 text-gray-500 truncate max-w-[140px]">
             {node.isLeaf && snap ? snap.memo || '' : ''}
           </td>
           <td className="p-2 text-center">
-            {node.isLeaf && snap ? (
+            {adminMode && node.isLeaf && snap ? (
               <button
                 onClick={(e) => handleDelete(snap.id, e)}
                 className="text-red-500 hover:text-red-700"
-                title="삭제"
+                title="삭제 (관리 모드)"
               >
                 <Trash2 className="w-4 h-4 inline" />
               </button>
@@ -670,7 +853,25 @@ export default function DataAnalysisPage() {
 
       {/* 입력 */}
       <div className="border rounded-lg p-4 bg-white space-y-3">
-        <h2 className="font-medium">새 데이터 추가</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-medium">새 데이터 추가</h2>
+          <label
+            className={`inline-flex items-center gap-2 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
+              batchMode
+                ? 'bg-[#0071E3] border-[#0071E3] text-white'
+                : 'bg-white border-[#E5E5E7] text-[#6E6E73] hover:bg-[#F5F5F7]'
+            }`}
+            title="여러 카테고리 결과를 이어붙여서 한 번에 저장 (자동 분리)"
+          >
+            <input
+              type="checkbox"
+              checked={batchMode}
+              onChange={(e) => setBatchMode(e.target.checked)}
+              className="sr-only"
+            />
+            여러 카테고리 한 번에
+          </label>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-3">
             <Label htmlFor="memo">메모 (선택)</Label>
@@ -684,7 +885,11 @@ export default function DataAnalysisPage() {
         </div>
 
         <div>
-          <Label htmlFor="raw">텍스트 붙여넣기 (카테고리 결과 + TOP 20 상품 + TOP 10 키워드)</Label>
+          <Label htmlFor="raw">
+            {batchMode
+              ? '여러 카테고리 텍스트를 이어붙여서 붙여넣기 (헤더 기준 자동 분리)'
+              : '텍스트 붙여넣기 (카테고리 결과 + TOP 20 상품 + TOP 10 키워드)'}
+          </Label>
           <textarea
             id="raw"
             value={rawText}
@@ -694,7 +899,19 @@ export default function DataAnalysisPage() {
           />
         </div>
 
-        {preview && (
+        {batchMode && batchPreview && (
+          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900">
+            인식된 카테고리: <b>{batchPreview.count}</b>개
+          </div>
+        )}
+
+        {batchSaving && (
+          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900">
+            저장 중... {batchSaving.done} / {batchSaving.total}
+          </div>
+        )}
+
+        {!batchMode && preview && (
           <div className="space-y-2 text-sm">
             {preview.category ? (
               <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2">
@@ -749,10 +966,17 @@ export default function DataAnalysisPage() {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !preview || preview.products.length === 0 || !preview.category}
+            disabled={
+              saving ||
+              (batchMode
+                ? !batchPreview || batchPreview.count === 0
+                : !preview || preview.products.length === 0 || !preview.category)
+            }
           >
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-            저장
+            {batchMode && batchPreview && batchPreview.count > 0
+              ? `${batchPreview.count}개 카테고리 저장`
+              : '저장'}
           </Button>
         </div>
       </div>
@@ -763,21 +987,65 @@ export default function DataAnalysisPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-medium">카테고리 분석 ({leafSnapshots.length}개 카테고리)</h2>
             <span className="text-xs text-gray-500">선택 {selected.size}개</span>
+            {searchTerm && (
+              <span className="text-xs text-blue-600 font-medium">{matchCount}개 매칭</span>
+            )}
             <span className="text-xs text-gray-400">트리 합산은 카테고리당 최신 1건 기준</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="카테고리 검색 (실시간)"
+                className="h-8 pl-7 pr-2.5 text-xs border rounded-md w-56 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                  aria-label="검색 지우기"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <Button variant="outline" size="sm" onClick={expandAllTree}>전체 펼침</Button>
             <Button variant="outline" size="sm" onClick={collapseAllTree}>전체 접기</Button>
             <Button onClick={handleDownloadCsv} disabled={selected.size === 0} size="sm">
               <Download className="w-4 h-4 mr-1" />
               선택 카테고리 CSV
             </Button>
+            <label
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
+                adminMode
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-white border-[#E5E5E7] text-[#6E6E73] hover:bg-[#F5F5F7]'
+              }`}
+              title="관리 모드: 삭제 버튼이 보이고, 카테고리명 타이핑 확인 후 삭제 가능"
+            >
+              <input
+                type="checkbox"
+                checked={adminMode}
+                onChange={(e) => setAdminMode(e.target.checked)}
+                className="sr-only"
+              />
+              <span className={`w-1.5 h-1.5 rounded-full ${adminMode ? 'bg-red-500' : 'bg-gray-300'}`} />
+              관리 모드
+            </label>
           </div>
         </div>
         {loading ? (
           <div className="p-6 text-center text-gray-500 text-sm">불러오는 중...</div>
         ) : tree.length === 0 ? (
           <div className="p-6 text-center text-gray-500 text-sm">저장된 카테고리가 없습니다.</div>
+        ) : filteredTree.length === 0 ? (
+          <div className="p-6 text-center text-gray-500 text-sm">
+            &quot;{searchTerm}&quot; 검색 결과 없음
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -794,13 +1062,21 @@ export default function DataAnalysisPage() {
                   <th className="p-2 text-right">Top100 점유율</th>
                   <th className="p-2 text-right">Search</th>
                   <th className="p-2 text-right">Ad</th>
-                  <th className="p-2 text-right">평균 판매가</th>
+                  <th
+                    className="p-2 text-right"
+                    title="복사한 텍스트에서 '아이템위너' 가격을 추출하지 못한 상품이 있는 경우 비어있을 수 있습니다 (Coupang이 가격 범위만 표시했거나 광고제외 상품)."
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      평균 판매가
+                      <Info className="w-3 h-3 text-gray-400" />
+                    </span>
+                  </th>
                   <th className="p-2 text-left">메모</th>
                   <th className="p-2 w-10"></th>
                 </tr>
               </thead>
               <tbody>
-                {tree.map((node) => renderTreeNode(node))}
+                {filteredTree.map((node) => renderTreeNode(node))}
               </tbody>
             </table>
           </div>
@@ -823,17 +1099,77 @@ export default function DataAnalysisPage() {
                   {fmtDate(s.captured_at)} · 상품 {s.products_count} / 키워드 {s.keywords_count}
                   {s.memo ? ` · ${s.memo}` : ''}
                 </span>
-                <button
-                  onClick={(e) => handleDelete(s.id, e)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {adminMode && (
+                  <button
+                    onClick={(e) => handleDelete(s.id, e)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* 삭제 확인 다이얼로그 — 카테고리명 정확히 타이핑해야 활성화 */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteConfirmInput('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#1D1D1F]">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              카테고리 스냅샷 삭제
+            </DialogTitle>
+            <DialogDescription className="text-[#6E6E73]">
+              이 작업은 되돌릴 수 없습니다. 정말 삭제하시려면 아래에 카테고리명을 정확히 입력하세요.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="space-y-3 py-2">
+              <div className="text-xs text-[#86868B]">카테고리 경로</div>
+              <div className="text-sm text-[#1D1D1F] bg-[#F5F5F7] rounded-md px-3 py-2 break-all">
+                {deleteTarget.path.length > 0 ? deleteTarget.path.join(' › ') : deleteTarget.name}
+              </div>
+              <div className="text-xs text-[#86868B] pt-1">
+                확인을 위해 <b className="text-[#1D1D1F]">{deleteTarget.name}</b> 을(를) 정확히 입력
+              </div>
+              <Input
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                placeholder={deleteTarget.name}
+                autoFocus
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteConfirmInput('');
+              }}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleConfirmDelete}
+              disabled={!deleteTarget || deleteConfirmInput !== deleteTarget.name}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-40"
+            >
+              삭제
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -928,7 +1264,7 @@ function ProductsTable({
                     className="p-2 text-right cursor-pointer"
                     onClick={() => onToggleProduct(p.id)}
                   >
-                    {fmtPct(p.ctr)}
+                    {fmtCTR(p.ctr)}
                   </td>
                   <td className="p-2 text-right">
                     <WinnerPriceCell
@@ -1083,7 +1419,7 @@ function KeywordsTable({ keywords }: { keywords: KeywordDetail[] }) {
               <td className="p-2 text-right">{fmt(k.search_volume)}</td>
               <td className="p-2 text-right">{fmt(k.exposure)}</td>
               <td className="p-2 text-right">{fmt(k.clicks)}</td>
-              <td className="p-2 text-right">{fmtPct(ctr(k.clicks, k.exposure))}</td>
+              <td className="p-2 text-right">{fmtCTR(ctr(k.clicks, k.exposure))}</td>
               <td className="p-2 text-right">{fmtWon(k.avg_price)}</td>
               <td className="p-2 text-right">{k.contributing_count ?? '-'}</td>
             </tr>

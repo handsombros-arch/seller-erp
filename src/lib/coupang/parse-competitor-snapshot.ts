@@ -398,3 +398,76 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
 
   return { category, products, warnings };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-paste: 한 입력에 여러 카테고리 결과가 이어붙어 있을 때 분리
+// ─────────────────────────────────────────────────────────────────────────────
+
+// trim 된 라인 단위에서 카테고리 헤더 패턴을 anchored 로 매치 (상품명에 "결과" 포함된 케이스 방어).
+const CATEGORY_HEADER_RE = /^["“'].+?["”']\s*카테고리\s*결과\s*$/;
+
+export type MultiParseResult = {
+  results: ParseResult[];
+  splitWarnings: string[]; // 잘못 헤더처럼 보이지만 실제는 아닌 chunk 등
+};
+
+// rawText 를 카테고리 헤더 라인 기준으로 분리. 헤더 다음 40줄 안에 'impression' 라벨이
+// 있어야 valid 한 헤더로 인정 (false-positive 방지).
+export function splitMultipleSnapshots(rawText: string): string[] {
+  const lines = rawText.replace(/\r\n/g, '\n').split('\n');
+  const trimmed = lines.map((l) => l.trim());
+
+  // 1) 후보 헤더 인덱스 수집
+  const candidates: number[] = [];
+  for (let i = 0; i < trimmed.length; i++) {
+    if (CATEGORY_HEADER_RE.test(trimmed[i])) candidates.push(i);
+  }
+  if (candidates.length === 0) return rawText.trim() ? [rawText] : [];
+
+  // 2) 각 후보가 진짜 헤더인지 — 이후 40줄 내 'impression' 단독 라벨 라인 존재
+  const valid: number[] = [];
+  for (const ci of candidates) {
+    const end = Math.min(ci + 40, trimmed.length);
+    let found = false;
+    for (let j = ci + 1; j < end; j++) {
+      if (trimmed[j] === 'impression') { found = true; break; }
+      // 다른 후보 헤더가 먼저 나오면 false (인접한 두 헤더 사이에 impression 없음)
+      if (CATEGORY_HEADER_RE.test(trimmed[j])) break;
+    }
+    if (found) valid.push(ci);
+  }
+
+  if (valid.length === 0) return rawText.trim() ? [rawText] : [];
+  if (valid.length === 1) return [rawText];
+
+  // 3) valid 인덱스 사이를 잘라서 chunk 생성. 첫 chunk 의 시작은 첫 헤더부터 (헤더 앞의 잡 텍스트 무시).
+  const chunks: string[] = [];
+  for (let i = 0; i < valid.length; i++) {
+    const start = valid[i];
+    const end = i + 1 < valid.length ? valid[i + 1] : lines.length;
+    chunks.push(lines.slice(start, end).join('\n'));
+  }
+  return chunks;
+}
+
+export function parseMultipleSnapshots(rawText: string): MultiParseResult {
+  const splitWarnings: string[] = [];
+  const chunks = splitMultipleSnapshots(rawText);
+  if (chunks.length === 0) {
+    return { results: [], splitWarnings: ['카테고리 헤더를 찾지 못했습니다.'] };
+  }
+  const results: ParseResult[] = [];
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const r = parseCompetitorSnapshot(chunks[idx]);
+    if (!r.category) {
+      splitWarnings.push(`청크 ${idx + 1}: 카테고리 헤더 파싱 실패 — 건너뜀`);
+      continue;
+    }
+    if (r.products.length === 0) {
+      splitWarnings.push(`청크 ${idx + 1} (${r.category.category_name}): 상품 0건 — 건너뜀`);
+      continue;
+    }
+    results.push(r);
+  }
+  return { results, splitWarnings };
+}

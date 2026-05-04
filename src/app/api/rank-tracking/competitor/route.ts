@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { parseCompetitorSnapshot } from '@/lib/coupang/parse-competitor-snapshot';
+import {
+  parseCompetitorSnapshot,
+  parseMultipleSnapshots,
+  type ParseResult,
+} from '@/lib/coupang/parse-competitor-snapshot';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // 스냅샷 목록 조회
 export async function GET() {
@@ -72,40 +77,20 @@ export async function GET() {
   return NextResponse.json({ snapshots: enriched });
 }
 
-// 스냅샷 저장
-export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
-
-  const body = await request.json();
-  const rawText = String(body.raw_text || '');
-  const myProductName = body.my_product_name ? String(body.my_product_name).trim() : null;
-  const myProductId = body.my_product_id ? String(body.my_product_id).trim() : null;
-  const memo = body.memo ? String(body.memo).trim() : null;
-
-  if (!rawText.trim()) {
-    return NextResponse.json({ error: 'raw_text 가 비어있습니다.' }, { status: 400 });
-  }
-
-  const parsed = parseCompetitorSnapshot(rawText);
-  if (parsed.products.length === 0) {
-    return NextResponse.json(
-      { error: '파싱된 상품이 없습니다.', warnings: parsed.warnings },
-      { status: 400 },
-    );
-  }
-
-  const admin = await createAdminClient();
-
+// 단일 스냅샷 insert. 성공 시 { snapshot_id, products, keywords_saved }, 실패 시 throw.
+async function insertOneSnapshot(
+  admin: SupabaseClient,
+  parsed: ParseResult,
+  meta: { user_id: string; my_product_name: string | null; my_product_id: string | null; memo: string | null; raw_text: string },
+): Promise<{ snapshot_id: string; products: number; keywords_saved: number; warnings: string[] }> {
   const { data: snapshot, error: snapErr } = await admin
     .from('competitor_snapshots')
     .insert({
-      user_id: user.id,
-      my_product_name: myProductName,
-      my_product_id: myProductId,
-      memo,
-      raw_text: rawText,
+      user_id: meta.user_id,
+      my_product_name: meta.my_product_name,
+      my_product_id: meta.my_product_id,
+      memo: meta.memo,
+      raw_text: meta.raw_text,
       category_name: parsed.category?.category_name ?? null,
       category_path: parsed.category?.category_path ?? null,
       total_impression: parsed.category?.total_impression ?? null,
@@ -116,12 +101,8 @@ export async function POST(request: NextRequest) {
     })
     .select()
     .single();
+  if (snapErr || !snapshot) throw new Error(snapErr?.message || '스냅샷 생성 실패');
 
-  if (snapErr || !snapshot) {
-    return NextResponse.json({ error: snapErr?.message || '스냅샷 생성 실패' }, { status: 500 });
-  }
-
-  // 상품 일괄 insert (id 회수 위해 select)
   const productRows = parsed.products.map((p) => ({
     snapshot_id: snapshot.id,
     rank: p.rank,
@@ -140,16 +121,13 @@ export async function POST(request: NextRequest) {
     price_max: p.price_max,
     is_my_product: p.is_my_product,
   }));
-
   const { data: insertedProducts, error: prodErr } = await admin
     .from('competitor_snapshot_products')
     .insert(productRows)
     .select('id, rank');
-
   if (prodErr || !insertedProducts) {
-    // 롤백: 스냅샷 삭제
     await admin.from('competitor_snapshots').delete().eq('id', snapshot.id);
-    return NextResponse.json({ error: prodErr?.message || '상품 저장 실패' }, { status: 500 });
+    throw new Error(prodErr?.message || '상품 저장 실패');
   }
 
   const productIdByRank = new Map<number, string>();
@@ -175,25 +153,95 @@ export async function POST(request: NextRequest) {
     }));
   });
 
+  let keywordsSaved = 0;
+  const warnings = [...parsed.warnings];
   if (keywordRows.length) {
     const { error: kwErr } = await admin
       .from('competitor_snapshot_keywords')
       .insert(keywordRows);
     if (kwErr) {
-      // 키워드 실패해도 상품/스냅샷은 살림. 경고만.
-      return NextResponse.json({
-        snapshot_id: snapshot.id,
-        products: parsed.products.length,
-        keywords_saved: 0,
-        warnings: [`키워드 저장 일부 실패: ${kwErr.message}`, ...parsed.warnings],
-      });
+      warnings.unshift(`키워드 저장 일부 실패: ${kwErr.message}`);
+    } else {
+      keywordsSaved = keywordRows.length;
     }
   }
 
-  return NextResponse.json({
+  return {
     snapshot_id: snapshot.id,
     products: parsed.products.length,
-    keywords_saved: keywordRows.length,
-    warnings: parsed.warnings,
-  });
+    keywords_saved: keywordsSaved,
+    warnings,
+  };
+}
+
+// 스냅샷 저장. body.batch === true 면 여러 카테고리 동시 paste 모드.
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+
+  const body = await request.json();
+  const rawText = String(body.raw_text || '');
+  const myProductName = body.my_product_name ? String(body.my_product_name).trim() : null;
+  const myProductId = body.my_product_id ? String(body.my_product_id).trim() : null;
+  const memo = body.memo ? String(body.memo).trim() : null;
+  const isBatch = body.batch === true;
+
+  if (!rawText.trim()) {
+    return NextResponse.json({ error: 'raw_text 가 비어있습니다.' }, { status: 400 });
+  }
+
+  const admin = await createAdminClient();
+  const baseMeta = { user_id: user.id, my_product_name: myProductName, my_product_id: myProductId, memo, raw_text: rawText };
+
+  // ── Batch 모드: splitter → 각 chunk 별도 insert ─────────────────────────
+  if (isBatch) {
+    const { results, splitWarnings } = parseMultipleSnapshots(rawText);
+    if (results.length === 0) {
+      return NextResponse.json(
+        { error: '파싱된 카테고리가 없습니다.', warnings: splitWarnings },
+        { status: 400 },
+      );
+    }
+    const saved: Array<{ snapshot_id: string; category_name: string | null; products: number; keywords_saved: number }> = [];
+    const failed: Array<{ category_name: string | null; error: string }> = [];
+    const allWarnings: string[] = [...splitWarnings];
+
+    for (const r of results) {
+      try {
+        const ins = await insertOneSnapshot(admin, r, {
+          ...baseMeta,
+          // batch 의 각 chunk 는 자기 자신의 raw_text 만 보존
+          raw_text: r.category ? `"${r.category.category_name}" 카테고리 결과\n${r.category.category_path.join('\n')}` : '',
+        });
+        saved.push({
+          snapshot_id: ins.snapshot_id,
+          category_name: r.category?.category_name ?? null,
+          products: ins.products,
+          keywords_saved: ins.keywords_saved,
+        });
+        if (ins.warnings.length) allWarnings.push(...ins.warnings);
+      } catch (e: any) {
+        failed.push({ category_name: r.category?.category_name ?? null, error: e?.message ?? String(e) });
+      }
+    }
+
+    return NextResponse.json({ batch: true, saved, failed, warnings: allWarnings });
+  }
+
+  // ── 단일 paste 모드: 기존 동작 그대로 ────────────────────────────────────
+  const parsed = parseCompetitorSnapshot(rawText);
+  if (parsed.products.length === 0) {
+    return NextResponse.json(
+      { error: '파싱된 상품이 없습니다.', warnings: parsed.warnings },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const ins = await insertOneSnapshot(admin, parsed, baseMeta);
+    return NextResponse.json(ins);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 500 });
+  }
 }
