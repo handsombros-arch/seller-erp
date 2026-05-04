@@ -59,10 +59,13 @@ export async function applyOrdersToInventory(
     if (reason.startsWith(RESTORE_NOTE_PREFIX)) restoredSet.add(reason.slice(RESTORE_NOTE_PREFIX.length));
   }
 
-  // 2. 전체 주문 조회 (order_status + claim_status 둘 다)
+  // 2. 전체 주문 조회 — DB 트리거가 set 한 inventory_deducted/cancelled_at 도 같이 받아온다.
+  // (트리거는 audit 를 안 쓰지만 inventory 자체는 이미 차감/복구한 상태 → 두 번째 차감 방지)
   const { data: orders } = await admin
     .from('channel_orders')
-    .select('order_number, channel, sku_id, quantity, order_date, order_status, claim_status, is_dummy');
+    .select(
+      'order_number, channel, sku_id, quantity, order_date, order_status, claim_status, is_dummy, inventory_deducted, cancelled_at',
+    );
 
   // 3. SKU별 마지막 수기 기입일
   const { data: manualAdj } = await admin
@@ -110,6 +113,48 @@ export async function applyOrdersToInventory(
     const isShipped = SHIPPED_STATUSES.some((s) => orderStatus.includes(s.toUpperCase()));
     const isReturned = RETURN_STATUSES.some((s) => orderStatus.includes(s.toUpperCase()) || claimStatus.includes(s.toUpperCase()));
 
+    // ── 트리거가 이미 처리한 케이스 — 이중 차감 방지 ─────────────────
+    // BEFORE INSERT 트리거가 inventory 차감 + flag TRUE 까지 했지만 audit 는 안 남김.
+    // applyOrders 가 처음 보면 deductedSet 에 없어 차감해버려 → 2배 차감.
+    // 수정: flag TRUE 면 audit 만 백필하고 inventory 는 안 건드린다.
+    if (order.inventory_deducted === true && !deductedSet.has(orderNum) && isShipped) {
+      // audit 백필 — before/after 같음 (트리거가 이미 처리함을 기록만)
+      const inv0 = invMap.get(order.sku_id);
+      const wh0 = inv0?.warehouse_id ?? defaultWhId;
+      if (wh0) {
+        await admin.from('inventory_adjustments').insert({
+          sku_id: order.sku_id,
+          warehouse_id: wh0,
+          before_quantity: inv0?.quantity ?? 0,
+          after_quantity: inv0?.quantity ?? 0,
+          reason: `${ORDER_NOTE_PREFIX}${orderNum}`,
+          adjusted_by: userId,
+        });
+        deductedSet.add(orderNum);
+      }
+    }
+    // 트리거가 UPDATE 시 cancelled_at 세팅 + inventory 복구 → 같은 패턴으로 audit 백필
+    if (
+      order.cancelled_at &&
+      order.inventory_deducted === false &&
+      deductedSet.has(orderNum) &&
+      !restoredSet.has(orderNum)
+    ) {
+      const inv0 = invMap.get(order.sku_id);
+      const wh0 = inv0?.warehouse_id ?? defaultWhId;
+      if (wh0) {
+        await admin.from('inventory_adjustments').insert({
+          sku_id: order.sku_id,
+          warehouse_id: wh0,
+          before_quantity: inv0?.quantity ?? 0,
+          after_quantity: inv0?.quantity ?? 0,
+          reason: `${RESTORE_NOTE_PREFIX}${orderNum}`,
+          adjusted_by: userId,
+        });
+        restoredSet.add(orderNum);
+      }
+    }
+
     // 수기 기입일 이후만 (기입일 당일 주문 포함)
     const lastManual = lastManualDate.get(order.sku_id);
     if (lastManual && order.order_date < lastManual) continue;
@@ -119,8 +164,9 @@ export async function applyOrdersToInventory(
     if (!warehouseId) continue;
     const currentQty = inv?.quantity ?? 0;
 
-    // Case A: 배송중 + 미차감 → 차감
-    if (isShipped && !deductedSet.has(orderNum)) {
+    // Case A: 배송중 + 미차감 + 트리거도 미처리 → 차감
+    // (이미 위 가드로 inventory_deducted=TRUE 면 deductedSet 에 이미 들어가 있음)
+    if (isShipped && !deductedSet.has(orderNum) && order.inventory_deducted !== true) {
       const newQty = currentQty - order.quantity;
       const { error } = await admin
         .from('inventory')
@@ -133,13 +179,24 @@ export async function applyOrdersToInventory(
         before_quantity: currentQty, after_quantity: newQty,
         reason: `${ORDER_NOTE_PREFIX}${orderNum}`, adjusted_by: userId,
       });
+      // applyOrders 가 처리한 건 트리거 외 경로니 직접 flag 도 세팅 (다음 sync 에서 트리거 안 탐)
+      await admin
+        .from('channel_orders')
+        .update({ inventory_deducted: true, deducted_warehouse_id: warehouseId })
+        .eq('order_number', orderNum)
+        .eq('channel', order.channel);
       deductedSet.add(orderNum);
       applied++;
       if (newQty < 0) negSet.add(order.sku_id);
     }
 
-    // Case B: 반품 완료 + 이미 차감됨 + 미복구 → 복구
-    if (isReturned && deductedSet.has(orderNum) && !restoredSet.has(orderNum)) {
+    // Case B: 반품 완료 + 이미 차감됨 + 미복구 + 트리거도 복구 안 함 → 복구
+    if (
+      isReturned &&
+      deductedSet.has(orderNum) &&
+      !restoredSet.has(orderNum) &&
+      !order.cancelled_at
+    ) {
       const newQty = currentQty + order.quantity;
       const { error } = await admin
         .from('inventory')
@@ -152,6 +209,11 @@ export async function applyOrdersToInventory(
         before_quantity: currentQty, after_quantity: newQty,
         reason: `${RESTORE_NOTE_PREFIX}${orderNum}`, adjusted_by: userId,
       });
+      await admin
+        .from('channel_orders')
+        .update({ inventory_deducted: false, cancelled_at: new Date().toISOString() })
+        .eq('order_number', orderNum)
+        .eq('channel', order.channel);
       restoredSet.add(orderNum);
       restored++;
     }
