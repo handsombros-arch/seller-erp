@@ -28,6 +28,16 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sorting helpers
@@ -334,6 +344,170 @@ const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
   'ad_pct',
   'avg_winner_price',
 ];
+
+// ────────────────────────────────────────────────────────────────────────────
+// CategoryHistoryChart — 단일 카테고리의 모든 캡처 시점을 시계열로
+// ────────────────────────────────────────────────────────────────────────────
+
+type ChartMetric = {
+  key: 'total_impression' | 'total_click' | 'top100_impression' | 'top100_search_pct' | 'top100_ad_pct' | 'avg_winner_price';
+  label: string;
+  color: string;
+  format: (v: number | null) => string;
+  unit: 'count' | 'pct' | 'won';
+};
+
+const HISTORY_METRICS: ChartMetric[] = [
+  { key: 'total_impression', label: '전체 노출', color: '#0071E3', format: fmt, unit: 'count' },
+  { key: 'total_click', label: '전체 클릭', color: '#34C759', format: fmt, unit: 'count' },
+  { key: 'top100_impression', label: 'Top100 노출', color: '#5E5CE6', format: fmt, unit: 'count' },
+  { key: 'top100_search_pct', label: 'Search%', color: '#FF9500', format: fmtPct, unit: 'pct' },
+  { key: 'top100_ad_pct', label: 'Ad%', color: '#FF2D55', format: fmtPct, unit: 'pct' },
+  { key: 'avg_winner_price', label: '평균 판매가', color: '#AF52DE', format: fmtWon, unit: 'won' },
+];
+
+function CategoryHistoryChart({
+  allSnapshots,
+  fullPath,
+}: {
+  allSnapshots: SnapshotMeta[];
+  fullPath: string[];
+}) {
+  // 같은 path 의 모든 캡처를 시간순 정렬. captured_at 의 날짜만 비교 (시각 무시).
+  const pathKey = fullPath.join('|');
+  const series = useMemo(() => {
+    return allSnapshots
+      .filter((s) => {
+        const k = (s.category_path && s.category_path.length > 0)
+          ? s.category_path.join('|')
+          : (s.category_name ?? '');
+        return k === pathKey;
+      })
+      .slice()
+      .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+      .map((s) => ({
+        date: new Date(s.captured_at).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }),
+        captured_at: s.captured_at,
+        total_impression: s.total_impression,
+        total_click: s.total_click,
+        top100_impression: s.top100_impression,
+        top100_search_pct: s.top100_search_pct,
+        top100_ad_pct: s.top100_ad_pct,
+        avg_winner_price: s.avg_winner_price,
+      }));
+  }, [allSnapshots, pathKey]);
+
+  const [activeKeys, setActiveKeys] = useState<Set<string>>(
+    () => new Set(['total_impression', 'total_click']),
+  );
+
+  if (series.length === 0) return null;
+  if (series.length === 1) {
+    return (
+      <div className="rounded-[12px] border border-black/[0.06] bg-white px-4 py-3 text-xs text-[#86868B]">
+        이 카테고리는 1회만 캡처되어 시계열이 없습니다. 같은 카테고리를 다시 페이스트하면 변화 추이를 볼 수 있습니다.
+      </div>
+    );
+  }
+
+  const toggleMetric = (key: string) => {
+    setActiveKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // 좌/우축 분리: count 와 pct/won 은 스케일이 달라 같은 축에 그리면 압축됨.
+  // 단순화: 활성 metric 중 첫 번째의 unit 기준 좌축, 다른 unit 은 우축.
+  const activeMetrics = HISTORY_METRICS.filter((m) => activeKeys.has(m.key));
+  const leftUnit = activeMetrics[0]?.unit ?? 'count';
+
+  return (
+    <div className="rounded-[12px] border border-black/[0.06] bg-white p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="text-sm font-medium text-[#1D1D1F]">
+          시계열 추이 ({series.length}회 캡처)
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {HISTORY_METRICS.map((m) => {
+            const active = activeKeys.has(m.key);
+            return (
+              <button
+                key={m.key}
+                onClick={() => toggleMetric(m.key)}
+                className={`text-[11px] px-2 h-6 rounded-md border transition-colors ${
+                  active
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-[#6E6E73] border-black/[0.1] hover:bg-[#F5F5F7]'
+                }`}
+                style={active ? { backgroundColor: m.color } : undefined}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ width: '100%', height: 280 }}>
+        <ResponsiveContainer>
+          <LineChart data={series} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: '#6E6E73' }}
+              axisLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+              tickLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+            />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 11, fill: '#6E6E73' }}
+              axisLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+              tickLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+              tickFormatter={(v) => {
+                if (leftUnit === 'pct') return `${Math.round(Number(v))}%`;
+                if (leftUnit === 'won') return v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}k`;
+                return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v);
+              }}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fontSize: 11, fill: '#6E6E73' }}
+              axisLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+              tickLine={{ stroke: 'rgba(0,0,0,0.1)' }}
+            />
+            <RechartsTooltip
+              contentStyle={{ borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', fontSize: 12 }}
+              formatter={(value: any, name: any) => {
+                const m = HISTORY_METRICS.find((x) => x.label === name);
+                if (!m) return [value, name];
+                return [m.format(typeof value === 'number' ? value : null), name];
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {activeMetrics.map((m) => (
+              <Line
+                key={m.key}
+                yAxisId={m.unit === leftUnit ? 'left' : 'right'}
+                type="monotone"
+                dataKey={m.key}
+                name={m.label}
+                stroke={m.color}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // CompareDialog — 선택한 N개 카테고리를 기준점과 직접 비교
@@ -1222,11 +1396,16 @@ export default function DataAnalysisPage() {
         {/* 트리 자식 펼침 */}
         {hasChildren && isOpen && node.children.map((c) => renderTreeNode(c))}
 
-        {/* leaf 카테고리의 상품 표 펼침 */}
+        {/* leaf 카테고리의 상품 표 펼침 + 시계열 차트 */}
         {node.isLeaf && snap && isSnapOpen && (
           <tr>
-            <td colSpan={14} className="p-0 bg-gray-50">
-              <div className="p-3">
+            <td colSpan={14} className="p-0 bg-[#FBFBFD]">
+              <div className="p-3 space-y-3">
+                {/* 이 카테고리의 모든 캡처 시점 데이터로 시계열 차트 */}
+                <CategoryHistoryChart
+                  allSnapshots={snapshots}
+                  fullPath={node.fullPath}
+                />
                 {loadingDetailFor === snap.id || !products ? (
                   <div className="text-sm text-gray-500">상품 불러오는 중...</div>
                 ) : (
