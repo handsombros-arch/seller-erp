@@ -1307,8 +1307,16 @@ export default function DataAnalysisPage() {
 
   // ── 카테고리 비교 ────────────────────────────────────────────────────
   const [compareOpen, setCompareOpen] = useState(false);
+  // selected 체크 vs bookmarks 둘 중 어느 source 로 비교 다이얼로그를 열지
+  const [compareSource, setCompareSource] = useState<'selected' | 'bookmarks'>('selected');
   const handleOpenCompare = () => {
     if (selected.size < 2) return;
+    setCompareSource('selected');
+    setCompareOpen(true);
+  };
+  const handleOpenBookmarkCompare = () => {
+    if (bookmarks.size < 2) return;
+    setCompareSource('bookmarks');
     setCompareOpen(true);
   };
 
@@ -1838,10 +1846,21 @@ export default function DataAnalysisPage() {
               disabled={selected.size < 2}
               size="sm"
               variant="outline"
-              title={selected.size < 2 ? '2개 이상 선택해야 비교 가능' : '선택한 카테고리들을 기준점과 직접 비교'}
+              title={selected.size < 2 ? '2개 이상 체크해야 비교 가능' : '체크한 카테고리들을 직접 비교'}
             >
               <ArrowUpDown className="w-4 h-4 mr-1" />
               비교 ({selected.size})
+            </Button>
+            <Button
+              onClick={handleOpenBookmarkCompare}
+              disabled={bookmarks.size < 2}
+              size="sm"
+              variant="outline"
+              className={bookmarks.size >= 2 ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : ''}
+              title={bookmarks.size < 2 ? '2개 이상 북마크해야 가능' : '북마크된 카테고리를 그대로 비교 (체크 불필요)'}
+            >
+              <Star className="w-4 h-4 mr-1" fill={bookmarks.size >= 2 ? 'currentColor' : 'none'} />
+              북마크 비교 ({bookmarks.size})
             </Button>
             <Button onClick={handleDownloadCsv} disabled={selected.size === 0} size="sm">
               <Download className="w-4 h-4 mr-1" />
@@ -1947,7 +1966,16 @@ export default function DataAnalysisPage() {
       <CompareDialog
         open={compareOpen}
         onOpenChange={setCompareOpen}
-        snapshots={leafSnapshots.filter((s) => selected.has(s.id))}
+        snapshots={
+          compareSource === 'bookmarks'
+            ? leafSnapshots.filter((s) => {
+                const k = s.category_path && s.category_path.length > 0
+                  ? s.category_path.join('|')
+                  : (s.category_name ?? '');
+                return bookmarks.has(k);
+              })
+            : leafSnapshots.filter((s) => selected.has(s.id))
+        }
         allSnapshots={snapshots}
       />
 
