@@ -1342,16 +1342,24 @@ export default function DataAnalysisPage() {
   const handleSelectAll = () => setSelected(new Set(allLeafIds));
   const handleClearAll = () => setSelected(new Set());
 
-  // ── 북마크 (full path 기준, localStorage 영속화) ────────────────
+  // ── 북마크 — 카테고리(노란 별) + 상품(초록 별) 따로 관리 ────────────
+  // 카테고리 북마크: full path 기준
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [bookmarkOnly, setBookmarkOnly] = useState(false);
-  // 초기 로드 (hydration mismatch 방지로 useEffect 안에서)
+  // 상품 북마크: 상품명 (full, 옵션 포함) 기준 — 다른 카테고리에서 같은 상품도 같이 잡힘
+  const [productBookmarks, setProductBookmarks] = useState<Set<string>>(new Set());
+  // hydration mismatch 방지로 useEffect 안에서 초기 로드
   useEffect(() => {
     try {
       const raw = localStorage.getItem('data-analysis.bookmarks.v1');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setBookmarks(new Set(parsed));
+      }
+      const rawP = localStorage.getItem('data-analysis.product-bookmarks.v1');
+      if (rawP) {
+        const parsed = JSON.parse(rawP);
+        if (Array.isArray(parsed)) setProductBookmarks(new Set(parsed));
       }
     } catch {}
   }, []);
@@ -1361,6 +1369,11 @@ export default function DataAnalysisPage() {
       localStorage.setItem('data-analysis.bookmarks.v1', JSON.stringify([...bookmarks]));
     } catch {}
   }, [bookmarks]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('data-analysis.product-bookmarks.v1', JSON.stringify([...productBookmarks]));
+    } catch {}
+  }, [productBookmarks]);
   const toggleBookmark = (pathKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setBookmarks((prev) => {
@@ -1370,6 +1383,14 @@ export default function DataAnalysisPage() {
       return next;
     });
   };
+  const toggleProductBookmark = useCallback((productName: string) => {
+    setProductBookmarks((prev) => {
+      const next = new Set(prev);
+      if (next.has(productName)) next.delete(productName);
+      else next.add(productName);
+      return next;
+    });
+  }, []);
 
   // ── 카테고리 실시간 검색 ────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState('');
@@ -1602,6 +1623,8 @@ export default function DataAnalysisPage() {
                     openProductIds={openProductIds}
                     onToggleProduct={handleToggleProduct}
                     onWinnerPriceChange={(pid, v) => handleWinnerPriceChange(snap.id, pid, v)}
+                    bookmarks={productBookmarks}
+                    onToggleBookmark={toggleProductBookmark}
                   />
                 )}
               </div>
@@ -1993,31 +2016,67 @@ export default function DataAnalysisPage() {
 // 상품 표 (드릴다운: 키워드 펼침)
 // ────────────────────────────────────────────────────────────────────────────
 
+// 쿠팡 검색 URL — 상품명 첫 번째 콤마 전까지만 검색어로 (콤마 뒤는 옵션명)
+function coupangSearchUrl(productName: string): string {
+  const base = productName.split(',')[0].trim();
+  return `https://www.coupang.com/np/search?q=${encodeURIComponent(base)}&channel=user`;
+}
+
 function ProductsTable({
   products,
   openProductIds,
   onToggleProduct,
   onWinnerPriceChange,
+  bookmarks,
+  onToggleBookmark,
 }: {
   products: ProductDetail[];
   openProductIds: Set<string>;
   onToggleProduct: (id: string) => void;
   onWinnerPriceChange: (productId: string, value: number | null) => void;
+  bookmarks: Set<string>;
+  onToggleBookmark: (name: string) => void;
 }) {
   const [sort, setSort] = useState<SortState<ProductColKey>>(null);
+  const [bookmarkOnly, setBookmarkOnly] = useState(false);
+  const filtered = useMemo(
+    () => (bookmarkOnly ? products.filter((p) => bookmarks.has(p.name)) : products),
+    [products, bookmarkOnly, bookmarks],
+  );
   const sorted = useMemo(() => {
-    if (!sort) return products;
+    if (!sort) return filtered;
     const k = sort.key;
     const d = sort.dir;
-    return [...products].sort((a, b) => cmp(getProductValue(a, k), getProductValue(b, k), d));
-  }, [products, sort]);
+    return [...filtered].sort((a, b) => cmp(getProductValue(a, k), getProductValue(b, k), d));
+  }, [filtered, sort]);
 
   if (products.length === 0) {
     return <div className="text-sm text-gray-500">상품이 없습니다.</div>;
   }
+  const bookmarkedCount = products.filter((p) => bookmarks.has(p.name)).length;
   const onSort = (k: ProductColKey) => setSort((p) => nextSort(p, k));
   return (
     <div className="overflow-x-auto bg-white border rounded">
+      {/* 상단: 북마크만 보기 토글 */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.06] text-xs">
+        <span className="text-[#6E6E73]">
+          {bookmarkOnly
+            ? `북마크 ${sorted.length}개 표시 중 / 전체 ${products.length}개`
+            : `상품 ${products.length}개 중 ${bookmarkedCount}개 북마크`}
+        </span>
+        <button
+          onClick={() => setBookmarkOnly((v) => !v)}
+          disabled={bookmarkedCount === 0 && !bookmarkOnly}
+          className={`inline-flex items-center gap-1 h-6 px-2 rounded-md border transition-colors ${
+            bookmarkOnly
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'bg-white border-black/[0.1] text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40'
+          }`}
+        >
+          <Star className="w-3 h-3" fill={bookmarkOnly ? 'currentColor' : 'none'} />
+          북마크만
+        </button>
+      </div>
       <table className="w-full text-xs">
         <thead className="bg-gray-100 text-gray-600">
           <tr>
@@ -2056,12 +2115,28 @@ function ProductsTable({
                     {p.rank}
                     {p.is_my_product && <span className="ml-1 text-blue-600 font-semibold">내</span>}
                   </td>
-                  <td
-                    className="p-2 max-w-[400px] truncate cursor-pointer"
-                    title={p.name}
-                    onClick={() => onToggleProduct(p.id)}
-                  >
-                    {p.name}
+                  <td className="p-2 max-w-[400px]" title={p.name}>
+                    <div className="inline-flex items-center gap-1.5 max-w-full">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onToggleBookmark(p.name); }}
+                        className={`shrink-0 transition-colors ${
+                          bookmarks.has(p.name) ? 'text-emerald-500' : 'text-gray-300 hover:text-emerald-400'
+                        }`}
+                        title={bookmarks.has(p.name) ? '북마크 해제' : '상품 북마크'}
+                      >
+                        <Star className="w-3.5 h-3.5" fill={bookmarks.has(p.name) ? 'currentColor' : 'none'} />
+                      </button>
+                      <a
+                        href={coupangSearchUrl(p.name)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[#0071E3] hover:underline truncate"
+                        title={`쿠팡에서 검색: ${p.name.split(',')[0].trim()}`}
+                      >
+                        {p.name}
+                      </a>
+                    </div>
                   </td>
                   <td
                     className="p-2 text-right cursor-pointer"
