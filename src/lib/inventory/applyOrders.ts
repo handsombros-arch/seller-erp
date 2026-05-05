@@ -31,6 +31,9 @@ export interface ApplyOrdersResult {
   applied: number;
   restored: number;
   skipped: number;
+  /** 음수가 될 뻔한 SKU (재고 부족) — 0 으로 floor 됨 */
+  clampedSkuIds: string[];
+  /** @deprecated negativeSkuIds 로 호출하던 외부 호환용 alias */
   negativeSkuIds: string[];
 }
 
@@ -169,7 +172,10 @@ export async function applyOrdersToInventory(
     // Case A: 배송중 + 미차감 + 트리거도 미처리 → 차감
     // (이미 위 가드로 inventory_deducted=TRUE 면 deductedSet 에 이미 들어가 있음)
     if (isShipped && !deductedSet.has(orderNum) && order.inventory_deducted !== true) {
-      const newQty = currentQty - order.quantity;
+      // 트리거와 동일하게 0 으로 floor (음수 재고 발생 방지)
+      const rawNewQty = currentQty - order.quantity;
+      const newQty = Math.max(0, rawNewQty);
+      if (rawNewQty < 0) negSet.add(order.sku_id);
       const { error } = await admin
         .from('inventory')
         .upsert({ sku_id: order.sku_id, warehouse_id: warehouseId, quantity: newQty }, { onConflict: 'sku_id,warehouse_id' });
@@ -189,7 +195,7 @@ export async function applyOrdersToInventory(
         .eq('channel', order.channel);
       deductedSet.add(orderNum);
       applied++;
-      if (newQty < 0) negSet.add(order.sku_id);
+      // negSet 는 위 rawNewQty < 0 시 이미 추가됨 (floor 후 newQty 는 0 이상)
     }
 
     // Case B: 반품 완료 + 이미 차감됨 + 미복구 + 트리거도 복구 안 함 → 복구
@@ -221,5 +227,6 @@ export async function applyOrdersToInventory(
     }
   }
 
-  return { applied, restored, skipped, negativeSkuIds: [...negSet] };
+  const ids = [...negSet];
+  return { applied, restored, skipped, clampedSkuIds: ids, negativeSkuIds: ids };
 }

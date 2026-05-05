@@ -16,11 +16,15 @@ export async function runRefreshSales(): Promise<Record<string, any>> {
     'PURCHASE_CANCEL', 'VENDOR_CANCEL',
   ];
 
+  // cancelled_at 세팅된 주문 (트리거가 UPDATE 로 복구한 케이스) 도 추가로 제외.
+  // 이전엔 order_status 만 보고 매출 카운트 → 취소 후 status 변경 안 된 일부 케이스에서
+  // 매출 카운트 계속 유지되던 문제 fix.
   const { data: orders, error } = await admin
     .from('channel_orders')
-    .select('sku_id, quantity, order_date, order_status')
+    .select('sku_id, quantity, order_date, order_status, cancelled_at')
     .not('sku_id', 'is', null)
     .gte('order_date', since30)
+    .is('cancelled_at', null)
     .not('order_status', 'in', `(${cancelStatuses.map((s) => `"${s}"`).join(',')})`);
 
   if (error) {

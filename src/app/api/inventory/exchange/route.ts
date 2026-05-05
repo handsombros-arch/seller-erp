@@ -65,7 +65,10 @@ export async function POST(request: NextRequest) {
 
   const replWh = replInv?.warehouse_id ?? defaultWhId;
   const replBefore = replInv?.quantity ?? 0;
-  const replAfter = replBefore - qty;
+  // 트리거/applyOrders 와 동일하게 0 으로 floor (음수 재고 방지)
+  const rawReplAfter = replBefore - qty;
+  const replAfter = Math.max(0, rawReplAfter);
+  const clamped = rawReplAfter < 0;
 
   await admin.from('inventory').upsert(
     { sku_id: replacement_sku_id, warehouse_id: replWh, quantity: replAfter },
@@ -79,6 +82,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     restored: { sku_id: original_sku_id, before: origBefore, after: origAfter },
-    deducted: { sku_id: replacement_sku_id, before: replBefore, after: replAfter },
+    deducted: { sku_id: replacement_sku_id, before: replBefore, after: replAfter, clamped },
   });
 }
