@@ -116,6 +116,28 @@ ORDER BY td.qty DESC;
 
 다음 달 실사 때 같은 절차 반복. 매월 1회 실측이 baseline 이고, 사이는 자동.
 
+## 통합 UX (5/5 정비 완료)
+
+- **재고 조정 다이얼로그 통합**: 헤더 버튼 2개로 정리.
+  - `재고 조정` (파란 버튼): entry 탭 시작
+  - `월별 실사` (보라 버튼): physical 탭 시작
+  - 다이얼로그 안에 [단건 조정] [대량 CSV] [월별 실사] tab strip — 탭 클릭으로 자유 전환
+- **종합 현황 RG 분리**: 재고 셀에 `RG` 보라 배지 / `쿠팡창고` 파란 배지로 소스 식별. total 셀 아래 `자사 N + RG M` breakdown.
+- **알림 배너** (재고 페이지 상단):
+  - 음수 재고 (이전 버그 흔적)
+  - 0 으로 floor 된 SKU (재고 부족 상태로 주문 들어옴)
+  - 미매칭 SKU 주문 (sku_id NULL — 차감 X, 매출 카운트 X) → 마스터 시트 매핑 링크
+
+## 코드 일관성 (5/5 fix)
+
+| 항목 | 이전 | 현재 |
+|---|---|---|
+| 음수 처리 | 트리거 0 floor, applyOrders 음수 허용 | 양쪽 모두 0 floor + alerts 로 보고 |
+| exchange 음수 | 가드 X | replacement 차감 0 floor + clamped 응답 |
+| refresh-sales 취소 제외 | order_status 만 봄 | + cancelled_at IS NULL 추가 |
+| 창고 선택 | 트리거 max-stock, applyOrders 첫 매칭 | 양쪽 max-stock |
+| audit 백필 | 트리거 audit 미작성 → 이중 차감 사고 (5/4) | flag 우선 확인, audit 백필만 |
+
 ## 알려진 한계
 
 1. **음수 재고 허용** — `GREATEST(0, qty - x)` 가 트리거에는 있지만 applyOrders 에는 없음. 차감량이 재고보다 크면 음수까지 내려감 (negativeSkuIds 로 보고됨, 실패는 아님)

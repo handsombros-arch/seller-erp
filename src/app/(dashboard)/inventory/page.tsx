@@ -1670,7 +1670,21 @@ export default function InventoryPage() {
     } finally { setLoading(false); }
   }, []);
 
+  // 음수 floor / 미매칭 SKU 주문 알림
+  const [alerts, setAlerts] = useState<{
+    count: number;
+    clamped_today: Array<{ sku_code: string; product_name: string; attempted_deduction: number }>;
+    unmapped_orders: Array<{ channel: string; product_name: string; option_name: string | null; count: number }>;
+  } | null>(null);
+  const loadAlerts = useCallback(async () => {
+    try {
+      const r = await fetch('/api/inventory/alerts');
+      if (r.ok) setAlerts(await r.json());
+    } catch {}
+  }, []);
+
   useEffect(() => { loadInventory(); }, [loadInventory]);
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
 
   const warehouses = useMemo<Warehouse[]>(() => {
     const seen = new Set<string>();
@@ -1854,6 +1868,51 @@ export default function InventoryPage() {
           </div>
         </div>
       </div>
+
+      {/* 알림 배너 — 음수 floor + 미매칭 SKU 주문 */}
+      {alerts && (alerts.clamped_today.length > 0 || alerts.unmapped_orders.length > 0 || alerts.count > 0) && (
+        <div className="space-y-2">
+          {alerts.count > 0 && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-[12px] text-red-900">
+              <div className="font-semibold text-[13px] mb-0.5">⚠ 음수 재고 {alerts.count}건</div>
+              <div className="text-red-700">실측이 필요한 SKU 입니다 (이전 버그 흔적일 수 있음). 월별 실사 모드로 보정하세요.</div>
+            </div>
+          )}
+          {alerts.clamped_today.length > 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-[12px] text-amber-900">
+              <div className="font-semibold text-[13px] mb-1">
+                ⚠ 최근 30일 재고 부족 (0 으로 floor) {alerts.clamped_today.length}건
+              </div>
+              <div className="text-amber-800 leading-relaxed">
+                재고가 부족한 상태에서 주문이 들어와 0 으로 처리됨. 실제 출고 가능 수량 확인 + 발주/실사 검토 필요.
+                {alerts.clamped_today.slice(0, 5).map((c, i) => (
+                  <span key={i} className="ml-2 inline-block">
+                    <b>{c.sku_code}</b> ({c.product_name.slice(0, 20)}) 시도 {c.attempted_deduction}
+                  </span>
+                ))}
+                {alerts.clamped_today.length > 5 && <span className="ml-1 text-amber-600">…외 {alerts.clamped_today.length - 5}건</span>}
+              </div>
+            </div>
+          )}
+          {alerts.unmapped_orders.length > 0 && (
+            <div className="rounded-xl bg-orange-50 border border-orange-200 px-4 py-3 text-[12px] text-orange-900">
+              <div className="font-semibold text-[13px] mb-1">
+                ⚠ 미매칭 SKU 주문 {alerts.unmapped_orders.length}종 — 재고 차감/매출 카운트 안 됨
+              </div>
+              <div className="text-orange-800 leading-relaxed">
+                {alerts.unmapped_orders.slice(0, 5).map((u, i) => (
+                  <span key={i} className="mr-3 inline-block">
+                    [{u.channel}] {u.product_name.slice(0, 25)}
+                    {u.option_name ? ` · ${u.option_name.slice(0, 15)}` : ''} ({u.count}건)
+                  </span>
+                ))}
+                {alerts.unmapped_orders.length > 5 && <span className="text-orange-600">…외 {alerts.unmapped_orders.length - 5}종</span>}
+                <a href="/master" className="ml-2 underline hover:text-orange-700">→ 마스터에서 매핑</a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
