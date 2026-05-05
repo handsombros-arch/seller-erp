@@ -53,14 +53,14 @@ function RowHeightButtons({ value, onChange }: { value: RowHeight; onChange: (v:
 
 // ─── Dialog ────────────────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode;
+function Dialog({ open, onClose, title, children, wide }: {
+  open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean;
 }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4">
+      <div className={`relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full ${wide ? 'max-w-2xl' : 'max-w-md'} mx-4`}>
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
           <h2 className="text-[15px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
@@ -73,13 +73,45 @@ function Dialog({ open, onClose, title, children }: {
   );
 }
 
+// ─── Adjust Dialog Tab Strip — 통합 entry/csv/physical ─────────────────────
+
+type AdjustTab = 'entry' | 'csv' | 'physical' | null;
+
+function AdjustTabStrip({ current, onChange }: { current: AdjustTab; onChange: (t: AdjustTab) => void }) {
+  const tabs: Array<{ key: Exclude<AdjustTab, null>; label: string; hint: string }> = [
+    { key: 'entry', label: '단건 조정', hint: 'SKU/창고 직접 입력' },
+    { key: 'csv', label: '대량 CSV', hint: 'CSV 일괄 기입' },
+    { key: 'physical', label: '월별 실사', hint: '실사 기준으로 덮어쓰기' },
+  ];
+  return (
+    <div className="flex items-center gap-1 mb-4 -mt-1 border-b border-[#F2F4F6]">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onChange(t.key)}
+          title={t.hint}
+          className={`px-3 h-9 text-[12px] border-b-2 transition-colors ${
+            current === t.key
+              ? 'border-[#0071E3] text-[#0071E3] font-semibold'
+              : 'border-transparent text-[#6B7684] hover:text-[#191F28]'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Entry Dialog ────────────────────────────────────────────────────────────
 
 interface SkuOption { id: string; label: string; }
 interface EntryRow { sku_id: string; quantity: string; }
 
-function EntryDialog({ open, onClose, onSave }: {
+function EntryDialog({ open, onClose, onSave, onTabChange }: {
   open: boolean; onClose: () => void; onSave: () => void;
+  onTabChange?: (t: AdjustTab) => void;
 }) {
   const [skuOptions, setSkuOptions] = useState<SkuOption[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
@@ -150,7 +182,8 @@ function EntryDialog({ open, onClose, onSave }: {
   const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
 
   return (
-    <Dialog open={open} onClose={onClose} title="재고 기입">
+    <Dialog open={open} onClose={onClose} title="재고 조정" wide>
+      {onTabChange && <AdjustTabStrip current="entry" onChange={onTabChange} />}
       {fetching ? (
         <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
       ) : (
@@ -217,7 +250,12 @@ function EntryDialog({ open, onClose, onSave }: {
 
 interface ParsedRow { sku_code: string; warehouse_name: string; quantity: string; reason: string; valid: boolean; error?: string; }
 
-function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: () => void; onSave: () => void }) {
+function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabChange, currentTab }: {
+  open: boolean; onClose: () => void; onSave: () => void;
+  defaultPhysicalCount?: boolean;
+  onTabChange?: (t: AdjustTab) => void;
+  currentTab?: 'csv' | 'physical';
+}) {
   const [csvText, setCsvText] = useState('');
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -225,7 +263,11 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
   const [parseError, setParseError] = useState('');
   // 월별 실사 모드 — reason 에 __PHYSICAL_COUNT__:<오늘> prefix 추가.
   // applyOrders 가 이를 cutoff 로 인식해 그 이후 주문만 자동 차감/복구.
-  const [physicalCount, setPhysicalCount] = useState(false);
+  const [physicalCount, setPhysicalCount] = useState(!!defaultPhysicalCount);
+  // open 또는 defaultPhysicalCount 변경 시 동기화
+  useEffect(() => {
+    if (open) setPhysicalCount(!!defaultPhysicalCount);
+  }, [open, defaultPhysicalCount]);
 
   function parseCsv(text: string) {
     setResult(null); setParseError('');
@@ -295,32 +337,43 @@ function CsvImportDialog({ open, onClose, onSave }: { open: boolean; onClose: ()
   const invalidCount = parsed.filter((r) => !r.valid).length;
 
   return (
-    <Dialog open={open} onClose={handleClose} title="재고 CSV 일괄 기입">
+    <Dialog open={open} onClose={handleClose} title="재고 조정" wide>
+      {onTabChange && <AdjustTabStrip current={currentTab ?? 'csv'} onChange={onTabChange} />}
       <div className="space-y-4">
-        {/* 월별 실사 모드 토글 */}
-        <label
-          className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-            physicalCount
-              ? 'border-[#0071E3] bg-[#0071E3]/5'
-              : 'border-[#E5E5EA] bg-white hover:bg-[#F5F5F7]'
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={physicalCount}
-            onChange={(e) => setPhysicalCount(e.target.checked)}
-            className="mt-0.5"
-          />
-          <div className="flex-1 space-y-0.5">
-            <div className="text-[13px] font-medium text-[#1D1D1F]">
-              월별 실사 모드
-            </div>
-            <div className="text-[11px] text-[#6E6E73] leading-relaxed">
+        {/* 월별 실사 모드 안내. physical 탭에선 강제 ON + 토글 숨김. csv 탭에선 사용자 선택 가능 */}
+        {currentTab === 'physical' ? (
+          <div className="rounded-xl border border-[#0071E3] bg-[#0071E3]/5 p-3 text-[12px] text-[#1D1D1F]">
+            <div className="font-semibold text-[13px] mb-1">월별 실사 모드 (자동 적용)</div>
+            <div className="text-[#6E6E73] leading-relaxed">
               실사 결과로 재고를 덮어쓰고, 그 이후 발생한 주문/반품/쿠팡/토스/스마트스토어/기타마켓 변동만 자동 반영.
               사유에 <span className="font-mono">__PHYSICAL_COUNT__:오늘날짜</span> 자동 추가됨.
             </div>
           </div>
-        </label>
+        ) : (
+          <label
+            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+              physicalCount
+                ? 'border-[#0071E3] bg-[#0071E3]/5'
+                : 'border-[#E5E5EA] bg-white hover:bg-[#F5F5F7]'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={physicalCount}
+              onChange={(e) => setPhysicalCount(e.target.checked)}
+              className="mt-0.5"
+            />
+            <div className="flex-1 space-y-0.5">
+              <div className="text-[13px] font-medium text-[#1D1D1F]">
+                월별 실사 모드
+              </div>
+              <div className="text-[11px] text-[#6E6E73] leading-relaxed">
+                실사 결과로 재고를 덮어쓰고, 그 이후 발생한 주문/반품/쿠팡/토스/스마트스토어/기타마켓 변동만 자동 반영.
+                사유에 <span className="font-mono">__PHYSICAL_COUNT__:오늘날짜</span> 자동 추가됨.
+              </div>
+            </div>
+          </label>
+        )}
 
         {/* Format hint */}
         <div className="bg-[#F8F9FB] rounded-xl p-3 space-y-1">
@@ -737,7 +790,21 @@ function SummaryTab() {
       );
       case 'coupang': return (
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
-          <span className="text-[13px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_stock)}</span>
+          {/* RG 우선 표시. RG 가 있으면 보라색 RG 배지, 없고 자사 coupang 창고만 있으면 파란색.
+              일반적으로 RG 가 출고 단위라 거의 모든 SKU 가 보라 표시됨. */}
+          {row.rg_stock > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-[13px] font-semibold text-[#5E5CE6] tabular-nums">{formatNumber(row.rg_stock)}</span>
+              <span className="text-[9px] px-1 py-px rounded bg-[#5E5CE6]/10 text-[#5E5CE6] font-medium uppercase tracking-wide">RG</span>
+            </span>
+          ) : row.coupang_warehouse_stock > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-[13px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_warehouse_stock)}</span>
+              <span className="text-[9px] px-1 py-px rounded bg-[#3182F6]/10 text-[#3182F6] font-medium">쿠팡창고</span>
+            </span>
+          ) : (
+            <span className="text-[13px] text-[#D1D5DB]">-</span>
+          )}
         </td>
       );
       case 'transit': return (
@@ -754,12 +821,23 @@ function SummaryTab() {
             : <span className="text-[13px] text-[#D1D5DB]">-</span>}
         </td>
       );
-      case 'total': return (
-        <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
-          <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(row.total_stock)}</span>
-          {daysLeft !== null && <span className="text-[11px] text-[#B0B8C1] ml-1">{daysLeft}일</span>}
-        </td>
-      );
+      case 'total': {
+        // 자사 + RG 분리. 둘 다 있으면 합계 옆에 작은 글자로 source breakdown
+        const ownN = row.warehouse_stock;
+        const rgN = row.rg_stock || row.coupang_warehouse_stock;
+        const showBreakdown = ownN > 0 && rgN > 0;
+        return (
+          <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
+            <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(row.total_stock)}</span>
+            {daysLeft !== null && <span className="text-[11px] text-[#B0B8C1] ml-1">{daysLeft}일</span>}
+            {showBreakdown && (
+              <div className="text-[10px] text-[#86868B] mt-0.5 leading-tight">
+                자사 {formatNumber(ownN)} + RG {formatNumber(rgN)}
+              </div>
+            )}
+          </td>
+        );
+      }
       case 'safety': return (
         <td key={col} className={`px-4 ${py}`}>
           <span className="text-[13px] text-[#6B7684] tabular-nums">{row.safety_stock > 0 ? formatNumber(row.safety_stock) : '-'}</span>
@@ -1570,8 +1648,9 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
   const [adjustItem, setAdjustItem] = useState<InventoryRow | null>(null);
-  const [entryOpen, setEntryOpen] = useState(false);
-  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  // 통합 조정 다이얼로그 — 'entry' (단건) / 'csv' (대량 CSV) / 'physical' (월별 실사) 중 하나
+  // null 이면 다이얼로그 닫힘. 같은 tab strip 으로 사용자가 자유롭게 전환 가능.
+  const [adjustTab, setAdjustTab] = useState<AdjustTab>(null);
 
   // Warehouse table column features
   const [whColOrder, setWhColOrder] = useState<WhCol[]>(() => {
@@ -1761,11 +1840,11 @@ export default function InventoryPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setEntryOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
-              <Plus className="h-4 w-4" /> 재고 기입
+            <button onClick={() => setAdjustTab('entry')} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
+              <Plus className="h-4 w-4" /> 재고 조정
             </button>
-            <button onClick={() => setCsvImportOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
-              <Upload className="h-4 w-4" /> CSV 기입
+            <button onClick={() => setAdjustTab('physical')} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#0071E3]/40 bg-[#0071E3]/5 text-[#0071E3] text-[13px] font-semibold hover:bg-[#0071E3]/10 transition-colors whitespace-nowrap">
+              <Upload className="h-4 w-4" /> 월별 실사
             </button>
             {tab === 'warehouse' && (
               <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
@@ -1900,7 +1979,7 @@ export default function InventoryPage() {
                         <WarehouseIcon className="h-6 w-6 text-[#B0B8C1]" />
                       </div>
                       <p className="text-[13px] font-medium text-[#6B7684]">재고 데이터가 없습니다</p>
-                      <button onClick={() => setEntryOpen(true)} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+                      <button onClick={() => setAdjustTab('entry')} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
                         <Plus className="h-4 w-4" /> 재고 기입
                       </button>
                     </div>
@@ -1934,8 +2013,29 @@ export default function InventoryPage() {
       )}
 
       <AdjustDialog open={!!adjustItem} onClose={() => setAdjustItem(null)} item={adjustItem} onSave={handleAdjusted} />
-      <EntryDialog open={entryOpen} onClose={() => setEntryOpen(false)} onSave={() => { setEntryOpen(false); loadInventory(); }} />
-      <CsvImportDialog open={csvImportOpen} onClose={() => setCsvImportOpen(false)} onSave={() => { setCsvImportOpen(false); loadInventory(); }} />
+      {/* 통합 조정 다이얼로그 — entry/csv/physical 세 탭 동일한 UX. tab strip 으로 자유 전환 */}
+      <EntryDialog
+        open={adjustTab === 'entry'}
+        onClose={() => setAdjustTab(null)}
+        onSave={() => { setAdjustTab(null); loadInventory(); }}
+        onTabChange={setAdjustTab}
+      />
+      <CsvImportDialog
+        open={adjustTab === 'csv'}
+        onClose={() => setAdjustTab(null)}
+        onSave={() => { setAdjustTab(null); loadInventory(); }}
+        defaultPhysicalCount={false}
+        onTabChange={setAdjustTab}
+        currentTab="csv"
+      />
+      <CsvImportDialog
+        open={adjustTab === 'physical'}
+        onClose={() => setAdjustTab(null)}
+        onSave={() => { setAdjustTab(null); loadInventory(); }}
+        defaultPhysicalCount={true}
+        onTabChange={setAdjustTab}
+        currentTab="physical"
+      />
     </div>
   );
 }

@@ -10,11 +10,20 @@ export interface InventorySummaryRow {
   safety_stock: number;
   sales_30d: number;
   sales_7d: number;
-  warehouse_stock: number;   // 자사창고 합계
-  coupang_stock: number;     // 쿠팡그로스 출고 - 쿠팡 Wing 판매
+  warehouse_stock: number;   // 자사창고 합계 (own + 3pl + other)
+  /** Coupang RG 스냅샷 (있으면) */
+  rg_stock: number;
+  /** Coupang 타입 창고 재고 (RG 스냅샷 없을 때만 사용 — 거의 0) */
+  coupang_warehouse_stock: number;
+  /**
+   * RG/coupang 합계. 일반적으로 rg_stock 사용. UI 호환 위해 보존.
+   * @deprecated UI 는 rg_stock 직접 사용 권장.
+   */
+  coupang_stock: number;
   transit_stock: number;     // 발주 중 (ordered/transiting) — 표시용, total_stock에 미포함
   outbound_stock: number;    // 출고중 (shipped 상태, 판매개시 전)
-  total_stock: number;       // warehouse_stock + coupang_stock (transit/outbound 제외)
+  /** warehouse_stock + rg_stock (또는 coupang_warehouse_stock fallback) */
+  total_stock: number;
 }
 
 export async function GET() {
@@ -121,8 +130,10 @@ export async function GET() {
 
   const summary: InventorySummaryRow[] = skus.map((sku) => {
     const warehouse_stock = warehouseMap.get(sku.id) ?? 0;
-    // RG 스냅샷 우선, 없으면 쿠팡 타입 창고 재고 사용
-    const coupang_stock = rgMap.has(sku.id) ? (rgMap.get(sku.id) ?? 0) : (coupangWHMap.get(sku.id) ?? 0);
+    // RG 스냅샷 우선, 없으면 쿠팡 타입 창고 재고 fallback. 두 값 분리해서 UI 가 소스 식별 가능.
+    const rg_stock = rgMap.get(sku.id) ?? 0;
+    const coupang_warehouse_stock = coupangWHMap.get(sku.id) ?? 0;
+    const coupang_stock = rg_stock > 0 ? rg_stock : coupang_warehouse_stock;
     const transit_stock = transitMap.get(sku.id) ?? 0;
     // channel_orders 실제 판매 우선, 없으면 수동 입력값
     const sales_30d = orders30Map.has(sku.id) ? (orders30Map.get(sku.id) ?? 0) : (sku.sales_30d ?? 0);
@@ -138,6 +149,8 @@ export async function GET() {
       sales_30d,
       sales_7d,
       warehouse_stock,
+      rg_stock,
+      coupang_warehouse_stock,
       coupang_stock,
       transit_stock,
       outbound_stock: outboundMap.get(sku.id) ?? 0,
