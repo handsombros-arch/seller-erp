@@ -196,9 +196,10 @@ function exact(label: string) {
 //   클릭
 //   10.18%            ← 변화율(부호 없음, 무시)
 function parseCategoryHeaderFromLines(lines: string[]): ParsedCategoryHeader | null {
-  const titleIdx = lines.findIndex((l) => /^["“'].+["”']\s*카테고리\s*결과/.test(l));
+  // 쿠팡이 페이지/시점에 따라 '카테고리 결과' 또는 '검색 결과' 두 종류 라벨 사용. 둘 다 인식.
+  const titleIdx = lines.findIndex((l) => /^["“'].+["”']\s*(?:카테고리|검색)\s*결과/.test(l));
   if (titleIdx < 0) return null;
-  const titleMatch = lines[titleIdx].match(/^["“'](.+?)["”']\s*카테고리\s*결과/);
+  const titleMatch = lines[titleIdx].match(/^["“'](.+?)["”']\s*(?:카테고리|검색)\s*결과/);
   if (!titleMatch) return null;
   const categoryName = titleMatch[1];
 
@@ -404,7 +405,8 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // trim 된 라인 단위에서 카테고리 헤더 패턴을 anchored 로 매치 (상품명에 "결과" 포함된 케이스 방어).
-const CATEGORY_HEADER_RE = /^["“'].+?["”']\s*카테고리\s*결과\s*$/;
+// '카테고리 결과' / '검색 결과' 두 가지 모두 인식 (쿠팡이 페이지에 따라 다른 라벨 사용).
+const CATEGORY_HEADER_RE = /^["“'].+?["”']\s*(?:카테고리|검색)\s*결과\s*$/;
 
 export type MultiParseResult = {
   results: ParseResult[];
