@@ -483,9 +483,11 @@ function deltaPct(value: number | null, baseline: number | null): number | null 
 function SortableCompareRow({
   snap,
   isBaseline,
+  onRemove,
 }: {
   snap: SnapshotMeta;
   isBaseline: boolean;
+  onRemove: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: snap.id });
   const style: React.CSSProperties = {
@@ -497,7 +499,7 @@ function SortableCompareRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={`border-b border-black/[0.06] ${
+      className={`group border-b border-black/[0.06] ${
         isBaseline ? 'bg-[#0071E3]/5' : 'hover:bg-[#F5F5F7] transition-colors'
       }`}
     >
@@ -522,6 +524,14 @@ function SortableCompareRow({
           >
             {snap.category_name}
           </span>
+          <button
+            type="button"
+            onClick={() => onRemove(snap.id)}
+            className="ml-auto text-[#86868B] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+            title="이 카테고리를 비교에서 제거"
+          >
+            ✕
+          </button>
         </div>
       </td>
       {COMPARE_METRICS.map((m) => {
@@ -555,11 +565,14 @@ function CompareDialog({
   onOpenChange,
   snapshots,
   allSnapshots,
+  availableLeafs,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   snapshots: SnapshotMeta[];
   allSnapshots: SnapshotMeta[];
+  /** 다이얼로그 안에서 추가할 수 있는 후보 leaf 리스트 (snapshots 외 카테고리도 골라 넣기) */
+  availableLeafs: SnapshotMeta[];
 }) {
   // 탭: 표 비교 / 시계열 차트
   const [tab, setTab] = useState<'table' | 'chart'>('table');
@@ -568,18 +581,57 @@ function CompareDialog({
 
   // 행 순서 = 비교 순서. orderedIds[0] = 기준점.
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
-  // 다이얼로그 열릴 때 / snapshots 변경될 때 순서 초기화
+  // 다이얼로그 안에서 추가/제거 시 originally-passed snapshots 외 leaf 도 표시할 수 있어야 하므로
+  // availableLeafs 에서 lookup. (availableLeafs 가 모든 leaf 를 포함)
+  const [addPickerInput, setAddPickerInput] = useState('');
+  const [showAddPicker, setShowAddPicker] = useState(false);
+
+  // 다이얼로그 열릴 때만 순서 초기화 — 닫지 않은 채 snapshots prop 이 변해도 사용자 편집 보존
   useEffect(() => {
     if (open) setOrderedIds(snapshots.map((s) => s.id));
-  }, [open, snapshots]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ordered 는 availableLeafs 에서 lookup — 추가된 카테고리도 정상 표시
+  const leafsById = useMemo(() => {
+    const m = new Map<string, SnapshotMeta>();
+    for (const s of availableLeafs) m.set(s.id, s);
+    // snapshots prop 도 추가 (혹시 leaf 가 아닌 snapshot 이 들어와도 표시되도록)
+    for (const s of snapshots) if (!m.has(s.id)) m.set(s.id, s);
+    return m;
+  }, [availableLeafs, snapshots]);
 
   const ordered = useMemo(
     () =>
       orderedIds
-        .map((id) => snapshots.find((s) => s.id === id))
+        .map((id) => leafsById.get(id))
         .filter((s): s is SnapshotMeta => !!s),
-    [orderedIds, snapshots],
+    [orderedIds, leafsById],
   );
+
+  // 추가 picker — 현재 ordered 에 없는 leaf 만, 검색어 필터
+  const addCandidates = useMemo(() => {
+    const inUse = new Set(orderedIds);
+    const term = addPickerInput.trim().toLowerCase();
+    return availableLeafs
+      .filter((s) => !inUse.has(s.id))
+      .filter((s) => {
+        if (!term) return true;
+        const name = (s.category_name ?? '').toLowerCase();
+        const path = (s.category_path ?? []).join(' > ').toLowerCase();
+        return name.includes(term) || path.includes(term);
+      })
+      .slice(0, 50);
+  }, [availableLeafs, orderedIds, addPickerInput]);
+
+  const handleAddCategory = (id: string) => {
+    setOrderedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setAddPickerInput('');
+    setShowAddPicker(false);
+  };
+
+  const handleRemoveRow = (id: string) => {
+    setOrderedIds((prev) => prev.filter((x) => x !== id));
+  };
   const baseline = ordered[0] ?? null;
   const others = ordered.slice(1);
 
@@ -652,8 +704,75 @@ function CompareDialog({
           <DialogDescription className="text-[#6E6E73]">
             행을 드래그해서 순서를 바꾸면 <b>맨 위</b>가 자동으로 기준점이 됩니다.
             상승 초록 / 하락 빨강 (Ad% 는 반대 — 낮을수록 자연검색 강세).
+            행 hover 시 우측 ✕ 으로 제거, 아래 '+ 카테고리 추가' 로 다른 카테고리 비교에 추가.
           </DialogDescription>
         </DialogHeader>
+
+        {/* 카테고리 추가/제거 컨트롤 */}
+        <div className="flex flex-wrap items-center gap-2 py-1">
+          <span className="text-xs text-[#6E6E73]">비교 대상 {ordered.length}개</span>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAddPicker((v) => !v)}
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[12px] border border-[#0071E3]/30 text-[#0071E3] hover:bg-[#0071E3]/5 transition-colors"
+            >
+              + 카테고리 추가
+            </button>
+            {showAddPicker && (
+              <div className="absolute top-full left-0 mt-1 w-[420px] max-h-[320px] z-50 bg-white border border-black/[0.08] rounded-lg shadow-lg overflow-hidden flex flex-col">
+                <input
+                  type="text"
+                  value={addPickerInput}
+                  onChange={(e) => setAddPickerInput(e.target.value)}
+                  placeholder="카테고리명 또는 path 검색..."
+                  autoFocus
+                  className="h-9 px-3 text-[13px] border-b border-black/[0.06] focus:outline-none focus:border-[#0071E3]"
+                />
+                <div className="overflow-y-auto flex-1">
+                  {addCandidates.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-[#86868B]">
+                      {addPickerInput ? '매칭되는 카테고리 없음' : '추가할 카테고리 없음'}
+                    </div>
+                  ) : (
+                    addCandidates.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleAddCategory(s.id)}
+                        className="w-full text-left px-3 py-2 text-[12px] hover:bg-[#F5F5F7] transition-colors border-b border-black/[0.04] last:border-0"
+                      >
+                        <div className="font-medium text-[#1D1D1F]">{s.category_name}</div>
+                        {s.category_path && s.category_path.length > 1 && (
+                          <div className="text-[10px] text-[#86868B] truncate">
+                            {s.category_path.slice(0, -1).join(' › ')}
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddPicker(false); setAddPickerInput(''); }}
+                  className="text-[11px] text-[#6E6E73] py-1.5 hover:bg-[#F5F5F7] border-t border-black/[0.06]"
+                >
+                  닫기
+                </button>
+              </div>
+            )}
+          </div>
+          {ordered.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOrderedIds([])}
+              className="text-[11px] text-[#86868B] hover:text-red-500 ml-1"
+              title="모두 제거"
+            >
+              전체 비우기
+            </button>
+          )}
+        </div>
 
         {/* 탭 — 표 / 시계열 차트 */}
         <div className="flex items-center gap-1 border-b border-black/[0.06] -mt-1">
@@ -718,6 +837,7 @@ function CompareDialog({
                         key={s.id}
                         snap={s}
                         isBaseline={idx === 0}
+                        onRemove={handleRemoveRow}
                       />
                     ))}
                   </SortableContext>
@@ -2158,6 +2278,7 @@ export default function DataAnalysisPage() {
             : leafSnapshots.filter((s) => selected.has(s.id))
         }
         allSnapshots={snapshots}
+        availableLeafs={leafSnapshots}
       />
 
       {/* 삭제 확인 다이얼로그 — 카테고리명 정확히 타이핑해야 활성화 */}
