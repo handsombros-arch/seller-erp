@@ -55,15 +55,20 @@ export async function GET() {
   if (ids.length) {
     try {
       type ProdRow = { id: string; snapshot_id: string; winner_price: number | null; price_min: number | null; price_max: number | null };
-      const prodRows = await fetchAll<ProdRow>(async (from, to) => {
+      // ⚠ .in('snapshot_id', ids) 사용 시 ids 가 수천 개면 URL 이 PostgREST 한계(~32KB) 초과해
+      // silent 실패 (0 rows 반환). 대신 필터 없이 전체 페이지네이션 + JS-side filter.
+      // competitor_snapshots 가 팀 공용이라 어차피 전체 ~10k-20k 행 정도 → 10초 내 처리 가능.
+      const idSet = new Set(ids);
+      const prodRowsAll = await fetchAll<ProdRow>(async (from, to) => {
         const r = await admin
           .from('competitor_snapshot_products')
           .select('id, snapshot_id, winner_price, price_min, price_max')
-          .in('snapshot_id', ids)
           .order('id', { ascending: true })
           .range(from, to);
         return { data: r.data as ProdRow[] | null, error: r.error };
       });
+      const prodRows = prodRowsAll.filter((p) => idSet.has(p.snapshot_id));
+
       const prodIdsBySnap: Record<string, string[]> = {};
       const winnerSumBySnap: Record<string, { sum: number; count: number }> = {};
       const pickProductPrice = (row: { winner_price: unknown; price_min: unknown; price_max: unknown }): number | null => {
