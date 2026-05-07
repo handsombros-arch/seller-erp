@@ -104,12 +104,42 @@ export async function GET() {
     }
   }
 
-  const enriched = (snapshots || []).map((s) => ({
-    ...s,
-    products_count: aggBySnapshot[s.id]?.products ?? 0,
-    keywords_count: aggBySnapshot[s.id]?.keywords ?? 0,
-    avg_winner_price: aggBySnapshot[s.id]?.avg_winner_price ?? null,
-  }));
+  // Sibling 보강: 같은 category_path 의 다른 snapshot 에 avg/products_count 가 있으면
+  // 현재 snapshot 의 NULL 을 채워준다. (사용자가 같은 카테고리에 상품/검색어/브랜드 페이지를
+  // 따로 paste 한 경우, latest 가 keywords/brands type 이라 avg 가 null 이지만 sibling 의
+  // products snapshot 엔 값이 있음 — 그걸 끌어옴.)
+  // snapshots 는 captured_at desc 정렬이므로 첫 hit 가 최신.
+  const pathBestAvg = new Map<string, number>();
+  const pathBestProductsCount = new Map<string, number>();
+  for (const s of snapshots ?? []) {
+    const path = (s as { category_path?: string[] | null }).category_path;
+    const name = (s as { category_name?: string | null }).category_name;
+    const k = path && path.length > 0 ? path.join('|') : (name ?? '');
+    if (!k) continue;
+    const agg = aggBySnapshot[s.id];
+    if (!agg) continue;
+    if (agg.avg_winner_price != null && !pathBestAvg.has(k)) {
+      pathBestAvg.set(k, agg.avg_winner_price);
+    }
+    if (agg.products > 0 && !pathBestProductsCount.has(k)) {
+      pathBestProductsCount.set(k, agg.products);
+    }
+  }
+
+  const enriched = (snapshots || []).map((s) => {
+    const agg = aggBySnapshot[s.id];
+    const path = (s as { category_path?: string[] | null }).category_path;
+    const name = (s as { category_name?: string | null }).category_name;
+    const k = path && path.length > 0 ? path.join('|') : (name ?? '');
+    const ownAvg = agg?.avg_winner_price ?? null;
+    const ownProducts = agg?.products ?? 0;
+    return {
+      ...s,
+      products_count: ownProducts > 0 ? ownProducts : (pathBestProductsCount.get(k) ?? 0),
+      keywords_count: agg?.keywords ?? 0,
+      avg_winner_price: ownAvg ?? (pathBestAvg.get(k) ?? null),
+    };
+  });
 
   return NextResponse.json({ snapshots: enriched });
 }
