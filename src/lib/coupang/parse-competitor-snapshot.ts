@@ -45,9 +45,43 @@ export type ParsedCategoryHeader = {
   total_click: number | null;
 };
 
+// 카테고리 단위 TOP 20 검색어 (per-product 인 ParsedKeyword 와 다름).
+// 쿠팡 광고진단의 "Top 20 검색어" 페이지에서 한 행씩 나오는 데이터.
+export type ParsedTopKeyword = {
+  rank: number;
+  keyword: string;
+  contributing_count: number | null; // 내 상품 노출에 기여한 키워드 (N) 의 N
+  search_volume: number | null;
+  search_volume_change_pct: number | null;
+  exposure: number | null;
+  exposure_change_pct: number | null;
+  clicks: number | null;
+  clicks_change_pct: number | null;
+  avg_price: number | null;
+  price_min: number | null;
+  price_max: number | null;
+};
+
+export type ParsedTopBrand = {
+  rank: number;
+  brand_name: string;
+  exposure: number | null;
+  exposure_change_pct: number | null;
+  clicks: number | null;
+  clicks_change_pct: number | null;
+  ctr: number | null;
+  ctr_change_pct: number | null;
+};
+
+// 어떤 페이지가 페이스트되었는지
+export type SnapshotType = 'products' | 'keywords' | 'brands';
+
 export type ParseResult = {
   category: ParsedCategoryHeader | null;
+  type: SnapshotType;
   products: ParsedProduct[];
+  topKeywords: ParsedTopKeyword[];
+  topBrands: ParsedTopBrand[];
   warnings: string[];
 };
 
@@ -254,6 +288,121 @@ export function parseCategoryHeader(rawText: string): ParsedCategoryHeader | nul
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Snapshot type 감지 — 페이스트가 어느 페이지인지 결정
+// ─────────────────────────────────────────────────────────────────────────────
+// products: '출시일 :' 마커 (각 상품 행)
+// keywords: '검색량' 단독 라벨 라인 (각 키워드 행)
+// brands: 둘 다 없고 '클릭율' 라벨 + '검색어 노출' 라벨 (각 브랜드 행)
+export function detectSnapshotType(rawText: string): SnapshotType {
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.some((l) => /^출시일\s*:/.test(l))) return 'products';
+  if (lines.some((l) => l === '검색량')) return 'keywords';
+  return 'brands';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOP 20 검색어 파서
+// ─────────────────────────────────────────────────────────────────────────────
+function parseTopKeywordsFromLines(lines: string[]): ParsedTopKeyword[] {
+  // anchor: '검색량' 라인. 각 키워드 entry 마다 1번씩 등장.
+  const anchors: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === '검색량') anchors.push(i);
+  }
+  const out: ParsedTopKeyword[] = [];
+  for (let ai = 0; ai < anchors.length; ai++) {
+    const a = anchors[ai];
+    const searchVolume = parseKoreanNumber(lines[a - 1]);
+    // back: a-1=search_volume_value, a-2=(contributing line | name), a-3 or a-2=name, a-N=rank
+    let cursor = a - 2;
+    let contributingCount: number | null = null;
+    if (cursor > 0 && /^내 상품 노출에 기여한 키워드\s*\(\d+\)/.test(lines[cursor])) {
+      const m = lines[cursor].match(/\((\d+)\)/);
+      if (m) contributingCount = parseInt(m[1]);
+      cursor--;
+    }
+    const keyword = (lines[cursor] ?? '').trim();
+    cursor--;
+    const rankLine = (lines[cursor] ?? '').trim();
+    const rank = /^\d+$/.test(rankLine) ? parseInt(rankLine) : ai + 1;
+    if (!keyword) continue;
+
+    const sChange = parseChangePercent(lines[a + 1]);
+    const exposure = parseKoreanNumber(lines[a + 2]);
+    // a+3='검색어 노출'
+    const expChange = parseChangePercent(lines[a + 4]);
+    const clicks = parseKoreanNumber(lines[a + 5]);
+    // a+6='클릭'
+    const clicksChange = parseChangePercent(lines[a + 7]);
+    const avgPrice = parseWon(lines[a + 8]);
+    // a+9='평균가격'
+    const priceRangeLine = lines[a + 10] ?? '';
+    const { min, max } = parsePriceRange(priceRangeLine);
+
+    out.push({
+      rank,
+      keyword,
+      contributing_count: contributingCount,
+      search_volume: searchVolume,
+      search_volume_change_pct: sChange,
+      exposure,
+      exposure_change_pct: expChange,
+      clicks,
+      clicks_change_pct: clicksChange,
+      avg_price: avgPrice,
+      price_min: min,
+      price_max: max,
+    });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOP 브랜드 파서
+// ─────────────────────────────────────────────────────────────────────────────
+function parseTopBrandsFromLines(lines: string[]): ParsedTopBrand[] {
+  // anchor: '클릭율' 라벨. brand entry 1개당 1번씩 (products 페이지가 아님 가정 — detectType 후 호출).
+  // 일부 entry 에 'double-hyphen' 같은 노이즈 라인 있을 수 있어 anchor 주변 결정적 offset 보다 라벨 기반 forward 탐색.
+  const klickyulIdxs: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^클릭율\s*$/.test(lines[i])) klickyulIdxs.push(i);
+  }
+  const out: ParsedTopBrand[] = [];
+  for (let ai = 0; ai < klickyulIdxs.length; ai++) {
+    const a = klickyulIdxs[ai];
+    // back: a-1=ctr value, a-2=clicks_change, a-3='클릭', a-4=clicks, a-5=exposure_change, a-6='검색어 노출',
+    //       a-7=exposure, a-8=name, a-9=rank
+    const ctr = parsePercent(lines[a - 1]);
+    const clicksChange = parseChangePercent(lines[a - 2]);
+    const clicks = parseKoreanNumber(lines[a - 4]);
+    const exposureChange = parseChangePercent(lines[a - 5]);
+    const exposure = parseKoreanNumber(lines[a - 7]);
+    const brandName = (lines[a - 8] ?? '').trim();
+    const rankLine = (lines[a - 9] ?? '').trim();
+    const rank = /^\d+$/.test(rankLine) ? parseInt(rankLine) : ai + 1;
+    // ctr_change: 다음 라인 (a+1) 이 일반적이지만 'double-hyphen' 같은 노이즈가 끼면 a+2 일 수 있음.
+    let ctrChange = parseChangePercent(lines[a + 1]);
+    if (ctrChange == null) ctrChange = parseChangePercent(lines[a + 2]);
+    if (!brandName) continue;
+    out.push({
+      rank,
+      brand_name: brandName,
+      exposure,
+      exposure_change_pct: exposureChange,
+      clicks,
+      clicks_change_pct: clicksChange,
+      ctr,
+      ctr_change_pct: ctrChange,
+    });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -266,12 +415,41 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
     .filter((l) => l.length > 0);
 
   const category = parseCategoryHeaderFromLines(lines);
+  const type = detectSnapshotType(rawText);
 
+  // keywords / brands 페이지면 해당 파서 호출하고 반환
+  if (type === 'keywords') {
+    const topKeywords = parseTopKeywordsFromLines(lines);
+    return {
+      category,
+      type,
+      products: [],
+      topKeywords,
+      topBrands: [],
+      warnings: topKeywords.length === 0 ? ['검색어 항목을 찾지 못했습니다.'] : [],
+    };
+  }
+  if (type === 'brands') {
+    const topBrands = parseTopBrandsFromLines(lines);
+    return {
+      category,
+      type,
+      products: [],
+      topKeywords: [],
+      topBrands,
+      warnings: topBrands.length === 0 ? ['브랜드 항목을 찾지 못했습니다.'] : [],
+    };
+  }
+
+  // 기본 (products) 흐름
   const anchors = findAnchors(lines);
   if (anchors.length === 0) {
     return {
       category,
+      type,
       products: [],
+      topKeywords: [],
+      topBrands: [],
       warnings: ['텍스트에서 상품/키워드 마커를 찾지 못했습니다.'],
     };
   }
@@ -397,7 +575,7 @@ export function parseCompetitorSnapshot(rawText: string): ParseResult {
     }
   }
 
-  return { category, products, warnings };
+  return { category, type, products, topKeywords: [], topBrands: [], warnings };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

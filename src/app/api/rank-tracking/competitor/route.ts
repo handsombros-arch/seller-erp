@@ -114,12 +114,12 @@ export async function GET() {
   return NextResponse.json({ snapshots: enriched });
 }
 
-// 단일 스냅샷 insert. 성공 시 { snapshot_id, products, keywords_saved }, 실패 시 throw.
+// 단일 스냅샷 insert. type 에 따라 products / top_keywords / top_brands 중 하나로 저장.
 async function insertOneSnapshot(
   admin: SupabaseClient,
   parsed: ParseResult,
   meta: { user_id: string; my_product_name: string | null; my_product_id: string | null; memo: string | null; raw_text: string },
-): Promise<{ snapshot_id: string; products: number; keywords_saved: number; warnings: string[] }> {
+): Promise<{ snapshot_id: string; type: string; products: number; keywords_saved: number; top_keywords: number; top_brands: number; warnings: string[] }> {
   const { data: snapshot, error: snapErr } = await admin
     .from('competitor_snapshots')
     .insert({
@@ -140,41 +140,75 @@ async function insertOneSnapshot(
     .single();
   if (snapErr || !snapshot) throw new Error(snapErr?.message || '스냅샷 생성 실패');
 
-  const productRows = parsed.products.map((p) => ({
-    snapshot_id: snapshot.id,
-    rank: p.rank,
-    name: p.name,
-    released_at: p.released_at,
-    review_score: p.review_score,
-    review_count: p.review_count,
-    exposure: p.exposure,
-    exposure_change_pct: p.exposure_change_pct,
-    clicks: p.clicks,
-    clicks_change_pct: p.clicks_change_pct,
-    ctr: p.ctr,
-    ctr_change_pct: p.ctr_change_pct,
-    winner_price: p.winner_price,
-    price_min: p.price_min,
-    price_max: p.price_max,
-    is_my_product: p.is_my_product,
-  }));
-  const { data: insertedProducts, error: prodErr } = await admin
-    .from('competitor_snapshot_products')
-    .insert(productRows)
-    .select('id, rank');
-  if (prodErr || !insertedProducts) {
-    await admin.from('competitor_snapshots').delete().eq('id', snapshot.id);
-    throw new Error(prodErr?.message || '상품 저장 실패');
+  const warnings = [...parsed.warnings];
+  let productsSaved = 0;
+  let keywordsSaved = 0;
+  let topKeywordsSaved = 0;
+  let topBrandsSaved = 0;
+
+  // ── products 페이지: 기존 로직 ─────────────────────────────────────
+  if (parsed.type === 'products' && parsed.products.length > 0) {
+    const productRows = parsed.products.map((p) => ({
+      snapshot_id: snapshot.id,
+      rank: p.rank,
+      name: p.name,
+      released_at: p.released_at,
+      review_score: p.review_score,
+      review_count: p.review_count,
+      exposure: p.exposure,
+      exposure_change_pct: p.exposure_change_pct,
+      clicks: p.clicks,
+      clicks_change_pct: p.clicks_change_pct,
+      ctr: p.ctr,
+      ctr_change_pct: p.ctr_change_pct,
+      winner_price: p.winner_price,
+      price_min: p.price_min,
+      price_max: p.price_max,
+      is_my_product: p.is_my_product,
+    }));
+    const { data: insertedProducts, error: prodErr } = await admin
+      .from('competitor_snapshot_products')
+      .insert(productRows)
+      .select('id, rank');
+    if (prodErr || !insertedProducts) {
+      await admin.from('competitor_snapshots').delete().eq('id', snapshot.id);
+      throw new Error(prodErr?.message || '상품 저장 실패');
+    }
+    productsSaved = insertedProducts.length;
+    const productIdByRank = new Map<number, string>();
+    for (const ip of insertedProducts) productIdByRank.set(ip.rank, ip.id);
+    const keywordRows = parsed.products.flatMap((p) => {
+      const pid = productIdByRank.get(p.rank);
+      if (!pid) return [];
+      return p.keywords.map((k) => ({
+        product_id: pid,
+        rank: k.rank,
+        keyword: k.keyword,
+        contributing_count: k.contributing_count,
+        search_volume: k.search_volume,
+        search_volume_change_pct: k.search_volume_change_pct,
+        exposure: k.exposure,
+        exposure_change_pct: k.exposure_change_pct,
+        clicks: k.clicks,
+        clicks_change_pct: k.clicks_change_pct,
+        avg_price: k.avg_price,
+        price_min: k.price_min,
+        price_max: k.price_max,
+      }));
+    });
+    if (keywordRows.length) {
+      const { error: kwErr } = await admin
+        .from('competitor_snapshot_keywords')
+        .insert(keywordRows);
+      if (kwErr) warnings.unshift(`키워드 저장 일부 실패: ${kwErr.message}`);
+      else keywordsSaved = keywordRows.length;
+    }
   }
 
-  const productIdByRank = new Map<number, string>();
-  for (const ip of insertedProducts) productIdByRank.set(ip.rank, ip.id);
-
-  const keywordRows = parsed.products.flatMap((p) => {
-    const pid = productIdByRank.get(p.rank);
-    if (!pid) return [];
-    return p.keywords.map((k) => ({
-      product_id: pid,
+  // ── TOP 20 검색어 페이지 ───────────────────────────────────────────
+  if (parsed.type === 'keywords' && parsed.topKeywords.length > 0) {
+    const rows = parsed.topKeywords.map((k) => ({
+      snapshot_id: snapshot.id,
       rank: k.rank,
       keyword: k.keyword,
       contributing_count: k.contributing_count,
@@ -188,25 +222,42 @@ async function insertOneSnapshot(
       price_min: k.price_min,
       price_max: k.price_max,
     }));
-  });
-
-  let keywordsSaved = 0;
-  const warnings = [...parsed.warnings];
-  if (keywordRows.length) {
-    const { error: kwErr } = await admin
-      .from('competitor_snapshot_keywords')
-      .insert(keywordRows);
-    if (kwErr) {
-      warnings.unshift(`키워드 저장 일부 실패: ${kwErr.message}`);
-    } else {
-      keywordsSaved = keywordRows.length;
+    const { error } = await admin.from('competitor_snapshot_top_keywords').insert(rows);
+    if (error) {
+      await admin.from('competitor_snapshots').delete().eq('id', snapshot.id);
+      throw new Error(error.message || 'TOP 검색어 저장 실패');
     }
+    topKeywordsSaved = rows.length;
+  }
+
+  // ── TOP 브랜드 페이지 ──────────────────────────────────────────────
+  if (parsed.type === 'brands' && parsed.topBrands.length > 0) {
+    const rows = parsed.topBrands.map((b) => ({
+      snapshot_id: snapshot.id,
+      rank: b.rank,
+      brand_name: b.brand_name,
+      exposure: b.exposure,
+      exposure_change_pct: b.exposure_change_pct,
+      clicks: b.clicks,
+      clicks_change_pct: b.clicks_change_pct,
+      ctr: b.ctr,
+      ctr_change_pct: b.ctr_change_pct,
+    }));
+    const { error } = await admin.from('competitor_snapshot_top_brands').insert(rows);
+    if (error) {
+      await admin.from('competitor_snapshots').delete().eq('id', snapshot.id);
+      throw new Error(error.message || 'TOP 브랜드 저장 실패');
+    }
+    topBrandsSaved = rows.length;
   }
 
   return {
     snapshot_id: snapshot.id,
-    products: parsed.products.length,
+    type: parsed.type,
+    products: productsSaved,
     keywords_saved: keywordsSaved,
+    top_keywords: topKeywordsSaved,
+    top_brands: topBrandsSaved,
     warnings,
   };
 }
@@ -268,9 +319,15 @@ export async function POST(request: NextRequest) {
 
   // ── 단일 paste 모드: 기존 동작 그대로 ────────────────────────────────────
   const parsed = parseCompetitorSnapshot(rawText);
-  if (parsed.products.length === 0) {
+  // type 별 최소 1건 검증
+  const hasContent =
+    (parsed.type === 'products' && parsed.products.length > 0) ||
+    (parsed.type === 'keywords' && parsed.topKeywords.length > 0) ||
+    (parsed.type === 'brands' && parsed.topBrands.length > 0);
+  if (!hasContent) {
+    const labelMap = { products: '상품', keywords: '검색어', brands: '브랜드' } as const;
     return NextResponse.json(
-      { error: '파싱된 상품이 없습니다.', warnings: parsed.warnings },
+      { error: `파싱된 ${labelMap[parsed.type]}이 없습니다.`, warnings: parsed.warnings, type: parsed.type },
       { status: 400 },
     );
   }

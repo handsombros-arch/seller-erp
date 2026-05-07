@@ -39,9 +39,23 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     }
   }
 
+  // TOP 20 검색어 (카테고리 단위) + TOP 브랜드 — 같은 snapshot 에 들어있을 수 있음
+  const { data: topKeywords } = await admin
+    .from('competitor_snapshot_top_keywords')
+    .select('*')
+    .eq('snapshot_id', id)
+    .order('rank', { ascending: true });
+  const { data: topBrands } = await admin
+    .from('competitor_snapshot_top_brands')
+    .select('*')
+    .eq('snapshot_id', id)
+    .order('rank', { ascending: true });
+
   return NextResponse.json({
     snapshot,
     products: (products || []).map((p) => ({ ...p, keywords: keywordsByProduct[p.id] ?? [] })),
+    topKeywords: topKeywords || [],
+    topBrands: topBrands || [],
   });
 }
 

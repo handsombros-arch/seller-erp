@@ -174,6 +174,36 @@ type KeywordDetail = {
   price_max: number | null;
 };
 
+// 카테고리 단위 TOP 20 검색어
+type TopKeywordRow = {
+  id: string;
+  rank: number;
+  keyword: string;
+  contributing_count: number | null;
+  search_volume: number | null;
+  search_volume_change_pct: number | null;
+  exposure: number | null;
+  exposure_change_pct: number | null;
+  clicks: number | null;
+  clicks_change_pct: number | null;
+  avg_price: number | null;
+  price_min: number | null;
+  price_max: number | null;
+};
+
+// 카테고리 단위 TOP 브랜드
+type TopBrandRow = {
+  id: string;
+  rank: number;
+  brand_name: string;
+  exposure: number | null;
+  exposure_change_pct: number | null;
+  clicks: number | null;
+  clicks_change_pct: number | null;
+  ctr: number | null;
+  ctr_change_pct: number | null;
+};
+
 // ────────────────────────────────────────────────────────────────────────────
 // Formatters
 // ────────────────────────────────────────────────────────────────────────────
@@ -1021,9 +1051,12 @@ export default function DataAnalysisPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; path: string[] } | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
 
-  // 드릴다운: 카테고리(=스냅샷) 펼침 / 상품 펼침
+  // 드릴다운: 카테고리(=스냅샷) 펼침 / 상품 펼침 / TOP 검색어 / TOP 브랜드
   const [openSnapId, setOpenSnapId] = useState<string | null>(null);
   const [productsBySnap, setProductsBySnap] = useState<Record<string, ProductDetail[]>>({});
+  const [topKeywordsBySnap, setTopKeywordsBySnap] = useState<Record<string, TopKeywordRow[]>>({});
+  const [topBrandsBySnap, setTopBrandsBySnap] = useState<Record<string, TopBrandRow[]>>({});
+  const [detailSubTabBySnap, setDetailSubTabBySnap] = useState<Record<string, 'products' | 'keywords' | 'brands'>>({});
   const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
   const [openProductIds, setOpenProductIds] = useState<Set<string>>(new Set());
 
@@ -1113,6 +1146,18 @@ export default function DataAnalysisPage() {
         if (!r.ok) return;
         const data = await r.json();
         setProductsBySnap((prev) => ({ ...prev, [snapId]: data.products || [] }));
+        setTopKeywordsBySnap((prev) => ({ ...prev, [snapId]: data.topKeywords || [] }));
+        setTopBrandsBySnap((prev) => ({ ...prev, [snapId]: data.topBrands || [] }));
+        // 기본 sub-tab 결정: 데이터가 있는 첫 종류 자동 선택
+        setDetailSubTabBySnap((prev) => {
+          if (prev[snapId]) return prev;
+          const next = { ...prev };
+          if ((data.products || []).length > 0) next[snapId] = 'products';
+          else if ((data.topKeywords || []).length > 0) next[snapId] = 'keywords';
+          else if ((data.topBrands || []).length > 0) next[snapId] = 'brands';
+          else next[snapId] = 'products';
+          return next;
+        });
       } finally {
         setLoadingDetailFor(null);
       }
@@ -1618,27 +1663,82 @@ export default function DataAnalysisPage() {
         {/* 트리 자식 펼침 */}
         {hasChildren && isOpen && node.children.map((c) => renderTreeNode(c))}
 
-        {/* leaf 카테고리의 상품 표 펼침 (시계열은 비교 다이얼로그 차트 탭에서 봄) */}
-        {node.isLeaf && snap && isSnapOpen && (
-          <tr>
-            <td colSpan={14} className="p-0 bg-[#FBFBFD]">
-              <div className="p-3 space-y-3">
-                {loadingDetailFor === snap.id || !products ? (
-                  <div className="text-sm text-gray-500">상품 불러오는 중...</div>
-                ) : (
-                  <ProductsTable
-                    products={products}
-                    openProductIds={openProductIds}
-                    onToggleProduct={handleToggleProduct}
-                    onWinnerPriceChange={(pid, v) => handleWinnerPriceChange(snap.id, pid, v)}
-                    bookmarks={productBookmarks}
-                    onToggleBookmark={toggleProductBookmark}
-                  />
-                )}
-              </div>
-            </td>
-          </tr>
-        )}
+        {/* leaf 카테고리 펼침: 상품 / TOP 검색어 / TOP 브랜드 sub-tab */}
+        {node.isLeaf && snap && isSnapOpen && (() => {
+          const topKws = topKeywordsBySnap[snap.id] ?? [];
+          const topBrs = topBrandsBySnap[snap.id] ?? [];
+          const subTab = detailSubTabBySnap[snap.id] ?? 'products';
+          const setSubTab = (t: 'products' | 'keywords' | 'brands') =>
+            setDetailSubTabBySnap((prev) => ({ ...prev, [snap.id]: t }));
+          return (
+            <tr>
+              <td colSpan={14} className="p-0 bg-[#FBFBFD]">
+                <div className="p-3 space-y-3">
+                  {loadingDetailFor === snap.id ? (
+                    <div className="text-sm text-gray-500">불러오는 중...</div>
+                  ) : (
+                    <>
+                      {/* sub-tab */}
+                      <div className="flex items-center gap-1 border-b border-black/[0.06]">
+                        {([
+                          ['products', `상품 (${(products || []).length})`],
+                          ['keywords', `TOP 검색어 (${topKws.length})`],
+                          ['brands', `TOP 브랜드 (${topBrs.length})`],
+                        ] as const).map(([key, label]) => (
+                          <button
+                            key={key}
+                            onClick={() => setSubTab(key)}
+                            className={`px-3 h-8 text-[12px] border-b-2 transition-colors ${
+                              subTab === key
+                                ? 'border-[#0071E3] text-[#0071E3] font-semibold'
+                                : 'border-transparent text-[#6E6E73] hover:text-[#1D1D1F]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {subTab === 'products' && (
+                        (products || []).length === 0 ? (
+                          <div className="text-xs text-[#86868B] py-4 text-center">
+                            이 스냅샷에는 상품 데이터가 없습니다. TOP 20 경쟁상품 페이지를 페이스트하면 추가됩니다.
+                          </div>
+                        ) : (
+                          <ProductsTable
+                            products={products!}
+                            openProductIds={openProductIds}
+                            onToggleProduct={handleToggleProduct}
+                            onWinnerPriceChange={(pid, v) => handleWinnerPriceChange(snap.id, pid, v)}
+                            bookmarks={productBookmarks}
+                            onToggleBookmark={toggleProductBookmark}
+                          />
+                        )
+                      )}
+                      {subTab === 'keywords' && (
+                        topKws.length === 0 ? (
+                          <div className="text-xs text-[#86868B] py-4 text-center">
+                            이 스냅샷에는 TOP 검색어 데이터가 없습니다. TOP 20 검색어 페이지를 페이스트하면 추가됩니다.
+                          </div>
+                        ) : (
+                          <TopKeywordsTable rows={topKws} />
+                        )
+                      )}
+                      {subTab === 'brands' && (
+                        topBrs.length === 0 ? (
+                          <div className="text-xs text-[#86868B] py-4 text-center">
+                            이 스냅샷에는 TOP 브랜드 데이터가 없습니다. TOP 브랜드 페이지를 페이스트하면 추가됩니다.
+                          </div>
+                        ) : (
+                          <TopBrandsTable rows={topBrs} />
+                        )
+                      )}
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })()}
       </Fragment>
     );
   };
@@ -2048,6 +2148,98 @@ export default function DataAnalysisPage() {
 function coupangSearchUrl(productName: string): string {
   const base = productName.split(',')[0].trim();
   return `https://www.coupang.com/np/search?q=${encodeURIComponent(base)}&channel=user`;
+}
+
+// 카테고리 단위 TOP 20 검색어 표
+function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
+  return (
+    <div className="overflow-x-auto bg-white border rounded">
+      <table className="w-full text-xs">
+        <thead className="bg-gray-100 text-gray-600">
+          <tr>
+            <th className="p-2 w-12 text-left">순위</th>
+            <th className="p-2 text-left">검색어</th>
+            <th className="p-2 text-right">검색량</th>
+            <th className="p-2 text-right">검색어 노출</th>
+            <th className="p-2 text-right">클릭</th>
+            <th className="p-2 text-right">평균 가격</th>
+            <th className="p-2 text-right">가격범위</th>
+            <th className="p-2 text-center">기여 키워드</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((k) => (
+            <tr key={k.id} className="border-t hover:bg-gray-50">
+              <td className="p-2 font-medium">{k.rank}</td>
+              <td className="p-2">
+                <a
+                  href={coupangSearchUrl(k.keyword)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#0071E3] hover:underline"
+                  title={`쿠팡에서 검색: ${k.keyword}`}
+                >
+                  {k.keyword}
+                </a>
+              </td>
+              <td className="p-2 text-right">{fmt(k.search_volume)}</td>
+              <td className="p-2 text-right">{fmt(k.exposure)}</td>
+              <td className="p-2 text-right">{fmt(k.clicks)}</td>
+              <td className="p-2 text-right">{fmtWon(k.avg_price)}</td>
+              <td className="p-2 text-right text-[#86868B] text-[11px]">
+                {k.price_min != null && k.price_max != null
+                  ? `${fmtWon(k.price_min)} ~ ${fmtWon(k.price_max)}`
+                  : '-'}
+              </td>
+              <td className="p-2 text-center text-[11px]">
+                {k.contributing_count != null ? `${k.contributing_count}개` : '-'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// 카테고리 단위 TOP 브랜드 표
+function TopBrandsTable({ rows }: { rows: TopBrandRow[] }) {
+  return (
+    <div className="overflow-x-auto bg-white border rounded">
+      <table className="w-full text-xs">
+        <thead className="bg-gray-100 text-gray-600">
+          <tr>
+            <th className="p-2 w-12 text-left">순위</th>
+            <th className="p-2 text-left">브랜드</th>
+            <th className="p-2 text-right">검색어 노출</th>
+            <th className="p-2 text-right">클릭</th>
+            <th className="p-2 text-right">CTR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => (
+            <tr key={b.id} className="border-t hover:bg-gray-50">
+              <td className="p-2 font-medium">{b.rank}</td>
+              <td className="p-2">
+                <a
+                  href={coupangSearchUrl(b.brand_name)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#0071E3] hover:underline"
+                  title={`쿠팡에서 검색: ${b.brand_name}`}
+                >
+                  {b.brand_name}
+                </a>
+              </td>
+              <td className="p-2 text-right">{fmt(b.exposure)}</td>
+              <td className="p-2 text-right">{fmt(b.clicks)}</td>
+              <td className="p-2 text-right">{fmtCTR(b.ctr)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function ProductsTable({
