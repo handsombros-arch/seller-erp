@@ -1142,19 +1142,50 @@ export default function DataAnalysisPage() {
       if (productsBySnap[snapId]) return; // already loaded
       setLoadingDetailFor(snapId);
       try {
-        const r = await fetch(`/api/rank-tracking/competitor/${snapId}`);
-        if (!r.ok) return;
-        const data = await r.json();
-        setProductsBySnap((prev) => ({ ...prev, [snapId]: data.products || [] }));
-        setTopKeywordsBySnap((prev) => ({ ...prev, [snapId]: data.topKeywords || [] }));
-        setTopBrandsBySnap((prev) => ({ ...prev, [snapId]: data.topBrands || [] }));
-        // 기본 sub-tab 결정: 데이터가 있는 첫 종류 자동 선택
+        // 같은 카테고리 path 의 모든 snapshot 을 가져와 type 별 최신 데이터로 합친다.
+        // (사용자가 상품/검색어/브랜드를 따로 paste 했을 때 leaf 한 곳에서 셋 다 보임)
+        const leafSnap = snapshots.find((s) => s.id === snapId);
+        const pathKey = leafSnap && leafSnap.category_path && leafSnap.category_path.length > 0
+          ? leafSnap.category_path.join('|')
+          : (leafSnap?.category_name ?? '');
+        const sameCategorySnaps = snapshots
+          .filter((s) => {
+            const k = s.category_path && s.category_path.length > 0
+              ? s.category_path.join('|')
+              : (s.category_name ?? '');
+            return k === pathKey && k.length > 0;
+          })
+          .sort((a, b) => b.captured_at.localeCompare(a.captured_at)); // 최신부터
+
+        // 모든 detail 병렬 조회 (대개 1-3건)
+        const details = await Promise.all(
+          sameCategorySnaps.slice(0, 10).map((s) =>
+            fetch(`/api/rank-tracking/competitor/${s.id}`).then((r) => (r.ok ? r.json() : null)),
+          ),
+        );
+
+        // type 별로 최신부터 첫 non-empty 선택
+        let products: ProductDetail[] = [];
+        let topKws: TopKeywordRow[] = [];
+        let topBrs: TopBrandRow[] = [];
+        for (const d of details) {
+          if (!d) continue;
+          if (products.length === 0 && (d.products ?? []).length > 0) products = d.products;
+          if (topKws.length === 0 && (d.topKeywords ?? []).length > 0) topKws = d.topKeywords;
+          if (topBrs.length === 0 && (d.topBrands ?? []).length > 0) topBrs = d.topBrands;
+          if (products.length > 0 && topKws.length > 0 && topBrs.length > 0) break;
+        }
+
+        setProductsBySnap((prev) => ({ ...prev, [snapId]: products }));
+        setTopKeywordsBySnap((prev) => ({ ...prev, [snapId]: topKws }));
+        setTopBrandsBySnap((prev) => ({ ...prev, [snapId]: topBrs }));
+        // 기본 sub-tab — 데이터가 있는 첫 종류
         setDetailSubTabBySnap((prev) => {
           if (prev[snapId]) return prev;
           const next = { ...prev };
-          if ((data.products || []).length > 0) next[snapId] = 'products';
-          else if ((data.topKeywords || []).length > 0) next[snapId] = 'keywords';
-          else if ((data.topBrands || []).length > 0) next[snapId] = 'brands';
+          if (products.length > 0) next[snapId] = 'products';
+          else if (topKws.length > 0) next[snapId] = 'keywords';
+          else if (topBrs.length > 0) next[snapId] = 'brands';
           else next[snapId] = 'products';
           return next;
         });
@@ -1162,7 +1193,7 @@ export default function DataAnalysisPage() {
         setLoadingDetailFor(null);
       }
     },
-    [productsBySnap],
+    [productsBySnap, snapshots],
   );
 
   const handleToggleSnap = useCallback(
