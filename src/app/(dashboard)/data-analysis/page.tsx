@@ -1284,9 +1284,18 @@ export default function DataAnalysisPage() {
       return;
     }
 
-    // ── 단일 paste 모드: 기존 그대로 ────────────────────────────
-    if (!preview || preview.products.length === 0) {
-      setError('파싱된 상품이 없습니다. 텍스트를 확인하세요.');
+    // ── 단일 paste 모드: 3종 타입(products/keywords/brands) 모두 허용 ─────
+    if (!preview) {
+      setError('파싱 결과가 비어있습니다. 텍스트를 확인하세요.');
+      return;
+    }
+    const previewCount =
+      preview.type === 'products' ? preview.products.length :
+      preview.type === 'keywords' ? preview.topKeywords.length :
+      preview.topBrands.length;
+    if (previewCount === 0) {
+      const labelMap = { products: '상품', keywords: '검색어', brands: '브랜드' } as const;
+      setError(`파싱된 ${labelMap[preview.type]}이 없습니다. 텍스트를 확인하세요.`);
       return;
     }
     if (!preview.category) {
@@ -1793,7 +1802,7 @@ export default function DataAnalysisPage() {
           <Label htmlFor="raw">
             {batchMode
               ? '여러 카테고리 텍스트를 이어붙여서 붙여넣기 (헤더 기준 자동 분리)'
-              : '텍스트 붙여넣기 (카테고리 결과 + TOP 20 상품 + TOP 10 키워드)'}
+              : '텍스트 붙여넣기 (TOP 20 경쟁상품 / TOP 20 검색어 / TOP 브랜드 — 자동 인식)'}
           </Label>
           <textarea
             id="raw"
@@ -1842,12 +1851,28 @@ export default function DataAnalysisPage() {
               <div className="text-orange-600">카테고리 헤더 미인식 — 카테고리 결과 줄부터 복사해주세요.</div>
             )}
             <div className="text-gray-600 flex items-center gap-4 flex-wrap">
-              <span>
-                상품 <b className="text-gray-900">{preview.products.length}</b>개,
-                키워드 <b className="text-gray-900">
-                  {preview.products.reduce((s, p) => s + p.keywords.length, 0)}
-                </b>개
-              </span>
+              {/* 인식된 타입에 따라 다른 카운트 표시 */}
+              {preview.type === 'products' && (
+                <span>
+                  <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-[#0071E3]/10 text-[#0071E3] text-[10px] font-semibold uppercase">상품</span>
+                  상품 <b className="text-gray-900">{preview.products.length}</b>개,
+                  키워드 <b className="text-gray-900">
+                    {preview.products.reduce((s, p) => s + p.keywords.length, 0)}
+                  </b>개
+                </span>
+              )}
+              {preview.type === 'keywords' && (
+                <span>
+                  <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-amber-500/10 text-amber-700 text-[10px] font-semibold uppercase">검색어</span>
+                  TOP 검색어 <b className="text-gray-900">{preview.topKeywords.length}</b>개
+                </span>
+              )}
+              {preview.type === 'brands' && (
+                <span>
+                  <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-purple-500/10 text-purple-700 text-[10px] font-semibold uppercase">브랜드</span>
+                  TOP 브랜드 <b className="text-gray-900">{preview.topBrands.length}</b>개
+                </span>
+              )}
               {preview.warnings.length > 0 && (
                 <span className="text-orange-600">경고 {preview.warnings.length}건</span>
               )}
@@ -1875,7 +1900,11 @@ export default function DataAnalysisPage() {
               saving ||
               (batchMode
                 ? !batchPreview || batchPreview.count === 0
-                : !preview || preview.products.length === 0 || !preview.category)
+                : !preview || !preview.category || (
+                    preview.type === 'products' ? preview.products.length === 0 :
+                    preview.type === 'keywords' ? preview.topKeywords.length === 0 :
+                    preview.topBrands.length === 0
+                  ))
             }
           >
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
