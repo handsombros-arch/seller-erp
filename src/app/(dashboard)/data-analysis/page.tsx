@@ -1412,7 +1412,17 @@ export default function DataAnalysisPage() {
 
   // 트리: 카테고리당 최신 1개씩만 뽑은 leaf
   // dedup 키는 full path. 같은 leaf 이름이라도 path 가 한 단계라도 다르면 다른 카테고리로 별도 보존.
+  // 추가: 같은 path 의 sibling snapshot 들에서 avg_winner_price / products_count 등을 끌어와
+  // leaf 가 keywords/brands type 이라 null 인 경우에도 표시되도록 보강.
   const leafSnapshots = useMemo(() => {
+    // path 별 모든 snapshot 모음
+    const byPath = new Map<string, SnapshotMeta[]>();
+    for (const s of withCategoryRaw) {
+      const k = categoryKey(s);
+      if (!k) continue;
+      if (!byPath.has(k)) byPath.set(k, []);
+      byPath.get(k)!.push(s);
+    }
     const seen = new Set<string>();
     const out: SnapshotMeta[] = [];
     // snapshots는 captured_at desc이므로 첫 등장이 최신
@@ -1420,7 +1430,18 @@ export default function DataAnalysisPage() {
       const k = categoryKey(s);
       if (!k || seen.has(k)) continue;
       seen.add(k);
-      out.push(s);
+      // sibling 보강 — 다른 type snapshot 에서 가져온 가격/카운트를 leaf 에 합침
+      const siblings = byPath.get(k) ?? [];
+      const merged: SnapshotMeta = { ...s };
+      if (merged.avg_winner_price == null) {
+        const withPrice = siblings.find((sib) => sib.avg_winner_price != null);
+        if (withPrice) merged.avg_winner_price = withPrice.avg_winner_price;
+      }
+      if (!merged.products_count) {
+        const withProducts = siblings.find((sib) => (sib.products_count ?? 0) > 0);
+        if (withProducts) merged.products_count = withProducts.products_count;
+      }
+      out.push(merged);
     }
     return out;
   }, [withCategoryRaw]);
