@@ -963,66 +963,30 @@ export default function AdAnalysisPage() {
     } catch { return null; }
   };
 
-  // ─── DB 강제 동기화: 로컬 IDB 전체를 DB 로 밀어넣음 (다른 PC 복원용) ───
-  const handleForceSyncToDb = useCallback(async () => {
-    if (!data?._rawRows?.length) {
-      setError('업로드된 데이터가 없습니다');
-      return;
-    }
-    setError('');
-    // 첫 청크 실패 즉시 중단 → 3분 기다리지 않고 1-2초로 진단
-    const sync = await uploadRowsInChunks(data._rawRows, 'force-sync', { abortOnFirstFail: true });
-    const head = `시도 ${sync.attempted.toLocaleString()}행 / 신규 ${sync.inserted.toLocaleString()}행 (중복 제외)`;
-    if (sync.failedChunks > 0 || sync.firstServerError) {
-      setError(`DB 동기화 실패 — ${head} · 실패 청크 ${sync.failedChunks}/${sync.totalChunks}` +
-        (sync.firstServerError ? ` · 서버 오류: ${sync.firstServerError}` : '') +
-        ` · (첫 실패 시 즉시 중단 — 동일 원인이면 나머지도 실패하므로)`);
-    } else {
-      setError(`DB 동기화 완료 — ${head} (${sync.totalChunks} 청크)`);
-    }
-  }, [data, uploadRowsInChunks]);
-
-  // ─── 페이지 로드 시 IndexedDB → DB fallback 복원 ─────────────────────────
+  // ─── 페이지 로드: DB 가 단일 source. 실패 시 IDB 캐시로 fallback 표시 ───
   const [initialLoading, setInitialLoading] = useState(false);
   const initialLoadDone = useRef(false);
-  // IDB 에 있지만 DB 에 없는 행 수 (배너 + 자동 동기화 트리거)
-  const [idbOnlyCount, setIdbOnlyCount] = useState(0);
   useEffect(() => {
     if (initialLoadDone.current || data) return;
     initialLoadDone.current = true;
     (async () => {
       try {
         setInitialLoading(true);
-        // DB + IDB 를 모두 받아서 dedupKey 로 union — 어느 한 쪽도 손실되지 않도록.
-        // 과거에 DB 로딩 성공이 IDB 의 누적 데이터를 덮어써 322k → 62k 로 데이터 유실된 사고가 있었음.
-        let dbRows: any[] = [];
-        let dbOk = false;
+        let cachedRows: any[] | null = null;
         try {
           const dbRes = await fetch('/api/ad-analysis/rows');
           if (dbRes.ok) {
             const j = await dbRes.json();
-            dbRows = j.rows ?? [];
-            dbOk = true;
+            const rows = j.rows ?? [];
+            if (rows.length) {
+              cachedRows = rows;
+              saveToIdb(rows); // 캐시 갱신 (DB 가 source)
+            }
           }
         } catch {}
-        const idbRows = (await loadFromIdb()) ?? [];
-
-        const seen = new Set<string>();
-        const merged: any[] = [];
-        let idbOnly = 0;
-        for (const r of dbRows) {
-          const k = `${r['날짜']}|${r['키워드'] ?? ''}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
-          if (!seen.has(k)) { seen.add(k); merged.push(r); }
+        if (!cachedRows) {
+          cachedRows = (await loadFromIdb()) ?? null; // DB 실패 시 표시용 fallback
         }
-        for (const r of idbRows) {
-          const k = `${r['날짜']}|${r['키워드'] ?? ''}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
-          if (!seen.has(k)) { seen.add(k); merged.push(r); idbOnly++; }
-        }
-
-        let cachedRows: any[] | null = merged.length ? merged : null;
-        if (cachedRows) saveToIdb(cachedRows); // 항상 union 결과 저장 (덮어쓰기 X)
-        // DB 가 정상이고 IDB 만 가진 행이 있으면 → 다음 PC 가 못 보는 상태
-        if (dbOk && idbOnly > 0) setIdbOnlyCount(idbOnly);
         if (!cachedRows?.length) return;
         const [pricesRes, mappingsRes] = await Promise.all([
           fetch('/api/ad-analysis'),
@@ -1535,18 +1499,10 @@ export default function AdAnalysisPage() {
           {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
             <span className="text-amber-600">· 날짜 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
           )}
-          {syncProgress ? (
+          {syncProgress && (
             <span className="text-[#0071E3] font-medium">
-              · DB 동기화 중 {syncProgress.done}/{syncProgress.total} 청크
+              · 업로드 중 {syncProgress.done}/{syncProgress.total} 청크
             </span>
-          ) : (
-            <button
-              onClick={handleForceSyncToDb}
-              className="px-2 h-6 rounded-md border border-[#BFD7FF] text-[#0071E3] text-[10px] font-medium hover:bg-[#F0F6FF]"
-              title="다른 PC 에서 최신 데이터가 안 보일 때 — 이 PC 의 로컬 데이터를 DB 로 강제 푸시"
-            >
-              DB 강제 동기화
-            </button>
           )}
         </div>
       )}
@@ -1576,23 +1532,6 @@ export default function AdAnalysisPage() {
               {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
             </span>
           )}
-        </div>
-      )}
-
-      {/* IDB 에만 있는 행 경고 — 다른 PC 에서 안 보이는 상태 */}
-      {idbOnlyCount > 0 && (
-        <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-[12px] text-orange-900 space-y-2">
-          <div className="font-semibold text-[13px]">⚠ 로컬에 DB 미동기 데이터 {idbOnlyCount.toLocaleString()}행</div>
-          <div className="text-orange-800">
-            이 PC 의 IndexedDB 에는 있지만 Supabase 에는 없는 행입니다. 다른 PC 에서 이 데이터가 안 보이고,
-            IndexedDB 가 비워지면(브라우저 데이터 삭제 등) 영구 손실됩니다.
-          </div>
-          <button
-            onClick={async () => { await handleForceSyncToDb(); setIdbOnlyCount(0); }}
-            className="px-3 py-1.5 rounded-lg bg-orange-600 text-white text-[11px] font-semibold hover:bg-orange-700"
-          >
-            지금 DB 로 동기화
-          </button>
         </div>
       )}
 
