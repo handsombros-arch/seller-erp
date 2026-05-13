@@ -851,32 +851,14 @@ export default function AdAnalysisPage() {
       const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
-      // 백그라운드: 원본 파일을 Storage 에 저장 (실패하면 경고 — 과거에 버킷 미생성으로
-      // 모든 백업이 조용히 실패했던 사고가 있었음. 절대 silent catch 금지)
-      const storageFailures: string[] = [];
-      await Promise.all(files.map(async (file) => {
-        try {
-          const fd = new FormData();
-          fd.append('file', file);
-          const res = await fetch('/api/ad-analysis/upload', { method: 'POST', body: fd });
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            storageFailures.push(`${file.name}: ${j.error || `HTTP ${res.status}`}`);
-          }
-        } catch (e: any) {
-          storageFailures.push(`${file.name}: ${e?.message ?? '네트워크 오류'}`);
-        }
-      }));
-      if (storageFailures.length > 0) {
-        setError(`Storage 백업 실패 (DB 데이터는 정상). ${storageFailures[0]}` +
-          (storageFailures.length > 1 ? ` 외 ${storageFailures.length - 1}건` : ''));
-      }
-      // IndexedDB에 전체 누적 저장 + DB에 신규분만 백업 (청크로 — Vercel 4.5MB body 제한 회피)
+      // IndexedDB 캐시 갱신 + DB 에 신규분 푸시 (청크 분할 — Vercel 4.5MB body 한도 회피)
       saveToIdb(raw);
       if (allRows.length > 0) {
         const sync = await uploadRowsInChunks(allRows, files[0]?.name ?? 'upload');
-        if (sync.failedChunks > 0) {
-          setError(`DB 동기화 부분 실패: ${sync.failedChunks}/${sync.totalChunks} 청크 실패. '${'DB 강제 동기화'}' 버튼으로 재시도하세요.`);
+        if (sync.failedChunks > 0 || sync.firstServerError) {
+          setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
+            (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
+            ` (재업로드하면 dedup 으로 중복은 자동 스킵)`);
         }
       }
     } catch (err: any) {
