@@ -945,31 +945,15 @@ export default function AdAnalysisPage() {
     } catch { return null; }
   };
 
-  // ─── 페이지 로드: DB 가 단일 source. 실패 시 IDB 캐시로 fallback 표시 ───
+  // ─── 페이지 로드: IDB 캐시 즉시 표시 → 백그라운드에서 DB 로 갱신 ───
   const [initialLoading, setInitialLoading] = useState(false);
   const initialLoadDone = useRef(false);
   useEffect(() => {
     if (initialLoadDone.current || data) return;
     initialLoadDone.current = true;
     (async () => {
+      setInitialLoading(true);
       try {
-        setInitialLoading(true);
-        let cachedRows: any[] | null = null;
-        try {
-          const dbRes = await fetch('/api/ad-analysis/rows');
-          if (dbRes.ok) {
-            const j = await dbRes.json();
-            const rows = j.rows ?? [];
-            if (rows.length) {
-              cachedRows = rows;
-              saveToIdb(rows); // 캐시 갱신 (DB 가 source)
-            }
-          }
-        } catch {}
-        if (!cachedRows) {
-          cachedRows = (await loadFromIdb()) ?? null; // DB 실패 시 표시용 fallback
-        }
-        if (!cachedRows?.length) return;
         const [pricesRes, mappingsRes] = await Promise.all([
           fetch('/api/ad-analysis'),
           fetch('/api/ad-analysis/mappings'),
@@ -987,8 +971,26 @@ export default function AdAnalysisPage() {
             sku_code: m.sku_code ?? '', product_name: m.matched_name ?? '',
           };
         }
-        const result = processData(cachedRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
-        saveResult(result);
+
+        // 1) IDB 캐시 즉시 표시 — 새로고침 시 1초 미만
+        const idbRows = await loadFromIdb();
+        if (idbRows?.length) {
+          saveResult(processData(idbRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
+          setInitialLoading(false); // 화면 즉시 사용 가능
+        }
+
+        // 2) 백그라운드 DB 갱신 — 행 수 다르면 다시 렌더
+        try {
+          const dbRes = await fetch('/api/ad-analysis/rows');
+          if (!dbRes.ok) return;
+          const j = await dbRes.json();
+          const dbRows = j.rows ?? [];
+          if (!dbRows.length) return;
+          saveToIdb(dbRows);
+          if (!idbRows || dbRows.length !== idbRows.length) {
+            saveResult(processData(dbRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
+          }
+        } catch {}
       } catch {
       } finally {
         setInitialLoading(false);
