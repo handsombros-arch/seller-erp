@@ -1184,26 +1184,25 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                         cogsLeaves.push({ label: cp.label, amount: Number(cp.amount ?? 0) });
                       }
                     }
-                    // 변동비 leaf 항목 (자식 있으면 자식, 없으면 본인)
+                    // 변동비 트리 (parent + 자식 묶음). parent 또는 자식 라벨로 플랫폼 매칭 가능
                     const varParents = parents.filter(p => catOf(p) === 'variable');
-                    const varLeaves: { label: string; amount: number }[] = [];
-                    for (const vp of varParents) {
+                    const varGroups = varParents.map(vp => {
                       const kids = childrenOf(vp.id);
-                      if (kids.length > 0) {
-                        kids.forEach(k => varLeaves.push({ label: k.label, amount: Number(k.amount ?? 0) }));
-                      } else {
-                        varLeaves.push({ label: vp.label, amount: Number(vp.amount ?? 0) });
-                      }
-                    }
+                      return {
+                        parentLabel: vp.label,
+                        childLabels: kids.map(k => k.label),
+                        total: kids.length > 0
+                          ? kids.reduce((s, k) => s + Number(k.amount ?? 0), 0)
+                          : Number(vp.amount ?? 0),
+                      };
+                    });
+                    // 매출 parent 의 자식 중 차감 항목 (is_income=false) — 수수료성 (예: 판매자 쿠폰)
+                    const revDeductChildren = revenueParent ? childrenOf(revenueParent.id).filter(c => !c.is_income) : [];
                     // 라벨 양방향 includes 매칭 — "쿠팡" ↔ "쿠팡 그로스" 같은 변형 흡수
                     const labelMatch = (a: string, b: string) => {
                       const la = a.toLowerCase(), lb = b.toLowerCase();
                       return la.includes(lb) || lb.includes(la);
                     };
-                    // 순이익에서 차감할 변동비: 플랫폼 수수료 + 부가 서비스만
-                    // (택배비/물류는 쿠팡 벌크 vs 일반 건당 2650원 산정 방식이 달라 별도 처리)
-                    const isPlatformFee = (label: string) =>
-                      /수수료|그로스|세이버|로켓/.test(label) && !/택배|물류/.test(label);
 
                     // 쿠팡은 판매자 할인쿠폰 차감하여 실매출로 계산
                     const platData = revChildren.map(rc => {
@@ -1212,12 +1211,19 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       if (platRevenue < 0) platRevenue = 0;
                       const platAd = adChildren.filter(a => a.label.includes(rc.label)).reduce((s, a) => s + a.amount, 0);
                       const platCogs = cogsLeaves.filter(c => labelMatch(c.label, rc.label)).reduce((s, c) => s + c.amount, 0);
-                      // 수수료 + 부가 서비스만 (택배비/물류 제외). 세이버는 무조건 쿠팡에 귀속.
-                      const platFee = varLeaves.filter(v => {
-                        if (!isPlatformFee(v.label)) return false;
-                        if (/세이버/.test(v.label)) return /쿠팡/.test(rc.label);
-                        return labelMatch(v.label, rc.label);
-                      }).reduce((s, v) => s + v.amount, 0);
+                      // 수수료 = 변동비(parent/자식 라벨 매칭) + 매출 차감 자식 + 세이버(무조건 쿠팡)
+                      // 택배비/물류는 산정 방식 다름 → 제외
+                      const platFeeVar = varGroups.filter(g => {
+                        if (/택배|물류/.test(g.parentLabel)) return false;
+                        const allLabels = [g.parentLabel, ...g.childLabels];
+                        if (allLabels.some(l => /세이버/.test(l))) return /쿠팡/.test(rc.label);
+                        if (labelMatch(g.parentLabel, rc.label)) return true;
+                        return g.childLabels.some(cl => labelMatch(cl, rc.label));
+                      }).reduce((s, g) => s + g.total, 0);
+                      const platFeeRevDeduct = revDeductChildren
+                        .filter(c => labelMatch(c.label, rc.label))
+                        .reduce((s, c) => s + Number(c.amount ?? 0), 0);
+                      const platFee = platFeeVar + platFeeRevDeduct;
                       const roas = platAd > 0 ? (platRevenue / platAd * 100) : 0;
                       const profit = platRevenue - platCogs - platAd - platFee;
                       const margin = platRevenue > 0 ? (profit / platRevenue * 100) : 0;
