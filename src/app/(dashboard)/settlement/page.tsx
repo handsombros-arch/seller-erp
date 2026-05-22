@@ -1173,6 +1173,37 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                         adChildren.push({ label: ap.label, amount: Number(ap.amount ?? 0) });
                       }
                     }
+                    // 매입원가 leaf 항목 (자식 있으면 자식, 없으면 본인)
+                    const cogsParents = parents.filter(p => catOf(p) === 'cogs');
+                    const cogsLeaves: { label: string; amount: number }[] = [];
+                    for (const cp of cogsParents) {
+                      const kids = childrenOf(cp.id);
+                      if (kids.length > 0) {
+                        kids.forEach(k => cogsLeaves.push({ label: k.label, amount: Number(k.amount ?? 0) }));
+                      } else {
+                        cogsLeaves.push({ label: cp.label, amount: Number(cp.amount ?? 0) });
+                      }
+                    }
+                    // 변동비 leaf 항목 (자식 있으면 자식, 없으면 본인)
+                    const varParents = parents.filter(p => catOf(p) === 'variable');
+                    const varLeaves: { label: string; amount: number }[] = [];
+                    for (const vp of varParents) {
+                      const kids = childrenOf(vp.id);
+                      if (kids.length > 0) {
+                        kids.forEach(k => varLeaves.push({ label: k.label, amount: Number(k.amount ?? 0) }));
+                      } else {
+                        varLeaves.push({ label: vp.label, amount: Number(vp.amount ?? 0) });
+                      }
+                    }
+                    // 라벨 양방향 includes 매칭 — "쿠팡" ↔ "쿠팡 그로스" 같은 변형 흡수
+                    const labelMatch = (a: string, b: string) => {
+                      const la = a.toLowerCase(), lb = b.toLowerCase();
+                      return la.includes(lb) || lb.includes(la);
+                    };
+                    // 순이익에서 차감할 변동비: 플랫폼 수수료 + 부가 서비스만
+                    // (택배비/물류는 쿠팡 벌크 vs 일반 건당 2650원 산정 방식이 달라 별도 처리)
+                    const isPlatformFee = (label: string) =>
+                      /수수료|그로스|세이버|로켓/.test(label) && !/택배|물류/.test(label);
 
                     // 쿠팡은 판매자 할인쿠폰 차감하여 실매출로 계산
                     const platData = revChildren.map(rc => {
@@ -1180,8 +1211,17 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       if (/쿠팡/.test(rc.label)) platRevenue -= discountTotals.exVat;
                       if (platRevenue < 0) platRevenue = 0;
                       const platAd = adChildren.filter(a => a.label.includes(rc.label)).reduce((s, a) => s + a.amount, 0);
+                      const platCogs = cogsLeaves.filter(c => labelMatch(c.label, rc.label)).reduce((s, c) => s + c.amount, 0);
+                      // 수수료 + 부가 서비스만 (택배비/물류 제외). 세이버는 무조건 쿠팡에 귀속.
+                      const platFee = varLeaves.filter(v => {
+                        if (!isPlatformFee(v.label)) return false;
+                        if (/세이버/.test(v.label)) return /쿠팡/.test(rc.label);
+                        return labelMatch(v.label, rc.label);
+                      }).reduce((s, v) => s + v.amount, 0);
                       const roas = platAd > 0 ? (platRevenue / platAd * 100) : 0;
-                      return { name: rc.label + (/쿠팡/.test(rc.label) && discountTotals.exVat > 0 ? ' (실매출)' : ''), revenue: platRevenue, ad: platAd, adRate: platRevenue > 0 ? (platAd / platRevenue * 100) : 0, share: revenue > 0 ? (platRevenue / revenue * 100) : 0, roas };
+                      const profit = platRevenue - platCogs - platAd - platFee;
+                      const margin = platRevenue > 0 ? (profit / platRevenue * 100) : 0;
+                      return { name: rc.label + (/쿠팡/.test(rc.label) && discountTotals.exVat > 0 ? ' (실매출)' : ''), revenue: platRevenue, ad: platAd, cogs: platCogs, fee: platFee, profit, margin, adRate: platRevenue > 0 ? (platAd / platRevenue * 100) : 0, share: revenue > 0 ? (platRevenue / revenue * 100) : 0, roas };
                     }).filter(d => d.revenue > 0).sort((a, b) => b.revenue - a.revenue);
 
                     if (platData.length === 0) return <p className="text-[12px] text-[#B0B8C1]">매출 하위 플랫폼 데이터가 없습니다</p>;
@@ -1193,9 +1233,13 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                             <th className="text-left py-2 px-3">플랫폼</th>
                             <th className="text-right py-2 px-3">매출</th>
                             <th className="text-right py-2 px-3">매출 비중</th>
+                            <th className="text-right py-2 px-3">매입원가</th>
                             <th className="text-right py-2 px-3">광고비</th>
+                            <th className="text-right py-2 px-3" title="플랫폼 수수료 + 부가 서비스 (택배비 제외)">수수료</th>
                             <th className="text-right py-2 px-3">광고비/매출</th>
                             <th className="text-right py-2 px-3">ROAS</th>
+                            <th className="text-right py-2 px-3">순이익</th>
+                            <th className="text-right py-2 px-3">순이익률</th>
                           </tr></thead>
                           <tbody>
                             {platData.map(p => (
@@ -1203,9 +1247,13 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                                 <td className="py-2.5 px-3 font-semibold text-[#191F28]">{p.name}</td>
                                 <td className="py-2.5 px-3 text-right tabular-nums">{fmt(p.revenue)}원</td>
                                 <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{p.share.toFixed(1)}%</td>
+                                <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(p.cogs)}원</td>
                                 <td className="py-2.5 px-3 text-right tabular-nums">{fmt(p.ad)}원</td>
+                                <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(p.fee)}원</td>
                                 <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.adRate > 20 ? 'text-red-600' : p.adRate > 10 ? 'text-amber-600' : 'text-emerald-600'}`}>{p.adRate.toFixed(1)}%</td>
                                 <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.roas >= 300 ? 'text-emerald-600' : p.roas >= 200 ? 'text-blue-600' : p.roas > 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>{p.roas > 0 ? p.roas.toFixed(0) + '%' : '-'}</td>
+                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.profit > 0 ? 'text-emerald-600' : p.profit < 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>{fmt(p.profit)}원</td>
+                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.margin >= 10 ? 'text-emerald-600' : p.margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{p.margin.toFixed(1)}%</td>
                               </tr>
                             ))}
                           </tbody>
