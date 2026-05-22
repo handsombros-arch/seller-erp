@@ -32,6 +32,30 @@ interface SoldRow {
   qty: number;
   revenue: number;
   vendorId?: string;
+  date?: string | number;  // YYYYMMDD, YYYY-MM-DD, 또는 Excel serial
+}
+
+/** 다양한 날짜 형식 → YYYY-MM */
+function toYearMonth(v: string | number | undefined): string {
+  if (v === undefined || v === null || v === '') return '';
+  // Excel serial number
+  if (typeof v === 'number' && v > 25569 && v < 99999) {
+    const ms = (v - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+  const digits = String(v).replace(/\D/g, '');
+  if (digits.length >= 6) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
+  return '';
+}
+
+/** 일반 날짜 컬럼 후보들에서 첫 매칭 값 추출 */
+function pickDateField(row: Record<string, any>): string | number | undefined {
+  const candidates = ['결제일자', '결제일', '주문일자', '주문일시', '주문일', '발주일', '판매일'];
+  for (const c of candidates) {
+    if (row[c] !== undefined && row[c] !== '') return row[c];
+  }
+  return undefined;
 }
 
 /** 쿠팡 인사이트 엑셀 파싱 */
@@ -65,6 +89,9 @@ function parseToss(wb: XLSX.WorkBook): SoldRow[] {
   const iOption = colIdx('옵션명');
   const iQty = colIdx('주문건수');
   const iAmount = colIdx('주문금액');
+  // 날짜 컬럼 인덱스 (후보 중 첫 매칭)
+  const dateCandidates = ['결제일자', '결제일', '주문일자', '주문일시'];
+  const iDate = dateCandidates.map(c => colIdx(c)).find(i => i >= 0) ?? -1;
 
   const results: SoldRow[] = [];
   for (let i = headerIdx + 1; i < raw.length; i++) {
@@ -75,6 +102,7 @@ function parseToss(wb: XLSX.WorkBook): SoldRow[] {
       option: String(row[iOption] ?? ''),
       qty: Number(row[iQty]) || 1,
       revenue: Number(row[iAmount]) || 0,
+      date: iDate >= 0 ? row[iDate] : undefined,
     });
   }
   return results;
@@ -93,6 +121,7 @@ function parseSmartStore(wb: XLSX.WorkBook): SoldRow[] {
         option: String(r['옵션정보'] ?? ''),
         qty: Number(r['수량']) || 1,
         revenue: 0,
+        date: pickDateField(r),
       }));
   }
   // raw 방식 fallback
@@ -105,11 +134,13 @@ function parseSmartStore(wb: XLSX.WorkBook): SoldRow[] {
   const headers = raw[headerIdx] as string[];
   const colIdx = (name: string) => headers.indexOf(name);
   const iStatus = colIdx('주문상태'), iName = colIdx('상품명'), iOption = colIdx('옵션정보'), iQty = colIdx('수량');
+  const dateCandidates = ['결제일자', '결제일', '주문일자', '주문일시'];
+  const iDate = dateCandidates.map(c => colIdx(c)).find(i => i >= 0) ?? -1;
   const results: SoldRow[] = [];
   for (let i = headerIdx + 1; i < raw.length; i++) {
     const row = raw[i];
     if (!row || row[iStatus] !== '구매확정') continue;
-    results.push({ name: String(row[iName] ?? ''), option: String(row[iOption] ?? ''), qty: Number(row[iQty]) || 1, revenue: 0 });
+    results.push({ name: String(row[iName] ?? ''), option: String(row[iOption] ?? ''), qty: Number(row[iQty]) || 1, revenue: 0, date: iDate >= 0 ? row[iDate] : undefined });
   }
   return results;
 }
@@ -131,6 +162,7 @@ function parseESM(wb: XLSX.WorkBook): SoldRow[] {
   const iAmount = colIdx('구매금액');
   const iQty = colIdx('수량');
   const iProductId = colIdx('상품번호');
+  const iDate = colIdx('결제일');  // ESM 은 Excel serial number
 
   const results: SoldRow[] = [];
   for (let i = headerIdx + 1; i < raw.length; i++) {
@@ -142,6 +174,7 @@ function parseESM(wb: XLSX.WorkBook): SoldRow[] {
       qty: Number(row[iQty]) || 1,
       revenue: Number(row[iAmount]) || 0,
       vendorId: iProductId >= 0 ? String(row[iProductId] ?? '') : undefined,
+      date: iDate >= 0 ? row[iDate] : undefined,
     });
   }
   return results;
@@ -251,12 +284,22 @@ export async function POST(request: NextRequest) {
     grouped.set(d.name, prev);
   }
 
+  // 첫 행에 date 있으면 그것으로 월 감지 (쿠팡 인사이트는 날짜 없어서 빈 string)
+  let detectedYm = '';
+  for (const r of soldRows) {
+    if (r.date !== undefined && r.date !== '') {
+      detectedYm = toYearMonth(r.date);
+      if (detectedYm) break;
+    }
+  }
+
   return NextResponse.json({
     platform,
     totalRevenue: soldRows.reduce((s, r) => s + r.revenue, 0),
     totalQty: soldRows.reduce((s, r) => s + r.qty, 0),
     matchCount,
     totalItems: soldRows.length,
+    detectedYm,
     products: [...grouped.entries()].map(([name, d]) => ({ name, ...d })).sort((a, b) => b.cost - a.cost),
   });
 }

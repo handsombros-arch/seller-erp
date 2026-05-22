@@ -1325,7 +1325,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
 // ───────────────── Platform Cost Calculator ─────────────────
 
 interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; }
-interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; }
+interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; }
 
 const PLATFORMS = [
   { id: 'coupang', label: '쿠팡 그로스', accept: '.xlsx,.xls', hint: '셀러 인사이트 엑셀' },
@@ -1360,8 +1360,14 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
     const res = await fetch('/api/monthly-costs/calc-cost', { method: 'POST', body: fd });
     const data = await res.json();
     setUploading(false);
-    if (data.products) setResult(data);
-    else { setToast('파일 처리 실패'); setTimeout(() => setToast(''), 2000); }
+    if (data.products) {
+      setResult(data);
+      // 엑셀 날짜와 선택월 불일치 시 알럿 (쿠팡 인사이트는 날짜 없어 detectedYm 비어있음 — skip)
+      if (data.detectedYm && data.detectedYm !== selectedYm) {
+        window.alert(`⚠️ 엑셀의 월(${data.detectedYm})과 선택된 월(${selectedYm})이 다릅니다.\n\n그대로 "정산시트에 적용" 시 ${selectedYm} 데이터로 저장됩니다.\n월을 바꾸시려면 정산 시트 위쪽 월 선택기에서 ${data.detectedYm} 선택하세요.`);
+      }
+    }
+    else { setToast(data?.error || '파일 처리 실패'); setTimeout(() => setToast(''), 2000); }
   }
 
   function updateProductUnitCost(idx: number, unitCost: number) {
@@ -1886,7 +1892,12 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
     const res = await fetch('/api/monthly-product-ads', { method: 'POST', body: fd });
     const data = await res.json();
     setUploading(false);
-    if (data?.products) setResult(data);
+    if (data?.products) {
+      setResult(data);
+      if (data.yearMonth && data.yearMonth !== selectedYm) {
+        window.alert(`⚠️ 광고 raw 엑셀의 월(${data.yearMonth})과 선택된 월(${selectedYm})이 다릅니다.\n\n저장 시 ${data.yearMonth} 데이터로 저장됩니다 (엑셀 날짜 우선).\n선택월을 바꾸시려면 정산시트 위쪽 월 선택기를 이동하세요.`);
+      }
+    }
     else { setToast(data?.error || '파일 처리 실패'); setTimeout(() => setToast(''), 2500); }
   }
 
