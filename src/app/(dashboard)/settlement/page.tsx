@@ -1216,7 +1216,8 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       const platFeeVar = varGroups.filter(g => {
                         if (/택배|물류/.test(g.parentLabel)) return false;
                         const allLabels = [g.parentLabel, ...g.childLabels];
-                        if (allLabels.some(l => /세이버/.test(l))) return /쿠팡/.test(rc.label);
+                        // 세이버 / 로켓(그로스) 키워드는 무조건 쿠팡 매출에 귀속
+                        if (allLabels.some(l => /세이버|로켓/.test(l))) return /쿠팡/.test(rc.label);
                         if (labelMatch(g.parentLabel, rc.label)) return true;
                         return g.childLabels.some(cl => labelMatch(cl, rc.label));
                       }).reduce((s, g) => s + g.total, 0);
