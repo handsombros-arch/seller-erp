@@ -193,21 +193,27 @@ export async function POST(request: NextRequest) {
   }
 
   let matchCount = 0;
-  const details: { name: string; qty: number; unitCost: number; lineCost: number; revenue: number; method: string }[] = [];
+  const details: { name: string; qty: number; unitCost: number; lineCost: number; revenue: number; method: string; skuId: string | null }[] = [];
 
   for (const row of soldRows) {
     // 1차: vendorItemId 직접 매칭 (쿠팡)
-    let skuId = row.vendorId ? (rgMap.get(row.vendorId) || psMap.get(row.vendorId)) : undefined;
+    let skuId: string | undefined = row.vendorId ? (rgMap.get(row.vendorId) || psMap.get(row.vendorId)) as string | undefined : undefined;
     let cost = skuId ? (skuMap.get(skuId) as any)?.cost_price : null;
     let method = skuId ? 'ID' : null;
 
-    // 2차: 상품명 키워드 매칭
+    // 2차: 상품명 키워드 매칭 (skuId 도 함께 잡기 위해 sku.product.name 매칭)
     if (!cost) {
       const searchText = row.name + ' ' + row.option;
       for (const [keyword, dbName] of Object.entries(NAME_MAP)) {
         if (searchText.includes(keyword)) {
           cost = productCost.get(dbName);
-          if (cost) { method = 'name'; break; }
+          if (cost) {
+            method = 'name';
+            // 동일 product.name 의 첫 SKU 찾아서 skuId 지정 (분석용)
+            const matchedSku = (skus ?? []).find((s: any) => (s as any).product?.name === dbName);
+            if (matchedSku) skuId = (matchedSku as any).id;
+            break;
+          }
         }
       }
     }
@@ -228,19 +234,20 @@ export async function POST(request: NextRequest) {
 
     if (cost) {
       matchCount++;
-      details.push({ name: displayName, qty: row.qty, unitCost: cost, lineCost: cost * row.qty, revenue: row.revenue, method: method! });
+      details.push({ name: displayName, qty: row.qty, unitCost: cost, lineCost: cost * row.qty, revenue: row.revenue, method: method!, skuId: skuId ?? null });
     } else {
-      details.push({ name: displayName, qty: row.qty, unitCost: 0, lineCost: 0, revenue: row.revenue, method: 'unmatched' });
+      details.push({ name: displayName, qty: row.qty, unitCost: 0, lineCost: 0, revenue: row.revenue, method: 'unmatched', skuId: skuId ?? null });
     }
   }
 
   // 옵션별 집계 (같은 표시명끼리만 합침)
-  const grouped = new Map<string, { qty: number; cost: number; revenue: number; unitCost: number; matched: boolean; method: string }>();
+  const grouped = new Map<string, { qty: number; cost: number; revenue: number; unitCost: number; matched: boolean; method: string; skuId: string | null }>();
   for (const d of details) {
-    const prev = grouped.get(d.name) || { qty: 0, cost: 0, revenue: 0, unitCost: d.unitCost, matched: d.method !== 'unmatched', method: d.method };
+    const prev = grouped.get(d.name) || { qty: 0, cost: 0, revenue: 0, unitCost: d.unitCost, matched: d.method !== 'unmatched', method: d.method, skuId: d.skuId };
     prev.qty += d.qty;
     prev.cost += d.lineCost;
     prev.revenue += d.revenue;
+    if (!prev.skuId && d.skuId) prev.skuId = d.skuId;
     grouped.set(d.name, prev);
   }
 

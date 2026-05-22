@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Loader2, CheckCircle2, Trash2, Save, ChevronDown, ChevronRight, ClipboardPaste, Lock, Unlock, RotateCcw, Upload, GripVertical } from 'lucide-react';
 import { BarChart, Bar, Line, ComposedChart, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -1281,6 +1281,9 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     );
                   })()}
                 </div>
+
+                {/* 상품별 순이익 분석 */}
+                <ProductProfitSection selectedYm={selectedYm} />
                 </>}
               </>
             );
@@ -1363,6 +1366,17 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
         body: JSON.stringify({ platform, mappings }),
       });
     }
+
+    // 상품별 매출 영속화 (monthly_product_sales) — 분석용
+    await fetch('/api/monthly-product-sales', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        yearMonth: selectedYm,
+        platform,
+        products: result.products,
+      }),
+    });
 
     const costRes = await fetch('/api/monthly-costs');
     const allItems: any[] = costRes.ok ? await costRes.json() : [];
@@ -1560,6 +1574,442 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
   );
 }
 
+// ───────────────── Product Profit (상품별 순이익 분석) ─────────────────
+
+interface SalesDbRow {
+  id: string;
+  year_month: string;
+  platform: string;
+  sku_id: string | null;
+  display_name: string;
+  qty: number;
+  revenue: number;
+  unit_cost: number;
+  total_cost: number;
+  match_method: string;
+  sku?: { id: string; sku_code: string; cost_price: number; product?: { id: string; name: string; logistics_tier: string | null } | null } | null;
+}
+
+interface AdsDbRow {
+  id: string;
+  year_month: string;
+  platform: string;
+  ad_type: string;
+  vendor_item_id: string | null;
+  sku_id: string | null;
+  campaign_name: string | null;
+  name: string | null;
+  cost: number;
+  impressions: number;
+  clicks: number;
+  conv_qty_14d: number;
+  conv_rev_14d: number;
+  sku?: { id: string; sku_code: string; cost_price: number; product?: { id: string; name: string; logistics_tier: string | null } | null } | null;
+}
+
+interface ProductAggRow {
+  productId: string | null;
+  productName: string;
+  logisticsTier: string | null;
+  qty: number;
+  revenue: number;
+  cogs: number;
+  adCost: number;
+  fee: number;
+  logistics: number;
+  profit: number;
+  margin: number;
+  isUnmatched: boolean;
+}
+
+const COUPANG_FEE_RATE = 0.12;            // 쿠팡 상품 수수료 12% (VAT 포함)
+const COUPANG_LOGISTICS_STANDARD = 4100;  // 일반 1건당
+const COUPANG_LOGISTICS_OVERSIZE = 4850;  // 하드/여행 1건당
+
+function detectOversize(name: string, tier: string | null): boolean {
+  if (tier === 'oversize') return true;
+  if (tier === 'standard') return false;
+  return /하드|여행/.test(name);
+}
+
+function ProductProfitSection({ selectedYm }: { selectedYm: string }) {
+  const [platform, setPlatform] = useState('coupang');
+  const [sales, setSales] = useState<SalesDbRow[]>([]);
+  const [ads, setAds] = useState<AdsDbRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [salesRes, adsRes] = await Promise.all([
+        fetch(`/api/monthly-product-sales?year_month=${selectedYm}&platform=${platform}`),
+        fetch(`/api/monthly-product-ads?year_month=${selectedYm}&platform=${platform}`),
+      ]);
+      const salesData = salesRes.ok ? await salesRes.json() : [];
+      const adsData = adsRes.ok ? await adsRes.json() : [];
+      if (!cancelled) {
+        setSales(salesData);
+        setAds(adsData);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedYm, platform]);
+
+  // product_id 단위 집계
+  const aggregated = useMemo<ProductAggRow[]>(() => {
+    const byProduct = new Map<string, ProductAggRow>();
+    const getRow = (productId: string | null, productName: string, tier: string | null) => {
+      const key = productId || `__unmatched__${productName || 'unknown'}`;
+      let row = byProduct.get(key);
+      if (!row) {
+        row = {
+          productId,
+          productName: productName || '(미매칭)',
+          logisticsTier: tier,
+          qty: 0, revenue: 0, cogs: 0, adCost: 0, fee: 0, logistics: 0, profit: 0, margin: 0,
+          isUnmatched: !productId,
+        };
+        byProduct.set(key, row);
+      }
+      return row;
+    };
+
+    for (const s of sales) {
+      const productId = s.sku?.product?.id ?? null;
+      const productName = s.sku?.product?.name ?? s.display_name;
+      const tier = s.sku?.product?.logistics_tier ?? null;
+      const row = getRow(productId, productName, tier);
+      row.qty += s.qty;
+      row.revenue += Number(s.revenue);
+      row.cogs += Number(s.total_cost);
+    }
+    for (const a of ads) {
+      const productId = a.sku?.product?.id ?? null;
+      const productName = a.sku?.product?.name ?? a.name ?? '(미매칭 광고)';
+      const tier = a.sku?.product?.logistics_tier ?? null;
+      const row = getRow(productId, productName, tier);
+      row.adCost += Number(a.cost);
+    }
+
+    // 비용 계산 — 쿠팡 정책: 수수료 12% + 물류비 (qty × 4100/4850)
+    for (const row of byProduct.values()) {
+      if (platform === 'coupang') {
+        row.fee = Math.round(row.revenue * COUPANG_FEE_RATE);
+        const oversize = detectOversize(row.productName, row.logisticsTier);
+        row.logistics = row.qty * (oversize ? COUPANG_LOGISTICS_OVERSIZE : COUPANG_LOGISTICS_STANDARD);
+      }
+      row.profit = row.revenue - row.cogs - row.adCost - row.fee - row.logistics;
+      row.margin = row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0;
+    }
+
+    return [...byProduct.values()].sort((a, b) => b.revenue - a.revenue);
+  }, [sales, ads, platform]);
+
+  const totals = useMemo(() => ({
+    qty: aggregated.reduce((s, r) => s + r.qty, 0),
+    revenue: aggregated.reduce((s, r) => s + r.revenue, 0),
+    cogs: aggregated.reduce((s, r) => s + r.cogs, 0),
+    adCost: aggregated.reduce((s, r) => s + r.adCost, 0),
+    fee: aggregated.reduce((s, r) => s + r.fee, 0),
+    logistics: aggregated.reduce((s, r) => s + r.logistics, 0),
+    profit: aggregated.reduce((s, r) => s + r.profit, 0),
+  }), [aggregated]);
+
+  const totalMargin = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[13px] font-bold text-[#191F28]">상품별 순이익 — {selectedYm}</h4>
+        <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+          {PLATFORMS.filter(p => !p.manualOnly).map(p => (
+            <button key={p.id} onClick={() => setPlatform(p.id)}
+              disabled={p.id !== 'coupang'}
+              title={p.id !== 'coupang' ? '쿠팡만 우선 지원' : ''}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all ${platform === p.id ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-[12px] text-[#B0B8C1] py-4">불러오는 중...</p>
+      ) : aggregated.length === 0 ? (
+        <p className="text-[12px] text-[#B0B8C1] py-4">
+          데이터가 없습니다. 정산시트에 상품 매출을 적용하고, 광고비 raw 엑셀을 업로드하세요.
+        </p>
+      ) : (
+        <div className="overflow-x-auto border border-[#E5E8EB] rounded-xl">
+          <table className="w-full text-[11px] border-collapse min-w-[900px]">
+            <thead className="bg-[#F8F9FB]">
+              <tr className="text-[#6B7684] border-b border-[#E5E8EB]">
+                <th className="text-left py-2 px-3 min-w-[180px]">상품</th>
+                <th className="text-right py-2 px-2 w-14">수량</th>
+                <th className="text-right py-2 px-2 w-24">매출</th>
+                <th className="text-right py-2 px-2 w-24">매입원가</th>
+                <th className="text-right py-2 px-2 w-24">광고비</th>
+                <th className="text-right py-2 px-2 w-24" title="매출의 12% (VAT 포함)">수수료 12%</th>
+                <th className="text-right py-2 px-2 w-24" title="일반 4,100원 · 하드/여행 4,850원">물류비</th>
+                <th className="text-right py-2 px-2 w-24">순이익</th>
+                <th className="text-right py-2 px-2 w-16">마진율</th>
+              </tr>
+            </thead>
+            <tbody>
+              {aggregated.map(row => {
+                const oversize = detectOversize(row.productName, row.logisticsTier);
+                return (
+                  <tr key={(row.productId || row.productName)} className={`border-b border-[#F2F4F6] ${row.isUnmatched ? 'bg-amber-50/50' : ''}`}>
+                    <td className="py-2 px-3 text-[#191F28] text-[11px]">
+                      <div className="truncate" title={row.productName}>{row.productName}</div>
+                      <div className="text-[9px] text-[#B0B8C1]">
+                        {oversize ? '대형(4,850)' : '일반(4,100)'}
+                        {row.logisticsTier && ` · ${row.logisticsTier}`}
+                        {row.isUnmatched && ' · 미매칭'}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{row.qty}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{fmt(row.revenue)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#F97316]">{fmt(row.cogs)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(row.adCost)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{fmt(row.fee)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{fmt(row.logistics)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.profit > 0 ? 'text-emerald-600' : row.profit < 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>
+                      {fmt(row.profit)}
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.margin >= 10 ? 'text-emerald-600' : row.margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {row.margin.toFixed(1)}%
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-[#E5E8EB] font-bold bg-[#F8F9FB]">
+                <td className="py-2 px-3 text-[#191F28]">합계</td>
+                <td className="py-2 px-2 text-right tabular-nums">{totals.qty}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.revenue)}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-[#F97316]">{fmt(totals.cogs)}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(totals.adCost)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.fee)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.logistics)}</td>
+                <td className={`py-2 px-2 text-right tabular-nums ${totals.profit > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(totals.profit)}</td>
+                <td className={`py-2 px-2 text-right tabular-nums ${totalMargin >= 10 ? 'text-emerald-600' : totalMargin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{totalMargin.toFixed(1)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ───────────────── Platform Ad (월 1회 raw 업로드) ─────────────────
+
+interface AdProductRow {
+  vendorItemId: string;
+  name: string;
+  campaignId: string;
+  campaignName: string;
+  cost: number;
+  impressions: number;
+  clicks: number;
+  qty14d: number;
+  rev14d: number;
+  skuId: string | null;
+  matched: boolean;
+}
+
+interface AdResult {
+  yearMonth: string;
+  platform: string;
+  adType: 'pa' | 'nca';
+  totalCost: number;
+  totalImpressions: number;
+  totalClicks: number;
+  matchedItems: number;
+  totalItems: number;
+  products: AdProductRow[];
+}
+
+const AD_TYPE_LABEL: Record<string, string> = {
+  pa: '상품 광고 (PA)',
+  nca: '신규 구매 광고 (NCA)',
+  live: '라이브',
+  message: '메시지',
+};
+
+function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
+  const [platform, setPlatform] = useState('coupang');
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<AdResult | null>(null);
+  const [toast, setToast] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    setResult(null);
+    setSaved(false);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('platform', platform);
+    fd.append('year_month', selectedYm);
+    const res = await fetch('/api/monthly-product-ads', { method: 'POST', body: fd });
+    const data = await res.json();
+    setUploading(false);
+    if (data?.products) setResult(data);
+    else { setToast(data?.error || '파일 처리 실패'); setTimeout(() => setToast(''), 2500); }
+  }
+
+  async function saveToDb() {
+    if (!result) return;
+    const res = await fetch('/api/monthly-product-ads', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        yearMonth: result.yearMonth,
+        platform: result.platform,
+        adType: result.adType,
+        products: result.products,
+      }),
+    });
+    const data = await res.json();
+    if (data?.ok) {
+      setSaved(true);
+      setToast(`${result.yearMonth} ${result.platform} ${AD_TYPE_LABEL[result.adType]} → ${data.saved}건 저장`);
+    } else {
+      setToast(data?.error || '저장 실패');
+    }
+    setTimeout(() => setToast(''), 2500);
+  }
+
+  return (
+    <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#F2F4F6]">
+        <h3 className="text-[15px] font-bold text-[#191F28]">광고비 raw 업로드 (월 1회)</h3>
+        <p className="text-[12px] text-[#6B7684] mt-0.5">상품별 광고비 영속화 — 상품별 순이익 분석에 사용. 광고 유형 자동 감지(PA/NCA)</p>
+      </div>
+
+      <div className="px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+            {PLATFORMS.filter(p => !p.manualOnly).map(p => (
+              <button key={p.id} onClick={() => { setPlatform(p.id); setResult(null); }}
+                disabled={p.id !== 'coupang'}
+                title={p.id !== 'coupang' ? '쿠팡만 우선 지원 — 다른 플랫폼은 추후' : ''}
+                className={`px-2.5 md:px-3.5 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${platform === p.id ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#8B5CF6] text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#7C3AED] flex items-center gap-1.5 cursor-pointer transition-colors">
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            <span>광고 raw 엑셀</span>
+            <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="hidden" />
+          </label>
+          <span className="text-[10px] text-[#B0B8C1]">선택 월: {selectedYm}</span>
+        </div>
+
+        {result && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-[#6B7684]">광고 유형</p>
+                <p className="text-[13px] font-bold text-[#8B5CF6]">{AD_TYPE_LABEL[result.adType] || result.adType}</p>
+              </div>
+              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-[#6B7684]">총 광고비</p>
+                <p className="text-[14px] font-bold text-[#8B5CF6] tabular-nums">{fmt(result.totalCost)}원</p>
+              </div>
+              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-[#6B7684]">노출 / 클릭</p>
+                <p className="text-[13px] font-bold text-[#191F28] tabular-nums">{fmt(result.totalImpressions)} / {fmt(result.totalClicks)}</p>
+              </div>
+              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-[#6B7684]">매칭</p>
+                <p className="text-[14px] font-bold text-[#191F28] tabular-nums">{result.matchedItems}/{result.totalItems}</p>
+              </div>
+              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-[#6B7684]">14일 전환 매출</p>
+                <p className="text-[13px] font-bold text-[#191F28] tabular-nums">{fmt(result.products.reduce((s, p) => s + p.rev14d, 0))}원</p>
+              </div>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto border border-[#E5E8EB] rounded-xl">
+              <table className="w-full text-[11px]">
+                <thead className="sticky top-0 bg-[#F8F9FB]"><tr className="text-[#6B7684] border-b border-[#E5E8EB]">
+                  <th className="text-left py-2 px-3 min-w-[220px]">상품 / 캠페인</th>
+                  <th className="text-right py-2 px-2 w-28">광고비</th>
+                  <th className="text-right py-2 px-2 w-20">노출</th>
+                  <th className="text-right py-2 px-2 w-16">클릭</th>
+                  <th className="text-right py-2 px-2 w-16">14일 수량</th>
+                  <th className="text-right py-2 px-2 w-24">14일 매출</th>
+                  <th className="text-center py-2 px-2 w-12">매칭</th>
+                </tr></thead>
+                <tbody>
+                  {result.products.map((p, i) => (
+                    <tr key={i} className={`border-b border-[#F2F4F6] ${!p.matched ? 'bg-amber-50/50' : ''}`}>
+                      <td className="py-1.5 px-3 text-[10px]">
+                        <div className="text-[#191F28] truncate" title={p.name}>{p.name}</div>
+                        <div className="text-[9px] text-[#B0B8C1] truncate">{p.campaignName} · {p.vendorItemId}</div>
+                      </td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-[#8B5CF6]">{fmt(p.cost)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(p.impressions)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(p.clicks)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.qty14d || '-'}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.rev14d ? fmt(p.rev14d) : '-'}</td>
+                      <td className="py-1.5 px-2 text-center">
+                        {p.matched
+                          ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">자동</span>
+                          : <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">미매칭</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-[#E5E8EB] font-bold bg-[#F8F9FB]">
+                    <td className="py-2 px-3 text-[#191F28]">합계</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(result.totalCost)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalImpressions)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalClicks)}</td>
+                    <td colSpan={3} />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {saved ? (
+                <div className="flex-1 h-10 rounded-lg bg-emerald-500 text-white text-[13px] font-semibold flex items-center justify-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  DB 저장 완료: {result.yearMonth} {AD_TYPE_LABEL[result.adType]} {fmt(result.totalCost)}원
+                </div>
+              ) : (
+                <button onClick={saveToDb}
+                  className="flex-1 h-10 rounded-lg bg-[#8B5CF6] text-white text-[13px] font-semibold hover:bg-[#7C3AED] transition-colors flex items-center justify-center gap-2">
+                  <Save className="h-4 w-4" />
+                  DB 저장: {result.yearMonth} {AD_TYPE_LABEL[result.adType]} ({result.totalItems}건)
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ───────────────── Settlement Page ─────────────────
 
 export default function SettlementPage() {
@@ -1573,6 +2023,7 @@ export default function SettlementPage() {
         <p className="text-[13px] text-[#6B7684] mt-0.5">월별 매출, 매입원가, 비용을 관리하고 분석합니다</p>
       </div>
       <PlatformCostSection selectedYm={selectedYm} onApply={() => setCostReloadKey(k => k + 1)} />
+      <PlatformAdSection selectedYm={selectedYm} />
       <MonthlyCostsSection reloadKey={costReloadKey} selectedYm={selectedYm} onSelectedYmChange={setSelectedYm} />
     </div>
   );
