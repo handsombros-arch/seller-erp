@@ -137,7 +137,29 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
 
   const now = new Date();
   const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const setSelectedYm = onSelectedYmChange;
+  const setSelectedYmRaw = onSelectedYmChange;
+
+  // dirty 상태에서 이동 시도 시 confirm — 사용자가 정산시트 변경 후 저장 안 한 상태 보호
+  const confirmIfDirty = (next: () => void) => {
+    if (dirty) {
+      const ok = window.confirm('저장하지 않은 변경사항이 있습니다.\n무시하고 이동하시겠어요?');
+      if (!ok) return;
+    }
+    next();
+  };
+  const setSelectedYm = (ym: string) => confirmIfDirty(() => setSelectedYmRaw(ym));
+  const safeSetTab = (next: 'edit' | 'history' | 'analysis') => confirmIfDirty(() => setTab(next));
+
+  // 브라우저 탭 닫기 / 페이지 이동 시 경고
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   // 최근 12개월 옵션 생성
   const monthOptions = (() => {
@@ -516,15 +538,15 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
         </div>
         <div className="flex items-center gap-2 mt-2 md:mt-0">
           <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
-            <button onClick={() => setTab('edit')}
+            <button onClick={() => safeSetTab('edit')}
               className={`px-2.5 md:px-3 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${tab === 'edit' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
               편집
             </button>
-            <button onClick={() => setTab('history')}
+            <button onClick={() => safeSetTab('history')}
               className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'history' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
               월별 추이
             </button>
-            <button onClick={() => setTab('analysis')}
+            <button onClick={() => safeSetTab('analysis')}
               className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'analysis' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
               분석
             </button>
