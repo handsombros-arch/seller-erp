@@ -1251,6 +1251,8 @@ const PLATFORMS = [
   { id: 'coupang', label: '쿠팡 그로스', accept: '.xlsx,.xls', hint: '셀러 인사이트 엑셀' },
   { id: 'toss', label: '토스', accept: '.xlsx,.xls', hint: '전체주문조회 엑셀 (구매확정)' },
   { id: 'smartstore', label: '스스', accept: '.xlsx,.xls,.csv', hint: '주문조회 엑셀 (구매확정)' },
+  { id: 'esm', label: 'ESM', accept: '.xlsx,.xls', hint: '주문 엑셀 (G마켓/옥션)' },
+  { id: 'talkdeal', label: '톡딜', accept: '.xlsx,.xls', hint: '주문 엑셀', manualOnly: true as const },
 ];
 
 function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onApply?: () => void }) {
@@ -1389,11 +1391,17 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
               </button>
             ))}
           </div>
-          <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#3182F6] text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#1B64DA] flex items-center gap-1.5 cursor-pointer transition-colors">
-            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{curPlatform.hint}</span><span className="sm:hidden">업로드</span>
-            <input type="file" accept={curPlatform.accept} onChange={handleUpload} className="hidden" />
-          </label>
+          {curPlatform.manualOnly ? (
+            <span className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#F2F4F6] text-[#6B7684] text-[11px] md:text-[12px] font-medium flex items-center">
+              수동 입력 전용 — 정산 페이지에서 직접 금액 입력
+            </span>
+          ) : (
+            <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#3182F6] text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#1B64DA] flex items-center gap-1.5 cursor-pointer transition-colors">
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{curPlatform.hint}</span><span className="sm:hidden">업로드</span>
+              <input type="file" accept={curPlatform.accept} onChange={handleUpload} className="hidden" />
+            </label>
+          )}
         </div>
 
         {/* 결과 */}

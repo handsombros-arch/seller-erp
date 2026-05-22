@@ -114,6 +114,39 @@ function parseSmartStore(wb: XLSX.WorkBook): SoldRow[] {
   return results;
 }
 
+/** ESM(옥션/지마켓) 주문통합검색 엑셀 파싱 (구매결정완료만) */
+function parseESM(wb: XLSX.WorkBook): SoldRow[] {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(10, raw.length); i++) {
+    if (raw[i]?.some((c: any) => c === '진행상태')) { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) return [];
+
+  const headers = raw[headerIdx] as string[];
+  const colIdx = (name: string) => headers.indexOf(name);
+  const iStatus = colIdx('진행상태');
+  const iName = colIdx('상품명');
+  const iAmount = colIdx('구매금액');
+  const iQty = colIdx('수량');
+  const iProductId = colIdx('상품번호');
+
+  const results: SoldRow[] = [];
+  for (let i = headerIdx + 1; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row || row[iStatus] !== '구매결정완료') continue;
+    results.push({
+      name: String(row[iName] ?? ''),
+      option: '',
+      qty: Number(row[iQty]) || 1,
+      revenue: Number(row[iAmount]) || 0,
+      vendorId: iProductId >= 0 ? String(row[iProductId] ?? '') : undefined,
+    });
+  }
+  return results;
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -135,7 +168,7 @@ export async function POST(request: NextRequest) {
   const wb = XLSX.read(buf);
 
   // 플랫폼별 파싱
-  const soldRows = platform === 'toss' ? parseToss(wb) : platform === 'smartstore' ? parseSmartStore(wb) : parseCoupang(wb);
+  const soldRows = platform === 'toss' ? parseToss(wb) : platform === 'smartstore' ? parseSmartStore(wb) : platform === 'esm' ? parseESM(wb) : parseCoupang(wb);
 
   // DB 데이터 로드
   const { data: skus } = await admin.from('skus').select('id, sku_code, cost_price, product:products(name)');
