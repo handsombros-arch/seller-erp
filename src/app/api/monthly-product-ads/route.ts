@@ -209,12 +209,17 @@ export async function PUT(request: NextRequest) {
     };
   });
 
-  const { error } = await admin.from('monthly_product_ads').upsert(rows, {
-    onConflict: 'user_id,year_month,platform,ad_type,vendor_item_id,campaign_id',
-  });
+  // 같은 (user_id, year_month, platform, ad_type) 의 이전 데이터 전부 삭제 후 재삽입
+  // — 같은 ad_type 재업로드 시 깨끗하게 교체 (다른 ad_type 은 보존되므로 PA/NCA 누적 가능)
+  await admin.from('monthly_product_ads').delete()
+    .eq('user_id', user.id)
+    .eq('year_month', body.yearMonth)
+    .eq('platform', body.platform)
+    .eq('ad_type', body.adType);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (rows.length > 0) {
+    const { error } = await admin.from('monthly_product_ads').insert(rows);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, saved: rows.length });
