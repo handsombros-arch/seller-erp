@@ -109,10 +109,11 @@ export async function POST(request: NextRequest) {
   // 파싱
   const parsed = adType === 'nca' ? parseCoupangNCA(wb) : parseCoupangPA(wb);
 
-  // 연월 결정: hint 우선, 없으면 첫 행 날짜에서 추출
-  const yearMonth = yearMonthHint || (parsed.length > 0 ? dateToYm(parsed[0].date) : '');
+  // 연월: 엑셀 첫 행 날짜 우선 자동 감지 → 없으면 hint 사용
+  const detected = parsed.length > 0 ? dateToYm(parsed[0].date) : '';
+  const yearMonth = detected || yearMonthHint || '';
   if (!yearMonth) {
-    return NextResponse.json({ error: '연월 추출 실패' }, { status: 400 });
+    return NextResponse.json({ error: '연월 추출 실패 — 엑셀 날짜 또는 year_month 파라미터 필요' }, { status: 400 });
   }
 
   // vendor_item_id 기준 집계 (캠페인은 첫 값 사용 — 같은 옵션ID에 여러 캠페인 있으면 마지막만)

@@ -1914,7 +1914,14 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
             <span>광고 raw 엑셀</span>
             <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="hidden" />
           </label>
-          <span className="text-[10px] text-[#B0B8C1]">선택 월: {selectedYm}</span>
+          {result ? (
+            <span className={`text-[10px] font-semibold px-2 py-1 rounded ${result.yearMonth === selectedYm ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+              감지된 월: {result.yearMonth}
+              {result.yearMonth !== selectedYm && ` (선택월 ${selectedYm}과 다름)`}
+            </span>
+          ) : (
+            <span className="text-[10px] text-[#B0B8C1]">엑셀 날짜로 자동 인식</span>
+          )}
         </div>
 
         {result && (
