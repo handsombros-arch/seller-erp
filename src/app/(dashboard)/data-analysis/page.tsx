@@ -377,6 +377,88 @@ const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
+// 컬럼 필터 — 엑셀처럼 컬럼별로 조건 걸기
+// ────────────────────────────────────────────────────────────────────────────
+
+type FilterOp = 'gte' | 'lte' | 'eq' | 'gt' | 'lt';
+type NumericFilter = { op: FilterOp; value: number };
+type ColumnFilters = {
+  category: string;
+  memo: string;
+  total_impression?: NumericFilter;
+  total_click?: NumericFilter;
+  ctr?: NumericFilter;
+  top100_impression?: NumericFilter;
+  top100_share?: NumericFilter;
+  search_pct?: NumericFilter;
+  ad_pct?: NumericFilter;
+  avg_winner_price?: NumericFilter;
+};
+
+const FILTER_STORAGE_KEY = 'data-analysis.columnFilters.v1';
+const EMPTY_FILTERS: ColumnFilters = { category: '', memo: '' };
+
+const NUMERIC_FILTER_KEYS: ReadonlyArray<keyof ColumnFilters> = [
+  'total_impression',
+  'total_click',
+  'ctr',
+  'top100_impression',
+  'top100_share',
+  'search_pct',
+  'ad_pct',
+  'avg_winner_price',
+];
+
+const FILTER_OP_LABELS: Record<FilterOp, string> = {
+  gte: '≥',
+  lte: '≤',
+  gt: '>',
+  lt: '<',
+  eq: '=',
+};
+
+// ColumnKey → leaf 노드의 숫자 값. date 는 비숫자라 null.
+function getNodeNumeric(node: TreeNode, key: ColumnKey): number | null {
+  switch (key) {
+    case 'date': return null;
+    case 'total_impression': return node.total_impression || null;
+    case 'total_click': return node.total_click || null;
+    case 'ctr': return ctr(node.total_click, node.total_impression);
+    case 'top100_impression': return node.top100_impression || null;
+    case 'top100_share': return top100Share(node.top100_impression, node.total_impression);
+    case 'search_pct': return node.top100_search_pct;
+    case 'ad_pct': return node.top100_ad_pct;
+    case 'avg_winner_price': return node.avg_winner_price;
+  }
+}
+
+function passNumericFilter(v: number | null, f: NumericFilter | undefined): boolean {
+  if (!f) return true;
+  if (v == null) return false;
+  switch (f.op) {
+    case 'gte': return v >= f.value;
+    case 'lte': return v <= f.value;
+    case 'gt': return v > f.value;
+    case 'lt': return v < f.value;
+    case 'eq': return v === f.value;
+  }
+}
+
+function hasActiveFilters(f: ColumnFilters): boolean {
+  if (f.category.trim() || f.memo.trim()) return true;
+  for (const k of NUMERIC_FILTER_KEYS) if (f[k]) return true;
+  return false;
+}
+
+function countActiveFilters(f: ColumnFilters): number {
+  let n = 0;
+  if (f.category.trim()) n += 1;
+  if (f.memo.trim()) n += 1;
+  for (const k of NUMERIC_FILTER_KEYS) if (f[k]) n += 1;
+  return n;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // CategoryHistoryChart — 단일 카테고리의 모든 캡처 시점을 시계열로
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -985,6 +1067,78 @@ function CompareDialog({
   );
 }
 
+// 숫자 컬럼 필터 셀 — operator select + value input. value 비우면 필터 해제.
+function NumericFilterCell({
+  filter,
+  onChange,
+  align,
+}: {
+  filter: NumericFilter | undefined;
+  onChange: (next: NumericFilter | undefined) => void;
+  align: 'left' | 'right';
+}) {
+  const [op, setOp] = useState<FilterOp>(filter?.op ?? 'gte');
+  const [text, setText] = useState<string>(filter?.value != null ? String(filter.value) : '');
+
+  // 외부에서 필터가 초기화되면 입력값도 비움
+  useEffect(() => {
+    if (!filter) {
+      setText('');
+      setOp('gte');
+    } else {
+      setOp(filter.op);
+      setText(String(filter.value));
+    }
+  }, [filter]);
+
+  const commit = (rawText: string, nextOp: FilterOp) => {
+    const trimmed = rawText.trim().replace(/[,\s₩%]/g, '');
+    if (trimmed === '') {
+      onChange(undefined);
+      return;
+    }
+    const v = Number(trimmed);
+    if (!Number.isFinite(v)) return;
+    onChange({ op: nextOp, value: v });
+  };
+
+  return (
+    <div className={`flex items-center gap-0.5 ${align === 'right' ? 'justify-end' : ''}`}>
+      <select
+        value={op}
+        onChange={(e) => {
+          const nextOp = e.target.value as FilterOp;
+          setOp(nextOp);
+          if (text.trim() !== '') commit(text, nextOp);
+        }}
+        className="h-6 px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+        title="비교 조건"
+      >
+        {(Object.keys(FILTER_OP_LABELS) as FilterOp[]).map((k) => (
+          <option key={k} value={k}>{FILTER_OP_LABELS[k]}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => commit(text, op)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            setText('');
+            onChange(undefined);
+          }
+        }}
+        placeholder="값"
+        className={`h-6 w-14 px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] ${align === 'right' ? 'text-right' : ''}`}
+      />
+    </div>
+  );
+}
+
 function SortableHeaderCell({ col }: { col: ColumnDef }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key });
   const style: React.CSSProperties = {
@@ -1207,6 +1361,52 @@ export default function DataAnalysisPage() {
       localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(columnOrder));
     } catch {}
   }, [columnOrder]);
+
+  // ── 컬럼 필터 (엑셀처럼 컬럼별로 조건) ──────────────────────────────
+  // hydration mismatch 방지: 초기값 비우고 useEffect 안에서 localStorage 로 덮어씀
+  const [filters, setFilters] = useState<ColumnFilters>(EMPTY_FILTERS);
+  const [filterRowOpen, setFilterRowOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        // shape 검증 — category/memo 는 string, 숫자 키들은 {op, value}
+        const next: ColumnFilters = { ...EMPTY_FILTERS };
+        if (typeof parsed.category === 'string') next.category = parsed.category;
+        if (typeof parsed.memo === 'string') next.memo = parsed.memo;
+        for (const k of NUMERIC_FILTER_KEYS) {
+          const v = parsed[k];
+          if (v && typeof v === 'object' && typeof v.value === 'number' && typeof v.op === 'string') {
+            (next[k] as NumericFilter) = { op: v.op, value: v.value };
+          }
+        }
+        setFilters(next);
+        if (hasActiveFilters(next)) setFilterRowOpen(true);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    } catch {}
+  }, [filters]);
+  const setNumericFilter = useCallback(
+    (key: Exclude<keyof ColumnFilters, 'category' | 'memo'>, next: NumericFilter | undefined) => {
+      setFilters((prev) => {
+        if (next === undefined) {
+          if (!prev[key]) return prev;
+          const copy = { ...prev };
+          delete copy[key];
+          return copy;
+        }
+        return { ...prev, [key]: next };
+      });
+    },
+    [],
+  );
+  const clearAllFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -1638,21 +1838,23 @@ export default function DataAnalysisPage() {
   const expandSnapshotRef = useRef<Set<string> | null>(null);
   const lastAutoExpandRef = useRef<Set<string>>(new Set());
 
-  // 트리 필터: post-order. 자기 segment 또는 fullPath 가 term 포함하면 keep,
-  // 자식 중 매칭이 있으면 ancestor 도 keep. 매칭 없으면 prune.
+  // 트리 필터: post-order. 검색어/북마크/컬럼필터 셋 다 합산.
+  // - leaf 직접 매칭: 모든 활성 조건 AND. 컬럼 숫자 필터는 leaf 에만 적용 (부모 합산값에는 안 검).
+  // - 부모 노드: 자식 중 살아남은 게 있으면 keep (조상 보존).
+  const filtersActive = hasActiveFilters(filters);
   const { filteredTree, autoExpandKeys, matchCount } = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    // 둘 중 하나라도 활성화면 필터 적용
-    if (!term && !bookmarkOnly) {
+    const categoryFilter = filters.category.trim().toLowerCase();
+    const memoFilter = filters.memo.trim().toLowerCase();
+    if (!term && !bookmarkOnly && !filtersActive) {
       return { filteredTree: tree, autoExpandKeys: new Set<string>(), matchCount: 0 };
     }
     const auto = new Set<string>();
     let matches = 0;
     const visit = (node: TreeNode): TreeNode | null => {
-      // 검색어 매칭 (없으면 자동 통과)
-      const segMatch = term ? node.segment.toLowerCase().includes(term) : false;
-      const pathMatch = term ? node.fullPath.join(' > ').toLowerCase().includes(term) : false;
-      // 북마크 매칭: leaf 만 직접 매칭. 부모는 자식 매칭으로만 살아남음.
+      const segMatch = term ? node.segment.toLowerCase().includes(term) : true;
+      const pathMatch = term ? node.fullPath.join(' > ').toLowerCase().includes(term) : true;
+      const searchMatch = !term || segMatch || pathMatch;
       const pathKey = node.fullPath.join('|');
       const isBookmarked = node.isLeaf && bookmarks.has(pathKey);
       const childResults: TreeNode[] = [];
@@ -1660,16 +1862,37 @@ export default function DataAnalysisPage() {
         const r = visit(c);
         if (r) childResults.push(r);
       }
-      // bookmarkOnly 면 직접 북마크 OR 자식이 살아남은 경우만 keep
-      // search 만이면 segMatch/pathMatch OR 자식
-      // 둘 다 활성: AND 조합 — 검색 매칭이고 북마크인 leaf 만
-      let directMatch: boolean;
-      if (term && bookmarkOnly) {
-        directMatch = (segMatch || pathMatch) && (node.isLeaf ? isBookmarked : false);
-      } else if (term) {
-        directMatch = segMatch || pathMatch;
-      } else {
-        directMatch = isBookmarked;
+      // 카테고리 필터 — 부모/자식 모두에 적용 (path 기반)
+      const categoryPass = !categoryFilter
+        || node.segment.toLowerCase().includes(categoryFilter)
+        || node.fullPath.join(' > ').toLowerCase().includes(categoryFilter);
+      // leaf 전용 조건: 북마크/메모/숫자 필터
+      let leafPass = true;
+      if (node.isLeaf) {
+        if (bookmarkOnly && !isBookmarked) leafPass = false;
+        if (leafPass && memoFilter) {
+          const m = (node.leafSnapshot?.memo ?? '').toLowerCase();
+          if (!m.includes(memoFilter)) leafPass = false;
+        }
+        if (leafPass) {
+          for (const k of NUMERIC_FILTER_KEYS) {
+            const f = filters[k] as NumericFilter | undefined;
+            if (!f) continue;
+            const colKey = k as ColumnKey;
+            if (!passNumericFilter(getNodeNumeric(node, colKey), f)) {
+              leafPass = false;
+              break;
+            }
+          }
+        }
+      } else if (bookmarkOnly && term === '' && !filtersActive) {
+        // 북마크 only 이면서 검색어/필터 없음 — 부모는 자식 매칭으로만 살아남음
+      }
+      // 직접 매칭: leaf 는 모든 leaf 조건 통과 + 검색/카테고리 통과
+      // 부모는 자식 매칭 또는 검색/카테고리 매칭 자체로 잡히지 않음 (자식 결과로만)
+      let directMatch = false;
+      if (node.isLeaf) {
+        directMatch = searchMatch && categoryPass && leafPass;
       }
       const keep = directMatch || childResults.length > 0;
       if (!keep) return null;
@@ -1683,11 +1906,11 @@ export default function DataAnalysisPage() {
       if (r) out.push(r);
     }
     return { filteredTree: out, autoExpandKeys: auto, matchCount: matches };
-  }, [tree, searchTerm, bookmarkOnly, bookmarks]);
+  }, [tree, searchTerm, bookmarkOnly, bookmarks, filters, filtersActive]);
 
-  // 검색어/북마크 필터 변하면 자동 펼침 적용. 둘 다 비우면 직전 사용자 펼침 상태로 복원.
+  // 검색어/북마크/컬럼필터 변하면 자동 펼침 적용. 모두 비우면 직전 사용자 펼침 상태로 복원.
   useEffect(() => {
-    if (searchTerm || bookmarkOnly) {
+    if (searchTerm || bookmarkOnly || filtersActive) {
       // 검색 시작 시점 1회만 사용자 상태 백업
       if (expandSnapshotRef.current === null) {
         expandSnapshotRef.current = new Set(openTreeKeys);
@@ -1708,7 +1931,7 @@ export default function DataAnalysisPage() {
         lastAutoExpandRef.current = new Set();
       }
     }
-  }, [searchTerm, bookmarkOnly, autoExpandKeys]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchTerm, bookmarkOnly, filtersActive, autoExpandKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleTreeNode = (key: string) => {
     setOpenTreeKeys((prev) => {
@@ -2175,6 +2398,21 @@ export default function DataAnalysisPage() {
             >
               컬럼 초기화
             </Button>
+            <Button
+              variant={filterRowOpen || filtersActive ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterRowOpen((v) => !v)}
+              title="컬럼별 필터 (엑셀처럼 조건 적용)"
+              className={filterRowOpen || filtersActive ? '' : ''}
+            >
+              <Search className="w-3.5 h-3.5 mr-1" />
+              필터{filtersActive ? ` (${countActiveFilters(filters)})` : ''}
+            </Button>
+            {filtersActive && (
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} title="필터 전체 초기화">
+                필터 초기화
+              </Button>
+            )}
             <label
               className={`inline-flex items-center gap-1.5 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
                 adminMode
@@ -2200,7 +2438,11 @@ export default function DataAnalysisPage() {
           <div className="p-6 text-center text-gray-500 text-sm">저장된 카테고리가 없습니다.</div>
         ) : filteredTree.length === 0 ? (
           <div className="p-6 text-center text-gray-500 text-sm">
-            &quot;{searchTerm}&quot; 검색 결과 없음
+            {searchTerm
+              ? `"${searchTerm}" 검색 결과 없음`
+              : filtersActive
+                ? '필터 조건에 맞는 카테고리가 없습니다.'
+                : '북마크된 카테고리가 없습니다.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -2224,6 +2466,56 @@ export default function DataAnalysisPage() {
                     </tr>
                   </SortableContext>
                 </DndContext>
+                {filterRowOpen && (
+                  <tr className="bg-white border-t border-black/[0.06]">
+                    <th className="p-1"></th>
+                    <th className="p-1"></th>
+                    <th className="p-1">
+                      <input
+                        type="text"
+                        value={filters.category}
+                        onChange={(e) => setFilters((p) => ({ ...p, category: e.target.value }))}
+                        placeholder="카테고리…"
+                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                      />
+                    </th>
+                    {columnOrder.map((key) => {
+                      const col = ALL_COLUMNS[key];
+                      // date 는 leaf/parent 표시가 섞여 필터 의미 없음 — 빈 셀
+                      if (key === 'date') return <th key={key} className="p-1"></th>;
+                      const numericKey = key as Exclude<keyof ColumnFilters, 'category' | 'memo'>;
+                      return (
+                        <th key={key} className="p-1">
+                          <NumericFilterCell
+                            filter={filters[numericKey] as NumericFilter | undefined}
+                            onChange={(next) => setNumericFilter(numericKey, next)}
+                            align={col.align}
+                          />
+                        </th>
+                      );
+                    })}
+                    <th className="p-1">
+                      <input
+                        type="text"
+                        value={filters.memo}
+                        onChange={(e) => setFilters((p) => ({ ...p, memo: e.target.value }))}
+                        placeholder="메모…"
+                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                      />
+                    </th>
+                    <th className="p-1 text-center">
+                      {filtersActive && (
+                        <button
+                          onClick={clearAllFilters}
+                          className="text-[10px] text-[#0071E3] hover:underline"
+                          title="모든 필터 해제"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </th>
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {filteredTree.map((node) => renderTreeNode(node))}
