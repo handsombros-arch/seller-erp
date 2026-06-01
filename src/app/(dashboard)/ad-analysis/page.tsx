@@ -852,27 +852,29 @@ export default function AdAnalysisPage() {
       const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
-      // 로컬 처리(파싱+dedup+집계) 끝났으니 스피너는 즉시 해제.
-      // DB 업로드는 백그라운드로 돌리고, 진행 상태는 syncProgress 배지로만 표시.
-      setLoading(false);
-
-      // IndexedDB 캐시 갱신 + DB 에 신규분 푸시 (청크 분할 — Vercel 4.5MB body 한도 회피)
+      // IDB 만 갱신 — DB 동기화는 수동 버튼으로 분리 (자동 청크 업로드가 느려서 사용자 요청).
+      // 다른 PC 와 공유하려면 우측 "DB 로 백업" 버튼을 명시적으로 눌러야 함.
       saveToIdb(raw);
-      if (allRows.length > 0) {
-        // await 하지 않음 — 사용자는 즉시 UI 사용 가능. 실패 시 setError 로 배너 표출.
-        uploadRowsInChunks(allRows, files[0]?.name ?? 'upload').then((sync) => {
-          if (sync.failedChunks > 0 || sync.firstServerError) {
-            setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
-              (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
-              ` (재업로드하면 dedup 으로 중복은 자동 스킵)`);
-          }
-        });
-      }
+      setLoading(false);
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
     }
-  }, [data, processData, saveResult, uploadRowsInChunks]);
+  }, [data, processData, saveResult]);
+
+  // 수동 DB 백업 — 현재 IDB/메모리에 있는 전체 raw 를 청크 업로드.
+  // dedup_key 로 ignoreDuplicates 되므로 여러 번 눌러도 안전.
+  const handleSyncToDb = useCallback(async () => {
+    if (!data?._rawRows?.length) return;
+    const sync = await uploadRowsInChunks(data._rawRows, `manual-sync-${new Date().toISOString().slice(0, 10)}`);
+    if (sync.failedChunks > 0 || sync.firstServerError) {
+      setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
+        (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
+        ` (다시 누르면 dedup 으로 중복은 자동 스킵)`);
+    } else {
+      setError('');
+    }
+  }, [data, uploadRowsInChunks]);
 
   // 매칭 확인 → DB 저장 → 재처리
   const handleConfirmMatches = useCallback(async () => {
@@ -1479,21 +1481,26 @@ export default function AdAnalysisPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
       )}
 
-      {/* 데이터 요약 + DB 동기화 */}
+      {/* 데이터 요약 + 수동 DB 백업 */}
       {data?._rawRows && (
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#86868B]">
-          <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨</span>
+          <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨 (로컬)</span>
           {data.dateRange?.from && data.dateRange?.to && (
             <span>· 데이터 기간: {data.dateRange.from} ~ {data.dateRange.to}</span>
           )}
           {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
             <span className="text-amber-600">· 날짜 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
           )}
-          {syncProgress && (
-            <span className="text-[#0071E3] font-medium">
-              · 업로드 중 {syncProgress.done}/{syncProgress.total} 청크
-            </span>
-          )}
+          <button
+            onClick={handleSyncToDb}
+            disabled={!!syncProgress}
+            className="ml-auto h-7 px-2.5 rounded-lg border border-[#BFD7FF] text-[#0071E3] hover:bg-[#F0F6FF] disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
+            title="다른 PC 와 공유하려면 눌러 DB 에 백업. 평소엔 로컬(IDB)만으로 동작."
+          >
+            {syncProgress
+              ? `DB 백업 중 ${syncProgress.done}/${syncProgress.total}`
+              : 'DB 로 백업'}
+          </button>
         </div>
       )}
 
