@@ -4,8 +4,8 @@ import { gunzipSync } from 'zlib';
 
 export const maxDuration = 60;
 
-// GET: 현재 유저의 광고 raw rows 전체
-export async function GET() {
+// GET: 현재 유저의 광고 raw rows 전체. ?stats=1 로 통계만 빠르게 반환.
+export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
@@ -17,6 +17,21 @@ export async function GET() {
     .select('filename, row_count, uploaded_at')
     .eq('user_id', user.id)
     .order('uploaded_at', { ascending: false });
+
+  // 진단용: 전체 행 안 가져오고 count + uploads 만 반환 (DB 잠자고 있는 데이터 양 판단용)
+  if (request.nextUrl.searchParams.get('stats') === '1') {
+    const { count } = await admin
+      .from('ad_raw_rows')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    const totalFromUploads = (uploads ?? []).reduce((s, u) => s + (u.row_count ?? 0), 0);
+    return NextResponse.json({
+      uploads: uploads ?? [],
+      rawRowsCount: count ?? 0,
+      uploadsTotalRowCount: totalFromUploads,
+      uploadsCount: (uploads ?? []).length,
+    });
+  }
 
   // Supabase 기본 max-rows 제한(보통 1000)에 맞춰 안전하게 페이지네이션.
   // (user_id, dedup_key) PK 정렬 — unique 정렬 키라 페이지 경계가 절대 안 흔들림.
