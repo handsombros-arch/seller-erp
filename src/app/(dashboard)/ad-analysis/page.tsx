@@ -724,8 +724,9 @@ export default function AdAnalysisPage() {
     filename: string,
     opts: { abortOnFirstFail?: boolean } = {},
   ) => {
-    // gzip 5-10배 압축 → 5000 행도 ~0.5-1MB 로 안정. 압축 안되면 자동으로 작게 잘라야 안전.
-    const CHUNK = 5000;
+    // 5000 행은 서버 단일 함수에서 17×300 upsert 돌 때 Postgres statement_timeout 위험.
+    // 2000 행으로 줄여 청크당 ~7×300 upsert 로 timeout 여유 확보. gzip 후엔 여전히 1MB 미만.
+    const CHUNK = 2000;
     const totalChunks = Math.ceil(rows.length / CHUNK);
     let inserted = 0, attempted = 0, failedChunks = 0;
     let firstServerError: string | null = null;
@@ -851,19 +852,24 @@ export default function AdAnalysisPage() {
       const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
+      // 로컬 처리(파싱+dedup+집계) 끝났으니 스피너는 즉시 해제.
+      // DB 업로드는 백그라운드로 돌리고, 진행 상태는 syncProgress 배지로만 표시.
+      setLoading(false);
+
       // IndexedDB 캐시 갱신 + DB 에 신규분 푸시 (청크 분할 — Vercel 4.5MB body 한도 회피)
       saveToIdb(raw);
       if (allRows.length > 0) {
-        const sync = await uploadRowsInChunks(allRows, files[0]?.name ?? 'upload');
-        if (sync.failedChunks > 0 || sync.firstServerError) {
-          setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
-            (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
-            ` (재업로드하면 dedup 으로 중복은 자동 스킵)`);
-        }
+        // await 하지 않음 — 사용자는 즉시 UI 사용 가능. 실패 시 setError 로 배너 표출.
+        uploadRowsInChunks(allRows, files[0]?.name ?? 'upload').then((sync) => {
+          if (sync.failedChunks > 0 || sync.firstServerError) {
+            setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
+              (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
+              ` (재업로드하면 dedup 으로 중복은 자동 스킵)`);
+          }
+        });
       }
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   }, [data, processData, saveResult, uploadRowsInChunks]);

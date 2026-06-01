@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { gunzipSync } from 'zlib';
 
+export const maxDuration = 60;
+
 // GET: 현재 유저의 광고 raw rows 전체
 export async function GET() {
   const supabase = await createClient();
@@ -73,24 +75,36 @@ export async function POST(request: NextRequest) {
     filename,
   }));
 
-  // upsert with ignoreDuplicates: true 일 때 .select() 를 추가하면
-  // 실제로 INSERT 된 행만 반환됨 (중복은 제외) — 진짜 inserted 카운트.
-  let actuallyInserted = 0;
+  // 내부 배치를 300 으로 줄임 — 1000 은 JSONB 무게 때문에 statement_timeout(57014) 빈발.
+  // 또한 .select() 반환셋이 큰 JSONB 와 함께 돌면 더 느려지므로 제거 (정확한 inserted 카운트 포기).
+  // 한 청크가 timeout 으로 잘리면 더 작은 배치로 한 번 재시도.
   let attempted = 0;
   let firstError: string | null = null;
-  for (let i = 0; i < upsertRows.length; i += 1000) {
-    const batch = upsertRows.slice(i, i + 1000);
-    attempted += batch.length;
-    const { data: ins, error } = await admin
+  const tryUpsert = async (batch: typeof upsertRows) => {
+    return admin
       .from('ad_raw_rows')
-      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: true })
-      .select('dedup_key');
+      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: true });
+  };
+  const BATCH = 300;
+  for (let i = 0; i < upsertRows.length; i += BATCH) {
+    const batch = upsertRows.slice(i, i + BATCH);
+    attempted += batch.length;
+    const { error } = await tryUpsert(batch);
     if (error) {
-      if (!firstError) firstError = `${error.code ?? ''} ${error.message}`.trim();
-    } else {
-      actuallyInserted += ins?.length ?? 0;
+      // 57014 = statement_timeout. 절반으로 쪼개 한 번 재시도.
+      if (error.code === '57014' && batch.length > 50) {
+        const half = Math.ceil(batch.length / 2);
+        const a = await tryUpsert(batch.slice(0, half));
+        const b = await tryUpsert(batch.slice(half));
+        const err = a.error ?? b.error;
+        if (err && !firstError) firstError = `${err.code ?? ''} ${err.message}`.trim();
+      } else if (!firstError) {
+        firstError = `${error.code ?? ''} ${error.message}`.trim();
+      }
     }
   }
+  // ignoreDuplicates 라 정확한 신규 행 수 알기 어려움 — attempted 만 보고.
+  const actuallyInserted = firstError ? 0 : attempted;
 
   // ad_uploads 이력 기록 (user_id + filename UNIQUE 로 upsert)
   await admin.from('ad_uploads').upsert({
