@@ -1369,85 +1369,98 @@ export default function AdAnalysisPage() {
     });
   }, []);
 
-  // 키워드 분석 → 그룹 접기/펼치기 피벗 엑셀 (ExcelJS 아웃라인 + 그룹키 셀 강조)
+  // 키워드 분석 → 네이티브 엑셀 피벗테이블 (xlsx 안에 pivotCache/pivotTable XML 직접 작성)
+  // '데이터' 시트(원본 키워드×일자 전체) + '피벗' 시트(실제 PivotTable). refreshOnLoad 로 열 때 자동 갱신.
   const downloadKeywordPivot = useCallback(async () => {
     const srcRows = dateFiltered.keywordDaily ?? [];
     if (!srcRows.length) return;
-    const ExcelJS = (await import('exceljs')).default;
-    const byDate = pivotAxis === 'date-kw'; // true: 일자 그룹 / 키워드 자식, false: 키워드 그룹 / 일자 자식
+    const JSZip = (await import('jszip')).default;
+    const byDate = pivotAxis === 'date-kw'; // true: 행 = 일자→키워드, false: 행 = 키워드→일자
 
-    // (키워드,일자) 합산 — 전체 키워드 포함 (검색/표시 제한 무시)
-    const agg = new Map<string, { keyword: string; date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
+    // (키워드,일자) 합산 — 전체 키워드 포함
+    const agg = new Map<string, { keyword: string; date: string; imp: number; clk: number; cost: number; ord: number; rev: number }>();
     for (const d of srcRows) {
       const k = `${d.keyword}||${d.date}`;
-      if (!agg.has(k)) agg.set(k, { keyword: d.keyword, date: d.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+      if (!agg.has(k)) agg.set(k, { keyword: d.keyword, date: d.date, imp: 0, clk: 0, cost: 0, ord: 0, rev: 0 });
       const x = agg.get(k)!;
-      x.impressions += d.impressions; x.clicks += d.clicks; x.cost += d.cost; x.orders14d += d.orders14d; x.revenue14d += d.revenue14d;
+      x.imp += d.impressions; x.clk += d.clicks; x.cost += d.cost; x.ord += d.orders14d; x.rev += d.revenue14d;
     }
-    const cells = [...agg.values()];
-    const gkey = (c: any) => byDate ? c.date : c.keyword;
-    const ckey = (c: any) => byDate ? c.keyword : c.date;
-    const sumCells = (arr: any[]) => arr.reduce((a, r) => { a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost; a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; return a; }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
-    const groups = new Map<string, any[]>();
-    for (const c of cells) { const g = gkey(c); if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(c); }
-    const groupArr = [...groups.entries()];
-    if (byDate) groupArr.sort((a, b) => a[0].localeCompare(b[0]));
-    else groupArr.sort((a, b) => sumCells(b[1]).cost - sumCells(a[1]).cost);
+    const recs = [...agg.values()];
 
-    const metrics = (x: any) => ({
-      imp: x.impressions, clk: x.clicks, cost: x.cost,
-      ctr: x.impressions > 0 ? x.clicks / x.impressions : null,
-      cpc: x.clicks > 0 ? Math.round(x.cost / x.clicks) : null,
-      ord: x.orders14d, rev: x.revenue14d,
-      cvr: x.clicks > 0 ? x.orders14d / x.clicks : null,
-      roas: x.cost > 0 ? x.revenue14d / x.cost : null,
+    // distinct 차원 (records 의 x 인덱스 참조용)
+    const kws: string[] = []; const kwIdx = new Map<string, number>();
+    const dates: string[] = []; const dtIdx = new Map<string, number>();
+    for (const r of recs) {
+      if (!kwIdx.has(r.keyword)) { kwIdx.set(r.keyword, kws.length); kws.push(r.keyword); }
+      if (!dtIdx.has(r.date)) { dtIdx.set(r.date, dates.length); dates.push(r.date); }
+    }
+
+    const esc = (s: unknown) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+    // shared strings (데이터 시트 문자열)
+    const ss: string[] = []; const ssIdx = new Map<string, number>();
+    const sId = (s: string) => { const e = esc(s); if (!ssIdx.has(e)) { ssIdx.set(e, ss.length); ss.push(e); } return ssIdx.get(e)!; };
+    const headers = ['키워드', '일자', '노출', '클릭', '광고비', '주문', '매출'];
+    const hIds = headers.map(sId);
+    const kwS = kws.map(sId); const dtS = dates.map(sId);
+
+    const nrows = recs.length + 1;
+    const COL = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    let sd = `<row r="1">` + COL.map((c, i) => `<c r="${c}1" t="s"><v>${hIds[i]}</v></c>`).join('') + `</row>`;
+    recs.forEach((r, i) => {
+      const rn = i + 2;
+      sd += `<row r="${rn}"><c r="A${rn}" t="s"><v>${kwS[kwIdx.get(r.keyword)!]}</v></c><c r="B${rn}" t="s"><v>${dtS[dtIdx.get(r.date)!]}</v></c>` +
+        `<c r="C${rn}"><v>${r.imp}</v></c><c r="D${rn}"><v>${r.clk}</v></c><c r="E${rn}"><v>${r.cost}</v></c><c r="F${rn}"><v>${r.ord}</v></c><c r="G${rn}"><v>${r.rev}</v></c></row>`;
     });
 
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(byDate ? '일자별 키워드' : '키워드별 일자', { views: [{ state: 'frozen', ySplit: 1 }] });
-    try { (ws.properties as any).outlineProperties = { summaryBelow: false, summaryRight: false }; } catch {}
-    ws.columns = [
-      { header: byDate ? '일자' : '키워드', key: 'g1', width: 30 },
-      { header: byDate ? '키워드' : '일자', key: 'g2', width: 26 },
-      { header: '노출', key: 'imp', width: 11 },
-      { header: '클릭', key: 'clk', width: 10 },
-      { header: '광고비', key: 'cost', width: 13 },
-      { header: 'CTR', key: 'ctr', width: 9 },
-      { header: 'CPC', key: 'cpc', width: 10 },
-      { header: '주문(14일)', key: 'ord', width: 11 },
-      { header: '매출(14일)', key: 'rev', width: 14 },
-      { header: 'CVR', key: 'cvr', width: 9 },
-      { header: 'ROAS', key: 'roas', width: 10 },
-    ];
-    for (const k of ['imp', 'clk', 'cost', 'cpc', 'ord', 'rev']) ws.getColumn(k).numFmt = '#,##0';
-    ws.getColumn('ctr').numFmt = '0.00%'; ws.getColumn('cvr').numFmt = '0.00%'; ws.getColumn('roas').numFmt = '0.0%';
+    const sheet1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:G${nrows}"/><sheetData>${sd}</sheetData></worksheet>`;
+    const sheet2 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1"/><sheetData/></worksheet>`;
 
-    const hr = ws.getRow(1);
-    hr.height = 22;
-    hr.eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } }; c.alignment = { vertical: 'middle', horizontal: 'center' }; });
+    const mm = (sel: (r: any) => number) => { let mn = Infinity, mx = -Infinity; for (const r of recs) { const v = sel(r); if (v < mn) mn = v; if (v > mx) mx = v; } if (!isFinite(mn)) { mn = 0; mx = 0; } return `minValue="${mn}" maxValue="${mx}"`; };
+    const numF = (name: string, sel: (r: any) => number) => `<cacheField name="${esc(name)}" numFmtId="0"><sharedItems containsSemiMixedTypes="0" containsString="0" containsNumber="1" containsInteger="1" ${mm(sel)}/></cacheField>`;
 
-    for (const [gname, arr] of groupArr) {
-      const hRow = ws.addRow({ g1: gname, g2: '', ...metrics(sumCells(arr)) });
-      hRow.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4D6' } }; c.font = { bold: true, color: { argb: 'FF7A5C00' } }; });
-      const g1c = hRow.getCell('g1'); // 그룹키 셀 강조
-      g1c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF59E0B' } };
-      g1c.font = { bold: true, color: { argb: 'FF1F2937' } };
-      const children = [...arr].sort((a, b) => byDate ? b.cost - a.cost : a.date.localeCompare(b.date));
-      for (const c of children) {
-        const r = ws.addRow({ g1: '', g2: ckey(c), ...metrics(c) });
-        r.outlineLevel = 1;
-        r.getCell('g2').font = { color: { argb: 'FF4B5563' } };
-      }
-    }
-    const gr = ws.addRow({ g1: '총합계', g2: '', ...metrics(sumCells(cells)) });
-    gr.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; });
+    const cacheDef = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" refreshOnLoad="1" refreshedBy="seller-erp" createdVersion="3" refreshedVersion="3" minRefreshableVersion="3" recordCount="${recs.length}"><cacheSource type="worksheet"><worksheetSource ref="A1:G${nrows}" sheet="데이터"/></cacheSource><cacheFields count="7"><cacheField name="키워드" numFmtId="0"><sharedItems count="${kws.length}">${kws.map(k => `<s v="${esc(k)}"/>`).join('')}</sharedItems></cacheField><cacheField name="일자" numFmtId="0"><sharedItems count="${dates.length}">${dates.map(d => `<s v="${esc(d)}"/>`).join('')}</sharedItems></cacheField>${numF('노출', r => r.imp)}${numF('클릭', r => r.clk)}${numF('광고비', r => r.cost)}${numF('주문', r => r.ord)}${numF('매출', r => r.rev)}</cacheFields></pivotCacheDefinition>`;
 
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const recXml = recs.map(r => `<r><x v="${kwIdx.get(r.keyword)}"/><x v="${dtIdx.get(r.date)}"/><n v="${r.imp}"/><n v="${r.clk}"/><n v="${r.cost}"/><n v="${r.ord}"/><n v="${r.rev}"/></r>`).join('');
+    const cacheRec = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" count="${recs.length}">${recXml}</pivotCacheRecords>`;
+
+    const kwItems = `<items count="${kws.length + 1}">${kws.map((_, i) => `<item x="${i}"/>`).join('')}<item t="default"/></items>`;
+    const dtItems = `<items count="${dates.length + 1}">${dates.map((_, i) => `<item x="${i}"/>`).join('')}<item t="default"/></items>`;
+    const rowFieldsXml = byDate ? `<field x="1"/><field x="0"/>` : `<field x="0"/><field x="1"/>`;
+    const pivot = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="키워드피벗" cacheId="1" applyNumberFormats="0" applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" applyWidthHeightFormats="1" dataCaption="값" updatedVersion="3" minRefreshableVersion="3" useAutoFormatting="1" itemPrintTitles="1" createdVersion="3" indent="0" outline="1" outlineData="1" multipleFieldFilters="0"><location ref="A3:G50" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/><pivotFields count="7"><pivotField axis="axisRow" showAll="0">${kwItems}</pivotField><pivotField axis="axisRow" showAll="0">${dtItems}</pivotField><pivotField dataField="1" showAll="0"/><pivotField dataField="1" showAll="0"/><pivotField dataField="1" showAll="0"/><pivotField dataField="1" showAll="0"/><pivotField dataField="1" showAll="0"/></pivotFields><rowFields count="2">${rowFieldsXml}</rowFields><rowItems count="1"><i><x/></i></rowItems><colFields count="1"><field x="-2"/></colFields><colItems count="5"><i><x/></i><i i="1"><x v="1"/></i><i i="2"><x v="2"/></i><i i="3"><x v="3"/></i><i i="4"><x v="4"/></i></colItems><dataFields count="5"><dataField name="합계 : 노출" fld="2" baseField="0" baseItem="0"/><dataField name="합계 : 클릭" fld="3" baseField="0" baseItem="0"/><dataField name="합계 : 광고비" fld="4" baseField="0" baseItem="0" numFmtId="3"/><dataField name="합계 : 주문" fld="5" baseField="0" baseItem="0"/><dataField name="합계 : 매출" fld="6" baseField="0" baseItem="0" numFmtId="3"/></dataFields><pivotTableStyleInfo name="PivotStyleLight16" showRowHeaders="1" showColHeaders="1" showRowStripes="0" showColStripes="0" showLastColumn="1"/></pivotTableDefinition>`;
+
+    const sharedStrings = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s => `<si><t xml:space="preserve">${s}</t></si>`).join('')}</sst>`;
+    const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+    const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/><Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/><Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/></Types>`;
+    const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+    const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="데이터" sheetId="1" r:id="rId1"/><sheet name="피벗" sheetId="2" r:id="rId2"/></sheets><pivotCaches><pivotCache cacheId="1" r:id="rId3"/></pivotCaches></workbook>`;
+    const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${REL}/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="${REL}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/><Relationship Id="rId4" Type="${REL}/styles" Target="styles.xml"/><Relationship Id="rId5" Type="${REL}/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
+    const sheet2Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/pivotTable" Target="../pivotTables/pivotTable1.xml"/></Relationships>`;
+    const pivotRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/pivotCacheDefinition" Target="../pivotCache/pivotCacheDefinition1.xml"/></Relationships>`;
+    const cacheRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/pivotCacheRecords" Target="pivotCacheRecords1.xml"/></Relationships>`;
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.file('_rels/.rels', rootRels);
+    zip.file('xl/workbook.xml', workbookXml);
+    zip.file('xl/_rels/workbook.xml.rels', wbRels);
+    zip.file('xl/styles.xml', styles);
+    zip.file('xl/sharedStrings.xml', sharedStrings);
+    zip.file('xl/worksheets/sheet1.xml', sheet1);
+    zip.file('xl/worksheets/sheet2.xml', sheet2);
+    zip.file('xl/worksheets/_rels/sheet2.xml.rels', sheet2Rels);
+    zip.file('xl/pivotTables/pivotTable1.xml', pivot);
+    zip.file('xl/pivotTables/_rels/pivotTable1.xml.rels', pivotRels);
+    zip.file('xl/pivotCache/pivotCacheDefinition1.xml', cacheDef);
+    zip.file('xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels', cacheRels);
+    zip.file('xl/pivotCache/pivotCacheRecords1.xml', cacheRec);
+
+    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `광고분석_${byDate ? '일자별키워드' : '키워드별일자'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `광고분석_키워드피벗_${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }, [dateFiltered.keywordDaily, pivotAxis]);
@@ -2545,7 +2558,7 @@ export default function AdAnalysisPage() {
                   구매 키워드만
                 </button>
                 <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-[#0071E3] text-[#0071E3] bg-white hover:bg-[#EBF1FE] transition-colors">
-                  <Download className="h-3.5 w-3.5" /> xlsx · {pivotAxis === 'kw-date' ? '키워드별 일자' : '일자별 키워드'} 피벗(접기/펼치기)
+                  <Download className="h-3.5 w-3.5" /> xlsx · 엑셀 피벗테이블 ({pivotAxis === 'kw-date' ? '행: 키워드→일자' : '행: 일자→키워드'})
                 </button>
                 <span className="text-[12px] text-[#86868B]">
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
