@@ -437,6 +437,7 @@ export default function AdAnalysisPage() {
   const [momGran, setMomGran] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // 기준 기간 ('' = 최신)
   const [momBasePeriod, setMomBasePeriod] = useState<string>(''); // 비교 기간 ('' = 직전)
+  const [momView, setMomView] = useState<'cards' | 'bars'>('cards'); // 증감 시각화: KPI 카드 / 가로 막대
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -3427,11 +3428,22 @@ export default function AdAnalysisPage() {
               return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}%`, cls: d > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold', rate: d };
             };
 
-            // MoM/WoW 전용 그래프: 기준 vs 비교 기간의 지표별 증감율 (순이익은 음수 기준 왜곡 가능 → 제외)
-            const chartData = metricRows
+            // MoM/WoW 막대: 지표별 증감율 (순이익은 음수 기준 왜곡 가능 → 제외), 변화 큰 순 정렬
+            const barData = (metricRows
               .filter((m) => m.key !== 'profit')
               .map((m) => ({ label: m.label, rate: rateCell(v(curAgg, m.key), v(baseAgg, m.key)).rate }))
-              .filter((d) => d.rate !== null) as { label: string; rate: number }[];
+              .filter((d) => d.rate !== null) as { label: string; rate: number }[])
+              .sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate));
+
+            // 카드 스파크라인용 최근 기간 시리즈
+            const recentPeriods = periods.slice(-10);
+            const sparkline = (key: string, color: string) => {
+              const vals = recentPeriods.map((p) => v(byPeriod.get(p) ?? emptyAgg(), key));
+              if (vals.length < 2) return null;
+              const w = 120, h = 26, min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
+              const pts = vals.map((val, i) => `${(i / (vals.length - 1)) * w},${h - 2 - ((val - min) / rng) * (h - 4)}`).join(' ');
+              return <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} /></svg>;
+            };
 
             const campaigns = data.campaigns ?? [];
             const products = data.products ?? [];
@@ -3463,10 +3475,15 @@ export default function AdAnalysisPage() {
                 <span className="text-[11px] text-[#C7C7CC] ml-auto">상단 캠페인/상품 필터와 연동 · 기간 필터 무시(전체)</span>
               </div>
 
-              {/* MoM/WoW 지표 증감율 그래프 (기준 vs 비교) */}
+              {/* MoM/WoW 증감 시각화 (카드 / 막대 전환) */}
               <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">지표 증감율</h3>
+                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">지표 증감</h3>
+                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                    {([['cards', '카드'], ['bars', '막대']] as const).map(([k, l]) => (
+                      <button key={k} onClick={() => setMomView(k)} className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${momView === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                    ))}
+                  </div>
                   <label className="flex items-center gap-1.5 text-[12px]">
                     <span className="text-[#86868B]">기준</span>
                     <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
@@ -3485,23 +3502,43 @@ export default function AdAnalysisPage() {
                     <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: RED }} />감소</span>
                   </span>
                 </div>
-                {chartData.length > 0 ? (
-                  <div className="h-[320px]">
+
+                {momView === 'cards' ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                    {metricRows.map((m) => {
+                      const cv = v(curAgg, m.key), bv = v(baseAgg, m.key);
+                      const rc = rateCell(cv, bv);
+                      const dir = rc.rate == null ? 0 : rc.rate > 0 ? 1 : rc.rate < 0 ? -1 : 0;
+                      const col = dir > 0 ? GREEN : dir < 0 ? RED : '#94A3B8';
+                      return (
+                        <div key={m.key} className="rounded-[14px] border border-black/[0.06] p-3">
+                          <div className="text-[11px] text-[#86868B] mb-0.5 truncate">{m.label}</div>
+                          <div className="text-[15px] font-bold text-[#1D1D1F]">{fmtVal(m.unit, cv)}</div>
+                          <div className={`text-[12px] font-semibold ${rc.cls}`}>{dir > 0 ? '▲ ' : dir < 0 ? '▼ ' : ''}{rc.text}</div>
+                          <div className="mt-1.5">{sparkline(m.key, col)}</div>
+                          <div className="text-[10px] text-[#C7C7CC] mt-0.5">전 {fmtVal(m.unit, bv)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : barData.length > 0 ? (
+                  <div style={{ height: Math.max(220, barData.length * 34 + 40) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F7" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={64} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(val: number) => `${(val * 100).toFixed(0)}%`} />
-                        <ReferenceLine y={0} stroke="#D2D2D7" />
+                      <BarChart data={barData} layout="vertical" margin={{ top: 8, right: 36, left: 8, bottom: 8 }}>
+                        <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#F5F5F7" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(val: number) => `${(val * 100).toFixed(0)}%`} />
+                        <YAxis type="category" dataKey="label" width={76} tick={{ fontSize: 11 }} />
+                        <ReferenceLine x={0} stroke="#D2D2D7" />
                         <Tooltip formatter={(val: number) => `${(val * 100).toFixed(1)}%`} />
-                        <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
-                          {chartData.map((d, i) => <Cell key={i} fill={d.rate >= 0 ? GREEN : RED} />)}
+                        <Bar dataKey="rate" radius={[0, 3, 3, 0]}>
+                          {barData.map((d, i) => <Cell key={i} fill={d.rate >= 0 ? GREEN : RED} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 ) : <div className="h-[160px] flex items-center justify-center text-[12px] text-[#C7C7CC]">비교할 증감율이 없습니다 (이전 기간 데이터 없음).</div>}
-                <div className="text-[11px] text-[#86868B]">기준 <b>{periodLabel(curP)}</b> vs 비교 <b>{periodLabel(baseP)}</b> · 각 지표가 이전 기간 대비 얼마나 변했는지</div>
+
+                <div className="text-[11px] text-[#86868B]">기준 <b>{periodLabel(curP)}</b> vs 비교 <b>{periodLabel(baseP)}</b> · 각 지표가 이전 기간 대비 얼마나 변했는지{momView === 'cards' ? ' (스파크라인 = 최근 추이)' : ''}</div>
               </div>
 
               {/* 상세 비교표 (전 지표) */}
