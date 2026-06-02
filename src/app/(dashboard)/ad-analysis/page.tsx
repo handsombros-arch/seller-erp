@@ -1357,17 +1357,17 @@ export default function AdAnalysisPage() {
     if (tab === 'daily') {
       const dateHeader = gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월';
       // 화면 표와 동일하게: 보이는 컬럼만 · 드래그 순서대로 · 정렬 순서대로 출력
-      const colNum = (d: any, key: TableColKey): number => {
+      const colNum = (d: any, key: TableColKey): number | string => {
         switch (key) {
           case 'impressions': return d.impressions;
           case 'clicks': return d.clicks;
-          case 'ctr': return d.impressions > 0 ? +(d.clicks / d.impressions * 100).toFixed(2) : 0;
+          case 'ctr': return d.impressions > 0 ? (d.clicks / d.impressions * 100).toFixed(2) + '%' : '-';
           case 'cpc': return d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
           case 'cost': return d.cost;
           case 'orders14d': return d.orders14d;
           case 'revenue14d': return d.revenue14d;
-          case 'roas': return d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0;
-          case 'cvr': return d.clicks > 0 ? +(d.orders14d / d.clicks * 100).toFixed(2) : 0;
+          case 'roas': return d.cost > 0 ? (d.revenue14d / d.cost * 100).toFixed(1) + '%' : '-';
+          case 'cvr': return d.clicks > 0 ? (d.orders14d / d.clicks * 100).toFixed(2) + '%' : '-';
           case 'cpm': return d.impressions > 0 ? Math.round(d.cost / d.impressions * 1000) : 0;
           case 'cpa': return d.orders14d > 0 ? Math.round(d.cost / d.orders14d) : 0;
           case 'aov': return d.orders14d > 0 ? Math.round(d.revenue14d / d.orders14d) : 0;
@@ -1397,11 +1397,11 @@ export default function AdAnalysisPage() {
         .map((r) => ({
           날짜: r.date, 키워드: r.keyword,
           노출: r.impressions, 클릭: r.clicks, 광고비: r.cost,
-          CTR: r.impressions > 0 ? +(r.clicks / r.impressions * 100).toFixed(2) : 0,
+          CTR: r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) + '%' : '-',
           CPC: r.clicks > 0 ? Math.round(r.cost / r.clicks) : 0,
           '주문(14일)': r.orders14d, '매출(14일)': r.revenue14d,
-          CVR: r.clicks > 0 ? +(r.orders14d / r.clicks * 100).toFixed(2) : 0,
-          ROAS: r.cost > 0 ? +(r.revenue14d / r.cost * 100).toFixed(1) : 0,
+          CVR: r.clicks > 0 ? (r.orders14d / r.clicks * 100).toFixed(2) + '%' : '-',
+          ROAS: r.cost > 0 ? (r.revenue14d / r.cost * 100).toFixed(1) + '%' : '-',
         }));
       downloadXlsxMulti(
         [{ name: gran === 'daily' ? '일자' : gran === 'weekly' ? '주차' : '월', data: summary }, { name: '일자×키워드', data: dateKw }],
@@ -1410,9 +1410,9 @@ export default function AdAnalysisPage() {
     } else if (tab === 'keywords') {
       const summary = sortedKeywords.map((k) => ({
         키워드: k.keyword, 노출: k.impressions, 클릭: k.clicks, 광고비: k.cost,
-        CTR: +(k.ctr * 100).toFixed(2), CPC: k.cpc,
+        CTR: (k.ctr * 100).toFixed(2) + '%', CPC: k.cpc,
         '주문(14일)': k.orders14d, '매출(14일)': k.revenue14d,
-        CVR: +(k.cvr * 100).toFixed(2), 'ROAS(14일)': +(k.roas14d * 100).toFixed(1),
+        CVR: (k.cvr * 100).toFixed(2) + '%', 'ROAS(14일)': (k.roas14d * 100).toFixed(1) + '%',
       }));
       // 키워드×일자 long format (필터 적용된 키워드만 포함)
       const kwSet = new Set(sortedKeywords.map((k) => k.keyword));
@@ -1430,11 +1430,11 @@ export default function AdAnalysisPage() {
         .map((r) => ({
           키워드: r.keyword, 날짜: r.date,
           노출: r.impressions, 클릭: r.clicks, 광고비: r.cost,
-          CTR: r.impressions > 0 ? +(r.clicks / r.impressions * 100).toFixed(2) : 0,
+          CTR: r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) + '%' : '-',
           CPC: r.clicks > 0 ? Math.round(r.cost / r.clicks) : 0,
           '주문(14일)': r.orders14d, '매출(14일)': r.revenue14d,
-          CVR: r.clicks > 0 ? +(r.orders14d / r.clicks * 100).toFixed(2) : 0,
-          ROAS: r.cost > 0 ? +(r.revenue14d / r.cost * 100).toFixed(1) : 0,
+          CVR: r.clicks > 0 ? (r.orders14d / r.clicks * 100).toFixed(2) + '%' : '-',
+          ROAS: r.cost > 0 ? (r.revenue14d / r.cost * 100).toFixed(1) + '%' : '-',
         }));
       downloadXlsxMulti(
         [{ name: '키워드', data: summary }, { name: '키워드×일자', data: daily }],
@@ -1443,9 +1443,9 @@ export default function AdAnalysisPage() {
     } else if (tab === 'placements') {
       const rows = dateFiltered.placements.map((p) => ({
         노출지면: p.placement, 노출: p.impressions, 클릭: p.clicks,
-        CTR: p.impressions > 0 ? +(p.clicks / p.impressions * 100).toFixed(2) : 0,
+        CTR: p.impressions > 0 ? (p.clicks / p.impressions * 100).toFixed(2) + '%' : '-',
         광고비: p.cost, '주문(14일)': p.orders14d, '매출(14일)': p.revenue14d,
-        'ROAS(14일)': p.cost > 0 ? +(p.revenue14d / p.cost * 100).toFixed(1) : 0,
+        'ROAS(14일)': p.cost > 0 ? (p.revenue14d / p.cost * 100).toFixed(1) + '%' : '-',
       }));
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
