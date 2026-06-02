@@ -1200,29 +1200,39 @@ export default function AdAnalysisPage() {
     return { ...filtered, daily, totals, rows: filteredRows, keywords, placements, keywordDaily, placementDaily };
   }, [filtered, dateFrom, dateTo]);
 
-  // 기간별 추이용 일별 데이터 — 검색/비검색 지면 필터 적용 (전체면 dateFiltered.daily 그대로)
-  // 쿠팡 '광고 노출 지면'에 '검색' 포함 && '비검색' 미포함 = 검색지면.
-  const isSearchPlacement = useCallback((pl: string) => pl.includes('검색') && !pl.includes('비검색'), []);
+  // 기간별 추이용 일별 데이터 — 검색/비검색 필터 (전체면 dateFiltered.daily 그대로)
+  // 쿠팡: 키워드가 '-' = 비검색. keywordDaily 는 키워드≠'-'(검색)만 담으므로
+  //  · 검색  = keywordDaily 일자 합 (cogs/commission 포함, 정확)
+  //  · 비검색 = 전체 daily − 검색 (정확)
   const trendDaily = useMemo(() => {
     if (placeTypeFilter === 'all') return dateFiltered.daily;
-    const want = (pl: string) => placeTypeFilter === 'search' ? isSearchPlacement(pl) : !isSearchPlacement(pl);
-    // cogs/commission 은 지면별로 없으므로 일자 매출 비중으로 안분 (순이익 근사)
-    const dayTot = new Map<string, { rev: number; cogs: number; comm: number }>();
-    for (const d of dateFiltered.daily) dayTot.set(d.date, { rev: d.revenue14d, cogs: d.cogs14d, comm: d.commission14d });
-    const map = new Map<string, DailyRow>();
-    for (const pd of (dateFiltered.placementDaily ?? [])) {
-      if (!want(pd.placement)) continue;
-      if (!map.has(pd.date)) map.set(pd.date, { date: pd.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
-      const m = map.get(pd.date)!;
-      m.impressions += pd.impressions; m.clicks += pd.clicks; m.cost += pd.cost;
-      m.orders14d += pd.orders14d; m.revenue14d += pd.revenue14d; m.revenue14d_raw += pd.revenue14d;
+    const searchByDate = new Map<string, DailyRow>();
+    for (const kd of (dateFiltered.keywordDaily ?? [])) {
+      if (!searchByDate.has(kd.date)) searchByDate.set(kd.date, { date: kd.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
+      const m = searchByDate.get(kd.date)!;
+      m.impressions += kd.impressions; m.clicks += kd.clicks; m.cost += kd.cost;
+      m.orders14d += kd.orders14d; m.revenue14d += kd.revenue14d; m.revenue14d_raw += kd.revenue14d;
+      m.cogs14d += kd.cogs14d; m.commission14d += kd.commission14d;
     }
-    for (const [date, m] of map) {
-      const tot = dayTot.get(date);
-      if (tot && tot.rev > 0) { const share = m.revenue14d / tot.rev; m.cogs14d = tot.cogs * share; m.commission14d = tot.comm * share; }
+    if (placeTypeFilter === 'search') {
+      return [...searchByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     }
-    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }, [placeTypeFilter, dateFiltered.daily, dateFiltered.placementDaily, isSearchPlacement]);
+    // 비검색 = 전체 − 검색 (일자별). 월 고정비 안분분(daily.cogs 에 가산됨)은 비검색에 귀속됨.
+    return dateFiltered.daily.map((d) => {
+      const s = searchByDate.get(d.date);
+      return {
+        date: d.date,
+        impressions: d.impressions - (s?.impressions ?? 0),
+        clicks: d.clicks - (s?.clicks ?? 0),
+        cost: d.cost - (s?.cost ?? 0),
+        orders14d: d.orders14d - (s?.orders14d ?? 0),
+        revenue14d: d.revenue14d - (s?.revenue14d ?? 0),
+        revenue14d_raw: d.revenue14d_raw - (s?.revenue14d_raw ?? 0),
+        cogs14d: d.cogs14d - (s?.cogs14d ?? 0),
+        commission14d: d.commission14d - (s?.commission14d ?? 0),
+      } as DailyRow;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  }, [placeTypeFilter, dateFiltered.daily, dateFiltered.keywordDaily]);
 
   // 기간별 추이 합계 (지면 필터 반영 — '전체'면 dateFiltered.totals 와 동일)
   const trendTotal = useMemo(() => trendDaily.reduce((acc, d) => {
@@ -2003,7 +2013,8 @@ export default function AdAnalysisPage() {
                       </button>
                     ))}
                   </div>
-                  {placeTypeFilter !== 'all' && <span className="text-[11px] text-[#C7C7CC]">차트/표/엑셀에 적용 · 순이익은 일자 매출비중 안분(근사)</span>}
+                  {placeTypeFilter === 'search' && <span className="text-[11px] text-[#C7C7CC]">키워드 있는 행(검색) · 차트/표/엑셀 적용</span>}
+                  {placeTypeFilter === 'nonsearch' && <span className="text-[11px] text-[#C7C7CC]">키워드 &lsquo;-&rsquo; 행(비검색) · 월 고정비는 비검색에 귀속</span>}
                 </div>
 
                 {/* Metric filter chips: 클릭 → 막대 → 꺾은선 → 숨김 */}
