@@ -1250,18 +1250,27 @@ export default function AdAnalysisPage() {
   // Aggregated chart data
   const chartData = useMemo(() => {
     if (!trendDaily.length) return [];
-    // 키워드 수는 본래 검색 행(키워드≠'-')에서만 나옴.
-    //  · 전체/검색  → compactRows(dateFiltered.rows) 전달해 키워드 수 집계
-    //  · 비검색      → 키워드 없음이 정상 → 미전달(0)
-    const buckets = aggregateByGranularity(trendDaily, gran, placeTypeFilter === 'nonsearch' ? undefined : dateFiltered.rows);
+    const buckets = aggregateByGranularity(trendDaily, gran);
+    // 노출/유입 키워드 수 = 버킷별 '검색' 키워드(키워드≠'-') distinct 개수.
+    //  · 전체/검색 → keywordDaily 에서 직접 집계 (지면 필터와 무관하게 동일)
+    //  · 비검색    → 키워드 없음이 정상 → 0
+    const kwSet = new Map<string, Set<string>>();
+    const kwClickSet = new Map<string, Set<string>>();
+    if (placeTypeFilter !== 'nonsearch') {
+      for (const kd of (dateFiltered.keywordDaily ?? [])) {
+        const key = bucketKey(kd.date, gran);
+        if (kd.impressions > 0) { if (!kwSet.has(key)) kwSet.set(key, new Set()); kwSet.get(key)!.add(kd.keyword); }
+        if (kd.clicks > 0) { if (!kwClickSet.has(key)) kwClickSet.set(key, new Set()); kwClickSet.get(key)!.add(kd.keyword); }
+      }
+    }
     return buckets.map((b) => {
-      const row: any = { ...b };
+      const row: any = { ...b, keywordCount: kwSet.get(b.date)?.size ?? 0, clickKeywordCount: kwClickSet.get(b.date)?.size ?? 0 };
       for (const m of METRICS) {
         row[`__${m.key}`] = m.getValue(b);
       }
       return row;
     });
-  }, [trendDaily, dateFiltered.rows, gran, placeTypeFilter]);
+  }, [trendDaily, dateFiltered.keywordDaily, gran, placeTypeFilter]);
 
   // Sorted trend table data
   const sortedTrendData = useMemo(() => {
