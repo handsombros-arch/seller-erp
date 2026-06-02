@@ -370,7 +370,7 @@ export default function AdAnalysisPage() {
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
-  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products'>('daily');
+  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products' | 'momwow'>('daily');
   const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
   const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc' | 'keywordCount' | 'clickKeywordCount'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
@@ -418,6 +418,14 @@ export default function AdAnalysisPage() {
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [placeShowRoas, setPlaceShowRoas] = useState(false);
+  // MoM/WoW (증감) 분석 탭 상태
+  const [momDim, setMomDim] = useState<'product' | 'campaign' | 'keyword'>('product');
+  const [momMode, setMomMode] = useState<'monthly' | 'weekly'>('monthly');
+  const [momMetric, setMomMetric] = useState<string>('cost');
+  const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // '' = 최신 기간 자동
+  const [momSortKey, setMomSortKey] = useState<string>('__delta'); // '__delta' = 선택 메트릭 절대 증감순
+  const [momSortAsc, setMomSortAsc] = useState(false);
+  const [momSearch, setMomSearch] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -1383,6 +1391,7 @@ export default function AdAnalysisPage() {
     { key: 'keywords' as const, label: '키워드 분석' },
     { key: 'placements' as const, label: '지면별' },
     { key: 'products' as const, label: '상품별' },
+    { key: 'momwow' as const, label: '증감(MoM/WoW)' },
   ];
 
   const granOptions: { key: Granularity; label: string }[] = [
@@ -3152,6 +3161,242 @@ export default function AdAnalysisPage() {
                     </tr>
                   </tbody></table>
                 </div>
+              </div>
+            </div>
+            );
+          })()}
+
+          {/* ─── Tab: 증감 (MoM / WoW) ─────────────────────────────── */}
+          {tab === 'momwow' && (() => {
+            if (!data) return null;
+
+            const periodOf = (date: string) => momMode === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
+            const periodLabel = (p: string) => momMode === 'monthly' ? p : bucketLabel(p, 'weekly');
+
+            // 날짜 필터 무시 — 이전 기간 비교를 위해 캠페인/상품 필터만 적용된 전체 기간을 소스로.
+            const src = momDim === 'keyword'
+              ? (filtered.keywordDaily ?? []).map((r: any) => ({ date: r.date, dim: r.keyword, impressions: r.impressions, clicks: r.clicks, cost: r.cost, orders14d: r.orders14d, revenue14d: r.revenue14d, cogs14d: r.cogs14d ?? 0, commission14d: r.commission14d ?? 0 }))
+              : filtered.rows.map((r: any) => ({ date: r.date, dim: momDim === 'product' ? r.product : r.campaign, impressions: r.impressions, clicks: r.clicks, cost: r.cost, orders14d: r.orders14d, revenue14d: r.revenue14d, cogs14d: r.cogs14d ?? 0, commission14d: r.commission14d ?? 0 }));
+
+            const emptyAgg = () => ({ impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
+            const byPeriod = new Map<string, Map<string, any>>();
+            const periodSet = new Set<string>();
+            for (const r of src) {
+              if (!r.date) continue;
+              const p = periodOf(r.date);
+              periodSet.add(p);
+              if (!byPeriod.has(p)) byPeriod.set(p, new Map());
+              const dm = byPeriod.get(p)!;
+              if (!dm.has(r.dim)) dm.set(r.dim, emptyAgg());
+              const a = dm.get(r.dim)!;
+              a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost;
+              a.orders14d += r.orders14d; a.revenue14d += r.revenue14d;
+              a.cogs14d += r.cogs14d; a.commission14d += r.commission14d;
+            }
+            const periods = [...periodSet].sort();
+
+            if (periods.length === 0) {
+              return <div className="bg-white rounded-[18px] border border-black/[0.06] p-10 text-center text-[13px] text-[#86868B]">데이터가 없습니다.</div>;
+            }
+
+            const curP = (momCurPeriod && periods.includes(momCurPeriod)) ? momCurPeriod : periods[periods.length - 1];
+            const curIdx = periods.indexOf(curP);
+            const baseP = curIdx > 0 ? periods[curIdx - 1] : null;
+            const curMap: Map<string, any> = byPeriod.get(curP) ?? new Map();
+            const baseMap: Map<string, any> = baseP ? (byPeriod.get(baseP) ?? new Map()) : new Map();
+
+            const getVal = (a: any, key: string) => {
+              if (!a) return 0;
+              if (key === 'roas') return a.cost > 0 ? a.revenue14d / a.cost : 0;
+              if (key === 'cpc') return a.clicks > 0 ? a.cost / a.clicks : 0;
+              if (key === 'cvr') return a.clicks > 0 ? a.orders14d / a.clicks : 0;
+              if (key === 'ctr') return a.impressions > 0 ? a.clicks / a.impressions : 0;
+              if (key === 'aov') return a.orders14d > 0 ? a.revenue14d / a.orders14d : 0;
+              if (key === 'profit') return a.revenue14d - (a.cogs14d ?? 0) - (a.commission14d ?? 0) - a.cost;
+              return a[key] ?? 0;
+            };
+
+            const cols = [
+              { key: 'cost', label: '광고비', inverse: true, fmt: (v: number) => fmtW(Math.round(v)) },
+              { key: 'revenue14d', label: '매출', inverse: false, fmt: (v: number) => fmtW(Math.round(v)) },
+              { key: 'roas', label: 'ROAS', inverse: false, fmt: (v: number) => v > 0 ? `${(v * 100).toFixed(0)}%` : '-' },
+              { key: 'orders14d', label: '주문', inverse: false, fmt: (v: number) => formatNumber(Math.round(v)) },
+              { key: 'profit', label: '순이익', inverse: false, fmt: (v: number) => fmtW(Math.round(v)) },
+            ];
+            const metricOpts = [
+              { key: 'cost', label: '광고비' }, { key: 'revenue14d', label: '매출' },
+              { key: 'roas', label: 'ROAS' }, { key: 'orders14d', label: '주문' },
+              { key: 'profit', label: '순이익' }, { key: 'cpc', label: 'CPC' },
+              { key: 'impressions', label: '노출' }, { key: 'clicks', label: '클릭' },
+            ];
+            const inverseOf = (key: string) => key === 'cost' || key === 'cpc' || key === 'cpa' || key === 'cpm';
+
+            const deltaCell = (cur: number, base: number, inverse: boolean) => {
+              if (base === 0 && cur === 0) return { text: '–', cls: 'text-[#D2D2D7]' };
+              if (base === 0) return { text: '신규', cls: 'text-[#0071E3] font-semibold' };
+              const d = (cur - base) / base;
+              if (Math.abs(d) < 0.0001) return { text: '0%', cls: 'text-[#86868B]' };
+              const good = (d > 0) !== inverse;
+              return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(0)}%`, cls: good ? 'text-green-600 font-medium' : 'text-red-500 font-medium' };
+            };
+
+            const allDims = [...new Set([...curMap.keys(), ...baseMap.keys()])];
+            const rows = allDims.map((dim) => ({ dim, cur: curMap.get(dim) ?? null, base: baseMap.get(dim) ?? null }));
+
+            let viewRows = momSearch ? rows.filter((r) => r.dim.toLowerCase().includes(momSearch.toLowerCase())) : rows;
+            viewRows = [...viewRows].sort((a, b) => {
+              if (momSortKey === 'dim') return momSortAsc ? a.dim.localeCompare(b.dim) : b.dim.localeCompare(a.dim);
+              if (momSortKey === '__delta') {
+                const da = Math.abs(getVal(a.cur, momMetric) - getVal(a.base, momMetric));
+                const db = Math.abs(getVal(b.cur, momMetric) - getVal(b.base, momMetric));
+                return momSortAsc ? da - db : db - da;
+              }
+              const va = getVal(a.cur, momSortKey), vb = getVal(b.cur, momSortKey);
+              return momSortAsc ? va - vb : vb - va;
+            });
+
+            const sumAgg = (m: Map<string, any>) => [...m.values()].reduce((acc, a) => { acc.impressions += a.impressions; acc.clicks += a.clicks; acc.cost += a.cost; acc.orders14d += a.orders14d; acc.revenue14d += a.revenue14d; acc.cogs14d += a.cogs14d; acc.commission14d += a.commission14d; return acc; }, emptyAgg());
+            const curTot = sumAgg(curMap), baseTot = sumAgg(baseMap);
+
+            const moverData = rows
+              .map((r) => ({ dim: r.dim, delta: getVal(r.cur, momMetric) - getVal(r.base, momMetric) }))
+              .filter((r) => r.delta !== 0)
+              .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+              .slice(0, 12)
+              .map((r) => {
+                const good = (r.delta > 0) !== inverseOf(momMetric);
+                return { label: r.dim.length > 12 ? r.dim.slice(0, 12) + '…' : r.dim, fullDim: r.dim, good: good ? r.delta : 0, bad: good ? 0 : r.delta };
+              });
+
+            const momSort = (key: string) => { if (momSortKey === key) setMomSortAsc(!momSortAsc); else { setMomSortKey(key); setMomSortAsc(false); } };
+            const si = (key: string) => momSortKey === key ? (momSortAsc ? ' ↑' : ' ↓') : '';
+            const dimLabel = momDim === 'product' ? '상품' : momDim === 'campaign' ? '캠페인' : '키워드';
+            const focusMetricLabel = metricOpts.find((m) => m.key === momMetric)?.label ?? momMetric;
+            const fmtMoney = (v: number) => fmtW(Math.round(v));
+
+            return (
+            <div className="space-y-4">
+              {/* 컨트롤 */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setMomDim(k)} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momDim === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                  ))}
+                </div>
+                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  {([['monthly', '전월대비 (MoM)'], ['weekly', '전주대비 (WoW)']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => { setMomMode(k); setMomCurPeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momMode === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <span className="text-[#86868B]">기준</span>
+                  <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
+                    {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
+                  </select>
+                  <span className="text-[#D2D2D7]">vs</span>
+                  <span className="font-medium text-[#6E6E73]">{baseP ? periodLabel(baseP) : '이전 없음'}</span>
+                </div>
+                <span className="text-[11px] text-[#C7C7CC] ml-auto">※ 상단 기간 필터 무시 — 캠페인/상품 필터만 적용</span>
+              </div>
+
+              {/* 요약 카드 */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+                {cols.map((c) => {
+                  const cv = getVal(curTot, c.key), bv = getVal(baseTot, c.key);
+                  const dc = deltaCell(cv, bv, c.inverse);
+                  return (
+                    <div key={c.key} className="bg-white rounded-[14px] border border-black/[0.06] p-3.5">
+                      <div className="text-[11px] text-[#86868B] mb-1">{c.label}</div>
+                      <div className="text-[15px] font-bold text-[#1D1D1F]">{c.fmt(cv)}</div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-[#C7C7CC]">전: {c.fmt(bv)}</span>
+                        <span className={`text-[11px] ${dc.cls}`}>{dc.text}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 증감 차트 */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">{dimLabel}별 {focusMetricLabel} 증감 (상위 12)</h3>
+                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                    {metricOpts.map((m) => (
+                      <button key={m.key} onClick={() => setMomMetric(m.key)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${momMetric === m.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{m.label}</button>
+                    ))}
+                  </div>
+                </div>
+                {moverData.length > 0 ? (
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={moverData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F7" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => momMetric === 'roas' ? `${(v * 100).toFixed(0)}%p` : Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v))} />
+                        <Tooltip formatter={(v: number, name: string) => [momMetric === 'roas' ? `${(v * 100).toFixed(0)}%p` : fmtMoney(v), name]} labelFormatter={(label, p: any) => p?.[0]?.payload?.fullDim ?? label} />
+                        <Legend />
+                        <ReferenceLine y={0} stroke="#D2D2D7" />
+                        <Bar dataKey="good" name="개선" fill="#10B981" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="bad" name="악화" fill="#F43F5E" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <div className="h-[120px] flex items-center justify-center text-[12px] text-[#C7C7CC]">변화 데이터가 없습니다.</div>}
+              </div>
+
+              {/* 테이블 */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-x-auto">
+                <div className="flex flex-wrap items-center gap-3 px-4 pt-3 pb-2">
+                  <div className="relative flex-1 min-w-[140px] max-w-[260px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D2D2D7]" />
+                    <input value={momSearch} onChange={(e) => setMomSearch(e.target.value)} placeholder={`${dimLabel} 검색`} className="w-full h-8 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]" />
+                  </div>
+                  <button onClick={() => momSort('__delta')} className={`px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${momSortKey === '__delta' ? 'bg-[#0071E3] text-white border-transparent' : 'border-black/[0.08] text-[#6E6E73]'}`}>{focusMetricLabel} 변화량순</button>
+                  <span className="text-[11px] text-[#86868B] ml-auto">{viewRows.length}개 · 현재 {periodLabel(curP)} vs {baseP ? periodLabel(baseP) : '–'}</span>
+                </div>
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="border-b border-black/[0.06] bg-[#FAFBFC]">
+                      <th onClick={() => momSort('dim')} className="text-left px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] whitespace-nowrap select-none">{dimLabel}{si('dim')}</th>
+                      {cols.map((c) => (
+                        <th key={c.key} onClick={() => momSort(c.key)} className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] whitespace-nowrap select-none">{c.label}{si(c.key)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewRows.map((r) => (
+                      <tr key={r.dim} className="border-b border-black/[0.06] hover:bg-[#FAFBFC]">
+                        <td className="px-3 py-2.5 font-medium text-[#1D1D1F] max-w-[260px] truncate" title={r.dim}>{r.dim}</td>
+                        {cols.map((c) => {
+                          const cv = getVal(r.cur, c.key), bv = getVal(r.base, c.key);
+                          const dc = deltaCell(cv, bv, c.inverse);
+                          return (
+                            <td key={c.key} className="px-3 py-2 text-right whitespace-nowrap">
+                              <div className="text-[#1D1D1F] font-medium" title={`이전: ${c.fmt(bv)}`}>{c.fmt(cv)}</div>
+                              <div className={`text-[10px] ${dc.cls}`}>{dc.text}</div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="sticky bottom-0">
+                    <tr className="bg-[#F8FAFC] border-t-2 border-black/[0.08] font-bold">
+                      <td className="px-3 py-2.5 text-[#1D1D1F]">합계</td>
+                      {cols.map((c) => {
+                        const cv = getVal(curTot, c.key), bv = getVal(baseTot, c.key);
+                        const dc = deltaCell(cv, bv, c.inverse);
+                        return (
+                          <td key={c.key} className="px-3 py-2.5 text-right whitespace-nowrap">
+                            <div className="text-[#1D1D1F]">{c.fmt(cv)}</div>
+                            <div className={`text-[10px] ${dc.cls}`}>{dc.text}</div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
             );
