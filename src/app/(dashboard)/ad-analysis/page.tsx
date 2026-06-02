@@ -1370,6 +1370,12 @@ export default function AdAnalysisPage() {
   }, []);
 
   const handleDownload = useCallback(() => {
+    // 합계 행 헬퍼 — 비율(CTR/CVR/ROAS/CPC)은 단순 합이 아니라 합산 구성요소로 재계산
+    const sumOf = (arr: any[]) => arr.reduce((a, r) => { a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost; a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; return a; }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+    const ctrStr = (x: any) => x.impressions > 0 ? (x.clicks / x.impressions * 100).toFixed(2) + '%' : '-';
+    const cvrStr = (x: any) => x.clicks > 0 ? (x.orders14d / x.clicks * 100).toFixed(2) + '%' : '-';
+    const roasStr = (x: any) => x.cost > 0 ? (x.revenue14d / x.cost * 100).toFixed(1) + '%' : '-';
+    const cpcVal = (x: any) => x.clicks > 0 ? Math.round(x.cost / x.clicks) : 0;
     if (tab === 'daily') {
       const dateHeader = gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월';
       // 화면 표와 동일하게: 보이는 컬럼만 · 드래그 순서대로 · 정렬 순서대로 출력
@@ -1399,6 +1405,10 @@ export default function AdAnalysisPage() {
         for (const col of visibleCols) row[col.label] = colNum(d, col.key);
         return row;
       });
+      // 합계 행 (비율 컬럼은 합산값으로 재계산, 키워드수는 합산 불가라 '-')
+      const totalRow: Record<string, any> = { [dateHeader]: '합계' };
+      for (const col of visibleCols) totalRow[col.label] = (col.key === 'keywordCount' || col.key === 'clickKeywordCount') ? '-' : colNum(trendTotal, col.key);
+      summary.push(totalRow);
       // 일자×키워드 long format: 날짜 오름차순 → 광고비 내림차순
       const byDateKw = new Map<string, { date: string; keyword: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
       for (const d of (dateFiltered.keywordDaily ?? [])) {
@@ -1419,6 +1429,8 @@ export default function AdAnalysisPage() {
           CVR: r.clicks > 0 ? (r.orders14d / r.clicks * 100).toFixed(2) + '%' : '-',
           ROAS: r.cost > 0 ? (r.revenue14d / r.cost * 100).toFixed(1) + '%' : '-',
         }));
+      const dkTot = sumOf([...byDateKw.values()]);
+      dateKw.push({ 날짜: '합계', 키워드: '', 노출: dkTot.impressions, 클릭: dkTot.clicks, 광고비: dkTot.cost, CTR: ctrStr(dkTot), CPC: cpcVal(dkTot), '주문(14일)': dkTot.orders14d, '매출(14일)': dkTot.revenue14d, CVR: cvrStr(dkTot), ROAS: roasStr(dkTot) });
       downloadXlsxMulti(
         [{ name: gran === 'daily' ? '일자' : gran === 'weekly' ? '주차' : '월', data: summary }, { name: '일자×키워드', data: dateKw }],
         `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`,
@@ -1430,6 +1442,8 @@ export default function AdAnalysisPage() {
         '주문(14일)': k.orders14d, '매출(14일)': k.revenue14d,
         CVR: (k.cvr * 100).toFixed(2) + '%', 'ROAS(14일)': (k.roas14d * 100).toFixed(1) + '%',
       }));
+      const kTot = sumOf(sortedKeywords);
+      summary.push({ 키워드: '합계', 노출: kTot.impressions, 클릭: kTot.clicks, 광고비: kTot.cost, CTR: ctrStr(kTot), CPC: cpcVal(kTot), '주문(14일)': kTot.orders14d, '매출(14일)': kTot.revenue14d, CVR: cvrStr(kTot), 'ROAS(14일)': roasStr(kTot) });
       // 키워드×일자 long format (필터 적용된 키워드만 포함)
       const kwSet = new Set(sortedKeywords.map((k) => k.keyword));
       const byKwDate = new Map<string, { keyword: string; date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
@@ -1452,6 +1466,8 @@ export default function AdAnalysisPage() {
           CVR: r.clicks > 0 ? (r.orders14d / r.clicks * 100).toFixed(2) + '%' : '-',
           ROAS: r.cost > 0 ? (r.revenue14d / r.cost * 100).toFixed(1) + '%' : '-',
         }));
+      const kdTot = sumOf([...byKwDate.values()]);
+      daily.push({ 키워드: '합계', 날짜: '', 노출: kdTot.impressions, 클릭: kdTot.clicks, 광고비: kdTot.cost, CTR: ctrStr(kdTot), CPC: cpcVal(kdTot), '주문(14일)': kdTot.orders14d, '매출(14일)': kdTot.revenue14d, CVR: cvrStr(kdTot), ROAS: roasStr(kdTot) });
       downloadXlsxMulti(
         [{ name: '키워드', data: summary }, { name: '키워드×일자', data: daily }],
         `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`,
@@ -1463,9 +1479,11 @@ export default function AdAnalysisPage() {
         광고비: p.cost, '주문(14일)': p.orders14d, '매출(14일)': p.revenue14d,
         'ROAS(14일)': p.cost > 0 ? (p.revenue14d / p.cost * 100).toFixed(1) + '%' : '-',
       }));
+      const pTot = sumOf(dateFiltered.placements);
+      rows.push({ 노출지면: '합계', 노출: pTot.impressions, 클릭: pTot.clicks, CTR: ctrStr(pTot), 광고비: pTot.cost, '주문(14일)': pTot.orders14d, '매출(14일)': pTot.revenue14d, 'ROAS(14일)': roasStr(pTot) });
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
-  }, [tab, gran, sortedTrendData, visibleCols, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
+  }, [tab, gran, sortedTrendData, trendTotal, visibleCols, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
