@@ -1245,8 +1245,10 @@ export default function AdAnalysisPage() {
   // Aggregated chart data
   const chartData = useMemo(() => {
     if (!trendDaily.length) return [];
-    // 지면 필터 시 keywordCount 는 의미 없으므로 compactRows 미전달
-    const buckets = aggregateByGranularity(trendDaily, gran, placeTypeFilter === 'all' ? dateFiltered.rows : undefined);
+    // 키워드 수는 본래 검색 행(키워드≠'-')에서만 나옴.
+    //  · 전체/검색  → compactRows(dateFiltered.rows) 전달해 키워드 수 집계
+    //  · 비검색      → 키워드 없음이 정상 → 미전달(0)
+    const buckets = aggregateByGranularity(trendDaily, gran, placeTypeFilter === 'nonsearch' ? undefined : dateFiltered.rows);
     return buckets.map((b) => {
       const row: any = { ...b };
       for (const m of METRICS) {
