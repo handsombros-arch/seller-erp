@@ -1369,6 +1369,89 @@ export default function AdAnalysisPage() {
     });
   }, []);
 
+  // 키워드 분석 → 그룹 접기/펼치기 피벗 엑셀 (ExcelJS 아웃라인 + 그룹키 셀 강조)
+  const downloadKeywordPivot = useCallback(async () => {
+    const srcRows = dateFiltered.keywordDaily ?? [];
+    if (!srcRows.length) return;
+    const ExcelJS = (await import('exceljs')).default;
+    const byDate = pivotAxis === 'date-kw'; // true: 일자 그룹 / 키워드 자식, false: 키워드 그룹 / 일자 자식
+
+    // (키워드,일자) 합산 — 전체 키워드 포함 (검색/표시 제한 무시)
+    const agg = new Map<string, { keyword: string; date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
+    for (const d of srcRows) {
+      const k = `${d.keyword}||${d.date}`;
+      if (!agg.has(k)) agg.set(k, { keyword: d.keyword, date: d.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+      const x = agg.get(k)!;
+      x.impressions += d.impressions; x.clicks += d.clicks; x.cost += d.cost; x.orders14d += d.orders14d; x.revenue14d += d.revenue14d;
+    }
+    const cells = [...agg.values()];
+    const gkey = (c: any) => byDate ? c.date : c.keyword;
+    const ckey = (c: any) => byDate ? c.keyword : c.date;
+    const sumCells = (arr: any[]) => arr.reduce((a, r) => { a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost; a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; return a; }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
+    const groups = new Map<string, any[]>();
+    for (const c of cells) { const g = gkey(c); if (!groups.has(g)) groups.set(g, []); groups.get(g)!.push(c); }
+    const groupArr = [...groups.entries()];
+    if (byDate) groupArr.sort((a, b) => a[0].localeCompare(b[0]));
+    else groupArr.sort((a, b) => sumCells(b[1]).cost - sumCells(a[1]).cost);
+
+    const metrics = (x: any) => ({
+      imp: x.impressions, clk: x.clicks, cost: x.cost,
+      ctr: x.impressions > 0 ? x.clicks / x.impressions : null,
+      cpc: x.clicks > 0 ? Math.round(x.cost / x.clicks) : null,
+      ord: x.orders14d, rev: x.revenue14d,
+      cvr: x.clicks > 0 ? x.orders14d / x.clicks : null,
+      roas: x.cost > 0 ? x.revenue14d / x.cost : null,
+    });
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(byDate ? '일자별 키워드' : '키워드별 일자', { views: [{ state: 'frozen', ySplit: 1 }] });
+    try { (ws.properties as any).outlineProperties = { summaryBelow: false, summaryRight: false }; } catch {}
+    ws.columns = [
+      { header: byDate ? '일자' : '키워드', key: 'g1', width: 30 },
+      { header: byDate ? '키워드' : '일자', key: 'g2', width: 26 },
+      { header: '노출', key: 'imp', width: 11 },
+      { header: '클릭', key: 'clk', width: 10 },
+      { header: '광고비', key: 'cost', width: 13 },
+      { header: 'CTR', key: 'ctr', width: 9 },
+      { header: 'CPC', key: 'cpc', width: 10 },
+      { header: '주문(14일)', key: 'ord', width: 11 },
+      { header: '매출(14일)', key: 'rev', width: 14 },
+      { header: 'CVR', key: 'cvr', width: 9 },
+      { header: 'ROAS', key: 'roas', width: 10 },
+    ];
+    for (const k of ['imp', 'clk', 'cost', 'cpc', 'ord', 'rev']) ws.getColumn(k).numFmt = '#,##0';
+    ws.getColumn('ctr').numFmt = '0.00%'; ws.getColumn('cvr').numFmt = '0.00%'; ws.getColumn('roas').numFmt = '0.0%';
+
+    const hr = ws.getRow(1);
+    hr.height = 22;
+    hr.eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } }; c.alignment = { vertical: 'middle', horizontal: 'center' }; });
+
+    for (const [gname, arr] of groupArr) {
+      const hRow = ws.addRow({ g1: gname, g2: '', ...metrics(sumCells(arr)) });
+      hRow.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4D6' } }; c.font = { bold: true, color: { argb: 'FF7A5C00' } }; });
+      const g1c = hRow.getCell('g1'); // 그룹키 셀 강조
+      g1c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF59E0B' } };
+      g1c.font = { bold: true, color: { argb: 'FF1F2937' } };
+      const children = [...arr].sort((a, b) => byDate ? b.cost - a.cost : a.date.localeCompare(b.date));
+      for (const c of children) {
+        const r = ws.addRow({ g1: '', g2: ckey(c), ...metrics(c) });
+        r.outlineLevel = 1;
+        r.getCell('g2').font = { color: { argb: 'FF4B5563' } };
+      }
+    }
+    const gr = ws.addRow({ g1: '총합계', g2: '', ...metrics(sumCells(cells)) });
+    gr.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `광고분석_${byDate ? '일자별키워드' : '키워드별일자'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }, [dateFiltered.keywordDaily, pivotAxis]);
+
   const handleDownload = useCallback(() => {
     // 합계 행 헬퍼 — 비율(CTR/CVR/ROAS/CPC)은 단순 합이 아니라 합산 구성요소로 재계산
     const sumOf = (arr: any[]) => arr.reduce((a, r) => { a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost; a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; return a; }, { impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
@@ -1436,42 +1519,8 @@ export default function AdAnalysisPage() {
         `광고분석_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );
     } else if (tab === 'keywords') {
-      const summary = sortedKeywords.map((k) => ({
-        키워드: k.keyword, 노출: k.impressions, 클릭: k.clicks, 광고비: k.cost,
-        CTR: (k.ctr * 100).toFixed(2) + '%', CPC: k.cpc,
-        '주문(14일)': k.orders14d, '매출(14일)': k.revenue14d,
-        CVR: (k.cvr * 100).toFixed(2) + '%', 'ROAS(14일)': (k.roas14d * 100).toFixed(1) + '%',
-      }));
-      const kTot = sumOf(sortedKeywords);
-      summary.push({ 키워드: '합계', 노출: kTot.impressions, 클릭: kTot.clicks, 광고비: kTot.cost, CTR: ctrStr(kTot), CPC: cpcVal(kTot), '주문(14일)': kTot.orders14d, '매출(14일)': kTot.revenue14d, CVR: cvrStr(kTot), 'ROAS(14일)': roasStr(kTot) });
-      // 키워드×일자 long format (필터 적용된 키워드만 포함)
-      const kwSet = new Set(sortedKeywords.map((k) => k.keyword));
-      const byKwDate = new Map<string, { keyword: string; date: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
-      for (const d of (dateFiltered.keywordDaily ?? [])) {
-        if (!kwSet.has(d.keyword)) continue;
-        const key = `${d.keyword}||${d.date}`;
-        if (!byKwDate.has(key)) byKwDate.set(key, { keyword: d.keyword, date: d.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0 });
-        const x = byKwDate.get(key)!;
-        x.impressions += d.impressions; x.clicks += d.clicks; x.cost += d.cost;
-        x.orders14d += d.orders14d; x.revenue14d += d.revenue14d;
-      }
-      const daily = Array.from(byKwDate.values())
-        .sort((a, b) => a.keyword === b.keyword ? a.date.localeCompare(b.date) : a.keyword.localeCompare(b.keyword))
-        .map((r) => ({
-          키워드: r.keyword, 날짜: r.date,
-          노출: r.impressions, 클릭: r.clicks, 광고비: r.cost,
-          CTR: r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) + '%' : '-',
-          CPC: r.clicks > 0 ? Math.round(r.cost / r.clicks) : 0,
-          '주문(14일)': r.orders14d, '매출(14일)': r.revenue14d,
-          CVR: r.clicks > 0 ? (r.orders14d / r.clicks * 100).toFixed(2) + '%' : '-',
-          ROAS: r.cost > 0 ? (r.revenue14d / r.cost * 100).toFixed(1) + '%' : '-',
-        }));
-      const kdTot = sumOf([...byKwDate.values()]);
-      daily.push({ 키워드: '합계', 날짜: '', 노출: kdTot.impressions, 클릭: kdTot.clicks, 광고비: kdTot.cost, CTR: ctrStr(kdTot), CPC: cpcVal(kdTot), '주문(14일)': kdTot.orders14d, '매출(14일)': kdTot.revenue14d, CVR: cvrStr(kdTot), ROAS: roasStr(kdTot) });
-      downloadXlsxMulti(
-        [{ name: '키워드', data: summary }, { name: '키워드×일자', data: daily }],
-        `광고분석_키워드_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      );
+      // 그룹 접기/펼치기 피벗(ExcelJS). pivotAxis 에 따라 그룹키/강조 변경. 전체 키워드 포함.
+      downloadKeywordPivot();
     } else if (tab === 'placements') {
       const rows = dateFiltered.placements.map((p) => ({
         노출지면: p.placement, 노출: p.impressions, 클릭: p.clicks,
@@ -1483,7 +1532,7 @@ export default function AdAnalysisPage() {
       rows.push({ 노출지면: '합계', 노출: pTot.impressions, 클릭: pTot.clicks, CTR: ctrStr(pTot), 광고비: pTot.cost, '주문(14일)': pTot.orders14d, '매출(14일)': pTot.revenue14d, 'ROAS(14일)': roasStr(pTot) });
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
-  }, [tab, gran, sortedTrendData, trendTotal, visibleCols, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
+  }, [tab, gran, sortedTrendData, trendTotal, visibleCols, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti, downloadKeywordPivot]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -2496,7 +2545,7 @@ export default function AdAnalysisPage() {
                   구매 키워드만
                 </button>
                 <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-[#0071E3] text-[#0071E3] bg-white hover:bg-[#EBF1FE] transition-colors">
-                  <Download className="h-3.5 w-3.5" /> xlsx · 키워드 + 키워드×일자
+                  <Download className="h-3.5 w-3.5" /> xlsx · {pivotAxis === 'kw-date' ? '키워드별 일자' : '일자별 키워드'} 피벗(접기/펼치기)
                 </button>
                 <span className="text-[12px] text-[#86868B]">
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
