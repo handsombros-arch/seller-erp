@@ -375,13 +375,23 @@ export default function AdAnalysisPage() {
   const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc' | 'keywordCount' | 'clickKeywordCount'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
   const [gran, setGran] = useState<Granularity>('daily');
+  const [placeTypeFilter, setPlaceTypeFilter] = useState<'all' | 'search' | 'nonsearch'>('all'); // 기간별 추이: 쿠팡 검색/비검색 지면
   const [activeMetrics, setActiveMetrics] = useState<MetricKey[]>(DEFAULT_METRICS);
   const [filterCampaign, setFilterCampaign] = useState('all');
   const [filterProduct, setFilterProduct] = useState('all');
   const [activeKpis, setActiveKpis] = useState<KpiKey[]>(loadKpis);
   const [kpiEditOpen, setKpiEditOpen] = useState(false);
-  const [trendSortKey, setTrendSortKey] = useState<string>('date');
-  const [trendSortAsc, setTrendSortAsc] = useState(true);
+  const TREND_SORT_STORAGE = 'lv-erp-ad-trend-sort';
+  const [trendSortKey, setTrendSortKey] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'date';
+    try { const s = localStorage.getItem(TREND_SORT_STORAGE); if (s) return JSON.parse(s).key ?? 'date'; } catch {}
+    return 'date';
+  });
+  const [trendSortAsc, setTrendSortAsc] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try { const s = localStorage.getItem(TREND_SORT_STORAGE); if (s) return !!JSON.parse(s).asc; } catch {}
+    return true;
+  });
   const [tableColEdit, setTableColEdit] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('cost');
   const [sortAsc, setSortAsc] = useState(false);
@@ -1190,10 +1200,43 @@ export default function AdAnalysisPage() {
     return { ...filtered, daily, totals, rows: filteredRows, keywords, placements, keywordDaily, placementDaily };
   }, [filtered, dateFrom, dateTo]);
 
+  // 기간별 추이용 일별 데이터 — 검색/비검색 지면 필터 적용 (전체면 dateFiltered.daily 그대로)
+  // 쿠팡 '광고 노출 지면'에 '검색' 포함 && '비검색' 미포함 = 검색지면.
+  const isSearchPlacement = useCallback((pl: string) => pl.includes('검색') && !pl.includes('비검색'), []);
+  const trendDaily = useMemo(() => {
+    if (placeTypeFilter === 'all') return dateFiltered.daily;
+    const want = (pl: string) => placeTypeFilter === 'search' ? isSearchPlacement(pl) : !isSearchPlacement(pl);
+    // cogs/commission 은 지면별로 없으므로 일자 매출 비중으로 안분 (순이익 근사)
+    const dayTot = new Map<string, { rev: number; cogs: number; comm: number }>();
+    for (const d of dateFiltered.daily) dayTot.set(d.date, { rev: d.revenue14d, cogs: d.cogs14d, comm: d.commission14d });
+    const map = new Map<string, DailyRow>();
+    for (const pd of (dateFiltered.placementDaily ?? [])) {
+      if (!want(pd.placement)) continue;
+      if (!map.has(pd.date)) map.set(pd.date, { date: pd.date, impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 });
+      const m = map.get(pd.date)!;
+      m.impressions += pd.impressions; m.clicks += pd.clicks; m.cost += pd.cost;
+      m.orders14d += pd.orders14d; m.revenue14d += pd.revenue14d; m.revenue14d_raw += pd.revenue14d;
+    }
+    for (const [date, m] of map) {
+      const tot = dayTot.get(date);
+      if (tot && tot.rev > 0) { const share = m.revenue14d / tot.rev; m.cogs14d = tot.cogs * share; m.commission14d = tot.comm * share; }
+    }
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }, [placeTypeFilter, dateFiltered.daily, dateFiltered.placementDaily, isSearchPlacement]);
+
+  // 기간별 추이 합계 (지면 필터 반영 — '전체'면 dateFiltered.totals 와 동일)
+  const trendTotal = useMemo(() => trendDaily.reduce((acc, d) => {
+    acc.impressions += d.impressions; acc.clicks += d.clicks; acc.cost += d.cost;
+    acc.orders14d += d.orders14d; acc.revenue14d += d.revenue14d; acc.revenue14d_raw += d.revenue14d_raw;
+    acc.cogs14d += d.cogs14d; acc.commission14d += d.commission14d;
+    return acc;
+  }, { date: '', impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, revenue14d_raw: 0, cogs14d: 0, commission14d: 0 } as DailyRow), [trendDaily]);
+
   // Aggregated chart data
   const chartData = useMemo(() => {
-    if (!dateFiltered.daily.length) return [];
-    const buckets = aggregateByGranularity(dateFiltered.daily, gran, dateFiltered.rows);
+    if (!trendDaily.length) return [];
+    // 지면 필터 시 keywordCount 는 의미 없으므로 compactRows 미전달
+    const buckets = aggregateByGranularity(trendDaily, gran, placeTypeFilter === 'all' ? dateFiltered.rows : undefined);
     return buckets.map((b) => {
       const row: any = { ...b };
       for (const m of METRICS) {
@@ -1201,7 +1244,7 @@ export default function AdAnalysisPage() {
       }
       return row;
     });
-  }, [dateFiltered.daily, dateFiltered.rows, gran]);
+  }, [trendDaily, dateFiltered.rows, gran, placeTypeFilter]);
 
   // Sorted trend table data
   const sortedTrendData = useMemo(() => {
@@ -1220,8 +1263,9 @@ export default function AdAnalysisPage() {
   }, [chartData, trendSortKey, trendSortAsc]);
 
   const toggleTrendSort = (key: string) => {
-    if (trendSortKey === key) setTrendSortAsc(!trendSortAsc);
-    else { setTrendSortKey(key); setTrendSortAsc(key === 'date'); }
+    const nextAsc = trendSortKey === key ? !trendSortAsc : (key === 'date');
+    setTrendSortKey(key); setTrendSortAsc(nextAsc);
+    try { localStorage.setItem(TREND_SORT_STORAGE, JSON.stringify({ key, asc: nextAsc })); } catch {}
   };
 
   const TrendSortIcon = ({ k }: { k: string }) => (
@@ -1301,17 +1345,34 @@ export default function AdAnalysisPage() {
 
   const handleDownload = useCallback(() => {
     if (tab === 'daily') {
-      const summary = chartData.map((d: any) => ({
-        [gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월']: d.label,
-        노출: d.impressions, 클릭: d.clicks,
-        CTR: d.impressions > 0 ? +(d.clicks / d.impressions * 100).toFixed(2) : 0,
-        CPC: d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0,
-        CPM: d.impressions > 0 ? Math.round(d.cost / d.impressions * 1000) : 0,
-        광고비: d.cost, '주문(14일)': d.orders14d, '매출(14일)': d.revenue14d,
-        'ROAS(14일)': d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0,
-        ...(d.keywordCount !== undefined ? { '노출 키워드수': d.keywordCount } : {}),
-        ...(d.clickKeywordCount !== undefined ? { '유입 키워드수': d.clickKeywordCount } : {}),
-      }));
+      const dateHeader = gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월';
+      // 화면 표와 동일하게: 보이는 컬럼만 · 드래그 순서대로 · 정렬 순서대로 출력
+      const colNum = (d: any, key: TableColKey): number => {
+        switch (key) {
+          case 'impressions': return d.impressions;
+          case 'clicks': return d.clicks;
+          case 'ctr': return d.impressions > 0 ? +(d.clicks / d.impressions * 100).toFixed(2) : 0;
+          case 'cpc': return d.clicks > 0 ? Math.round(d.cost / d.clicks) : 0;
+          case 'cost': return d.cost;
+          case 'orders14d': return d.orders14d;
+          case 'revenue14d': return d.revenue14d;
+          case 'roas': return d.cost > 0 ? +(d.revenue14d / d.cost * 100).toFixed(1) : 0;
+          case 'cvr': return d.clicks > 0 ? +(d.orders14d / d.clicks * 100).toFixed(2) : 0;
+          case 'cpm': return d.impressions > 0 ? Math.round(d.cost / d.impressions * 1000) : 0;
+          case 'cpa': return d.orders14d > 0 ? Math.round(d.cost / d.orders14d) : 0;
+          case 'aov': return d.orders14d > 0 ? Math.round(d.revenue14d / d.orders14d) : 0;
+          case 'adRatio': return d.revenue14d > 0 ? +(d.cost / d.revenue14d * 100).toFixed(2) : 0;
+          case 'profit': return Math.round(d.revenue14d - (d.cogs14d ?? 0) - (d.commission14d ?? 0) - d.cost);
+          case 'keywordCount': return d.keywordCount ?? 0;
+          case 'clickKeywordCount': return d.clickKeywordCount ?? 0;
+          default: return 0;
+        }
+      };
+      const summary = sortedTrendData.map((d: any) => {
+        const row: Record<string, any> = { [dateHeader]: d.label };
+        for (const col of visibleCols) row[col.label] = colNum(d, col.key);
+        return row;
+      });
       // 일자×키워드 long format: 날짜 오름차순 → 광고비 내림차순
       const byDateKw = new Map<string, { date: string; keyword: string; impressions: number; clicks: number; cost: number; orders14d: number; revenue14d: number }>();
       for (const d of (dateFiltered.keywordDaily ?? [])) {
@@ -1378,7 +1439,7 @@ export default function AdAnalysisPage() {
       }));
       downloadXlsx(rows, `광고분석_노출지면_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
-  }, [tab, gran, chartData, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
+  }, [tab, gran, sortedTrendData, visibleCols, sortedKeywords, dateFiltered.placements, dateFiltered.keywordDaily, downloadXlsx, downloadXlsxMulti]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -1931,6 +1992,20 @@ export default function AdAnalysisPage() {
                   </div>
                 </div>
 
+                {/* 쿠팡 검색/비검색 지면 필터 */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-[#86868B]">지면</span>
+                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                    {([['all', '전체'], ['search', '검색지면'], ['nonsearch', '비검색지면']] as const).map(([k, l]) => (
+                      <button key={k} onClick={() => setPlaceTypeFilter(k)}
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeTypeFilter === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  {placeTypeFilter !== 'all' && <span className="text-[11px] text-[#C7C7CC]">차트/표/엑셀에 적용 · 순이익은 일자 매출비중 안분(근사)</span>}
+                </div>
+
                 {/* Metric filter chips: 클릭 → 막대 → 꺾은선 → 숨김 */}
                 <div className="flex flex-wrap gap-2">
                   {METRICS.map((m) => {
@@ -2204,7 +2279,7 @@ export default function AdAnalysisPage() {
                       <td className="px-3 py-2.5 text-[#1D1D1F]">합계</td>
                       {visibleCols.map((col) => (
                         <td key={col.key} className="px-3 py-2.5 text-right">
-                          {col.renderTotal(t)}
+                          {col.renderTotal(trendTotal)}
                         </td>
                       ))}
                     </tr>
