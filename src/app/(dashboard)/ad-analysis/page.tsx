@@ -10,7 +10,7 @@ import {
 import {
   ComposedChart, Bar, Line, Area, AreaChart, ReferenceLine,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart,
+  BarChart, Cell,
 } from 'recharts';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -433,14 +433,10 @@ export default function AdAnalysisPage() {
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [placeShowRoas, setPlaceShowRoas] = useState(false);
-  // 증감/추이 분석 탭 상태
-  const [momDim, setMomDim] = useState<'product' | 'campaign' | 'keyword'>('product');
-  const [momGran, setMomGran] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [momMetric, setMomMetric] = useState<string>('cost'); // 꺾은선 그래프 지표
-  const [momTargets, setMomTargets] = useState<Set<string>>(new Set()); // 그래프 비교 대상(여러 개)
-  const [momTableTarget, setMomTableTarget] = useState<string>(''); // 상세표 대상 ('' = 전체 합계)
-  const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // 상세표 기준 기간 ('' = 최신)
-  const [momBasePeriod, setMomBasePeriod] = useState<string>(''); // 상세표 비교 기간 ('' = 직전)
+  // 증감(MoM/WoW) 분석 탭 상태
+  const [momGran, setMomGran] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // 기준 기간 ('' = 최신)
+  const [momBasePeriod, setMomBasePeriod] = useState<string>(''); // 비교 기간 ('' = 직전)
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -3350,59 +3346,37 @@ export default function AdAnalysisPage() {
             );
           })()}
 
-          {/* ─── Tab: 증감 / 추이 ─────────────────────────────── */}
+          {/* ─── Tab: 증감 (MoM / WoW) ─────────────────────────────── */}
           {tab === 'momwow' && (() => {
             if (!data) return null;
-            const COLORS: string[] = ['#0071E3', '#F43F5E', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316'];
+            const GREEN = '#10B981', RED = '#F43F5E';
 
             const periodOf = (date: string) => momGran === 'daily' ? date : momGran === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
             const periodLabel = (p: string) => momGran === 'daily' ? p.slice(5) : momGran === 'monthly' ? p : `${p.slice(0, 4)} ${bucketLabel(p, 'weekly')}`;
 
-            // 날짜 필터 무시 — 이전 기간 비교를 위해 캠페인/상품 필터만 적용된 전체 기간을 소스로.
-            const src = momDim === 'keyword'
-              ? (filtered.keywordDaily ?? []).map((r: any) => ({ date: r.date, dim: r.keyword, impressions: r.impressions, clicks: r.clicks, cost: r.cost, orders14d: r.orders14d, revenue14d: r.revenue14d, cogs14d: r.cogs14d ?? 0, commission14d: r.commission14d ?? 0 }))
-              : filtered.rows.map((r: any) => ({ date: r.date, dim: momDim === 'product' ? r.product : r.campaign, impressions: r.impressions, clicks: r.clicks, cost: r.cost, orders14d: r.orders14d, revenue14d: r.revenue14d, cogs14d: r.cogs14d ?? 0, commission14d: r.commission14d ?? 0 }));
-
+            // 캠페인/상품(글로벌 필터)만 적용된 전체 기간 합계 — 날짜 필터 무시
             const emptyAgg = () => ({ impressions: 0, clicks: 0, cost: 0, orders14d: 0, revenue14d: 0, cogs14d: 0, commission14d: 0 });
-            const addAgg = (a: any, r: any) => { a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost; a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; a.cogs14d += r.cogs14d; a.commission14d += r.commission14d; };
-            const byPeriod = new Map<string, Map<string, any>>();
-            const totalCost = new Map<string, number>();
+            const byPeriod = new Map<string, any>();
             const periodSet = new Set<string>();
-            for (const r of src) {
+            for (const r of filtered.rows) {
               if (!r.date) continue;
               const p = periodOf(r.date);
               periodSet.add(p);
-              if (!byPeriod.has(p)) byPeriod.set(p, new Map());
-              const dm = byPeriod.get(p)!;
-              if (!dm.has(r.dim)) dm.set(r.dim, emptyAgg());
-              addAgg(dm.get(r.dim)!, r);
-              totalCost.set(r.dim, (totalCost.get(r.dim) ?? 0) + r.cost);
+              if (!byPeriod.has(p)) byPeriod.set(p, emptyAgg());
+              const a = byPeriod.get(p)!;
+              a.impressions += r.impressions; a.clicks += r.clicks; a.cost += r.cost;
+              a.orders14d += r.orders14d; a.revenue14d += r.revenue14d; a.cogs14d += r.cogs14d; a.commission14d += r.commission14d;
             }
             const periods = [...periodSet].sort();
-
             if (periods.length === 0) {
               return <div className="bg-white rounded-[18px] border border-black/[0.06] p-10 text-center text-[13px] text-[#86868B]">데이터가 없습니다.</div>;
             }
 
-            // 대상 목록 (광고비 큰 순)
-            const dimList = [...totalCost.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d);
-
             const curP = (momCurPeriod && periods.includes(momCurPeriod)) ? momCurPeriod : periods[periods.length - 1];
             const curIdx = periods.indexOf(curP);
-            const baseP = (momBasePeriod && periods.includes(momBasePeriod))
-              ? momBasePeriod
-              : (curIdx > 0 ? periods[curIdx - 1] : curP);
-
-            // 선택 대상의 기간 합계 (전체 합계면 모든 dim 합산)
-            const aggOf = (period: string, target: string) => {
-              const dm = byPeriod.get(period);
-              if (!dm) return emptyAgg();
-              if (target) return dm.has(target) ? dm.get(target)! : emptyAgg();
-              const tot = emptyAgg();
-              for (const a of dm.values()) addAgg(tot, a);
-              return tot;
-            };
-            const curAgg = aggOf(curP, momTableTarget), baseAgg = aggOf(baseP, momTableTarget);
+            const baseP = (momBasePeriod && periods.includes(momBasePeriod)) ? momBasePeriod : (curIdx > 0 ? periods[curIdx - 1] : curP);
+            const curAgg = byPeriod.get(curP) ?? emptyAgg();
+            const baseAgg = byPeriod.get(baseP) ?? emptyAgg();
 
             const v = (a: any, key: string) => {
               if (key === 'roas') return a.cost > 0 ? a.revenue14d / a.cost : 0;
@@ -3416,25 +3390,25 @@ export default function AdAnalysisPage() {
             };
 
             type Unit = 'won' | 'cnt' | 'rate' | 'roas';
-            const metricRows: { key: string; label: string; unit: Unit; inverse: boolean }[] = [
-              { key: 'cost', label: '광고비', unit: 'won', inverse: true },
-              { key: 'impressions', label: '노출', unit: 'cnt', inverse: false },
-              { key: 'clicks', label: '클릭', unit: 'cnt', inverse: false },
-              { key: 'ctr', label: 'CTR', unit: 'rate', inverse: false },
-              { key: 'cpc', label: 'CPC', unit: 'won', inverse: true },
-              { key: 'orders14d', label: '주문(14일)', unit: 'cnt', inverse: false },
-              { key: 'cpa', label: 'CPA', unit: 'won', inverse: true },
-              { key: 'cvr', label: 'CVR(14일)', unit: 'rate', inverse: false },
-              { key: 'revenue14d', label: '매출(14일)', unit: 'won', inverse: false },
-              { key: 'aov', label: 'AOV', unit: 'won', inverse: false },
-              { key: 'roas', label: 'ROAS(14일)', unit: 'roas', inverse: false },
-              { key: 'profit', label: '순이익(14일)', unit: 'won', inverse: false },
+            const metricRows: { key: string; label: string; unit: Unit }[] = [
+              { key: 'cost', label: '광고비', unit: 'won' },
+              { key: 'impressions', label: '노출', unit: 'cnt' },
+              { key: 'clicks', label: '클릭', unit: 'cnt' },
+              { key: 'ctr', label: 'CTR', unit: 'rate' },
+              { key: 'cpc', label: 'CPC', unit: 'won' },
+              { key: 'orders14d', label: '주문(14일)', unit: 'cnt' },
+              { key: 'cpa', label: 'CPA', unit: 'won' },
+              { key: 'cvr', label: 'CVR(14일)', unit: 'rate' },
+              { key: 'revenue14d', label: '매출(14일)', unit: 'won' },
+              { key: 'aov', label: 'AOV', unit: 'won' },
+              { key: 'roas', label: 'ROAS(14일)', unit: 'roas' },
+              { key: 'profit', label: '순이익(14일)', unit: 'won' },
             ];
             const fmtVal = (unit: Unit, val: number) => {
               if (unit === 'won') return fmtW(Math.round(val));
               if (unit === 'cnt') return formatNumber(Math.round(val));
               if (unit === 'roas') return val > 0 ? `${(val * 100).toFixed(0)}%` : '-';
-              return `${(val * 100).toFixed(2)}%`; // rate (CTR/CVR)
+              return `${(val * 100).toFixed(2)}%`;
             };
             const fmtDelta = (unit: Unit, cur: number, base: number) => {
               const d = cur - base;
@@ -3444,124 +3418,97 @@ export default function AdAnalysisPage() {
               if (unit === 'roas') return s + (d * 100).toFixed(0) + '%p';
               return s + (d * 100).toFixed(2) + '%p';
             };
-            const rateCell = (cur: number, base: number, inverse: boolean) => {
-              if (base === 0 && cur === 0) return { text: '–', cls: 'text-[#D2D2D7]' };
-              if (base === 0) return { text: '신규', cls: 'text-[#0071E3] font-semibold' };
+            // 색상 통일: 부호 기준 — 증가=초록, 감소=빨강 (지표 종류 무관)
+            const rateCell = (cur: number, base: number) => {
+              if (base === 0 && cur === 0) return { text: '–', cls: 'text-[#D2D2D7]', rate: null as number | null };
+              if (base === 0) return { text: '신규', cls: 'text-[#0071E3] font-semibold', rate: null as number | null };
               const d = (cur - base) / base;
-              if (Math.abs(d) < 0.0001) return { text: '0%', cls: 'text-[#86868B]' };
-              const good = (d > 0) !== inverse;
-              return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}%`, cls: good ? 'text-green-600 font-bold' : 'text-red-500 font-bold' };
+              if (Math.abs(d) < 0.0001) return { text: '0%', cls: 'text-[#86868B]', rate: 0 };
+              return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}%`, cls: d > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold', rate: d };
             };
 
-            // ── 꺾은선 추이 그래프 데이터 ──
-            const defaultTop = dimList.slice(0, 3);
-            const chartTargets = momTargets.size > 0 ? dimList.filter((d) => momTargets.has(d)) : defaultTop;
-            const chartMetricOpts = [
-              { key: 'cost', label: '광고비' }, { key: 'revenue14d', label: '매출' }, { key: 'roas', label: 'ROAS' },
-              { key: 'orders14d', label: '주문' }, { key: 'cpc', label: 'CPC' }, { key: 'cpa', label: 'CPA' },
-              { key: 'profit', label: '순이익' }, { key: 'impressions', label: '노출' }, { key: 'clicks', label: '클릭' },
-            ];
-            const metricLabel = chartMetricOpts.find((m) => m.key === momMetric)?.label ?? momMetric;
-            const isRoasM = momMetric === 'roas';
-            const isCntM = momMetric === 'orders14d' || momMetric === 'impressions' || momMetric === 'clicks';
-            const lineData = periods.map((p) => {
-              const dm = byPeriod.get(p) ?? new Map();
-              const row: any = { label: periodLabel(p) };
-              for (const tg of chartTargets) row[tg] = v(dm.get(tg) ?? emptyAgg(), momMetric);
-              return row;
-            });
-            const axisFmt = (val: number) => isRoasM ? `${(val * 100).toFixed(0)}%`
-              : isCntM ? (Math.abs(val) >= 1000 ? `${(val / 1000).toFixed(0)}k` : String(Math.round(val)))
-              : (Math.abs(val) >= 1000000 ? `${(val / 1000000).toFixed(1)}M` : `${Math.round(val / 1000)}k`);
-            const toggleTarget = (d: string) => setMomTargets((prev) => { const base = new Set(prev.size > 0 ? prev : defaultTop); base.has(d) ? base.delete(d) : base.add(d); return base; });
-            const chipDims = dimList.slice(0, 40);
-            const granOpts = [['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const;
+            // MoM/WoW 전용 그래프: 기준 vs 비교 기간의 지표별 증감율 (순이익은 음수 기준 왜곡 가능 → 제외)
+            const chartData = metricRows
+              .filter((m) => m.key !== 'profit')
+              .map((m) => ({ label: m.label, rate: rateCell(v(curAgg, m.key), v(baseAgg, m.key)).rate }))
+              .filter((d) => d.rate !== null) as { label: string; rate: number }[];
+
+            const campaigns = data.campaigns ?? [];
+            const products = data.products ?? [];
+            const granOpts = [['monthly', '월 (MoM)'], ['weekly', '주 (WoW)'], ['daily', '일']] as const;
 
             return (
             <div className="space-y-4">
-              {/* 컨트롤 */}
+              {/* 컨트롤 — 단위 + 캠페인/상품(글로벌 필터와 동일 state) */}
               <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
-                  {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => { setMomDim(k); setMomTargets(new Set()); setMomTableTarget(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momDim === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
-                  ))}
-                </div>
                 <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
                   {granOpts.map(([k, l]) => (
                     <button key={k} onClick={() => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momGran === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
                   ))}
                 </div>
-                <span className="text-[11px] text-[#C7C7CC] ml-auto">※ 상단 기간 필터 무시 — 전체 기간 · 캠페인/상품 필터만 적용</span>
+                <label className="flex items-center gap-1.5 text-[12px]">
+                  <span className="text-[#86868B] whitespace-nowrap">캠페인</span>
+                  <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-[#0071E3]">
+                    <option value="all">전체</option>
+                    {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5 text-[12px]">
+                  <span className="text-[#86868B] whitespace-nowrap">상품</span>
+                  <select value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-[#0071E3]">
+                    <option value="all">전체</option>
+                    {products.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                <span className="text-[11px] text-[#C7C7CC] ml-auto">상단 캠페인/상품 필터와 연동 · 기간 필터 무시(전체)</span>
               </div>
 
-              {/* 꺾은선 추이 그래프 (메인) */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">{metricLabel} 추이 ({momGran === 'daily' ? '일별' : momGran === 'weekly' ? '주별' : '월별'})</h3>
-                  <div className="flex flex-wrap gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
-                    {chartMetricOpts.map((m) => (
-                      <button key={m.key} onClick={() => setMomMetric(m.key)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${momMetric === m.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{m.label}</button>
-                    ))}
-                  </div>
-                </div>
-                {chartTargets.length > 0 && lineData.length > 0 ? (
-                  <div className="h-[360px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={lineData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F7" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={axisFmt} />
-                        <Tooltip formatter={(val: number, name: string) => [isRoasM ? `${(val * 100).toFixed(0)}%` : isCntM ? formatNumber(Math.round(val)) : fmtW(Math.round(val)), name.length > 18 ? name.slice(0, 18) + '…' : name]} />
-                        <Legend formatter={(value: string) => value.length > 18 ? value.slice(0, 18) + '…' : value} />
-                        {chartTargets.map((tg, i) => (
-                          <Line key={tg} type="monotone" dataKey={tg} name={tg} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 2 }} connectNulls />
-                        ))}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : <div className="h-[200px] flex items-center justify-center text-[12px] text-[#C7C7CC]">아래에서 비교할 대상을 선택하세요.</div>}
-                {/* 비교 대상 칩 */}
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-black/[0.06]">
-                  <span className="text-[11px] text-[#86868B] py-1">그래프 대상:</span>
-                  {chipDims.map((d) => {
-                    const on = chartTargets.includes(d);
-                    const ci = chartTargets.indexOf(d);
-                    return (
-                      <button key={d} onClick={() => toggleTarget(d)} title={d}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${on ? 'text-white border-transparent' : 'border-black/[0.08] bg-white text-[#86868B] hover:border-[#D2D2D7]'}`}
-                        style={on ? { backgroundColor: COLORS[ci % COLORS.length] } : undefined}>
-                        {d.length > 20 ? d.slice(0, 20) + '…' : d}
-                      </button>
-                    );
-                  })}
-                  {dimList.length > chipDims.length && <span className="text-[11px] text-[#C7C7CC] py-1">…광고비 상위 {chipDims.length}개만 표시 (상세표 드롭다운에서 전체 선택 가능)</span>}
-                </div>
-              </div>
-
-              {/* 상세 증감표 (두 기간 비교) */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-hidden">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 border-b border-black/[0.06]">
-                  <span className="text-[13px] font-bold text-[#1D1D1F]">상세 비교</span>
+              {/* MoM/WoW 지표 증감율 그래프 (기준 vs 비교) */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">지표 증감율</h3>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B] whitespace-nowrap">대상</span>
-                    <select value={momTableTarget} onChange={(e) => setMomTableTarget(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[260px] focus:outline-none focus:border-[#0071E3]">
-                      <option value="">전체 합계</option>
-                      {dimList.map((d) => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B] whitespace-nowrap">기준</span>
+                    <span className="text-[#86868B]">기준</span>
                     <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
                       {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
                     </select>
                   </label>
                   <span className="text-[#D2D2D7] text-[12px]">vs</span>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B] whitespace-nowrap">비교</span>
+                    <span className="text-[#86868B]">비교</span>
                     <select value={baseP} onChange={(e) => setMomBasePeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
                       {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
                     </select>
                   </label>
+                  <span className="ml-auto text-[11px] flex items-center gap-2">
+                    <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: GREEN }} />증가</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: RED }} />감소</span>
+                  </span>
+                </div>
+                {chartData.length > 0 ? (
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F7" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" height={64} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(val: number) => `${(val * 100).toFixed(0)}%`} />
+                        <ReferenceLine y={0} stroke="#D2D2D7" />
+                        <Tooltip formatter={(val: number) => `${(val * 100).toFixed(1)}%`} />
+                        <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
+                          {chartData.map((d, i) => <Cell key={i} fill={d.rate >= 0 ? GREEN : RED} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <div className="h-[160px] flex items-center justify-center text-[12px] text-[#C7C7CC]">비교할 증감율이 없습니다 (이전 기간 데이터 없음).</div>}
+                <div className="text-[11px] text-[#86868B]">기준 <b>{periodLabel(curP)}</b> vs 비교 <b>{periodLabel(baseP)}</b> · 각 지표가 이전 기간 대비 얼마나 변했는지</div>
+              </div>
+
+              {/* 상세 비교표 (전 지표) */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-hidden">
+                <div className="px-5 py-3 border-b border-black/[0.06] flex items-center justify-between">
+                  <span className="text-[13px] font-bold text-[#1D1D1F]">상세 비교</span>
+                  <span className="text-[11px] text-[#86868B]">{filterCampaign === 'all' ? '전체 캠페인' : filterCampaign} · {filterProduct === 'all' ? '전체 상품' : filterProduct}</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
@@ -3577,7 +3524,7 @@ export default function AdAnalysisPage() {
                     <tbody>
                       {metricRows.map((m) => {
                         const cv = v(curAgg, m.key), bv = v(baseAgg, m.key);
-                        const rc = rateCell(cv, bv, m.inverse);
+                        const rc = rateCell(cv, bv);
                         return (
                           <tr key={m.key} className="border-b border-black/[0.04] hover:bg-[#FAFBFC]">
                             <td className="px-5 py-2.5 font-medium text-[#1D1D1F] whitespace-nowrap">{m.label}</td>
