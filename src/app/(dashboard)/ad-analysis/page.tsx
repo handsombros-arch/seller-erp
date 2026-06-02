@@ -412,18 +412,23 @@ export default function AdAnalysisPage() {
   const [expandedPlaces, setExpandedPlaces] = useState<Set<string>>(new Set());
   const [placeSearch, setPlaceSearch] = useState('');
   const [placeMetric, setPlaceMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d'>('cost');
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  // 기본 기간: 전월 1일 ~ 오늘. 사용자가 수정하면 localStorage 에 저장해 새로고침/이동/창종료 후에도 유지.
+  const DATE_RANGE_STORAGE = 'lv-erp-ad-date-range';
+  const persistRange = (from: string, to: string) => { try { localStorage.setItem(DATE_RANGE_STORAGE, JSON.stringify({ from, to })); } catch {} };
+  const [dateFrom, setDateFrom] = useState<string>(() => {
+    if (typeof window !== 'undefined') { try { const s = localStorage.getItem(DATE_RANGE_STORAGE); if (s) return JSON.parse(s).from ?? ''; } catch {} }
+    const d = new Date(); const p = new Date(d.getFullYear(), d.getMonth() - 1, 1); // 전월 1일
+    return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-01`;
   });
-  const [dateTo, setDateTo] = useState(() => {
-    const d = new Date();
+  const [dateTo, setDateTo] = useState<string>(() => {
+    if (typeof window !== 'undefined') { try { const s = localStorage.getItem(DATE_RANGE_STORAGE); if (s) return JSON.parse(s).to ?? ''; } catch {} }
+    const d = new Date(); // 오늘
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
-  // 사용자가 직접 기간을 만진 적이 있으면 자동 핏을 멈춘다
-  const dateTouchedRef = useRef(false);
-  const setDateFromUser = (v: string) => { dateTouchedRef.current = true; setDateFrom(v); };
-  const setDateToUser = (v: string) => { dateTouchedRef.current = true; setDateTo(v); };
+  // 저장된 기간이 있으면(=사용자가 수정함) 데이터 로드 시 자동 핏을 멈춘다
+  const dateTouchedRef = useRef<boolean>((() => { if (typeof window === 'undefined') return false; try { return !!localStorage.getItem(DATE_RANGE_STORAGE); } catch { return false; } })());
+  const setDateFromUser = (v: string) => { dateTouchedRef.current = true; setDateFrom(v); persistRange(v, dateTo); };
+  const setDateToUser = (v: string) => { dateTouchedRef.current = true; setDateTo(v); persistRange(dateFrom, v); };
   const [metricTypes, setMetricTypes] = useState<Record<string, 'bar' | 'line'>>({});
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
@@ -1596,14 +1601,15 @@ export default function AdAnalysisPage() {
           <input type="date" value={dateTo} onChange={e => setDateToUser(e.target.value)}
             className="h-8 px-2 rounded-lg border border-black/[0.08] text-[11px] bg-white" />
           {(dateFrom || dateTo) && (
-            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); }}
+            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); persistRange('', ''); }}
               className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
           )}
           {data.dateRange?.from && data.dateRange?.to && (
             <button onClick={() => {
-              dateTouchedRef.current = false;
+              dateTouchedRef.current = true;
               setDateFrom(data.dateRange.from);
               setDateTo(data.dateRange.to);
+              persistRange(data.dateRange.from, data.dateRange.to);
             }} className="h-8 px-2 rounded-lg text-[10px] text-[#0071E3] hover:bg-[#F0F6FF] border border-[#BFD7FF]">데이터 전체 기간</button>
           )}
           {(dateFrom || dateTo) && (
@@ -1635,14 +1641,15 @@ export default function AdAnalysisPage() {
           <div className="flex gap-2 pt-1">
             {data.dateRange?.from && data.dateRange?.to && (
               <button onClick={() => {
-                dateTouchedRef.current = false;
+                dateTouchedRef.current = true;
                 setDateFrom(data.dateRange.from);
                 setDateTo(data.dateRange.to);
+                persistRange(data.dateRange.from, data.dateRange.to);
               }} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700">
                 데이터 전체 기간으로 보기
               </button>
             )}
-            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); }}
+            <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); persistRange('', ''); }}
               className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 text-[11px] font-semibold hover:bg-amber-100">
               기간 필터 해제
             </button>
