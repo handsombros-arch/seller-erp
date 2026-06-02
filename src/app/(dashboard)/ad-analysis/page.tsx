@@ -418,12 +418,14 @@ export default function AdAnalysisPage() {
   const [rightAxisKeys, setRightAxisKeys] = useState<Set<string>>(new Set());
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [placeShowRoas, setPlaceShowRoas] = useState(false);
-  // MoM/WoW (증감) 분석 탭 상태
+  // 증감/추이 분석 탭 상태
   const [momDim, setMomDim] = useState<'product' | 'campaign' | 'keyword'>('product');
-  const [momMode, setMomMode] = useState<'monthly' | 'weekly'>('weekly');
-  const [momTarget, setMomTarget] = useState<string>(''); // '' = 전체 합계
-  const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // '' = 최신 기간 자동
-  const [momBasePeriod, setMomBasePeriod] = useState<string>(''); // '' = 직전 기간 자동
+  const [momGran, setMomGran] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [momMetric, setMomMetric] = useState<string>('cost'); // 꺾은선 그래프 지표
+  const [momTargets, setMomTargets] = useState<Set<string>>(new Set()); // 그래프 비교 대상(여러 개)
+  const [momTableTarget, setMomTableTarget] = useState<string>(''); // 상세표 대상 ('' = 전체 합계)
+  const [momCurPeriod, setMomCurPeriod] = useState<string>(''); // 상세표 기준 기간 ('' = 최신)
+  const [momBasePeriod, setMomBasePeriod] = useState<string>(''); // 상세표 비교 기간 ('' = 직전)
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Toggle KPI
@@ -3164,12 +3166,13 @@ export default function AdAnalysisPage() {
             );
           })()}
 
-          {/* ─── Tab: 증감 (MoM / WoW) ─────────────────────────────── */}
+          {/* ─── Tab: 증감 / 추이 ─────────────────────────────── */}
           {tab === 'momwow' && (() => {
             if (!data) return null;
+            const COLORS: string[] = ['#0071E3', '#F43F5E', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#6366F1', '#F97316'];
 
-            const periodOf = (date: string) => momMode === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
-            const periodLabel = (p: string) => momMode === 'monthly' ? p : `${p.slice(0, 4)} ${bucketLabel(p, 'weekly')}`;
+            const periodOf = (date: string) => momGran === 'daily' ? date : momGran === 'monthly' ? date.slice(0, 7) : isoWeekKey(date);
+            const periodLabel = (p: string) => momGran === 'daily' ? p.slice(5) : momGran === 'monthly' ? p : `${p.slice(0, 4)} ${bucketLabel(p, 'weekly')}`;
 
             // 날짜 필터 무시 — 이전 기간 비교를 위해 캠페인/상품 필터만 적용된 전체 기간을 소스로.
             const src = momDim === 'keyword'
@@ -3207,15 +3210,15 @@ export default function AdAnalysisPage() {
               : (curIdx > 0 ? periods[curIdx - 1] : curP);
 
             // 선택 대상의 기간 합계 (전체 합계면 모든 dim 합산)
-            const aggOf = (period: string) => {
+            const aggOf = (period: string, target: string) => {
               const dm = byPeriod.get(period);
               if (!dm) return emptyAgg();
-              if (momTarget) return dm.has(momTarget) ? dm.get(momTarget)! : emptyAgg();
+              if (target) return dm.has(target) ? dm.get(target)! : emptyAgg();
               const tot = emptyAgg();
               for (const a of dm.values()) addAgg(tot, a);
               return tot;
             };
-            const curAgg = aggOf(curP), baseAgg = aggOf(baseP);
+            const curAgg = aggOf(curP, momTableTarget), baseAgg = aggOf(baseP, momTableTarget);
 
             const v = (a: any, key: string) => {
               if (key === 'roas') return a.cost > 0 ? a.revenue14d / a.cost : 0;
@@ -3266,30 +3269,98 @@ export default function AdAnalysisPage() {
               return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}%`, cls: good ? 'text-green-600 font-bold' : 'text-red-500 font-bold' };
             };
 
-            const targetLabel = momTarget || '전체 합계';
-            const modeLabel = momMode === 'monthly' ? '전월' : '전주';
+            // ── 꺾은선 추이 그래프 데이터 ──
+            const defaultTop = dimList.slice(0, 3);
+            const chartTargets = momTargets.size > 0 ? dimList.filter((d) => momTargets.has(d)) : defaultTop;
+            const chartMetricOpts = [
+              { key: 'cost', label: '광고비' }, { key: 'revenue14d', label: '매출' }, { key: 'roas', label: 'ROAS' },
+              { key: 'orders14d', label: '주문' }, { key: 'cpc', label: 'CPC' }, { key: 'cpa', label: 'CPA' },
+              { key: 'profit', label: '순이익' }, { key: 'impressions', label: '노출' }, { key: 'clicks', label: '클릭' },
+            ];
+            const metricLabel = chartMetricOpts.find((m) => m.key === momMetric)?.label ?? momMetric;
+            const isRoasM = momMetric === 'roas';
+            const isCntM = momMetric === 'orders14d' || momMetric === 'impressions' || momMetric === 'clicks';
+            const lineData = periods.map((p) => {
+              const dm = byPeriod.get(p) ?? new Map();
+              const row: any = { label: periodLabel(p) };
+              for (const tg of chartTargets) row[tg] = v(dm.get(tg) ?? emptyAgg(), momMetric);
+              return row;
+            });
+            const axisFmt = (val: number) => isRoasM ? `${(val * 100).toFixed(0)}%`
+              : isCntM ? (Math.abs(val) >= 1000 ? `${(val / 1000).toFixed(0)}k` : String(Math.round(val)))
+              : (Math.abs(val) >= 1000000 ? `${(val / 1000000).toFixed(1)}M` : `${Math.round(val / 1000)}k`);
+            const toggleTarget = (d: string) => setMomTargets((prev) => { const base = new Set(prev.size > 0 ? prev : defaultTop); base.has(d) ? base.delete(d) : base.add(d); return base; });
+            const chipDims = dimList.slice(0, 40);
+            const granOpts = [['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const;
 
             return (
             <div className="space-y-4">
               {/* 컨트롤 */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
-                    {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => { setMomDim(k); setMomTarget(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momDim === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
-                    ))}
-                  </div>
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
-                    {([['monthly', '전월대비 (MoM)'], ['weekly', '전주대비 (WoW)']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => { setMomMode(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momMode === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-[#C7C7CC] ml-auto">※ 상단 기간 필터 무시 — 캠페인/상품 필터만 적용</span>
+              <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => { setMomDim(k); setMomTargets(new Set()); setMomTableTarget(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momDim === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                  ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  {granOpts.map(([k, l]) => (
+                    <button key={k} onClick={() => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momGran === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-[#C7C7CC] ml-auto">※ 상단 기간 필터 무시 — 전체 기간 · 캠페인/상품 필터만 적용</span>
+              </div>
+
+              {/* 꺾은선 추이 그래프 (메인) */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">{metricLabel} 추이 ({momGran === 'daily' ? '일별' : momGran === 'weekly' ? '주별' : '월별'})</h3>
+                  <div className="flex flex-wrap gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                    {chartMetricOpts.map((m) => (
+                      <button key={m.key} onClick={() => setMomMetric(m.key)} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${momMetric === m.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{m.label}</button>
+                    ))}
+                  </div>
+                </div>
+                {chartTargets.length > 0 && lineData.length > 0 ? (
+                  <div className="h-[360px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={lineData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F7" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={axisFmt} />
+                        <Tooltip formatter={(val: number, name: string) => [isRoasM ? `${(val * 100).toFixed(0)}%` : isCntM ? formatNumber(Math.round(val)) : fmtW(Math.round(val)), name.length > 18 ? name.slice(0, 18) + '…' : name]} />
+                        <Legend formatter={(value: string) => value.length > 18 ? value.slice(0, 18) + '…' : value} />
+                        {chartTargets.map((tg, i) => (
+                          <Line key={tg} type="monotone" dataKey={tg} name={tg} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 2 }} connectNulls />
+                        ))}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : <div className="h-[200px] flex items-center justify-center text-[12px] text-[#C7C7CC]">아래에서 비교할 대상을 선택하세요.</div>}
+                {/* 비교 대상 칩 */}
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-black/[0.06]">
+                  <span className="text-[11px] text-[#86868B] py-1">그래프 대상:</span>
+                  {chipDims.map((d) => {
+                    const on = chartTargets.includes(d);
+                    const ci = chartTargets.indexOf(d);
+                    return (
+                      <button key={d} onClick={() => toggleTarget(d)} title={d}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${on ? 'text-white border-transparent' : 'border-black/[0.08] bg-white text-[#86868B] hover:border-[#D2D2D7]'}`}
+                        style={on ? { backgroundColor: COLORS[ci % COLORS.length] } : undefined}>
+                        {d.length > 20 ? d.slice(0, 20) + '…' : d}
+                      </button>
+                    );
+                  })}
+                  {dimList.length > chipDims.length && <span className="text-[11px] text-[#C7C7CC] py-1">…광고비 상위 {chipDims.length}개만 표시 (상세표 드롭다운에서 전체 선택 가능)</span>}
+                </div>
+              </div>
+
+              {/* 상세 증감표 (두 기간 비교) */}
+              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-hidden">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 border-b border-black/[0.06]">
+                  <span className="text-[13px] font-bold text-[#1D1D1F]">상세 비교</span>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B] whitespace-nowrap">{momDim === 'product' ? '상품' : momDim === 'campaign' ? '캠페인' : '키워드'}</span>
-                    <select value={momTarget} onChange={(e) => setMomTarget(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[300px] focus:outline-none focus:border-[#0071E3]">
+                    <span className="text-[#86868B] whitespace-nowrap">대상</span>
+                    <select value={momTableTarget} onChange={(e) => setMomTableTarget(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[260px] focus:outline-none focus:border-[#0071E3]">
                       <option value="">전체 합계</option>
                       {dimList.map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
@@ -3302,19 +3373,11 @@ export default function AdAnalysisPage() {
                   </label>
                   <span className="text-[#D2D2D7] text-[12px]">vs</span>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B] whitespace-nowrap">비교({modeLabel})</span>
+                    <span className="text-[#86868B] whitespace-nowrap">비교</span>
                     <select value={baseP} onChange={(e) => setMomBasePeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
                       {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
                     </select>
                   </label>
-                </div>
-              </div>
-
-              {/* 비교 테이블 */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-hidden">
-                <div className="px-5 py-3 border-b border-black/[0.06]">
-                  <div className="text-[14px] font-bold text-[#1D1D1F] truncate" title={targetLabel}>{targetLabel}</div>
-                  <div className="text-[11px] text-[#86868B] mt-0.5">기준 {periodLabel(curP)} vs 비교 {periodLabel(baseP)}</div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
