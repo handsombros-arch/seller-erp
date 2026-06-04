@@ -1623,7 +1623,9 @@ export default function AdAnalysisPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 ad-nowrap">
+      {/* 모든 표 셀을 한 줄로 — 어떤 컬럼이든 2줄로 안 넘어감. 길면 가로 스크롤(표는 overflow-x-auto). */}
+      <style>{`.ad-nowrap table th, .ad-nowrap table td { white-space: nowrap; }`}</style>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
