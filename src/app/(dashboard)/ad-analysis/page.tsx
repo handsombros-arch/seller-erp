@@ -832,12 +832,12 @@ export default function AdAnalysisPage() {
               error: (err) => reject(err),
             });
           });
-          allRows.push(...rows);
+          for (const r of rows) allRows.push(r); // spread(...) 금지 — 대용량이면 스택 초과
         } else {
           const buffer = await file.arrayBuffer();
           const wb = XLSX.read(buffer, { type: 'array' });
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-          allRows.push(...rows);
+          for (const r of rows) allRows.push(r); // spread(...) 금지 — 대용량이면 스택 초과
         }
       }
       if (!allRows.length) throw new Error('데이터가 없습니다');
