@@ -816,13 +816,29 @@ export default function AdAnalysisPage() {
         };
       }
 
-      // 여러 파일 동시 읽기
+      // 여러 파일 동시 읽기 — CSV/TSV/TXT 는 구분자 자동인식 + 스트리밍 파서(PapaParse),
+      // 엑셀(.xlsx/.xls)은 기존 XLSX. CSV 가 커도 안 멈추고, TSV(탭)도 자동 인식됨.
       const allRows: any[] = [];
       for (const file of files) {
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        allRows.push(...rows);
+        if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+          const Papa = (await import('papaparse')).default;
+          const rows = await new Promise<any[]>((resolve, reject) => {
+            Papa.parse(file, {
+              header: true,         // 첫 행을 컬럼명으로 (sheet_to_json 과 동일)
+              skipEmptyLines: true,
+              dynamicTyping: true,  // 숫자 자동 변환 — 엑셀 경로와 동일한 값 타입
+              // delimiter 미지정 = 콤마/탭 자동 감지 (CSV·TSV 모두 처리)
+              complete: (res) => resolve(res.data as any[]),
+              error: (err) => reject(err),
+            });
+          });
+          allRows.push(...rows);
+        } else {
+          const buffer = await file.arrayBuffer();
+          const wb = XLSX.read(buffer, { type: 'array' });
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+          allRows.push(...rows);
+        }
       }
       if (!allRows.length) throw new Error('데이터가 없습니다');
 
@@ -944,7 +960,7 @@ export default function AdAnalysisPage() {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const files = [...e.dataTransfer.files].filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+    const files = [...e.dataTransfer.files].filter(f => /\.(xlsx|xls|csv|tsv|txt)$/i.test(f.name));
     if (files.length) handleUpload(files);
   }, [handleUpload]);
 
@@ -1634,7 +1650,7 @@ export default function AdAnalysisPage() {
         <input
           ref={fileRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.xls,.csv,.tsv,.txt"
           multiple
           className="hidden"
           onChange={(e) => {
@@ -1662,8 +1678,8 @@ export default function AdAnalysisPage() {
           ) : (
             <>
               <Upload className="h-10 w-10 mx-auto text-[#D2D2D7] mb-3" />
-              <p className="text-[15px] font-semibold text-[#1D1D1F]">쿠팡 광고 데이터 (xlsx) 를 드래그하거나 클릭하세요</p>
-              <p className="text-[12px] text-[#86868B] mt-1">PA 일별 키워드 리포트 · 여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
+              <p className="text-[15px] font-semibold text-[#1D1D1F]">쿠팡 광고 데이터 (xlsx · csv · tsv) 를 드래그하거나 클릭하세요</p>
+              <p className="text-[12px] text-[#86868B] mt-1">PA 일별 키워드 리포트 · 큰 CSV/TSV 도 OK · 여러 파일 동시 업로드 · 중복 자동 제거</p>
             </>
           )}
         </div>
