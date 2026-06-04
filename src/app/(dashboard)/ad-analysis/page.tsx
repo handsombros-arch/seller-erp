@@ -726,6 +726,8 @@ export default function AdAnalysisPage() {
   // ─── 청크 업로드 (Vercel serverless body 4.5MB 제한 회피) ────────────
   // 단일 거대 POST 가 조용히 413 으로 실패하던 문제 해결.
   const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
+  // 로컬(IDB)에만 있고 DB 엔 아직 없는 행 수. >0 이면 백업 권유 배너 노출.
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
   // 본문 gzip 압축 (CompressionStream 지원하는 모던 브라우저). 실패 시 raw JSON.
   const gzipJson = async (obj: unknown): Promise<{ body: BodyInit; gzipped: boolean }> => {
     const json = JSON.stringify(obj);
@@ -891,8 +893,10 @@ export default function AdAnalysisPage() {
       setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
         (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
         ` (다시 누르면 dedup 으로 중복은 자동 스킵)`);
+      // 부분 실패면 미백업분이 남아있으니 배너 유지.
     } else {
       setError('');
+      setUnsyncedCount(0); // 전체 성공 시에만 미백업 0 으로.
     }
   }, [data, uploadRowsInChunks]);
 
@@ -1007,17 +1011,39 @@ export default function AdAnalysisPage() {
           setInitialLoading(false); // 화면 즉시 사용 가능
         }
 
-        // 2) 백그라운드 DB 갱신 — 행 수 다르면 다시 렌더
+        // 2) 백그라운드 DB 갱신 — 절대 일방 덮어쓰기 금지. dedup_key 기준 합집합(union)만.
+        //    로컬(IDB)에만 있든 DB 에만 있든 모든 행을 보존한다. 데이터가 줄어드는 방향은 없음.
+        //    ⚠️ 과거 사고: 여기서 DB 로 IDB 를 통째로 덮어써 로컬 풀 데이터가 말없이 사라짐.
         try {
           const dbRes = await fetch('/api/ad-analysis/rows');
           if (!dbRes.ok) return;
           const j = await dbRes.json();
-          const dbRows = j.rows ?? [];
-          if (!dbRows.length) return;
-          saveToIdb(dbRows);
-          if (!idbRows || dbRows.length !== idbRows.length) {
-            saveResult(processData(dbRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
+          const dbRows: any[] = j.rows ?? [];
+
+          // IDB ∪ DB — 같은 dedup_key 는 한 번만(중복 적재 없음), 어느 쪽에만 있어도 보존.
+          // union 키는 DB PK(route.ts) 및 dedupKey() 와 완전히 동일하므로 idempotent.
+          const merged: any[] = [];
+          const seen = new Set<string>();
+          for (const r of (idbRows ?? [])) {
+            const k = dedupKey(r);
+            if (!seen.has(k)) { seen.add(k); merged.push(r); }
           }
+          for (const r of dbRows) {
+            const k = dedupKey(r);
+            if (!seen.has(k)) { seen.add(k); merged.push(r); }
+          }
+
+          if (!merged.length) return; // 양쪽 다 비었으면 둘 곳도, 그릴 것도 없음
+
+          // 합집합이 로컬과 달라졌을 때만 IDB/화면 갱신. merged 는 idbRows 의 상위집합이라
+          // 절대 줄지 않음(삭제 0). DB 에서 새로 받은 행이 있으면 그만큼 늘어남.
+          if (!idbRows || merged.length !== idbRows.length) {
+            saveToIdb(merged);
+            saveResult(processData(merged, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
+          }
+
+          // 로컬에만 있고 DB 엔 아직 없는 행 수 = |IDB ∪ DB| − |DB|. >0 이면 백업 안 된 데이터 존재.
+          setUnsyncedCount(Math.max(0, merged.length - dbRows.length));
         } catch {}
       } catch {
       } finally {
@@ -1652,6 +1678,21 @@ export default function AdAnalysisPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-[13px] text-red-700">{error}</div>
+      )}
+
+      {/* 미백업 데이터 경고 — 로컬에만 있고 DB 엔 없는 행이 있을 때. 데이터 안전 가시화. */}
+      {unsyncedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-[12px] text-amber-900">
+          <span className="font-semibold">⚠️ {unsyncedCount.toLocaleString()}행이 이 브라우저(로컬)에만 있고 DB 엔 백업되지 않았습니다.</span>
+          <span className="text-amber-800">캐시가 지워지거나 다른 기기에서 열면 이 데이터를 잃을 수 있습니다. 지금 DB 로 백업하세요.</span>
+          <button
+            onClick={handleSyncToDb}
+            disabled={!!syncProgress}
+            className="ml-auto h-7 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-semibold whitespace-nowrap"
+          >
+            {syncProgress ? `백업 중 ${syncProgress.done}/${syncProgress.total}` : '지금 DB 로 백업'}
+          </button>
+        </div>
       )}
 
       {/* 데이터 요약 + 수동 DB 백업 */}
