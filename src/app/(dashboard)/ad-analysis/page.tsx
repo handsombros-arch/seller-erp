@@ -827,6 +827,7 @@ export default function AdAnalysisPage() {
               header: true,         // 첫 행을 컬럼명으로 (sheet_to_json 과 동일)
               skipEmptyLines: true,
               dynamicTyping: true,  // 숫자 자동 변환 — 엑셀 경로와 동일한 값 타입
+              escapeChar: '\\',     // 쿠팡 export 는 따옴표 안 따옴표를 \" 로 이스케이프(상품명/옵션 JSON). 미설정 시 InvalidQuotes 대량 발생
               // delimiter 미지정 = 콤마/탭 자동 감지 (CSV·TSV 모두 처리)
               complete: (res) => resolve(res.data as any[]),
               error: (err) => reject(err),
