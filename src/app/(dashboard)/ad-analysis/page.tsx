@@ -591,7 +591,8 @@ export default function AdAnalysisPage() {
       if (!date) { skippedNoDate++; continue; }
       const keyword = r['키워드'] || '-';
       const placement = r['광고 노출 지면'] || '기타';
-      const campaign = r['캠페인명'] || '기타';
+      // 쿠팡 PA export 양식 변경(2026-06): '캠페인명' → '캠페인'. 둘 다 지원.
+      const campaign = r['캠페인명'] || r['캠페인'] || '기타';
       const rawProduct = String(r['광고집행 상품명'] ?? '');
       const product = rawProduct.split(',')[0].trim() || '기타';
       const convOptionId = String(r['광고전환매출발생 옵션ID'] ?? '');

@@ -37,7 +37,8 @@ function parseCoupangPA(wb: XLSX.WorkBook): ParsedRow[] {
     vendorItemId: String(r['광고집행 옵션ID'] ?? ''),
     name: String(r['광고집행 상품명'] ?? ''),
     campaignId: String(r['캠페인 ID'] ?? ''),
-    campaignName: String(r['캠페인명'] ?? ''),
+    // 쿠팡 PA export 양식 변경(2026-06): '캠페인명' → '캠페인'. 둘 다 지원.
+    campaignName: String(r['캠페인명'] ?? r['캠페인'] ?? ''),
     cost: Number(r['광고비']) || 0,
     impressions: Number(r['노출수']) || 0,
     clicks: Number(r['클릭수']) || 0,
