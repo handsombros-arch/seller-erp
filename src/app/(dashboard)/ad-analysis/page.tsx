@@ -1723,7 +1723,11 @@ export default function AdAnalysisPage() {
             <span>· 데이터 기간: {data.dateRange.from} ~ {data.dateRange.to}</span>
           )}
           {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
-            <span className="text-amber-600">· 날짜 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
+            data._diagnostics.missingCols?.includes('날짜') ? (
+              <span className="text-red-600">· ‘날짜’ 컬럼이 없는 보고서입니다 ({data._diagnostics.skippedNoDate.toLocaleString()}행 무시) — 쿠팡에서 <b>일자별 보고서</b>로 다시 받아주세요 (지금 파일은 캠페인 합계 리포트)</span>
+            ) : (
+              <span className="text-amber-600">· 날짜 형식 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
+            )
           )}
           <button
             onClick={handleSyncToDb}
