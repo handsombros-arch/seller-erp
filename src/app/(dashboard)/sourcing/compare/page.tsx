@@ -692,7 +692,7 @@ export default function ComparePage() {
 
       <div className="overflow-x-auto border rounded-lg bg-card">
         <table className="w-full text-sm">
-          <thead className="bg-card-2 border-b sticky top-0 z-10">
+          <thead className="sticky top-0 z-10 bg-card-2 border-b border-line-2">
             <tr>
               <th className="text-left px-3 py-2 font-medium w-32 sticky left-0 bg-card-2 z-20"></th>
               {items.map((it) => (

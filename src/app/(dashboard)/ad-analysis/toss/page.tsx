@@ -691,7 +691,7 @@ export default function TossAdAnalysisPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
-                  <thead className="bg-card-2 border-b border-line">
+                  <thead className="bg-card-2 border-b border-line-2">
                     <tr className="text-[11px] text-fg-3">
                       <th className="w-8"></th>
                       <th className="text-left px-3 py-2.5 font-medium">이름</th>
@@ -771,7 +771,7 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]">
-        <thead className="bg-card-2 border-b border-line">
+        <thead className="bg-card-2 border-b border-line-2">
           <tr className="text-[11px] text-fg-3">
             <th className={`text-left px-3 ${pad} font-medium`}>{gran === 'monthly' ? '월' : gran === 'weekly' ? '주' : '일자'}</th>
             <th className={`text-right px-3 ${pad} font-medium`}>노출</th>

@@ -16,6 +16,10 @@ import { Tabs, useTabParam } from '@/components/ui/tabs';
 
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
+import { AppDialog as Dialog } from '@/components/ui/app-dialog';
+
+import { Button } from '@/components/ui/button';
+
 const OutboundTab = dynamic(() => import('@/components/logistics/OutboundTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 const CalendarTab = dynamic(() => import('@/components/logistics/CalendarTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 
@@ -59,36 +63,6 @@ const STATUS_MAP: Record<POStatus, { label: string; color: string }> = {
 
 // ─── Dialog Component ───────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children, wide }: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
-          <h2 className="text-[15px] font-bold text-fg tracking-[-0.02em]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
-            <X className="h-4 w-4 text-fg-3" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
   return (
@@ -369,13 +343,13 @@ function AddPODialog({ open, onClose, skus, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>
             취소
-          </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          </Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             발주서 생성
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -486,13 +460,13 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>
             취소
-          </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          </Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             입고 처리
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

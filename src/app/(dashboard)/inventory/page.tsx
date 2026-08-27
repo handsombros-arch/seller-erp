@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { formatNumber, formatCurrency, skuOptionLabel } from '@/lib/utils';
+import { formatNumber, formatCurrency, skuOptionLabel, cn } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
 import type { InventoryItem, Warehouse } from '@/types';
 import type { InventorySummaryRow } from '@/app/api/inventory/summary/route';
@@ -16,6 +16,12 @@ import dynamic from 'next/dynamic';
 import { PageHeader } from '@/components/ui/page-header';
 
 import { Tabs, useTabParam } from '@/components/ui/tabs';
+
+import { AppDialog as Dialog } from '@/components/ui/app-dialog';
+
+import { inputClassName } from '@/components/ui/input';
+
+import { Button } from '@/components/ui/button';
 
 const TrendsTab = dynamic(() => import('@/components/inventory/TrendsTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 const ForecastTab = dynamic(() => import('@/components/inventory/ForecastTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
@@ -56,25 +62,6 @@ function RowHeightButtons({ value, onChange }: { value: RowHeight; onChange: (v:
 
 // ─── Dialog ────────────────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children, wide }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full ${wide ? 'max-w-2xl' : 'max-w-md'} mx-4`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
-          <h2 className="text-[15px] font-bold text-fg tracking-[-0.02em]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
-            <X className="h-4 w-4 text-fg-3" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Adjust Dialog Tab Strip — 통합 entry/csv/physical ─────────────────────
 
@@ -182,7 +169,7 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
     } finally { setLoading(false); }
   }
 
-  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+  const selectCls = cn(inputClassName, 'h-10');
 
   return (
     <Dialog open={open} onClose={onClose} title="재고 조정" wide>
@@ -238,10 +225,10 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
           </div>
           {error && <p className="text-[13px] text-red-500">{error}</p>}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+            <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+            <Button size="lg" className="flex-1" type="submit" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />} {rows.filter((r) => r.sku_id).length > 1 ? `${rows.filter((r) => r.sku_id).length}건 기입` : '기입'}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -447,7 +434,7 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
         )}
 
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={handleClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">닫기</button>
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={handleClose}>닫기</Button>
           <button
             type="button"
             onClick={handleSubmit}
@@ -526,10 +513,10 @@ function AdjustDialog({ open, onClose, item, onSave }: {
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} 조정 저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -597,9 +584,9 @@ function InventoryHistoryModal({ skuId, skuCode, productName, onClose }: {
             <h3 className="text-[15px] font-bold text-fg">재고 변동 이력</h3>
             <p className="text-[12px] text-fg-3 mt-0.5">{productName} <span className="font-mono text-fg-5">({skuCode})</span></p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
@@ -1492,8 +1479,8 @@ function RgInventoryTab() {
                 ))}
             </div>
             <div className="flex gap-2 px-6 py-4 border-t border-line-2">
-              <button onClick={skipBulkLink} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">건너뛰기</button>
-              <button onClick={() => setBulkLinkQueue([])} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">전체 취소</button>
+              <Button variant="outline" size="lg" className="flex-1" onClick={skipBulkLink}>건너뛰기</Button>
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setBulkLinkQueue([])}>전체 취소</Button>
             </div>
           </div>
         </div>
@@ -1519,7 +1506,7 @@ function RgInventoryTab() {
               </button>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setBulkModal(false)} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">취소</button>
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setBulkModal(false)}>취소</Button>
               <button onClick={classifyBulk} disabled={bulkLoading}
                 className="flex-1 h-10 rounded-xl bg-orange-500 text-white text-[13px] font-semibold hover:bg-orange-600 disabled:opacity-60">
                 {bulkLoading ? '처리 중...' : '이동'}
@@ -1857,9 +1844,9 @@ export default function InventoryPage() {
               <Upload className="h-4 w-4" /> 월별 실사
             </button>
             {tab === 'warehouse' && (
-              <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
+              <Button variant="outline" size="lg" onClick={exportCsv}>
                 <Download className="h-4 w-4" /> CSV
-              </button>
+              </Button>
             )}
           </div>
         </div>

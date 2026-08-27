@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Loader2, PackageCheck, PackageMinus, Bell, X
 import { formatNumber } from '@/lib/utils';
 import type { CalendarEvent } from '@/app/api/calendar-events/route';
 
+import { Button } from '@/components/ui/button';
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -103,9 +105,9 @@ function EventPopup({ event, onClose }: { event: CalendarEvent; onClose: () => v
               <p className="text-[13px] font-bold text-fg mt-1">{event.label}</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-app transition-colors">
+          <Button variant="ghost" size="icon" className="w-7" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-2 text-[13px]">

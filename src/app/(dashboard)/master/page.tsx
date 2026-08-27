@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
-import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
+import { formatCurrency, formatNumber, skuOptionLabel, cn } from '@/lib/utils';
 import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, Download, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
@@ -12,6 +12,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, useTabParam } from '@/components/ui/tabs';
 
 import { useToast } from '@/components/ui/toast';
+
+import { inputClassName } from '@/components/ui/input';
+
+import { Button } from '@/components/ui/button';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -292,7 +296,7 @@ const EMPTY_SUPPLIER_FORM: SupplierFormState = {
   addresses: [],
 };
 
-const sfInputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+const sfInputCls = cn(inputClassName, 'h-10');
 
 function SfField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -406,11 +410,11 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
           rows={2} placeholder="특이사항, 계좌 정보 등" value={form.note} onChange={(e) => set('note', e.target.value)} />
       </SfField>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-        <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onCancel}>취소</Button>
+        <Button size="lg" className="flex-1" type="submit" disabled={saving}>
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           저장
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -574,9 +578,9 @@ function SuppliersTab() {
           <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
               <h2 className="text-[15px] font-bold text-fg">공급처 추가</h2>
-              <button onClick={() => setAddOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+              <Button variant="ghost" size="icon" onClick={() => setAddOpen(false)}>
                 <XIcon className="h-4 w-4 text-fg-3" />
-              </button>
+              </Button>
             </div>
             <div className="px-6 py-5">
               <SupplierFormDialog initial={EMPTY_SUPPLIER_FORM} onSave={handleAdd} onCancel={() => setAddOpen(false)} saving={saving} />
@@ -592,9 +596,9 @@ function SuppliersTab() {
           <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
               <h2 className="text-[15px] font-bold text-fg">공급처 수정</h2>
-              <button onClick={() => setEditTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+              <Button variant="ghost" size="icon" onClick={() => setEditTarget(null)}>
                 <XIcon className="h-4 w-4 text-fg-3" />
-              </button>
+              </Button>
             </div>
             <div className="px-6 py-5">
               <SupplierFormDialog
@@ -626,7 +630,7 @@ function SuppliersTab() {
             <h3 className="text-[15px] font-bold text-fg mb-2">공급처 삭제</h3>
             <p className="text-[13px] text-fg-3">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setDeleteId(null)}>취소</Button>
               <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
             </div>
           </div>
@@ -1120,7 +1124,7 @@ export default function MasterPage() {
   const totalCols = 1 /* checkbox */ + 1 /* name */ + skuBasicColCount + warehouses.length
     + channels.reduce((s, c) => s + (c.type === 'coupang' ? 10 : 3), 0) + 1 /* save */;
 
-  const platformInputCls = 'w-full h-10 px-2.5 rounded-lg border border-line text-[12px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors bg-card';
+  const platformInputCls = cn(inputClassName, 'text-[12px] px-2.5');
 
   if (loading) {
     return (
@@ -1158,9 +1162,9 @@ export default function MasterPage() {
                 className="w-full h-10 pl-8 pr-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand"
               />
             </div>
-            <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
+            <Button variant="outline" size="lg" onClick={load}>
               <RefreshCw className="h-4 w-4" /> 새로고침
-            </button>
+            </Button>
             {channels.some((c) => c.type === 'coupang') && (
               <button onClick={syncIds} disabled={syncing}
                 title={syncResult ?? '쿠팡 옵션ID 자동 매핑 (externalSkuId -> vendorItemId)'}
@@ -1174,10 +1178,10 @@ export default function MasterPage() {
               <Upload className="h-4 w-4" /> 엑셀 업로드
             </button>
             {dirtyCount > 0 && (
-              <button onClick={saveAllDirty} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 whitespace-nowrap">
+              <Button size="lg" onClick={saveAllDirty} disabled={savingAll}>
                 {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 저장 ({dirtyCount})
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -1549,9 +1553,9 @@ export default function MasterPage() {
                 <h3 className="text-[15px] font-bold text-fg">연동 상품명 관리</h3>
                 <p className="text-[12px] text-fg-3 mt-0.5">{aliasModal.productName} · {aliasModal.optionLabel || '기본'} <span className="text-fg-5 font-mono">({aliasModal.skuCode})</span></p>
               </div>
-              <button onClick={() => setAliasModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+              <Button variant="ghost" size="icon" onClick={() => setAliasModal(null)}>
                 <XIcon className="h-4 w-4 text-fg-3" />
-              </button>
+              </Button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
               {(aliases[aliasModal.skuId] ?? []).length === 0 ? (

@@ -900,7 +900,7 @@ function CompareDialog({
           >
             <div className="overflow-x-auto pt-2">
               <table className="w-full text-xs border-separate border-spacing-0">
-                <thead className="bg-app text-fg-3">
+                <thead className="bg-card-2 text-fg-4">
                   <tr>
                     <th className="sticky left-0 z-10 bg-app p-2 text-left min-w-[260px] border-b border-line">
                       카테고리
@@ -2449,7 +2449,7 @@ export default function DataAnalysisPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-card-2 text-fg-3">
+              <thead className="bg-card-2 text-fg-4">
                 <DndContext
                   sensors={dndSensors}
                   collisionDetection={closestCenter}
@@ -2651,7 +2651,7 @@ function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
   return (
     <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-card-2 text-fg-3">
+        <thead className="bg-card-2 text-fg-4">
           <tr>
             <th className="p-2 w-12 text-left">순위</th>
             <th className="p-2 text-left">검색어</th>
@@ -2703,7 +2703,7 @@ function TopBrandsTable({ rows }: { rows: TopBrandRow[] }) {
   return (
     <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-card-2 text-fg-3">
+        <thead className="bg-card-2 text-fg-4">
           <tr>
             <th className="p-2 w-12 text-left">순위</th>
             <th className="p-2 text-left">브랜드</th>
@@ -2794,7 +2794,7 @@ function ProductsTable({
         </button>
       </div>
       <table className="w-full text-xs">
-        <thead className="bg-card-2 text-fg-3">
+        <thead className="bg-card-2 text-fg-4">
           <tr>
             <th className="p-2 w-8"></th>
             <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
@@ -3005,7 +3005,7 @@ function KeywordsTable({ keywords }: { keywords: KeywordDetail[] }) {
   return (
     <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-card-2 text-fg-3">
+        <thead className="bg-card-2 text-fg-4">
           <tr>
             <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
             <SortableTh sortKey="keyword" sort={sort} onSort={onSort} className="p-2 text-left">키워드</SortableTh>

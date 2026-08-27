@@ -8,6 +8,8 @@ import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
 
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
+import { Button } from '@/components/ui/button';
+
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
@@ -2272,9 +2274,9 @@ export default function AdAnalysisPage() {
                       }`}>
                       <Settings className="h-3 w-3" /> 컬럼
                     </button>
-                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-brand text-brand bg-card hover:bg-brand-bg transition-colors">
+                    <Button variant="outline" size="sm" className="border-brand text-brand hover:bg-brand-bg" onClick={handleDownload}>
                       <Download className="h-3 w-3" /> xlsx · 일자 + 일자×키워드
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {tableColEdit && (
@@ -2367,7 +2369,7 @@ export default function AdAnalysisPage() {
                                   </div>
                                   <div className="overflow-auto max-h-96">
                                     <table className="w-full text-[11px]">
-                                      <thead className="bg-card sticky top-0">
+                                      <thead className="sticky top-0 z-10 bg-card-2">
                                         <tr className="text-fg-4 border-b border-line">
                                           <th className="text-left px-2 py-1.5 font-medium">키워드</th>
                                           <th className="text-right px-2 py-1.5 font-medium">노출</th>
@@ -2548,18 +2550,11 @@ export default function AdAnalysisPage() {
                         )}
                         {!expandedKw && <span className="text-[11px] text-fg-4">· 키워드 클릭 시 해당 키워드 기준 차트로 전환</span>}
                       </div>
-                      <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                        {([
+                      <SegmentedControl items={([
                           { key: 'daily' as Granularity, label: '일' },
                           { key: 'weekly' as Granularity, label: '주' },
                           { key: 'monthly' as Granularity, label: '월' },
-                        ]).map((g) => (
-                          <button key={g.key} onClick={() => setGran(g.key)}
-                            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${gran === g.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
-                            {g.label}
-                          </button>
-                        ))}
-                      </div>
+                        ]).map((g) => ({ value: g.key, label: g.label }))} value={gran} onChange={setGran} />
                     </div>
                     <div className="h-[200px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -2595,9 +2590,9 @@ export default function AdAnalysisPage() {
                   className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-all ${kwOnlyOrders ? 'border-brand bg-brand-bg text-brand' : 'border-black/[0.08] text-fg-3'}`}>
                   구매 키워드만
                 </button>
-                <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-brand text-brand bg-card hover:bg-brand-bg transition-colors">
+                <Button variant="outline" className="border-brand text-brand hover:bg-brand-bg" onClick={handleDownload}>
                   <Download className="h-3.5 w-3.5" /> xlsx · 엑셀 피벗테이블 ({pivotAxis === 'kw-date' ? '행: 키워드→일자' : '행: 일자→키워드'})
-                </button>
+                </Button>
                 <span className="text-[12px] text-fg-4">
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
                 </span>
@@ -2607,7 +2602,7 @@ export default function AdAnalysisPage() {
               {pivotAxis === 'kw-date' && (<>
               <div className="bg-card rounded-[18px] border border-line max-h-[70vh] overflow-auto">
                 <table className="w-full text-[12px]">
-                  <thead className="sticky top-0 z-10">
+                  <thead className="sticky top-0 z-10 bg-card-2">
                     <tr className="border-b border-line bg-card-2 shadow-sm">
                       <th className="w-6 bg-card-2"></th>
                       <th className="text-left px-3 py-2.5 font-semibold text-fg-3 min-w-[180px] bg-card-2">키워드</th>
@@ -2754,7 +2749,7 @@ export default function AdAnalysisPage() {
                 return (
                   <div className="bg-card rounded-[18px] border border-line max-h-[70vh] overflow-auto">
                     <table className="w-full text-[12px]">
-                      <thead className="sticky top-0 z-10">
+                      <thead className="sticky top-0 z-10 bg-card-2">
                         <tr className="border-b border-line bg-card-2 shadow-sm">
                           <th className="w-6 bg-card-2"></th>
                           <th className="text-left px-3 py-2.5 font-semibold text-fg-3 min-w-[120px] bg-card-2">일자</th>
@@ -2809,7 +2804,7 @@ export default function AdAnalysisPage() {
                                       </div>
                                       <div className="overflow-auto max-h-96">
                                         <table className="w-full text-[11px]">
-                                          <thead className="bg-card sticky top-0">
+                                          <thead className="sticky top-0 z-10 bg-card-2">
                                             <tr className="text-fg-4 border-b border-line">
                                               <th className="text-left px-2 py-1.5 font-medium">키워드</th>
                                               <th className="text-right px-2 py-1.5 font-medium">노출</th>
@@ -2956,18 +2951,8 @@ export default function AdAnalysisPage() {
                   <input value={placeSearch} onChange={(e) => setPlaceSearch(e.target.value)} placeholder="지면 검색"
                     className="w-full h-9 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand" />
                 </div>
-                <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                  {([['total', '합산'], ['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
-                    <button key={k} onClick={() => setPlaceGran(k)}
-                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
-                  ))}
-                </div>
-                <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                  {placeMetricOpts.map(({ key, label }) => (
-                    <button key={key} onClick={() => setPlaceMetric(key)}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${placeMetric === key ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{label}</button>
-                  ))}
-                </div>
+                <SegmentedControl items={([['total', '합산'], ['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => ({ value: k, label: l }))} value={placeGran} onChange={(k) => setPlaceGran(k)} />
+                <SegmentedControl items={placeMetricOpts.map(({ key, label }) => ({ value: key, label }))} value={placeMetric} onChange={setPlaceMetric} />
                 <button onClick={() => setPlaceShowRoas(v => !v)}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${placeShowRoas ? 'bg-fg text-white border-fg' : 'bg-card text-fg-3 border-black/[0.08] hover:border-fg-5'}`}>
                   ROAS {placeShowRoas ? 'ON' : 'OFF'}
@@ -3025,7 +3010,7 @@ export default function AdAnalysisPage() {
               {/* 테이블 */}
               <div className="bg-card rounded-[18px] border border-line overflow-x-auto relative">
                 <table className="w-full text-[12px]">
-                  <thead className="sticky top-0 z-10">
+                  <thead className="sticky top-0 z-10 bg-card-2">
                     <tr className="border-b border-line bg-card-2">
                       <th className="text-left px-3 py-2.5 font-semibold text-fg-3">지면</th>
                       <th className="text-right px-3 py-2.5 font-semibold text-fg-3">노출</th>
@@ -3235,14 +3220,7 @@ export default function AdAnalysisPage() {
               <div className="bg-card rounded-[18px] border border-line p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-[13px] font-bold text-fg">{dimLabel}별 비교</h3>
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {metricOpts.map((m) => (
-                      <button key={m.key} onClick={() => setProdMetric(m.key)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${prodMetric === m.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl items={metricOpts.map((m) => ({ value: m.key, label: m.label }))} value={prodMetric} onChange={setProdMetric} />
                 </div>
                 {compareChartData.length > 0 && (
                   <div className="h-[300px]">
@@ -3281,22 +3259,8 @@ export default function AdAnalysisPage() {
               {/* 엑셀 피벗 스타일 테이블 */}
               <div className="bg-card rounded-[18px] border border-line overflow-x-auto relative">
                 <div className="flex flex-wrap items-center gap-3 px-4 pt-3 pb-2">
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => { setPivotDim(k); setSelectedProducts(new Set()); setExpandedDims(new Set()); }}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotDim === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {([['weekly', '주'], ['monthly', '월'], ['daily', '일']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => setPivotGran(k)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl items={([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => ({ value: k, label: l }))} value={pivotDim} onChange={(k) => { setPivotDim(k); setSelectedProducts(new Set()); setExpandedDims(new Set()); }} />
+                  <SegmentedControl items={([['weekly', '주'], ['monthly', '월'], ['daily', '일']] as const).map(([k, l]) => ({ value: k, label: l }))} value={pivotGran} onChange={(k) => setPivotGran(k)} />
                   <div className="relative flex-1 min-w-[140px] max-w-[260px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
                     <input value={pivotSearch} onChange={(e) => setPivotSearch(e.target.value)} placeholder={`${dimLabel} 검색`}
@@ -3305,7 +3269,7 @@ export default function AdAnalysisPage() {
                   <span className="text-[11px] text-fg-4 ml-auto">{allDims.length}개</span>
                 </div>
                 <table className="w-full text-[12px]">
-                  <thead className="sticky top-0 z-10">
+                  <thead className="sticky top-0 z-10 bg-card-2">
                     <tr className="border-b border-line bg-card-2">
                       <th onClick={() => togglePSort('dim')} className="text-left px-3 py-2.5 font-semibold text-fg-3 cursor-pointer hover:text-fg whitespace-nowrap select-none">{dimLabel}{si('dim')}</th>
                       {metricCols.map((col) => (
@@ -3494,11 +3458,7 @@ export default function AdAnalysisPage() {
             <div className="space-y-4">
               {/* 컨트롤 — 단위 + 캠페인/상품(글로벌 필터와 동일 state) */}
               <div className="bg-card rounded-[18px] border border-line p-4 flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                  {granOpts.map(([k, l]) => (
-                    <button key={k} onClick={() => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
-                  ))}
-                </div>
+                <SegmentedControl items={granOpts.map(([k, l]) => ({ value: k, label: l }))} value={momGran} onChange={(k) => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} />
                 <label className="flex items-center gap-1.5 text-[12px]">
                   <span className="text-fg-4 whitespace-nowrap">캠페인</span>
                   <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-brand">
@@ -3520,11 +3480,7 @@ export default function AdAnalysisPage() {
               <div className="bg-card rounded-[18px] border border-line p-5 space-y-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                   <h3 className="text-[13px] font-bold text-fg">지표 증감</h3>
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {([['cards', '카드'], ['bars', '막대']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => setMomView(k)} className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${momView === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
-                    ))}
-                  </div>
+                  <SegmentedControl items={([['cards', '카드'], ['bars', '막대']] as const).map(([k, l]) => ({ value: k, label: l }))} value={momView} onChange={(k) => setMomView(k)} />
                   <label className="flex items-center gap-1.5 text-[12px]">
                     <span className="text-fg-4">기준</span>
                     <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand">

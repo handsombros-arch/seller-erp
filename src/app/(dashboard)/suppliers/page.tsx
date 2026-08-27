@@ -8,27 +8,16 @@ import CsvImportDialog from '@/components/CsvImportDialog';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { AppDialog as Dialog } from '@/components/ui/app-dialog';
+
+import { inputClassName } from '@/components/ui/input';
+
+import { cn } from '@/lib/utils';
+
+import { Button } from '@/components/ui/button';
+
 // ─── Dialog ──────────────────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
-          <h2 className="text-[15px] font-bold text-fg">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
-            <X className="h-4 w-4 text-fg-3" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -41,7 +30,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+const inputCls = cn(inputClassName, 'h-10');
 
 // ─── Supplier Form ────────────────────────────────────────────────────────────
 
@@ -201,13 +190,13 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
         />
       </Field>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+        <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onCancel}>
           취소
-        </button>
-        <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        </Button>
+        <Button size="lg" className="flex-1" type="submit" disabled={loading}>
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           저장
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -294,9 +283,9 @@ export default function SuppliersPage() {
           <p className="mt-1 text-[13px] text-fg-3">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
+          <Button variant="outline" size="lg" onClick={() => setCsvOpen(true)}>
             <Upload className="h-4 w-4" /> CSV 업로드
-          </button>
+          </Button>
           <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap">
             <Plus className="h-4 w-4" /> 공급처 추가
           </button>
@@ -443,9 +432,9 @@ export default function SuppliersPage() {
             <h3 className="text-[15px] font-bold text-fg mb-2">공급처 삭제</h3>
             <p className="text-[13px] text-fg-3">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setDeleteId(null)}>
                 취소
-              </button>
+              </Button>
               <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors">
                 삭제
               </button>

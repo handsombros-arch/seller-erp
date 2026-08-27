@@ -13,6 +13,10 @@ import type { Warehouse as WarehouseType, Channel } from '@/types';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { inputClassName } from '@/components/ui/input';
+
+import { cn } from '@/lib/utils';
+
 const WAREHOUSE_TYPE_LABELS: Record<string, string> = {
   own:      '자사창고',
   coupang:  '쿠팡그로스',
@@ -498,7 +502,7 @@ function AccountSection() {
 
 // ───────────────── Coupang API section ─────────────────
 
-const iCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+const iCls = cn(inputClassName, 'h-10');
 
 function CoupangApiSection() {
   const [connected, setConnected] = useState<{ vendor_id: string; updated_at: string } | null>(null);

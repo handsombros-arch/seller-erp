@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Upload, X, Download, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -117,9 +119,9 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">{title}</h2>
-          <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={handleClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
 
@@ -195,14 +197,14 @@ export default function CsvImportDialog({ open, onClose, onImported, title, temp
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={handleClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+            <Button variant="outline" size="lg" className="flex-1" onClick={handleClose}>
               닫기
-            </button>
-            <button onClick={handleImport} disabled={!rows.length || loading}
-              className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+            </Button>
+            <Button size="lg" className="flex-1" onClick={handleImport} disabled={!rows.length || loading}
+             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               업로드 ({rows.length}행)
-            </button>
+            </Button>
           </div>
         </div>
       </div>

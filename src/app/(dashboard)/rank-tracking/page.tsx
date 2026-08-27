@@ -219,7 +219,7 @@ export default function RankTrackingPage() {
       {/* 목록 */}
       <div className="bg-card border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-card-2 border-b">
+          <thead className="bg-card-2 border-b border-line-2">
             <tr>
               <th className="text-left px-3 py-2 font-medium">키워드 / 상품</th>
               <th className="text-left px-3 py-2 font-medium w-20">상태</th>

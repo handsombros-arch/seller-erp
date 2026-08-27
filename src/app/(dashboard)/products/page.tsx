@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatCurrency, formatNumber, skuOptionLabel } from '@/lib/utils';
+import { formatCurrency, formatNumber, skuOptionLabel, cn } from '@/lib/utils';
 import type { Product, Sku } from '@/types';
 import {
   Package, Plus, Edit, Trash2, ChevronDown, ChevronUp, Loader2, X, Check, Info, Upload,
@@ -9,6 +9,12 @@ import {
 import CsvImportDialog from '@/components/CsvImportDialog';
 
 import { PageHeader } from '@/components/ui/page-header';
+
+import { AppDialog as Dialog } from '@/components/ui/app-dialog';
+
+import { inputClassName } from '@/components/ui/input';
+
+import { Button } from '@/components/ui/button';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -28,25 +34,6 @@ const VAT_RATE = 0.1;
 
 // ─── Dialog ─────────────────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
-          <h2 className="text-[15px] font-bold text-fg tracking-[-0.02em]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
-            <X className="h-4 w-4 text-fg-3" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 function InputField({ label, hint, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; required?: boolean }) {
   return (
@@ -93,7 +80,7 @@ function VatCostFields({ exclVat, onChange }: {
     onChange(excl);
   }
 
-  const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+  const inputCls = cn(inputClassName, 'h-10');
 
   return (
     <div className="space-y-2">
@@ -184,7 +171,7 @@ function AddProductDialog({ open, onClose, onSave }: {
     } finally { setLoading(false); }
   }
 
-  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+  const selectCls = cn(inputClassName, 'h-10');
 
   return (
     <Dialog open={open} onClose={onClose} title="상품 추가">
@@ -224,10 +211,10 @@ function AddProductDialog({ open, onClose, onSave }: {
         <InputField label="제품코드" hint="(선택 · 없으면 자동 생성)" placeholder="예: PROD-001" value={form.skuCode} onChange={(e) => set('skuCode', e.target.value)} />
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -274,10 +261,10 @@ function EditProductDialog({ open, onClose, product, onSave }: {
         <InputField label="옵션명" placeholder="예: 색상, 사이즈" value={form.optionName} onChange={(e) => set('optionName', e.target.value)} />
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -388,7 +375,7 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
     } finally { setLoading(false); }
   }
 
-  const inputCls = 'h-9 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors';
+  const inputCls = cn(inputClassName, 'w-auto');
 
   return (
     <Dialog open={open} onClose={onClose} title="SKU 추가">
@@ -444,9 +431,9 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
               placeholder="옵션명 추가 (예: 색상, 사이즈)"
               className={`${inputCls} flex-1`}
             />
-            <button type="button" onClick={addOptType} className="h-10 px-3 rounded-xl border border-brand text-brand text-[13px] font-medium hover:bg-brand-bg transition-colors whitespace-nowrap">
+            <Button variant="outline" size="lg" className="border-brand text-brand hover:bg-brand-bg" type="button" onClick={addOptType}>
               + 옵션 추가
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -515,11 +502,11 @@ function AddSkuDialog({ open, onClose, product, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {comboCount > 1 ? `SKU ${comboCount}개 생성` : '저장'}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -597,7 +584,7 @@ function PlatformSetupDialog({ skus, onClose }: {
     setTimeout(onClose, 800);
   }
 
-  const inputCls = 'w-full h-8 px-2.5 rounded-lg border border-line text-[12px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors';
+  const inputCls = cn(inputClassName, 'text-[12px] px-2.5');
 
   if (!channels.length) return null;
 
@@ -611,9 +598,9 @@ function PlatformSetupDialog({ skus, onClose }: {
             <h2 className="text-[15px] font-bold text-fg">플랫폼 상품 정보 등록</h2>
             <p className="text-[12px] text-fg-3 mt-0.5">각 채널의 상품명과 판매가를 입력하면 주문 자동 매칭에 사용됩니다</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors ml-3 shrink-0">
+          <Button variant="ghost" size="icon" className="ml-3 shrink-0" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
 
         {/* Body */}
@@ -668,13 +655,13 @@ function PlatformSetupDialog({ skus, onClose }: {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-line-2 flex gap-2 shrink-0">
-          <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+          <Button variant="outline" size="lg" className="flex-1" onClick={onClose}>
             나중에 하기
-          </button>
-          <button onClick={handleSave} disabled={saving || done}
-            className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          </Button>
+          <Button size="lg" className="flex-1" onClick={handleSave} disabled={saving || done}
+           >
             {done ? <><Check className="h-4 w-4" /> 저장완료</> : saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '저장'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -790,10 +777,10 @@ function EditSkuDialog({ open, onClose, sku, product, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -832,12 +819,12 @@ function SkuRow({ sku, onEdit, onDelete }: { sku: Sku; onEdit: () => void; onDel
           <span className="text-[13px] font-bold text-fg tabular-nums">{formatNumber(inv)}</span>
           <span className="text-[11px] text-fg-5 ml-1">개</span>
         </div>
-        <button onClick={onEdit} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-brand-bg text-fg-3 hover:text-brand transition-colors">
+        <Button variant="ghost" size="icon" className="hover:bg-brand-bg hover:text-brand" onClick={onEdit}>
           <Edit className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={onDelete} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-3 hover:text-red-500 transition-colors">
+        </Button>
+        <Button variant="ghost" size="icon" className="hover:bg-danger/10 hover:text-danger" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -870,12 +857,12 @@ function ProductRow({ product, onEdit, onDelete, onAddSku, onEditSku, onDeleteSk
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3" onClick={(e) => e.stopPropagation()}>
-          <button onClick={onEdit} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-brand-bg text-fg-3 hover:text-brand transition-colors">
+          <Button variant="ghost" size="icon" className="hover:bg-brand-bg hover:text-brand" onClick={onEdit}>
             <Edit className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={onDelete} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-3 hover:text-red-500 transition-colors">
+          </Button>
+          <Button variant="ghost" size="icon" className="hover:bg-danger/10 hover:text-danger" onClick={onDelete}>
             <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          </Button>
           <div className="w-px h-4 bg-line" />
           {expanded ? <ChevronUp className="h-4 w-4 text-fg-5" /> : <ChevronDown className="h-4 w-4 text-fg-5" />}
         </div>
@@ -944,9 +931,9 @@ export default function ProductsPage() {
           <p className="mt-1 text-[13px] text-fg-3">상품과 SKU를 관리하세요</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
+          <Button variant="outline" size="lg" onClick={() => setCsvOpen(true)}>
             <Upload className="h-4 w-4" /> CSV 업로드
-          </button>
+          </Button>
           <button onClick={() => setAddProductOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap">
             <Plus className="h-4 w-4" /> 상품 추가
           </button>
@@ -1026,10 +1013,10 @@ export default function ProductsPage() {
           <p className="text-[13px] text-fg"><span className="font-semibold">{deleteConfirm?.name}</span>을(를) 삭제하시겠습니까?</p>
           <p className="text-[13px] text-fg-3">삭제된 데이터는 복구할 수 없습니다.</p>
           <div className="flex gap-2">
-            <button onClick={() => setDeleteConfirm(null)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-            <button onClick={handleDelete} disabled={deleting} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+            <Button variant="outline" size="lg" className="flex-1" onClick={() => setDeleteConfirm(null)}>취소</Button>
+            <Button variant="destructive" size="lg" className="flex-1 bg-danger text-white hover:bg-danger/90" onClick={handleDelete} disabled={deleting}>
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}삭제
-            </button>
+            </Button>
           </div>
         </div>
       </Dialog>

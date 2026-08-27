@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 
+import { Button } from '@/components/ui/button';
+
 import {
   Upload, X, Download, AlertCircle, CheckCircle2, Loader2,
   MapPin, SlidersHorizontal, Search, Trash2, PackageX,
@@ -266,9 +268,9 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">주문 엑셀 업로드</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
 
@@ -406,12 +408,12 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">닫기</button>
-            <button onClick={handleUpload} disabled={!rows.length || loading}
-              className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+            <Button variant="outline" size="lg" className="flex-1" onClick={onClose}>닫기</Button>
+            <Button size="lg" className="flex-1" onClick={handleUpload} disabled={!rows.length || loading}
+             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               업로드 ({rows.length}건)
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1046,7 +1048,7 @@ export default function OrdersTab() {
                 ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setExchangeOrder(null)} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">취소</button>
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setExchangeOrder(null)}>취소</Button>
               <button onClick={processExchange} disabled={!exchangeSkuId || exchangeLoading}
                 className="flex-1 h-10 rounded-xl bg-purple-500 text-white text-[13px] font-semibold hover:bg-purple-600 disabled:opacity-60">
                 {exchangeLoading ? '처리 중...' : '교환 처리'}

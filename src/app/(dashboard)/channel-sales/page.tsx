@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
+import { formatNumber, formatCurrency, formatDate, skuOptionLabel, cn } from '@/lib/utils';
 import type { ChannelSale } from '@/types';
 import {
   ShoppingCart, Plus, Upload, X, Loader2, ChevronDown, AlertCircle, CheckCircle2, Trash2, Clock,
@@ -16,6 +16,12 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, useTabParam } from '@/components/ui/tabs';
 
 import { useToast } from '@/components/ui/toast';
+
+import { AppDialog as Dialog } from '@/components/ui/app-dialog';
+
+import { inputClassName } from '@/components/ui/input';
+
+import { Button } from '@/components/ui/button';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -51,27 +57,8 @@ function resolvePlatformName(sku: any, channel: string): string | null {
 
 // ─── Dialog wrapper ─────────────────────────────────────────────────────────
 
-function Dialog({ open, onClose, title, children, wide }: {
-  open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
-          <h2 className="text-[15px] font-bold text-fg">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
-            <X className="h-4 w-4 text-fg-3" />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+const inputCls = cn(inputClassName, 'h-10');
 const selectCls = `${inputCls} bg-card`;
 
 // ─── Manual Add Dialog ───────────────────────────────────────────────────────
@@ -189,10 +176,10 @@ function AddDialog({ open, onClose, onSaved }: {
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>취소</Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={loading}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} 저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -688,12 +675,12 @@ function UploadDialog({ open, onClose, onUploaded }: {
 
           {!confirmOverwrite && (
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setStep(1)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">이전</button>
-              <button onClick={() => handleUpload(false)} disabled={loading || !parsedRows.length}
-                className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
+              <Button variant="outline" size="lg" className="flex-1" onClick={() => setStep(1)}>이전</Button>
+              <Button size="lg" className="flex-1" onClick={() => handleUpload(false)} disabled={loading || !parsedRows.length}
+               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                 업로드 완료 ({parsedRows.length}건)
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -753,9 +740,9 @@ function InsightsUploadDialog({ open, onClose, onDone }: {
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-lg max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">셀러 인사이트 업로드</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="bg-brand-bg rounded-xl px-4 py-3 text-[12px] text-brand space-y-1">
@@ -879,9 +866,9 @@ function CoupangSyncDialog({ open, onClose, onDone }: {
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">쿠팡 그로스 데이터 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="bg-brand-bg rounded-xl px-4 py-3 text-[12px] text-brand">
@@ -948,9 +935,9 @@ function NaverSyncDialog({ open, onClose, onDone }: {
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">네이버 스마트스토어 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="bg-[#F0FDF4] rounded-xl px-4 py-3 text-[12px] text-green-700">
@@ -1017,9 +1004,9 @@ function TossSyncDialog({ open, onClose, onDone }: {
       <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">토스쇼핑 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="bg-[#F0F4FF] rounded-xl px-4 py-3 text-[12px] text-brand-hover">

@@ -374,7 +374,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
       {items.length > 0 && (
         <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-card-2 border-b">
+            <thead className="bg-card-2 border-b border-line-2">
               <tr>
                 <th className="text-left px-3 py-2 font-medium w-12">#</th>
                 <th className="text-left px-3 py-2 font-medium">상품</th>

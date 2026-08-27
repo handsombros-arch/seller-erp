@@ -1522,7 +1522,7 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
 
             <div className="max-h-80 overflow-y-auto border border-line rounded-xl">
               <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-card-2"><tr className="text-fg-3 border-b border-line">
+                <thead className="sticky top-0 z-10 bg-card-2"><tr className="text-fg-3 border-b border-line">
                   <th className="text-left py-2 px-3 min-w-[200px]">상품 / 옵션</th>
                   <th className="text-right py-2 px-2 w-12">수량</th>
                   <th className="text-right py-2 px-2 w-24">매출</th>
@@ -1976,7 +1976,7 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
 
             <div className="max-h-80 overflow-y-auto border border-line rounded-xl">
               <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-card-2"><tr className="text-fg-3 border-b border-line">
+                <thead className="sticky top-0 z-10 bg-card-2"><tr className="text-fg-3 border-b border-line">
                   <th className="text-left py-2 px-3 min-w-[220px]">상품 / 캠페인</th>
                   <th className="text-right py-2 px-2 w-28">광고비</th>
                   <th className="text-right py-2 px-2 w-20">노출</th>

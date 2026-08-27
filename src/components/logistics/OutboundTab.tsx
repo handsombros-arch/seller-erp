@@ -6,6 +6,8 @@ import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/
 import type { OutboundRecord, Sku, Warehouse, Channel } from '@/types';
 import { SearchSelect } from '@/components/ui/search-select';
 
+import { Button } from '@/components/ui/button';
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type SkuOption = Omit<Sku, 'product'> & {
@@ -445,9 +447,9 @@ export default function OutboundTab() {
       <Dialog open={open} onClose={closeForm}>
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <h2 className="text-[15px] font-bold text-fg">출고 등록</h2>
-          <button onClick={closeForm} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
+          <Button variant="ghost" size="icon" onClick={closeForm}>
             <X className="h-4 w-4 text-fg-3" />
-          </button>
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -665,13 +667,13 @@ export default function OutboundTab() {
             <p className="px-6 pb-2 text-[13px] text-red-500">{submitError}</p>
           )}
           <div className="px-6 pb-6 pt-2 flex gap-2">
-            <button type="button" onClick={closeForm} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+            <Button variant="outline" size="lg" className="flex-1" type="button" onClick={closeForm}>
               취소
-            </button>
-            <button type="submit" disabled={submitting} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+            </Button>
+            <Button size="lg" className="flex-1" type="submit" disabled={submitting}>
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {outboundType === 'coupang_growth' ? `등록 (${centers.reduce((sum, c) => sum + c.skus.filter(s => s.sku_id && s.quantity).length, 0)}건)` : '등록'}
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>
@@ -750,9 +752,9 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
     <Dialog open onClose={onClose}>
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
         <h2 className="text-[15px] font-bold text-fg">출고 수정</h2>
-        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
+        <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4 text-fg-3" />
-        </button>
+        </Button>
       </div>
       <form onSubmit={handleSubmit}>
         <div className="px-6 py-5 space-y-4">
@@ -822,12 +824,12 @@ function EditDialog({ record, skus, warehouses, channels, inputCls, onClose, onS
         </div>
 
         <div className="px-6 pb-6 pt-2 flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
+          <Button variant="outline" size="lg" className="flex-1" type="button" onClick={onClose}>
             취소
-          </button>
-          <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          </Button>
+          <Button size="lg" className="flex-1" type="submit" disabled={saving}>
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} 저장
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

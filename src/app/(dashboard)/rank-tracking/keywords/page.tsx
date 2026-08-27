@@ -386,7 +386,7 @@ export default function KeywordSearchPage() {
           )}
           {!loadingMatrix && matrix && matrix.snapshots.length > 0 && (
             <table className="text-xs border-collapse min-w-full">
-              <thead className="bg-card-2 border-b sticky top-0 z-10">
+              <thead className="sticky top-0 z-10 bg-card-2 border-b border-line-2">
                 <tr>
                   <th className="text-left px-2 py-2 font-medium w-12 sticky left-0 bg-card-2 z-20 border-r">#</th>
                   {matrix.snapshots.map((s) => (
@@ -435,7 +435,7 @@ export default function KeywordSearchPage() {
                 <span className="text-fg-5 font-normal">· 노란 셀 = 직전 시점 대비 상품 변경</span>
               </div>
               <table className="text-xs w-full">
-                <thead className="bg-card-2 border-b">
+                <thead className="bg-card-2 border-b border-line-2">
                   <tr>
                     <th className="text-left px-2 py-1.5 font-medium">상품</th>
                     {matrix.snapshots.map((s) => (
@@ -487,7 +487,7 @@ export default function KeywordSearchPage() {
       {currentKw && viewMode === 'single' && (
         <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-card-2 border-b">
+            <thead className="bg-card-2 border-b border-line-2">
               <tr>
                 <th className="text-left px-3 py-2 font-medium w-14">순위</th>
                 <th className="text-left px-3 py-2 font-medium">상품명</th>

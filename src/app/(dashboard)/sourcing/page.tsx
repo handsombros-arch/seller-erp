@@ -309,7 +309,7 @@ export default function SourcingListPage() {
       {/* 목록 */}
       <div className="bg-card border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-card-2 border-b">
+          <thead className="bg-card-2 border-b border-line-2">
             <tr>
               <th className="px-3 py-2 w-8">
                 <input
