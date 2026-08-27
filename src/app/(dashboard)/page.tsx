@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber, formatDate, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
+import { PageHeader } from '@/components/ui/page-header';
+
 import {
   Package, Warehouse, AlertTriangle, TrendingUp,
   PackageCheck, ArrowRight, Loader2, ChevronDown, X, Plus,
@@ -85,21 +87,21 @@ function DailyOutboundChart() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+    <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div>
-          <h3 className="text-[13px] font-semibold text-[#191F28] tracking-[-0.02em]">일별 출고량</h3>
-          <p className="text-[12px] text-[#B0B8C1] mt-0.5">
-            {days}일간 총 <span className="font-semibold text-[#191F28]">{formatNumber(grandTotal)}개</span> 출고
+          <h3 className="text-[13px] font-semibold text-fg tracking-[-0.02em]">일별 출고량</h3>
+          <p className="text-[12px] text-fg-5 mt-0.5">
+            {days}일간 총 <span className="font-semibold text-fg">{formatNumber(grandTotal)}개</span> 출고
             {maxDay && maxDay.total > 0 && (
-              <span className="ml-2">· 최다 {fmtLabel(maxDay.date)} <span className="font-semibold text-[#FF6B00]">{formatNumber(maxDay.total)}개</span></span>
+              <span className="ml-2">· 최다 {fmtLabel(maxDay.date)} <span className="font-semibold text-warn">{formatNumber(maxDay.total)}개</span></span>
             )}
           </p>
         </div>
-        <div className="flex rounded-xl border border-[#E5E8EB] overflow-hidden">
+        <div className="flex rounded-xl border border-line overflow-hidden">
           {([30, 60, 90] as const).map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 text-[12px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 text-[12px] font-medium transition-colors ${days === d ? 'bg-brand text-white' : 'bg-card text-fg-3 hover:bg-app'}`}>
               {d}일
             </button>
           ))}
@@ -108,11 +110,11 @@ function DailyOutboundChart() {
 
       {loading ? (
         <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" />
+          <Loader2 className="h-5 w-5 animate-spin text-brand" />
         </div>
       ) : grandTotal === 0 ? (
         <div className="flex flex-col items-center justify-center h-40">
-          <p className="text-[13px] text-[#B0B8C1]">출고 데이터가 없습니다</p>
+          <p className="text-[13px] text-fg-5">출고 데이터가 없습니다</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
@@ -255,16 +257,16 @@ function SalesTrendSection() {
     : skuOptions;
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+    <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
       <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h3 className="text-[13px] font-semibold text-[#191F28]">판매 추이</h3>
-          <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 {days}일 상품별 판매량</p>
+          <h3 className="text-[13px] font-semibold text-fg">판매 추이</h3>
+          <p className="text-[12px] text-fg-5 mt-0.5">최근 {days}일 상품별 판매량</p>
         </div>
-        <div className="flex items-center gap-1 bg-[#F2F4F6] p-0.5 rounded-lg">
+        <div className="flex items-center gap-1 bg-app p-0.5 rounded-lg">
           {PERIOD_OPTIONS.map(opt => (
             <button key={opt.value} onClick={() => changeDays(opt.value)}
-              className={`h-7 px-2.5 rounded-md text-[12px] font-medium transition-colors ${days === opt.value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+              className={`h-7 px-2.5 rounded-md text-[12px] font-medium transition-colors ${days === opt.value ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
               {opt.label}
             </button>
           ))}
@@ -281,27 +283,27 @@ function SalesTrendSection() {
         ))}
         <div className="relative" ref={dropRef}>
           <button onClick={() => { setDropOpen(v => !v); setDropSearch(''); }}
-            className="flex items-center gap-1 h-8 px-3 rounded-full border border-dashed border-[#B0B8C1] text-[12px] text-[#6B7684] hover:border-[#3182F6] hover:text-[#3182F6] transition-colors">
+            className="flex items-center gap-1 h-8 px-3 rounded-full border border-dashed border-fg-5 text-[12px] text-fg-3 hover:border-brand hover:text-brand transition-colors">
             <Plus className="h-3 w-3" /> 상품 추가
           </button>
           {dropOpen && (
-            <div className="absolute left-0 top-9 z-30 w-80 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6]">
-              <div className="p-2 border-b border-[#F2F4F6]">
+            <div className="absolute left-0 top-9 z-30 w-80 bg-card rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-line-2">
+              <div className="p-2 border-b border-line-2">
                 <input lang="ko" autoFocus value={dropSearch} onChange={e => setDropSearch(e.target.value)} placeholder="상품명 또는 SKU 검색"
-                  className="w-full h-8 px-3 text-[12px] rounded-lg border border-[#E5E8EB] outline-none focus:border-[#3182F6]" />
+                  className="w-full h-8 px-3 text-[12px] rounded-lg border border-line outline-none focus:border-brand" />
               </div>
               <div className="max-h-64 overflow-y-auto p-2">
                 {filteredSkuOptions.slice(0, 30).map(s => {
                   const sel = selectedIds.includes(s.id);
                   return (
                     <button key={s.id} onClick={() => toggleSku(s.id)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${sel ? 'bg-[#EBF1FE]' : 'hover:bg-[#F8F9FB]'}`}>
-                      <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 ${sel ? 'bg-[#3182F6] border-[#3182F6]' : 'border-[#D0D5DD]'}`}>
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${sel ? 'bg-brand-bg' : 'hover:bg-card-2'}`}>
+                      <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 ${sel ? 'bg-brand border-brand' : 'border-line'}`}>
                         {sel && <svg viewBox="0 0 12 10" className="w-2.5 h-2.5"><path d="M1 5l3 3 7-7" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[#191F28] truncate">{s.label}</p>
-                        <p className="text-[11px] text-[#B0B8C1] font-mono">{s.sku_code}</p>
+                        <p className="text-[13px] font-medium text-fg truncate">{s.label}</p>
+                        <p className="text-[11px] text-fg-5 font-mono">{s.sku_code}</p>
                       </div>
                     </button>
                   );
@@ -314,13 +316,13 @@ function SalesTrendSection() {
 
       {selectedIds.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-40">
-          <TrendingUp className="h-8 w-8 text-[#E5E8EB] mb-2" />
-          <p className="text-[13px] text-[#B0B8C1]">상품을 선택하면 추이 그래프가 표시됩니다</p>
+          <TrendingUp className="h-8 w-8 text-line mb-2" />
+          <p className="text-[13px] text-fg-5">상품을 선택하면 추이 그래프가 표시됩니다</p>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center h-40"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+        <div className="flex items-center justify-center h-40"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
       ) : chartData.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-40"><p className="text-[13px] text-[#B0B8C1]">선택한 기간에 판매 데이터가 없습니다</p></div>
+        <div className="flex flex-col items-center justify-center h-40"><p className="text-[13px] text-fg-5">선택한 기간에 판매 데이터가 없습니다</p></div>
       ) : (
         <>
           <ResponsiveContainer width="100%" height={260}>
@@ -339,21 +341,21 @@ function SalesTrendSection() {
           </ResponsiveContainer>
 
           {/* 상품별 주문 합계 */}
-          <div className="mt-4 border-t border-[#F2F4F6] pt-4">
-            <h4 className="text-[12px] font-semibold text-[#6B7684] mb-2">최근 {days}일 주문 합계</h4>
+          <div className="mt-4 border-t border-line-2 pt-4">
+            <h4 className="text-[12px] font-semibold text-fg-3 mb-2">최근 {days}일 주문 합계</h4>
             <div className="space-y-1.5">
               {skuTotals.map((item, idx) => (
                 <div key={item.id} className="flex items-center gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: LINE_COLORS[selectedIds.indexOf(item.id) % LINE_COLORS.length] }} />
-                  <span className="text-[13px] text-[#191F28] flex-1 min-w-0 truncate">{item.label}</span>
-                  <span className="text-[13px] font-bold text-[#191F28] tabular-nums">{formatNumber(item.total)}개</span>
+                  <span className="text-[13px] text-fg flex-1 min-w-0 truncate">{item.label}</span>
+                  <span className="text-[13px] font-bold text-fg tabular-nums">{formatNumber(item.total)}개</span>
                 </div>
               ))}
               {skuTotals.length > 1 && (
-                <div className="flex items-center gap-2.5 pt-1.5 border-t border-[#F2F4F6]">
+                <div className="flex items-center gap-2.5 pt-1.5 border-t border-line-2">
                   <div className="w-2.5 h-2.5 shrink-0" />
-                  <span className="text-[13px] font-semibold text-[#6B7684] flex-1">합계</span>
-                  <span className="text-[13px] font-bold text-[#3182F6] tabular-nums">{formatNumber(grandTotalQty)}개</span>
+                  <span className="text-[13px] font-semibold text-fg-3 flex-1">합계</span>
+                  <span className="text-[13px] font-bold text-brand tabular-nums">{formatNumber(grandTotalQty)}개</span>
                 </div>
               )}
             </div>
@@ -393,9 +395,9 @@ export default function DashboardPage() {
 
   const stats = data?.stats;
   const statCards = [
-    { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-[#EBF1FE]', icon: Package, href: '/products' },
+    { label: '관리 SKU', value: formatNumber(stats?.totalSkus ?? 0), unit: '개', color: 'text-primary', bg: 'bg-brand-bg', icon: Package, href: '/products' },
     { label: '창고 재고', value: formatNumber(stats?.totalStock ?? 0), unit: '개', color: 'text-[#1EC800]', bg: 'bg-green-50', icon: Warehouse, href: '/inventory?tab=warehouse' },
-    { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-[#FF6B00]', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음', href: '/inventory?tab=rg' },
+    { label: '쿠팡 재고', value: formatNumber(stats?.coupangStock ?? 0), unit: '개', color: 'text-warn', bg: 'bg-orange-50', icon: Store, sub: stats?.coupangStockDate ? `${stats.coupangStockDate} 기준` : '데이터 없음', href: '/inventory?tab=rg' },
     { label: vatOn ? '재고 원가 총액 (VAT+10%)' : '재고 원가 총액 (VAT별도)', value: formatCurrency((stats?.totalStockValue ?? 0) * vatMult), unit: '', color: 'text-purple-600', bg: 'bg-purple-50', icon: TrendingUp, href: '/inventory' },
     { label: '발주 필요 SKU', value: formatNumber(stats?.needsReorderCount ?? 0), unit: '개', color: 'text-red-500', bg: 'bg-red-50', icon: AlertTriangle, href: '/forecast' },
   ];
@@ -403,8 +405,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       <div className="pt-1">
-        <h2 className="text-[20px] font-bold tracking-[-0.03em] text-foreground">대시보드</h2>
-        <p className="mt-1 text-[13px] text-[#6B7684]">재고 현황과 발주 알림을 확인하세요</p>
+        <PageHeader title="대시보드" />
+        <p className="mt-1 text-[13px] text-fg-3">재고 현황과 발주 알림을 확인하세요</p>
       </div>
 
       {/* 재고 음수 경고 */}
@@ -431,9 +433,9 @@ export default function DashboardPage() {
                 <div key={a.sku_id + a.warehouse_name} className="flex items-center gap-3 text-[12px]">
                   <span className="font-semibold text-red-700 w-5 text-right">{a.quantity}</span>
                   <span className="text-red-400">개</span>
-                  <span className="font-medium text-[#191F28]">{a.product_name}</span>
-                  <span className="text-[#6B7684] font-mono">{a.sku_code}</span>
-                  <span className="text-[#B0B8C1]">· {a.warehouse_name}</span>
+                  <span className="font-medium text-fg">{a.product_name}</span>
+                  <span className="text-fg-3 font-mono">{a.sku_code}</span>
+                  <span className="text-fg-5">· {a.warehouse_name}</span>
                 </div>
               ))}
             </div>
@@ -444,16 +446,16 @@ export default function DashboardPage() {
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map((s) => (
-          <Link key={s.label} href={s.href} className="block bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-150 cursor-pointer">
+          <Link key={s.label} href={s.href} className="block bg-card rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-150 cursor-pointer">
             <div className={`w-9 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
               <s.icon className={`h-[18px] w-[18px] ${s.color}`} strokeWidth={2.5} />
             </div>
-            <p className="text-[11px] text-[#6B7684] font-medium mb-1">{s.label}</p>
+            <p className="text-[11px] text-fg-3 font-medium mb-1">{s.label}</p>
             <div className="flex items-baseline gap-1">
               <span className={`text-[24px] font-bold tracking-[-0.04em] ${s.color}`}>{s.value}</span>
-              {s.unit && <span className="text-[13px] text-[#B0B8C1] font-medium">{s.unit}</span>}
+              {s.unit && <span className="text-[13px] text-fg-5 font-medium">{s.unit}</span>}
             </div>
-            {'sub' in s && s.sub && <p className="text-[11px] text-[#B0B8C1] mt-1">{s.sub}</p>}
+            {'sub' in s && s.sub && <p className="text-[11px] text-fg-5 mt-1">{s.sub}</p>}
           </Link>
         ))}
       </div>
@@ -462,13 +464,13 @@ export default function DashboardPage() {
       {((data?.upcomingEvents ?? []).length > 0 || (data?.anomalies ?? []).length > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
           {/* 다가오는 예정 */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <div>
                 <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
                   <Calendar className="h-4 w-4 text-primary" /> 다가오는 예정
                 </h3>
-                <p className="text-[12px] text-[#B0B8C1] mt-0.5">14일 이내 입고 · 발주 권장일</p>
+                <p className="text-[12px] text-fg-5 mt-0.5">14일 이내 입고 · 발주 권장일</p>
               </div>
               <Link href="/inbound?tab=calendar" className="flex items-center gap-1 text-[12px] text-primary font-medium">
                 캘린더 <ArrowRight className="h-3.5 w-3.5" />
@@ -476,24 +478,24 @@ export default function DashboardPage() {
             </div>
             {(data?.upcomingEvents ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10">
-                <p className="text-[13px] text-[#B0B8C1]">14일 내 예정 없음</p>
+                <p className="text-[13px] text-fg-5">14일 내 예정 없음</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F2F4F6]">
+              <div className="divide-y divide-line-2">
                 {(data?.upcomingEvents ?? []).map((ev, i) => {
                   const isInbound = ev.type === 'inbound';
                   const dLabel = ev.days_until === 0 ? 'D-day' : `D-${ev.days_until}`;
                   const urgent = ev.days_until <= 3;
                   return (
-                    <Link key={i} href={isInbound ? '/inbound' : '/forecast'} className="flex items-center gap-3 px-5 py-3 hover:bg-[#F8F9FB] transition-colors">
-                      <div className={`shrink-0 w-14 text-center py-1 rounded-lg text-[11px] font-bold ${urgent ? 'bg-red-50 text-red-500' : 'bg-[#F2F4F6] text-[#6B7684]'}`}>
+                    <Link key={i} href={isInbound ? '/inbound' : '/forecast'} className="flex items-center gap-3 px-5 py-3 hover:bg-card-2 transition-colors">
+                      <div className={`shrink-0 w-14 text-center py-1 rounded-lg text-[11px] font-bold ${urgent ? 'bg-red-50 text-red-500' : 'bg-app text-fg-3'}`}>
                         {dLabel}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-foreground truncate">{ev.label}</p>
-                        <p className="text-[11px] text-[#B0B8C1]">{ev.date}</p>
+                        <p className="text-[11px] text-fg-5">{ev.date}</p>
                       </div>
-                      <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${isInbound ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                      <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${isInbound ? 'bg-brand-bg text-brand' : 'bg-orange-50 text-orange-600'}`}>
                         {isInbound ? '입고예정' : '발주권장'}
                       </span>
                     </Link>
@@ -504,29 +506,29 @@ export default function DashboardPage() {
           </div>
 
           {/* 특이점 감지 */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
             <div className="px-5 pt-5 pb-3">
               <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em] flex items-center gap-1.5">
                 <Zap className="h-4 w-4 text-amber-500" /> 특이점 감지
               </h3>
-              <p className="text-[12px] text-[#B0B8C1] mt-0.5">최근 7일 판매 급증 SKU</p>
+              <p className="text-[12px] text-fg-5 mt-0.5">최근 7일 판매 급증 SKU</p>
             </div>
             {(data?.anomalies ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10">
-                <p className="text-[13px] text-[#B0B8C1]">이상 감지된 SKU 없음</p>
+                <p className="text-[13px] text-fg-5">이상 감지된 SKU 없음</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F2F4F6]">
+              <div className="divide-y divide-line-2">
                 {(data?.anomalies ?? []).map((a) => (
-                  <Link key={a.sku_id} href="/channel-sales" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
+                  <Link key={a.sku_id} href="/channel-sales" className="flex items-center justify-between px-5 py-3.5 hover:bg-card-2 transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-foreground truncate">{a.product_name}</p>
-                      <p className="text-[12px] text-[#6B7684] font-mono mt-0.5">{a.sku_code}</p>
-                      <p className="text-[11px] text-[#B0B8C1] mt-0.5">전주 {formatNumber(a.prev_7d)}개</p>
+                      <p className="text-[12px] text-fg-3 font-mono mt-0.5">{a.sku_code}</p>
+                      <p className="text-[11px] text-fg-5 mt-0.5">전주 {formatNumber(a.prev_7d)}개</p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
                       <p className="text-[18px] font-bold text-foreground tabular-nums">
-                        {formatNumber(a.recent_7d)}<span className="text-[12px] font-normal text-[#6B7684] ml-1">개</span>
+                        {formatNumber(a.recent_7d)}<span className="text-[12px] font-normal text-fg-3 ml-1">개</span>
                       </p>
                       {a.change_pct !== null ? (
                         <p className="text-[12px] font-bold text-red-500">↑{a.change_pct}%</p>
@@ -547,11 +549,11 @@ export default function DashboardPage() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* 발주 필요 목록 */}
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div>
               <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em]">발주 필요 SKU</h3>
-              <p className="text-[12px] text-[#B0B8C1] mt-0.5">재고점 이하 도달</p>
+              <p className="text-[12px] text-fg-5 mt-0.5">재고점 이하 도달</p>
             </div>
             <Link href="/inventory?tab=forecast" className="flex items-center gap-1 text-[12px] text-primary font-medium">
               전체 <ArrowRight className="h-3.5 w-3.5" />
@@ -559,13 +561,13 @@ export default function DashboardPage() {
           </div>
           {(data?.needsReorder ?? []).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-12 h-12 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
-                <Package className="h-5 w-5 text-[#B0B8C1]" />
+              <div className="w-12 h-12 rounded-2xl bg-app flex items-center justify-center mb-3">
+                <Package className="h-5 w-5 text-fg-5" />
               </div>
-              <p className="text-[13px] text-[#B0B8C1]">발주 필요 항목 없음</p>
+              <p className="text-[13px] text-fg-5">발주 필요 항목 없음</p>
             </div>
           ) : (
-            <div className="divide-y divide-[#F2F4F6]">
+            <div className="divide-y divide-line-2">
               {(data?.needsReorder ?? []).map((sku: any) => {
                 const total = (sku.inventory ?? []).reduce((s: number, i: any) => s + (i.quantity ?? 0), 0);
                 const s7d = sku.sales_7d ?? 0;
@@ -577,17 +579,17 @@ export default function DashboardPage() {
                 const daysRemaining = dailyAvg > 0 ? Math.floor(total / dailyAvg) : null;
                 const daysUntilReorder = daysRemaining !== null ? daysRemaining - (sku.lead_time_days ?? 0) : null;
                 return (
-                  <Link key={sku.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
+                  <Link key={sku.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-card-2 transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-foreground truncate">{sku.product?.name}</p>
-                      <p className="text-[12px] text-[#6B7684] mt-0.5">{sku.sku_code} · {skuOptionLabel(sku.option_values ?? {})}</p>
+                      <p className="text-[12px] text-fg-3 mt-0.5">{sku.sku_code} · {skuOptionLabel(sku.option_values ?? {})}</p>
                     </div>
                     <div className="text-right shrink-0 ml-3">
                       <span className="text-[15px] font-bold text-red-500 tabular-nums">{formatNumber(total)}</span>
                       {daysUntilReorder !== null ? (
                         <p className="text-[11px] font-semibold text-red-400">{daysUntilReorder <= 0 ? '지금 발주 필요' : `D-${daysUntilReorder}일 후 발주`}</p>
                       ) : (
-                        <p className="text-[11px] text-[#B0B8C1]">발주점 {formatNumber(sku.reorder_point)}</p>
+                        <p className="text-[11px] text-fg-5">발주점 {formatNumber(sku.reorder_point)}</p>
                       )}
                     </div>
                   </Link>
@@ -598,11 +600,11 @@ export default function DashboardPage() {
         </div>
 
         {/* 진행 중 발주서 */}
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div>
               <h3 className="text-[13px] font-semibold text-foreground tracking-[-0.02em]">진행 중 발주</h3>
-              <p className="text-[12px] text-[#B0B8C1] mt-0.5">입고 예정 발주서</p>
+              <p className="text-[12px] text-fg-5 mt-0.5">입고 예정 발주서</p>
             </div>
             <Link href="/inbound" className="flex items-center gap-1 text-[12px] text-primary font-medium">
               전체 <ArrowRight className="h-3.5 w-3.5" />
@@ -610,24 +612,24 @@ export default function DashboardPage() {
           </div>
           {(data?.pendingPOs ?? []).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-12 h-12 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
-                <PackageCheck className="h-5 w-5 text-[#B0B8C1]" />
+              <div className="w-12 h-12 rounded-2xl bg-app flex items-center justify-center mb-3">
+                <PackageCheck className="h-5 w-5 text-fg-5" />
               </div>
-              <p className="text-[13px] text-[#B0B8C1]">진행 중인 발주 없음</p>
+              <p className="text-[13px] text-fg-5">진행 중인 발주 없음</p>
             </div>
           ) : (
-            <div className="divide-y divide-[#F2F4F6]">
+            <div className="divide-y divide-line-2">
               {(data?.pendingPOs ?? []).map((po: any) => {
                 const statusMap: Record<string, { label: string; color: string }> = {
-                  ordered: { label: '발주완료', color: 'bg-blue-50 text-blue-600' },
+                  ordered: { label: '발주완료', color: 'bg-brand-bg text-brand' },
                   partial: { label: '부분입고', color: 'bg-amber-50 text-amber-600' },
                 };
-                const s = statusMap[po.status] ?? { label: po.status, color: 'bg-gray-100 text-gray-600' };
+                const s = statusMap[po.status] ?? { label: po.status, color: 'bg-card-2 text-fg-3' };
                 return (
-                  <Link key={po.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#F8F9FB] transition-colors">
+                  <Link key={po.id} href="/inbound" className="flex items-center justify-between px-5 py-3.5 hover:bg-card-2 transition-colors">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-foreground">{po.po_number}</p>
-                      <p className="text-[12px] text-[#6B7684] mt-0.5">
+                      <p className="text-[12px] text-fg-3 mt-0.5">
                         {po.supplier ?? '공급사 미지정'} · 입고예정 {po.expected_date ? formatDate(po.expected_date) : '-'}
                       </p>
                     </div>

@@ -39,7 +39,7 @@ function GridBg() {
         backgroundSize: '60px 60px',
       }} />
       {/* Glowing orbs */}
-      <div className="absolute top-[-200px] left-[20%] w-[600px] h-[600px] rounded-full bg-[#3182F6]/[0.07] blur-[120px]" />
+      <div className="absolute top-[-200px] left-[20%] w-[600px] h-[600px] rounded-full bg-brand/[0.07] blur-[120px]" />
       <div className="absolute top-[100px] right-[10%] w-[400px] h-[400px] rounded-full bg-[#6554C0]/[0.05] blur-[100px]" />
       <div className="absolute bottom-[-100px] left-[40%] w-[500px] h-[500px] rounded-full bg-[#00B8D9]/[0.04] blur-[100px]" />
     </div>
@@ -75,7 +75,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="bg-[#0A0A0B] text-white selection:bg-[#3182F6]/30">
+    <div className="bg-[#0A0A0B] text-white selection:bg-brand/30">
       {/* Inline styles for animations */}
       <style>{`
         .home-fade {
@@ -124,7 +124,7 @@ export default function HomePage() {
             <span className="text-[15px] font-semibold tracking-[-0.01em] text-white/90">LV ERP</span>
           </div>
           <Link href="/login"
-            className="group h-10 px-6 rounded-full bg-white text-[#0A0A0B] text-[13px] font-semibold flex items-center gap-2 hover:bg-white/90 transition-all">
+            className="group h-10 px-6 rounded-full bg-card text-[#0A0A0B] text-[13px] font-semibold flex items-center gap-2 hover:bg-white/90 transition-all">
             로그인
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </Link>
@@ -140,7 +140,7 @@ export default function HomePage() {
             {/* Badge */}
             {mounted && (
               <div className="home-hero-enter home-hero-enter-d1 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm text-[12px] text-white/50 mb-8">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#36B37E] animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 셀러를 위한 올인원 ERP 플랫폼
               </div>
             )}
@@ -150,7 +150,7 @@ export default function HomePage() {
               <h1 className="home-hero-enter home-hero-enter-d2 text-[44px] sm:text-[64px] lg:text-[76px] font-bold leading-[1.05] tracking-[-0.04em] mb-8">
                 재고부터 손익까지
                 <br />
-                <span className="bg-gradient-to-r from-[#3182F6] via-[#6C9BF6] to-[#3182F6] bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-brand via-[#6C9BF6] to-brand bg-clip-text text-transparent">
                   하나의 흐름
                 </span>으로
               </h1>
@@ -169,7 +169,7 @@ export default function HomePage() {
             {mounted && (
               <div className="home-hero-enter home-hero-enter-d4 flex items-center gap-4">
                 <Link href="/login"
-                  className="group h-13 px-8 rounded-full bg-[#3182F6] text-white text-[14px] font-semibold flex items-center gap-2.5 hover:bg-[#4A9AF8] transition-all shadow-[0_0_40px_rgba(49,130,246,0.3)]">
+                  className="group h-13 px-8 rounded-full bg-brand text-white text-[14px] font-semibold flex items-center gap-2.5 hover:bg-[#4A9AF8] transition-all shadow-[0_0_40px_rgba(49,130,246,0.3)]">
                   시작하기
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
@@ -187,7 +187,7 @@ export default function HomePage() {
               <div className="home-hero-enter home-hero-enter-d4 home-float">
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl p-5 shadow-[0_20px_80px_rgba(0,0,0,0.4)]">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-2 h-2 rounded-full bg-[#36B37E]" />
+                    <div className="w-2 h-2 rounded-full bg-success" />
                     <span className="text-[11px] text-white/30 tracking-wider uppercase">Live Dashboard</span>
                   </div>
                   <div className="space-y-2.5">
@@ -244,7 +244,7 @@ export default function HomePage() {
       <section id="features" className="relative py-32">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10">
           <FadeIn>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Features</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-brand mb-4">Features</p>
             <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-[1.15] mb-20">
               복잡한 운영을<br />
               <span className="text-white/40">단순하게</span>
@@ -309,7 +309,7 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-[1fr_1.2fr] gap-20 items-start">
             <div>
               <FadeIn>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Workflow</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-brand mb-4">Workflow</p>
                 <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-[1.15] mb-6">
                   매일 아침,<br />
                   <span className="text-white/40">자동으로 완료됩니다</span>
@@ -329,7 +329,7 @@ export default function HomePage() {
                   <FadeIn key={step.time} delay={i * 120}>
                     <div className="flex gap-5 group">
                       <div className="flex flex-col items-center">
-                        <div className="w-2 h-2 rounded-full bg-white/20 group-hover:bg-[#3182F6] transition-colors mt-2" />
+                        <div className="w-2 h-2 rounded-full bg-white/20 group-hover:bg-brand transition-colors mt-2" />
                         {i < 3 && <div className="w-px flex-1 bg-white/[0.06]" />}
                       </div>
                       <div className="pb-8">
@@ -353,19 +353,19 @@ export default function HomePage() {
                   <span className="ml-3 text-[11px] text-white/20 font-mono">daily-sync — 2026.03.23</span>
                 </div>
                 <div className="p-6 font-mono text-[12px] leading-[2]">
-                  <p className="text-white/20"><span className="text-[#36B37E]/60">$</span> sync-orders --all-channels</p>
-                  <p className="text-white/40 pl-4">쿠팡 그로스 <span className="text-[#3182F6]">27건</span></p>
-                  <p className="text-white/40 pl-4">쿠팡 Wing <span className="text-[#3182F6]">12건</span></p>
-                  <p className="text-white/40 pl-4">스마트스토어 <span className="text-[#36B37E]">8건</span></p>
+                  <p className="text-white/20"><span className="text-success/60">$</span> sync-orders --all-channels</p>
+                  <p className="text-white/40 pl-4">쿠팡 그로스 <span className="text-brand">27건</span></p>
+                  <p className="text-white/40 pl-4">쿠팡 Wing <span className="text-brand">12건</span></p>
+                  <p className="text-white/40 pl-4">스마트스토어 <span className="text-success">8건</span></p>
                   <p className="text-white/40 pl-4">토스 <span className="text-[#6554C0]">3건</span></p>
                   <p className="text-white/15 mt-2">──────────────────────────</p>
-                  <p className="text-white/20"><span className="text-[#36B37E]/60">$</span> apply-inventory</p>
-                  <p className="text-white/40 pl-4">차감 <span className="text-[#00B8D9]">42건</span> · 복구 <span className="text-[#36B37E]">3건</span></p>
-                  <p className="text-white/20 mt-2"><span className="text-[#36B37E]/60">$</span> sync-rg-inventory</p>
-                  <p className="text-white/40 pl-4">동기화 <span className="text-[#3182F6]">105개</span> SKU</p>
+                  <p className="text-white/20"><span className="text-success/60">$</span> apply-inventory</p>
+                  <p className="text-white/40 pl-4">차감 <span className="text-[#00B8D9]">42건</span> · 복구 <span className="text-success">3건</span></p>
+                  <p className="text-white/20 mt-2"><span className="text-success/60">$</span> sync-rg-inventory</p>
+                  <p className="text-white/40 pl-4">동기화 <span className="text-brand">105개</span> SKU</p>
                   <p className="text-white/20 mt-2"><span className="text-[#FEBC2E]/60">!</span> <span className="text-[#FEBC2E]/50">발주 필요 8개 SKU (안전재고 이하)</span></p>
-                  <p className="text-white/20 mt-2"><span className="text-[#36B37E]/60">$</span> notify --slack</p>
-                  <p className="text-[#36B37E]/50 pl-4">리포트 전송 완료</p>
+                  <p className="text-white/20 mt-2"><span className="text-success/60">$</span> notify --slack</p>
+                  <p className="text-success/50 pl-4">리포트 전송 완료</p>
                   <p className="text-white/20 mt-1"><span className="inline-block w-1.5 h-3.5 bg-white/40 animate-pulse" /></p>
                 </div>
               </div>
@@ -378,7 +378,7 @@ export default function HomePage() {
       <section className="relative py-32 border-t border-white/[0.04]">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10 text-center">
           <FadeIn>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#3182F6] mb-4">Integrations</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-brand mb-4">Integrations</p>
             <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] mb-16">
               연동된 채널
             </h2>
@@ -409,9 +409,9 @@ export default function HomePage() {
           <FadeIn>
             <div className="relative rounded-[28px] overflow-hidden">
               {/* Background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#3182F6]/20 via-[#0A0A0B] to-[#6554C0]/10" />
+              <div className="absolute inset-0 bg-gradient-to-br from-brand/20 via-[#0A0A0B] to-[#6554C0]/10" />
               <div className="absolute inset-0 border border-white/[0.06] rounded-[28px]" />
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-px bg-gradient-to-r from-transparent via-[#3182F6]/30 to-transparent" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-px bg-gradient-to-r from-transparent via-brand/30 to-transparent" />
 
               <div className="relative px-10 py-20 sm:py-28 text-center">
                 <h2 className="text-[32px] sm:text-[48px] font-bold tracking-[-0.03em] mb-5">
@@ -421,7 +421,7 @@ export default function HomePage() {
                   로그인 한 번이면 전 채널 통합 관리가 시작됩니다.
                 </p>
                 <Link href="/login"
-                  className="group inline-flex items-center gap-3 h-14 px-10 rounded-full bg-white text-[#0A0A0B] text-[15px] font-semibold hover:bg-white/90 transition-all shadow-[0_0_60px_rgba(255,255,255,0.1)]">
+                  className="group inline-flex items-center gap-3 h-14 px-10 rounded-full bg-card text-[#0A0A0B] text-[15px] font-semibold hover:bg-white/90 transition-all shadow-[0_0_60px_rgba(255,255,255,0.1)]">
                   로그인
                   <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </Link>

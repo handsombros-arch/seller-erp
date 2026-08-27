@@ -49,7 +49,7 @@ export function LVLogoText({ size = 32, className = '' }: { size?: number; class
     <div className={`flex items-center gap-2.5 ${className}`}>
       <LVLogo size={size} />
       <span
-        className="font-bold tracking-[-0.02em] text-[#191F28] leading-tight"
+        className="font-bold tracking-[-0.02em] text-fg leading-tight"
         style={{ fontSize: size * 0.47 }}
       >
         LV ERP

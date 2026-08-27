@@ -4,26 +4,27 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * 앱 표준 버튼 — 디자인 기준: 높이 32px 기본 / 28px 소형, 라운드 10px, 13px semibold.
+ * 페이지에서 raw <button className="h-10 px-4 rounded-xl bg-brand ..."> 대신 이걸 사용한다.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-brand text-white hover:bg-brand-hover",
+        destructive: "bg-danger/10 text-danger hover:bg-danger/15",
+        outline: "border border-line bg-card text-fg-2 hover:bg-card-2 hover:text-fg",
+        secondary: "bg-app text-fg-2 hover:bg-line-2 hover:text-fg",
+        ghost: "text-fg-3 hover:bg-app hover:text-fg",
+        link: "text-brand underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-10 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        default: "h-8 px-3.5",
+        sm: "h-7 rounded-lg px-2.5 text-[12px]",
+        lg: "h-10 rounded-xl px-4",
+        icon: "h-8 w-8",
       },
     },
     defaultVariants: {

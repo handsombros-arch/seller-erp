@@ -11,8 +11,10 @@ import {
 import { SearchSelect } from '@/components/ui/search-select';
 import dynamic from 'next/dynamic';
 
-const OutboundTab = dynamic(() => import('@/components/logistics/OutboundTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
-const CalendarTab = dynamic(() => import('@/components/logistics/CalendarTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
+import { PageHeader } from '@/components/ui/page-header';
+
+const OutboundTab = dynamic(() => import('@/components/logistics/OutboundTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
+const CalendarTab = dynamic(() => import('@/components/logistics/CalendarTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -44,8 +46,8 @@ interface SkuOption {
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const STATUS_MAP: Record<POStatus, { label: string; color: string }> = {
-  draft:      { label: '초안',    color: 'bg-[#F2F4F6] text-[#6B7684]' },
-  ordered:    { label: '발주완료', color: 'bg-blue-50 text-blue-600' },
+  draft:      { label: '초안',    color: 'bg-app text-fg-3' },
+  ordered:    { label: '발주완료', color: 'bg-brand-bg text-brand' },
   transiting: { label: '수입중',   color: 'bg-orange-50 text-orange-600' },
   partial:    { label: '부분입고', color: 'bg-amber-50 text-amber-600' },
   completed:  { label: '완료',    color: 'bg-green-50 text-green-600' },
@@ -72,11 +74,11 @@ function Dialog({ open, onClose, title, children, wide }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg tracking-[-0.02em]">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
@@ -88,13 +90,13 @@ function Dialog({ open, onClose, title, children, wide }: {
 function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[13px] font-medium text-[#191F28]">
+      <label className="text-[13px] font-medium text-fg">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <input
         lang="ko"
         {...props}
-        className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+        className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
       />
     </div>
   );
@@ -220,7 +222,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* 입고 유형 */}
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">입고 유형 *</label>
+          <label className="text-[13px] font-medium text-fg">입고 유형 *</label>
           <div className="flex gap-2">
             {[
               { value: 'import', label: '해외수입 (중국 등)' },
@@ -233,8 +235,8 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                 onClick={() => set('inbound_type', opt.value)}
                 className={`flex-1 h-10 rounded-xl text-[13px] font-medium border transition-colors ${
                   form.inbound_type === opt.value
-                    ? 'bg-[#3182F6] text-white border-[#3182F6]'
-                    : 'bg-white text-[#6B7684] border-[#E5E8EB] hover:bg-[#F2F4F6]'
+                    ? 'bg-brand text-white border-brand'
+                    : 'bg-card text-fg-3 border-line hover:bg-app'
                 }`}
               >
                 {opt.label}
@@ -245,11 +247,11 @@ function AddPODialog({ open, onClose, skus, onSave }: {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">공급사</label>
+            <label className="text-[13px] font-medium text-fg">공급사</label>
             <select
               value={selectedSupplierId}
               onChange={(e) => handleSupplierSelect(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
+              className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors bg-card"
             >
               <option value="">공급사 선택</option>
               {suppliers.map((s) => (
@@ -263,34 +265,34 @@ function AddPODialog({ open, onClose, skus, onSave }: {
         {/* 리드타임 + 운송기간 → 입고 예정일 자동 계산 */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">리드타임 (일)</label>
+            <label className="text-[13px] font-medium text-fg">리드타임 (일)</label>
             <input
               type="number" min="0" placeholder="예: 30"
               value={form.lead_time_days}
               onChange={(e) => handleLeadTimeChange(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
             />
-            <p className="text-[11px] text-[#B0B8C1]">품목 최대 리드타임 자동</p>
+            <p className="text-[11px] text-fg-5">품목 최대 리드타임 자동</p>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">운송기간 (일)</label>
+            <label className="text-[13px] font-medium text-fg">운송기간 (일)</label>
             <input
               type="number" min="0" placeholder="10"
               value={form.transit_days}
               onChange={(e) => handleTransitDaysChange(e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">입고 예정일</label>
+            <label className="text-[13px] font-medium text-fg">입고 예정일</label>
             <input
               type="date"
               value={form.expected_date}
               onChange={(e) => set('expected_date', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#3182F6] bg-[#EBF1FE] text-[13px] text-[#191F28] focus:outline-none focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl border border-brand bg-brand-bg text-[13px] text-fg focus:outline-none focus:ring-2 focus:ring-brand/10 transition-colors"
             />
             {form.lead_time_days && form.transit_days && (
-              <p className="text-[11px] text-[#3182F6]">리드타임 {form.lead_time_days}일 + 운송 {form.transit_days}일</p>
+              <p className="text-[11px] text-brand">리드타임 {form.lead_time_days}일 + 운송 {form.transit_days}일</p>
             )}
           </div>
         </div>
@@ -302,8 +304,8 @@ function AddPODialog({ open, onClose, skus, onSave }: {
         {/* Items */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-[13px] font-medium text-[#191F28]">품목 <span className="text-red-500">*</span></label>
-            <button type="button" onClick={addItem} className="flex items-center gap-1 text-[12px] text-[#3182F6] font-medium hover:underline">
+            <label className="text-[13px] font-medium text-fg">품목 <span className="text-red-500">*</span></label>
+            <button type="button" onClick={addItem} className="flex items-center gap-1 text-[12px] text-brand font-medium hover:underline">
               <Plus className="h-3.5 w-3.5" /> 품목 추가
             </button>
           </div>
@@ -325,7 +327,7 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                     placeholder="수량"
                     value={item.quantity}
                     onChange={(e) => setItem(i, 'quantity', e.target.value)}
-                    className="w-24 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+                    className="w-24 h-10 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors"
                   />
                   <input
                     type="number"
@@ -333,10 +335,10 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                     placeholder="단가"
                     value={item.unit_cost}
                     onChange={(e) => setItem(i, 'unit_cost', e.target.value)}
-                    className="w-28 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+                    className="w-28 h-10 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors"
                   />
                   {items.length > 1 && (
-                    <button type="button" onClick={() => removeItem(i)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors">
+                    <button type="button" onClick={() => removeItem(i)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors">
                       <X className="h-4 w-4" />
                     </button>
                   )}
@@ -345,10 +347,10 @@ function AddPODialog({ open, onClose, skus, onSave }: {
                   const sku = skus.find((s) => s.id === item.sku_id);
                   if (!sku) return null;
                   return (
-                    <p className="text-[11px] text-[#B0B8C1] pl-1">
+                    <p className="text-[11px] text-fg-5 pl-1">
                       마스터 원가 {formatCurrency(sku.cost_price * vatMult)}{vatOn ? ' (VAT포함)' : ''}
                       {sku.logistics_cost > 0 && ` · 물류비 ${formatCurrency(sku.logistics_cost * vatMult)}`}
-                      {(sku.lead_time_days ?? 0) > 0 && <span className="text-[#6B7684]"> · 리드타임 {sku.lead_time_days}일</span>}
+                      {(sku.lead_time_days ?? 0) > 0 && <span className="text-fg-3"> · 리드타임 {sku.lead_time_days}일</span>}
                     </p>
                   );
                 })()}
@@ -357,17 +359,17 @@ function AddPODialog({ open, onClose, skus, onSave }: {
           </div>
           {total > 0 && (
             <div className="flex justify-end pt-1">
-              <span className="text-[13px] font-semibold text-[#191F28]">합계: {formatCurrency(total * vatMult)}{vatOn ? ' (VAT포함)' : ''}</span>
+              <span className="text-[13px] font-semibold text-fg">합계: {formatCurrency(total * vatMult)}{vatOn ? ' (VAT포함)' : ''}</span>
             </div>
           )}
         </div>
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
             취소
           </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             발주서 생성
           </button>
@@ -442,31 +444,31 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
   return (
     <Dialog open={open} onClose={onClose} title="입고 처리">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="bg-[#F2F4F6] rounded-xl p-4 space-y-1">
-          <p className="text-[13px] font-semibold text-[#191F28]">{poItem.sku?.product?.name}</p>
-          <p className="text-[12px] text-[#6B7684]">{poItem.sku?.sku_code} · {skuOptionLabel(poItem.sku?.option_values ?? {})}</p>
-          <p className="text-[12px] text-[#6B7684]">
+        <div className="bg-app rounded-xl p-4 space-y-1">
+          <p className="text-[13px] font-semibold text-fg">{poItem.sku?.product?.name}</p>
+          <p className="text-[12px] text-fg-3">{poItem.sku?.sku_code} · {skuOptionLabel(poItem.sku?.option_values ?? {})}</p>
+          <p className="text-[12px] text-fg-3">
             발주수량: {formatNumber(poItem.quantity)} | 입고완료: {formatNumber(poItem.received_quantity ?? 0)} | 잔여: {formatNumber(remaining)}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">입고 수량 <span className="text-red-500">*</span></label>
+          <label className="text-[13px] font-medium text-fg">입고 수량 <span className="text-red-500">*</span></label>
           <input
             type="number"
             min="1"
             value={form.quantity}
             onChange={(e) => set('quantity', e.target.value)}
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">창고 <span className="text-red-500">*</span></label>
+          <label className="text-[13px] font-medium text-fg">창고 <span className="text-red-500">*</span></label>
           <select
             value={form.warehouse_id}
             onChange={(e) => set('warehouse_id', e.target.value)}
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
+            className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors bg-card"
           >
             <option value="">창고 선택</option>
             {warehouses.map((w) => (
@@ -481,10 +483,10 @@ function InboundProcessDialog({ open, onClose, poItem, warehouses, onSave }: {
 
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
             취소
           </button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             입고 처리
           </button>
@@ -510,7 +512,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const { vatMult, vatOn } = useVat();
 
-  const status = STATUS_MAP[po.status] ?? { label: po.status, color: 'bg-gray-100 text-gray-600' };
+  const status = STATUS_MAP[po.status] ?? { label: po.status, color: 'bg-card-2 text-fg-3' };
   const canOrder    = po.status === 'draft';
   const canTransit  = po.status === 'ordered';
   const canComplete = po.status === 'transiting' || po.status === 'ordered' || po.status === 'partial';
@@ -549,21 +551,21 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   }
 
   return (
-    <div className="border-b border-[#F2F4F6] last:border-0">
+    <div className="border-b border-line-2 last:border-0">
       <div
-        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-[#FAFAFA] transition-colors"
+        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-card-2 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
-            <Truck className="h-4 w-4 text-[#FF6B00]" strokeWidth={2.5} />
+            <Truck className="h-4 w-4 text-warn" strokeWidth={2.5} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[13px] font-semibold text-[#191F28] tracking-[-0.02em]">{po.po_number}</span>
+              <span className="text-[13px] font-semibold text-fg tracking-[-0.02em]">{po.po_number}</span>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
             </div>
-            <p className="text-[12px] text-[#B0B8C1] mt-0.5">
+            <p className="text-[12px] text-fg-5 mt-0.5">
               {po.supplier ?? '공급사 미지정'} · 품목 {(po.items ?? []).length}개 · {formatCurrency(po.total_amount * vatMult)}{vatOn ? '(VAT+)' : ''}
               {po.expected_date && ` · 입고예정 ${formatDate(po.expected_date)}`}
               {po.inbound_type === 'import' && (
@@ -580,7 +582,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
             <button
               onClick={() => updateStatus('ordered')}
               disabled={statusLoading}
-              className="h-8 px-3 rounded-xl bg-[#3182F6] text-white text-[12px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60"
+              className="h-8 px-3 rounded-xl bg-brand text-white text-[12px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60"
             >
               발주완료
             </button>
@@ -608,7 +610,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
               onClick={() => updateStatus('partial')}
               disabled={statusLoading}
               title="완료 상태를 부분입고로 되돌립니다"
-              className="h-8 px-3 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-amber-50 hover:border-amber-300 hover:text-amber-600 transition-colors disabled:opacity-60"
+              className="h-8 px-3 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-600 transition-colors disabled:opacity-60"
             >
               완료 취소
             </button>
@@ -617,25 +619,25 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
             <button
               onClick={() => updateStatus('cancelled')}
               disabled={statusLoading}
-              className="h-8 px-3 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors disabled:opacity-60"
+              className="h-8 px-3 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors disabled:opacity-60"
             >
               취소
             </button>
           )}
-          <div className="w-px h-4 bg-[#E5E8EB]" />
+          <div className="w-px h-4 bg-line" />
           <button
             onClick={handleDelete}
             disabled={deleteLoading}
             title="발주서 삭제"
-            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors disabled:opacity-60"
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors disabled:opacity-60"
           >
             {deleteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           </button>
-          <div className="w-px h-4 bg-[#E5E8EB]" />
+          <div className="w-px h-4 bg-line" />
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-[#B0B8C1]" />
+            <ChevronUp className="h-4 w-4 text-fg-5" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-[#B0B8C1]" />
+            <ChevronDown className="h-4 w-4 text-fg-5" />
           )}
         </div>
       </div>
@@ -647,9 +649,9 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
       )}
 
       {expanded && (
-        <div className="bg-[#F8F9FB] border-t border-[#F2F4F6]">
+        <div className="bg-card-2 border-t border-line-2">
           {(po.items ?? []).length === 0 ? (
-            <p className="px-5 py-4 text-[13px] text-[#B0B8C1]">품목이 없습니다.</p>
+            <p className="px-5 py-4 text-[13px] text-fg-5">품목이 없습니다.</p>
           ) : (
             (po.items ?? []).map((item) => {
               const received = item.received_quantity ?? 0;
@@ -657,25 +659,25 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
               const isComplete = remaining <= 0;
 
               return (
-                <div key={item.id} className="flex items-center justify-between px-5 py-3.5 border-b border-[#F2F4F6] last:border-0">
+                <div key={item.id} className="flex items-center justify-between px-5 py-3.5 border-b border-line-2 last:border-0">
                   <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-[#191F28]">{item.sku?.product?.name}</p>
-                    <p className="text-[12px] text-[#6B7684] mt-0.5">
+                    <p className="text-[13px] font-medium text-fg">{item.sku?.product?.name}</p>
+                    <p className="text-[12px] text-fg-3 mt-0.5">
                       {item.sku?.sku_code} · {skuOptionLabel(item.sku?.option_values ?? {})}
                     </p>
-                    <p className="text-[12px] text-[#B0B8C1] mt-0.5">
+                    <p className="text-[12px] text-fg-5 mt-0.5">
                       발주 {formatNumber(item.quantity)} | 입고완료 {formatNumber(received)} | 잔여 {formatNumber(Math.max(0, remaining))}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-3">
                     <div className="text-right">
-                      <p className="text-[13px] font-semibold text-[#191F28]">{formatCurrency(item.unit_cost * vatMult)}</p>
-                      <p className="text-[11px] text-[#B0B8C1]">{vatOn ? 'VAT포함 단가' : '단가'}</p>
+                      <p className="text-[13px] font-semibold text-fg">{formatCurrency(item.unit_cost * vatMult)}</p>
+                      <p className="text-[11px] text-fg-5">{vatOn ? 'VAT포함 단가' : '단가'}</p>
                     </div>
                     {po.status !== 'cancelled' && po.status !== 'draft' && (
                       <button
                         onClick={() => setInboundItem(item)}
-                        className={`h-8 px-3 rounded-xl text-[12px] font-semibold transition-colors whitespace-nowrap ${isComplete ? 'bg-[#F2F4F6] text-[#6B7684] hover:bg-green-50 hover:text-green-600' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                        className={`h-8 px-3 rounded-xl text-[12px] font-semibold transition-colors whitespace-nowrap ${isComplete ? 'bg-app text-fg-3 hover:bg-green-50 hover:text-green-600' : 'bg-green-500 text-white hover:bg-green-600'}`}
                       >
                         {isComplete ? '재입고' : '입고 처리'}
                       </button>
@@ -744,7 +746,7 @@ function POManagementTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+        <Loader2 className="h-6 w-6 animate-spin text-brand" />
       </div>
     );
   }
@@ -752,24 +754,24 @@ function POManagementTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-[#6B7684]">총 {formatNumber(pos.length)}개의 발주서</p>
+        <p className="text-[13px] text-fg-3">총 {formatNumber(pos.length)}개의 발주서</p>
         <button
           onClick={() => setAddOpen(true)}
-          className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors"
+          className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors"
         >
           <Plus className="h-4 w-4" />
           발주서 생성
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         {pos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
-              <Truck className="h-6 w-6 text-[#B0B8C1]" />
+            <div className="w-14 h-14 rounded-2xl bg-app flex items-center justify-center mb-3">
+              <Truck className="h-6 w-6 text-fg-5" />
             </div>
-            <p className="text-[13px] font-medium text-[#6B7684]">발주서가 없습니다</p>
-            <p className="text-[13px] text-[#B0B8C1] mt-1">발주서 생성 버튼을 눌러 시작하세요</p>
+            <p className="text-[13px] font-medium text-fg-3">발주서가 없습니다</p>
+            <p className="text-[13px] text-fg-5 mt-1">발주서 생성 버튼을 눌러 시작하세요</p>
           </div>
         ) : (
           pos.map((po) => (
@@ -833,7 +835,7 @@ function InboundRecordsTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+        <Loader2 className="h-6 w-6 animate-spin text-brand" />
       </div>
     );
   }
@@ -841,7 +843,7 @@ function InboundRecordsTab() {
   return (
     <div className="space-y-4">
       {/* 검색 + 날짜 필터 */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 space-y-3">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 space-y-3">
         {/* 텍스트 검색 */}
         <div className="relative">
           <input
@@ -850,10 +852,10 @@ function InboundRecordsTab() {
             placeholder="상품명, SKU코드, 창고명으로 검색..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-4 pr-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors"
+            className="w-full h-10 pl-4 pr-10 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-3 text-[#B0B8C1] hover:text-[#6B7684]">
+            <button onClick={() => setSearch('')} className="absolute right-3 top-3 text-fg-5 hover:text-fg-3">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -861,7 +863,7 @@ function InboundRecordsTab() {
 
         {/* 기간 필터 */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-[13px] text-[#6B7684]">
+          <div className="flex items-center gap-2 text-[13px] text-fg-3">
             <CalendarDays className="h-4 w-4" />
             <span className="font-medium">기간</span>
           </div>
@@ -870,70 +872,70 @@ function InboundRecordsTab() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="h-10 px-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand transition-colors"
             />
-            <span className="text-[13px] text-[#B0B8C1]">~</span>
+            <span className="text-[13px] text-fg-5">~</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="h-10 px-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand transition-colors"
             />
           </div>
           {(dateFrom || dateTo) && (
             <button
               onClick={() => { setDateFrom(''); setDateTo(''); }}
-              className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors flex items-center gap-1"
+              className="h-10 px-3 rounded-xl border border-line text-[12px] text-fg-3 hover:bg-app transition-colors flex items-center gap-1"
             >
               <X className="h-3.5 w-3.5" /> 초기화
             </button>
           )}
-          <span className="text-[12px] text-[#6B7684] ml-auto">{formatNumber(filtered.length)}건</span>
+          <span className="text-[12px] text-fg-3 ml-auto">{formatNumber(filtered.length)}건</span>
         </div>
       </div>
 
       {/* Records list */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
         <div className="min-w-[560px]">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3 border-b border-[#F2F4F6] bg-[#F8F9FB]">
-          <span className="text-[12px] font-semibold text-[#6B7684]">입고일</span>
-          <span className="text-[12px] font-semibold text-[#6B7684]">상품 / SKU</span>
-          <span className="text-[12px] font-semibold text-[#6B7684]">창고</span>
-          <span className="text-[12px] font-semibold text-[#6B7684]">유형</span>
-          <span className="text-[12px] font-semibold text-[#6B7684] text-right">수량</span>
-          <span className="text-[12px] font-semibold text-[#6B7684] text-right">단가</span>
+        <div className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3 border-b border-line-2 bg-card-2">
+          <span className="text-[12px] font-semibold text-fg-3">입고일</span>
+          <span className="text-[12px] font-semibold text-fg-3">상품 / SKU</span>
+          <span className="text-[12px] font-semibold text-fg-3">창고</span>
+          <span className="text-[12px] font-semibold text-fg-3">유형</span>
+          <span className="text-[12px] font-semibold text-fg-3 text-right">수량</span>
+          <span className="text-[12px] font-semibold text-fg-3 text-right">단가</span>
         </div>
 
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
-              <PackageCheck className="h-6 w-6 text-[#B0B8C1]" />
+            <div className="w-14 h-14 rounded-2xl bg-app flex items-center justify-center mb-3">
+              <PackageCheck className="h-6 w-6 text-fg-5" />
             </div>
-            <p className="text-[13px] font-medium text-[#6B7684]">입고 기록이 없습니다</p>
+            <p className="text-[13px] font-medium text-fg-3">입고 기록이 없습니다</p>
           </div>
         ) : (
-          <div className="divide-y divide-[#F2F4F6]">
+          <div className="divide-y divide-line-2">
             {filtered.map((record) => (
-              <div key={record.id} className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3.5 items-center hover:bg-[#FAFAFA] transition-colors">
+              <div key={record.id} className="grid grid-cols-[1fr_1.5fr_1fr_0.7fr_1fr_1fr] gap-3 px-5 py-3.5 items-center hover:bg-card-2 transition-colors">
                 <div>
-                  <span className="text-[13px] text-[#191F28]">{formatDate(record.inbound_date)}</span>
+                  <span className="text-[13px] text-fg">{formatDate(record.inbound_date)}</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-[#191F28] truncate">{record.sku?.product?.name}</p>
-                  <p className="text-[11px] text-[#6B7684] mt-0.5">
+                  <p className="text-[13px] font-medium text-fg truncate">{record.sku?.product?.name}</p>
+                  <p className="text-[11px] text-fg-3 mt-0.5">
                     {record.sku?.sku_code} · {skuOptionLabel(record.sku?.option_values ?? {})}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[13px] text-[#6B7684]">{record.warehouse?.name}</span>
+                  <span className="text-[13px] text-fg-3">{record.warehouse?.name}</span>
                 </div>
                 <div>
                   {(() => {
                     const t = (record as any).po_item?.po?.inbound_type;
                     const map: Record<string, { label: string; color: string }> = {
-                      import: { label: '해외수입', color: 'bg-[#EBF1FE] text-[#3182F6]' },
+                      import: { label: '해외수입', color: 'bg-brand-bg text-brand' },
                       local:  { label: '국내구매', color: 'bg-[#E8F5E9] text-[#2E7D32]' },
                       export: { label: '반출',     color: 'bg-[#FFF3E0] text-[#E65100]' },
                     };
@@ -941,20 +943,20 @@ function InboundRecordsTab() {
                     return info ? (
                       <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${info.color}`}>{info.label}</span>
                     ) : (
-                      <span className="text-[11px] text-[#B0B8C1]">-</span>
+                      <span className="text-[11px] text-fg-5">-</span>
                     );
                   })()}
                 </div>
                 <div className="text-right">
-                  <span className="text-[13px] font-bold text-[#191F28] tabular-nums">{formatNumber(record.quantity)}</span>
-                  <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
+                  <span className="text-[13px] font-bold text-fg tabular-nums">{formatNumber(record.quantity)}</span>
+                  <span className="text-[11px] text-fg-5 ml-0.5">개</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[13px] text-[#6B7684] tabular-nums">
+                  <span className="text-[13px] text-fg-3 tabular-nums">
                     {record.unit_cost != null ? formatCurrency(record.unit_cost * vatMult) : '-'}
                   </span>
                   {vatOn && record.unit_cost != null && (
-                    <p className="text-[11px] text-[#B0B8C1]">VAT포함</p>
+                    <p className="text-[11px] text-fg-5">VAT포함</p>
                   )}
                 </div>
               </div>
@@ -988,12 +990,12 @@ export default function InboundPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입출고 관리</h2>
-        <p className="mt-1 text-[13px] text-[#6B7684]">발주, 입고, 출고를 한 곳에서 관리하세요</p>
+        <PageHeader title="입출고 관리" />
+        <p className="mt-1 text-[13px] text-fg-3">발주, 입고, 출고를 한 곳에서 관리하세요</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#F2F4F6] p-1 rounded-xl overflow-x-auto">
+      <div className="flex gap-1 bg-app p-1 rounded-xl overflow-x-auto">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -1002,8 +1004,8 @@ export default function InboundPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-white text-[#191F28] shadow-sm'
-                  : 'text-[#6B7684] hover:text-[#191F28]'
+                  ? 'bg-card text-fg shadow-sm'
+                  : 'text-fg-3 hover:text-fg'
               }`}
             >
               <Icon className="h-4 w-4" /> {tab.label}

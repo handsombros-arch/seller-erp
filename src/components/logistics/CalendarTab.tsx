@@ -55,15 +55,15 @@ function eventStyle(event: CalendarEvent): { pill: string; dot: string; badge: s
   }
   if (event.subtype === 'coupang_growth') {
     return {
-      pill: 'bg-blue-50 text-blue-700 border border-blue-200',
-      dot: 'bg-blue-500',
-      badge: 'bg-blue-100 text-blue-700',
+      pill: 'bg-brand-bg text-brand-hover border border-blue-200',
+      dot: 'bg-brand',
+      badge: 'bg-brand-bg text-brand-hover',
     };
   }
   return {
-    pill: 'bg-gray-50 text-gray-600 border border-gray-200',
-    dot: 'bg-gray-400',
-    badge: 'bg-gray-100 text-gray-600',
+    pill: 'bg-card-2 text-fg-3 border border-line',
+    dot: 'bg-fg-5',
+    badge: 'bg-card-2 text-fg-3',
   };
 }
 
@@ -90,69 +90,69 @@ function EventPopup({ event, onClose }: { event: CalendarEvent; onClose: () => v
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
       <div
-        className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] w-full max-w-sm mx-4 p-5"
+        className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] w-full max-w-sm mx-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${event.type === 'order' ? 'bg-violet-50' : event.type === 'reorder' ? 'bg-orange-50' : event.type === 'inbound' ? 'bg-emerald-50' : 'bg-blue-50'}`}>
-              <Icon className={`h-5 w-5 ${event.type === 'order' ? 'text-violet-600' : event.type === 'reorder' ? 'text-orange-600' : event.type === 'inbound' ? 'text-emerald-600' : 'text-blue-600'}`} />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${event.type === 'order' ? 'bg-violet-50' : event.type === 'reorder' ? 'bg-orange-50' : event.type === 'inbound' ? 'bg-emerald-50' : 'bg-brand-bg'}`}>
+              <Icon className={`h-5 w-5 ${event.type === 'order' ? 'text-violet-600' : event.type === 'reorder' ? 'text-orange-600' : event.type === 'inbound' ? 'text-emerald-600' : 'text-brand'}`} />
             </div>
             <div>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>{subtypeLabel}</span>
-              <p className="text-[13px] font-bold text-[#191F28] mt-1">{event.label}</p>
+              <p className="text-[13px] font-bold text-fg mt-1">{event.label}</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-[#F2F4F6] transition-colors">
-            <X className="h-4 w-4 text-[#6B7684]" />
+          <button onClick={onClose} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-app transition-colors">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
 
         <div className="space-y-2 text-[13px]">
-          <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-            <span className="text-[#6B7684]">{event.type === 'order' ? '발주일' : event.type === 'reorder' ? '발주 권장일' : event.type === 'inbound' ? '입고 예정일' : '쿠팡 도착 예정일'}</span>
-            <span className="font-semibold text-[#191F28]">{event.date}</span>
+          <div className="flex items-center justify-between py-2 border-b border-line-2">
+            <span className="text-fg-3">{event.type === 'order' ? '발주일' : event.type === 'reorder' ? '발주 권장일' : event.type === 'inbound' ? '입고 예정일' : '쿠팡 도착 예정일'}</span>
+            <span className="font-semibold text-fg">{event.date}</span>
           </div>
           {event.type !== 'reorder' && event.type !== 'order' && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">수량</span>
-              <span className="font-semibold text-[#191F28]">{formatNumber(event.quantity)}개</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">수량</span>
+              <span className="font-semibold text-fg">{formatNumber(event.quantity)}개</span>
             </div>
           )}
           {event.type === 'reorder' && event.days_until_stockout != null && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">예상 소진일</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">예상 소진일</span>
               <span className="font-semibold text-orange-600">{event.days_until_stockout}일 후</span>
             </div>
           )}
           {event.type === 'reorder' && event.sku_code && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">SKU 코드</span>
-              <span className="font-mono text-[12px] text-[#191F28]">{event.sku_code}</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">SKU 코드</span>
+              <span className="font-mono text-[12px] text-fg">{event.sku_code}</span>
             </div>
           )}
           {event.box_count != null && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">박스 수</span>
-              <span className="font-semibold text-[#191F28]">{event.box_count}박스</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">박스 수</span>
+              <span className="font-semibold text-fg">{event.box_count}박스</span>
             </div>
           )}
           {event.coupang_center && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">쿠팡 센터</span>
-              <span className="font-semibold text-[#191F28]">{event.coupang_center}</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">쿠팡 센터</span>
+              <span className="font-semibold text-fg">{event.coupang_center}</span>
             </div>
           )}
           {event.supplier && (
-            <div className="flex items-center justify-between py-2 border-b border-[#F2F4F6]">
-              <span className="text-[#6B7684]">공급사</span>
-              <span className="font-semibold text-[#191F28]">{event.supplier}</span>
+            <div className="flex items-center justify-between py-2 border-b border-line-2">
+              <span className="text-fg-3">공급사</span>
+              <span className="font-semibold text-fg">{event.supplier}</span>
             </div>
           )}
           {event.po_number && (
             <div className="flex items-center justify-between py-2">
-              <span className="text-[#6B7684]">발주번호</span>
-              <span className="font-mono text-[12px] text-[#191F28]">{event.po_number}</span>
+              <span className="text-fg-3">발주번호</span>
+              <span className="font-mono text-[12px] text-fg">{event.po_number}</span>
             </div>
           )}
         </div>
@@ -224,13 +224,13 @@ export default function CalendarTab() {
   const orderCount     = events.filter((e) => e.type === 'order').length;
 
   const FILTERS: Array<{ value: FilterType; label: string; color: string }> = [
-    { value: 'all',                     label: '전체',      color: 'bg-[#3182F6] text-white' },
+    { value: 'all',                     label: '전체',      color: 'bg-brand text-white' },
     { value: 'order_order',             label: '발주일',    color: 'bg-violet-600 text-white' },
     { value: 'inbound_import',          label: '수입입고',  color: 'bg-emerald-600 text-white' },
     { value: 'inbound_local',           label: '국내입고',  color: 'bg-teal-600 text-white' },
     { value: 'inbound_export',          label: '반출',      color: 'bg-purple-600 text-white' },
-    { value: 'outbound_coupang_growth', label: '쿠팡그로스', color: 'bg-blue-600 text-white' },
-    { value: 'outbound_other',          label: '기타출고',  color: 'bg-gray-500 text-white' },
+    { value: 'outbound_coupang_growth', label: '쿠팡그로스', color: 'bg-brand text-white' },
+    { value: 'outbound_other',          label: '기타출고',  color: 'bg-fg-3 text-white' },
     { value: 'reorder_reorder',         label: '발주권장',  color: 'bg-orange-500 text-white' },
   ];
 
@@ -239,8 +239,8 @@ export default function CalendarTab() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div className="min-w-0">
-          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">입출고 캘린더</h2>
-          <p className="mt-1 text-[13px] text-[#6B7684]">입고 예정과 쿠팡 출고 일정을 한눈에 확인하세요</p>
+          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-fg">입출고 캘린더</h2>
+          <p className="mt-1 text-[13px] text-fg-3">입고 예정과 쿠팡 출고 일정을 한눈에 확인하세요</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Summary badges */}
@@ -255,8 +255,8 @@ export default function CalendarTab() {
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               입고 {inboundCount}건
             </span>
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl font-medium">
-              <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-bg text-brand-hover rounded-xl font-medium">
+              <div className="w-2 h-2 rounded-full bg-brand" />
               출고 {outboundCount}건
             </span>
             {reorderCount > 0 && (
@@ -275,25 +275,25 @@ export default function CalendarTab() {
         <div className="flex items-center gap-2">
           <button
             onClick={prevMonth}
-            className="w-9 h-10 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6] transition-colors"
+            className="w-9 h-10 flex items-center justify-center rounded-xl border border-line hover:bg-app transition-colors"
           >
-            <ChevronLeft className="h-4 w-4 text-[#6B7684]" />
+            <ChevronLeft className="h-4 w-4 text-fg-3" />
           </button>
           <button
             onClick={goToday}
-            className="h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-bold text-[#191F28] hover:bg-[#F2F4F6] transition-colors min-w-[120px] text-center"
+            className="h-10 px-4 rounded-xl border border-line text-[13px] font-bold text-fg hover:bg-app transition-colors min-w-[120px] text-center"
           >
             {year}년 {month}월
           </button>
           <button
             onClick={nextMonth}
-            className="w-9 h-10 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6] transition-colors"
+            className="w-9 h-10 flex items-center justify-center rounded-xl border border-line hover:bg-app transition-colors"
           >
-            <ChevronRight className="h-4 w-4 text-[#6B7684]" />
+            <ChevronRight className="h-4 w-4 text-fg-3" />
           </button>
           <button
             onClick={goToday}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors"
+            className="h-10 px-3 rounded-xl border border-line text-[12px] text-fg-3 hover:bg-app transition-colors"
           >
             오늘
           </button>
@@ -306,7 +306,7 @@ export default function CalendarTab() {
               key={f.value}
               onClick={() => setFilter(f.value)}
               className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${
-                filter === f.value ? f.color : 'bg-white text-[#6B7684] border border-[#E5E8EB] hover:bg-[#F2F4F6]'
+                filter === f.value ? f.color : 'bg-card text-fg-3 border border-line hover:bg-app'
               }`}
             >
               {f.label}
@@ -316,14 +316,14 @@ export default function CalendarTab() {
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-[#F2F4F6]">
+        <div className="grid grid-cols-7 border-b border-line-2">
           {WEEKDAYS.map((day, i) => (
             <div
               key={day}
               className={`py-3 text-center text-[12px] font-semibold ${
-                i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-[#6B7684]'
+                i === 0 ? 'text-red-500' : i === 6 ? 'text-brand' : 'text-fg-3'
               }`}
             >
               {day}
@@ -334,7 +334,7 @@ export default function CalendarTab() {
         {/* Loading overlay */}
         {loading && (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+            <Loader2 className="h-6 w-6 animate-spin text-brand" />
           </div>
         )}
 
@@ -343,7 +343,7 @@ export default function CalendarTab() {
           <div className="grid grid-cols-7">
             {/* Empty cells before month start */}
             {Array.from({ length: firstDay }).map((_, i) => (
-              <div key={`empty-${i}`} className="min-h-[110px] p-2 border-b border-r border-[#F2F4F6] bg-[#FAFAFA]" />
+              <div key={`empty-${i}`} className="min-h-[110px] p-2 border-b border-r border-line-2 bg-card-2" />
             ))}
 
             {/* Day cells */}
@@ -360,8 +360,8 @@ export default function CalendarTab() {
               return (
                 <div
                   key={day}
-                  className={`min-h-[110px] p-2 border-b border-r border-[#F2F4F6] transition-colors ${
-                    isPast ? 'bg-[#FAFAFA]' : 'bg-white hover:bg-[#FAFBFF]'
+                  className={`min-h-[110px] p-2 border-b border-r border-line-2 transition-colors ${
+                    isPast ? 'bg-card-2' : 'bg-card hover:bg-brand-soft'
                   }`}
                 >
                   {/* Day number */}
@@ -369,20 +369,20 @@ export default function CalendarTab() {
                     <span
                       className={`text-[13px] font-semibold w-7 h-8 flex items-center justify-center rounded-full ${
                         isToday
-                          ? 'bg-[#3182F6] text-white'
+                          ? 'bg-brand text-white'
                           : isSun
                           ? 'text-red-500'
                           : isSat
-                          ? 'text-blue-500'
+                          ? 'text-brand'
                           : isPast
                           ? 'text-[#C4C9D1]'
-                          : 'text-[#191F28]'
+                          : 'text-fg'
                       }`}
                     >
                       {day}
                     </span>
                     {dayEvents.length > 0 && (
-                      <span className="text-[11px] text-[#B0B8C1]">{dayEvents.length}건</span>
+                      <span className="text-[11px] text-fg-5">{dayEvents.length}건</span>
                     )}
                   </div>
 
@@ -411,7 +411,7 @@ export default function CalendarTab() {
                     {dayEvents.length > 3 && (
                       <button
                         onClick={() => setDayPopup({ date: dateStr, events: dayEvents })}
-                        className="text-[11px] text-[#3182F6] font-medium pl-1 hover:underline"
+                        className="text-[11px] text-brand font-medium pl-1 hover:underline"
                       >
                         +{dayEvents.length - 3}개 더
                       </button>
@@ -423,21 +423,21 @@ export default function CalendarTab() {
 
             {/* Trailing empty cells to complete last row */}
             {Array.from({ length: (7 - ((firstDay + daysInMonth) % 7)) % 7 }).map((_, i) => (
-              <div key={`trail-${i}`} className="min-h-[110px] p-2 border-b border-r border-[#F2F4F6] bg-[#FAFAFA]" />
+              <div key={`trail-${i}`} className="min-h-[110px] p-2 border-b border-r border-line-2 bg-card-2" />
             ))}
           </div>
         )}
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 flex-wrap text-[12px] text-[#6B7684]">
+      <div className="flex items-center gap-4 flex-wrap text-[12px] text-fg-3">
         <span className="font-medium">범례:</span>
         {[
           { color: 'bg-violet-500',  label: '발주일' },
           { color: 'bg-emerald-500', label: '수입입고 예정' },
           { color: 'bg-teal-500',    label: '국내입고 예정' },
-          { color: 'bg-blue-500',    label: '쿠팡그로스 도착 예정' },
-          { color: 'bg-gray-400',    label: '기타 출고' },
+          { color: 'bg-brand',    label: '쿠팡그로스 도착 예정' },
+          { color: 'bg-fg-5',    label: '기타 출고' },
           { color: 'bg-orange-500',  label: '발주 권장일' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1.5">
@@ -452,16 +452,16 @@ export default function CalendarTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setDayPopup(null)}>
           <div className="absolute inset-0 bg-black/20" />
           <div
-            className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] w-full max-w-sm mx-4 p-5 max-h-[70vh] flex flex-col"
+            className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] w-full max-w-sm mx-4 p-5 max-h-[70vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[15px] font-bold text-[#191F28]">
+              <h3 className="text-[15px] font-bold text-fg">
                 {dayPopup.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1년 $2월 $3일')}
-                <span className="ml-2 text-[12px] font-medium text-[#8B95A1]">{dayPopup.events.length}건</span>
+                <span className="ml-2 text-[12px] font-medium text-fg-4">{dayPopup.events.length}건</span>
               </h3>
-              <button onClick={() => setDayPopup(null)} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-[#F2F4F6]">
-                <X className="h-4 w-4 text-[#6B7684]" />
+              <button onClick={() => setDayPopup(null)} className="w-7 h-8 flex items-center justify-center rounded-lg hover:bg-app">
+                <X className="h-4 w-4 text-fg-3" />
               </button>
             </div>
             <div className="overflow-y-auto space-y-1.5">

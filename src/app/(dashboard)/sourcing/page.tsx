@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, Trash2, ExternalLink, GitCompareArrows, FolderOpen, ChevronRight } from 'lucide-react';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 type BatchStats = { total: number; done: number; failed: number; pending: number; crawling: number; analyzing: number };
 type Batch = {
   id: string;
@@ -44,8 +46,8 @@ const STATUS_LABEL: Record<Item['status'], string> = {
 };
 
 const STATUS_COLOR: Record<Item['status'], string> = {
-  pending: 'bg-gray-100 text-gray-700',
-  crawling: 'bg-blue-100 text-blue-700',
+  pending: 'bg-card-2 text-fg-2',
+  crawling: 'bg-brand-bg text-brand-hover',
   analyzing: 'bg-purple-100 text-purple-700',
   done: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
@@ -155,8 +157,8 @@ export default function SourcingListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">소싱 분석</h1>
-          <p className="text-sm text-gray-500 mt-1">쿠팡/네이버 상품 URL을 입력하면 상세페이지 + 전체 리뷰를 AI가 분석합니다</p>
+          <PageHeader title="소싱 분석" />
+          <p className="text-sm text-fg-3 mt-1">쿠팡/네이버 상품 URL을 입력하면 상세페이지 + 전체 리뷰를 AI가 분석합니다</p>
         </div>
         <div className="flex gap-2">
           {selected.size >= 2 && (
@@ -169,11 +171,11 @@ export default function SourcingListPage() {
       </div>
 
       {/* 추가 폼 */}
-      <div className="bg-white border rounded-lg p-4 space-y-3">
+      <div className="bg-card border rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
           <h2 className="font-semibold">URL 추가</h2>
-          <span className="text-xs text-gray-500 ml-2">상품 URL · 베스트100 · 카테고리 · 캠페인 URL 모두 OK (줄바꿈/쉼표로 여러 개)</span>
+          <span className="text-xs text-fg-3 ml-2">상품 URL · 베스트100 · 카테고리 · 캠페인 URL 모두 OK (줄바꿈/쉼표로 여러 개)</span>
         </div>
         <textarea
           value={urls}
@@ -182,7 +184,7 @@ export default function SourcingListPage() {
           className="w-full min-h-[100px] border rounded p-2 text-sm font-mono"
         />
         <div className="flex justify-between items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-fg-3">
             <span>카테고리는 상위</span>
             <input
               type="number"
@@ -194,9 +196,9 @@ export default function SourcingListPage() {
             />
             <span>개 자동 추출</span>
           </div>
-          <p className="text-xs text-gray-500 flex-1">
-            ⚠️ 워커 2개 필요: <code className="bg-gray-100 px-1">worker.py --watch</code> (상품 분석) +
-            <code className="bg-gray-100 px-1 ml-1">expand_category.py --watch</code> (카테고리 확장)
+          <p className="text-xs text-fg-3 flex-1">
+            ⚠️ 워커 2개 필요: <code className="bg-card-2 px-1">worker.py --watch</code> (상품 분석) +
+            <code className="bg-card-2 px-1 ml-1">expand_category.py --watch</code> (카테고리 확장)
           </p>
           <Button onClick={submit} disabled={submitting || !urls.trim()}>
             {submitting ? '추가 중...' : '큐에 추가'}
@@ -206,11 +208,11 @@ export default function SourcingListPage() {
 
       {/* 배치 섹션 */}
       {batches.length > 0 && (
-        <div className="bg-white border rounded-lg overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b flex items-center gap-2">
-            <FolderOpen className="w-4 h-4 text-gray-600" />
+        <div className="bg-card border rounded-lg overflow-hidden">
+          <div className="px-4 py-2 bg-card-2 border-b flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-fg-3" />
             <h2 className="font-semibold text-sm">카테고리 배치 (묶음)</h2>
-            <span className="text-xs text-gray-500">{batches.length}개</span>
+            <span className="text-xs text-fg-3">{batches.length}개</span>
           </div>
           <div className="divide-y">
             {batches.map((b) => {
@@ -221,7 +223,7 @@ export default function SourcingListPage() {
                 <Link
                   key={b.id}
                   href={`/sourcing/batches/${b.id}`}
-                  className="block px-4 py-3 hover:bg-gray-50 transition-colors"
+                  className="block px-4 py-3 hover:bg-card-2 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
@@ -229,28 +231,28 @@ export default function SourcingListPage() {
                         <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">{b.source_type}</span>
                         <span className="font-medium">{b.title || '(제목 분석중)'}</span>
                         {b.status === 'pending' && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">확장 대기</span>}
-                        {b.status === 'expanding' && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">확장 중</span>}
+                        {b.status === 'expanding' && <span className="text-xs bg-brand-bg text-brand-hover px-1.5 py-0.5 rounded">확장 중</span>}
                         {b.status === 'failed' && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">확장 실패</span>}
                       </div>
-                      <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={b.source_url}>{b.source_url}</div>
+                      <div className="text-[11px] text-fg-5 mt-0.5 truncate" title={b.source_url}>{b.source_url}</div>
                       {b.error && <div className="text-xs text-red-600 mt-1">{b.error}</div>}
                       {b.status === 'expanded' && stats.total > 0 && (
                         <div className="mt-2 flex items-center gap-3 text-xs">
                           <div className="flex-1 max-w-md">
                             <div className="flex justify-between mb-0.5">
-                              <span className="text-gray-600">{stats.done}/{stats.total} 완료</span>
-                              <span className="text-gray-400">{pct}%</span>
+                              <span className="text-fg-3">{stats.done}/{stats.total} 완료</span>
+                              <span className="text-fg-5">{pct}%</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
+                            <div className="w-full bg-line rounded h-1.5 overflow-hidden">
                               <div className="bg-green-500 h-full transition-all" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
-                          {inProgress > 0 && <span className="text-blue-600">진행중 {inProgress}</span>}
+                          {inProgress > 0 && <span className="text-brand">진행중 {inProgress}</span>}
                           {stats.failed > 0 && <span className="text-red-600">실패 {stats.failed}</span>}
                         </div>
                       )}
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-fg-5 flex-shrink-0" />
                   </div>
                 </Link>
               );
@@ -277,31 +279,31 @@ export default function SourcingListPage() {
         };
         return (
           <>
-            <div className="bg-white border rounded-lg p-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-gray-700">생성일자</span>
+            <div className="bg-card border rounded-lg p-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-fg-2">생성일자</span>
               <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="h-8 px-2 rounded border border-gray-300 text-xs" />
-              <span className="text-xs text-gray-400">~</span>
+                className="h-8 px-2 rounded border border-line text-xs" />
+              <span className="text-xs text-fg-5">~</span>
               <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="h-8 px-2 rounded border border-gray-300 text-xs" />
+                className="h-8 px-2 rounded border border-line text-xs" />
               <div className="flex gap-1 ml-2">
-                <button onClick={() => quickRange(7)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">7일</button>
-                <button onClick={() => quickRange(30)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">30일</button>
-                <button onClick={() => quickRange(90)} className="text-[11px] px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">90일</button>
+                <button onClick={() => quickRange(7)} className="text-[11px] px-2 py-1 rounded border border-line hover:bg-card-2">7일</button>
+                <button onClick={() => quickRange(30)} className="text-[11px] px-2 py-1 rounded border border-line hover:bg-card-2">30일</button>
+                <button onClick={() => quickRange(90)} className="text-[11px] px-2 py-1 rounded border border-line hover:bg-card-2">90일</button>
               </div>
               {(dateFrom || dateTo) && (
                 <button onClick={() => { setDateFrom(''); setDateTo(''); }}
                   className="text-[11px] px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">초기화</button>
               )}
-              <span className="text-[11px] text-gray-500 ml-auto">
+              <span className="text-[11px] text-fg-3 ml-auto">
                 {filteredItems.length}개 {(dateFrom || dateTo) ? `(전체 ${items.length}개 중)` : ''}
               </span>
             </div>
 
       {/* 목록 */}
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-card border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-card-2 border-b">
             <tr>
               <th className="px-3 py-2 w-8">
                 <input
@@ -322,10 +324,10 @@ export default function SourcingListPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-500">로딩...</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-fg-3">로딩...</td></tr>
             )}
             {!loading && filteredItems.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-500">
+              <tr><td colSpan={8} className="text-center py-6 text-fg-3">
                 {items.length === 0 ? '아직 등록된 항목이 없습니다.' : '해당 기간에 생성된 항목이 없습니다.'}
               </td></tr>
             )}
@@ -333,7 +335,7 @@ export default function SourcingListPage() {
               const pct = STATUS_PERCENT[it.status];
               const inProgress = it.status === 'pending' || it.status === 'crawling' || it.status === 'analyzing';
               return (
-              <tr key={it.id} className="border-b hover:bg-gray-50">
+              <tr key={it.id} className="border-b hover:bg-card-2">
                 <td className="px-3 py-2 text-center">
                   <input
                     type="checkbox"
@@ -349,13 +351,13 @@ export default function SourcingListPage() {
                       <img src={it.product_info.thumbnailUrl} alt="" className="w-12 h-12 object-cover rounded flex-shrink-0 border" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <Link href={`/sourcing/${it.id}`} className="text-blue-600 hover:underline font-medium">
+                      <Link href={`/sourcing/${it.id}`} className="text-brand hover:underline font-medium">
                         {it.product_info?.title || '(분석 중...)'}
                       </Link>
                       {(it.product_info?.finalPrice || it.product_info?.price) && (
-                        <span className="ml-2 text-xs text-gray-500">{it.product_info?.finalPrice || it.product_info?.price}</span>
+                        <span className="ml-2 text-xs text-fg-3">{it.product_info?.finalPrice || it.product_info?.price}</span>
                       )}
-                      <div className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[500px]" title={it.url}>{it.url}</div>
+                      <div className="text-[11px] text-fg-5 mt-0.5 truncate max-w-[500px]" title={it.url}>{it.url}</div>
                       {it.error && <div className="text-xs text-red-600 mt-1">{it.error}</div>}
                     </div>
                   </div>
@@ -368,8 +370,8 @@ export default function SourcingListPage() {
                       {inProgress && <span className="ml-1">{pct}%</span>}
                     </span>
                     {inProgress && (
-                      <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
-                        <div className="bg-blue-500 h-full transition-all duration-500" style={{width: `${pct}%`}} />
+                      <div className="w-full bg-line rounded-full h-1 overflow-hidden">
+                        <div className="bg-brand h-full transition-all duration-500" style={{width: `${pct}%`}} />
                       </div>
                     )}
                   </div>
@@ -380,19 +382,19 @@ export default function SourcingListPage() {
                 <td className="px-3 py-2 text-xs">
                   {it.review_stats?.avgRating ? `${it.review_stats.avgRating}★` : '-'}
                 </td>
-                <td className="px-3 py-2 text-xs text-gray-500">
+                <td className="px-3 py-2 text-xs text-fg-3">
                   {new Date(it.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <a href={it.url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-gray-200 rounded" title="원본 열기">
+                  <a href={it.url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-line rounded" title="원본 열기">
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                   {(it.status === 'failed' || it.status === 'done') && (
-                    <button onClick={() => retry(it.id)} className="inline-block p-1 hover:bg-gray-200 rounded" title="재분석">
+                    <button onClick={() => retry(it.id)} className="inline-block p-1 hover:bg-line rounded" title="재분석">
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button onClick={() => remove(it.id)} className="inline-block p-1 hover:bg-gray-200 rounded text-red-600" title="삭제">
+                  <button onClick={() => remove(it.id)} className="inline-block p-1 hover:bg-line rounded text-red-600" title="삭제">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </td>

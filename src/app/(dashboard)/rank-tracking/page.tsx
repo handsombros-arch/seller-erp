@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, Trash2, Play, ExternalLink } from 'lucide-react';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 function TabNav() {
   return (
     <div className="flex gap-1 border-b">
-      <Link href="/rank-tracking" className="px-3 py-2 text-sm font-semibold border-b-2 border-blue-600 text-gray-900">
+      <Link href="/rank-tracking" className="px-3 py-2 text-sm font-semibold border-b-2 border-brand text-fg">
         내 상품 추적
       </Link>
-      <Link href="/rank-tracking/keywords" className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900">
+      <Link href="/rank-tracking/keywords" className="px-3 py-2 text-sm text-fg-3 hover:text-fg">
         키워드 Top N 스냅샷
       </Link>
     </div>
@@ -46,16 +48,16 @@ const STATUS_LABEL: Record<Keyword['status'], string> = {
 };
 
 const STATUS_COLOR: Record<Keyword['status'], string> = {
-  idle: 'bg-gray-100 text-gray-700',
+  idle: 'bg-card-2 text-fg-2',
   queued: 'bg-yellow-100 text-yellow-700',
-  checking: 'bg-blue-100 text-blue-700',
+  checking: 'bg-brand-bg text-brand-hover',
   done: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
 };
 
 function Sparkline({ points }: { points: HistoryPoint[] }) {
   const series = [...points].reverse().slice(-14);
-  if (series.length < 2) return <span className="text-xs text-gray-400">데이터 부족</span>;
+  if (series.length < 2) return <span className="text-xs text-fg-5">데이터 부족</span>;
   const maxRank = Math.max(...series.map((p) => p.rank ?? 999));
   const minRank = Math.min(...series.filter((p) => p.rank != null).map((p) => p.rank as number));
   const range = Math.max(1, maxRank - minRank);
@@ -150,8 +152,8 @@ export default function RankTrackingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">쿠팡 키워드 순위 추적</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <PageHeader title="쿠팡 키워드 순위 추적" />
+          <p className="text-sm text-fg-3 mt-1">
             시크릿 Chrome 기준 (로그인/개인화 없음). `python sourcing/rank_worker.py --watch` 가 켜져있어야 동작합니다.
           </p>
         </div>
@@ -161,7 +163,7 @@ export default function RankTrackingPage() {
       <TabNav />
 
       {/* 추가 폼 */}
-      <div className="bg-white border rounded-lg p-4 space-y-3">
+      <div className="bg-card border rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
           <h2 className="font-semibold">키워드 추가</h2>
@@ -203,15 +205,15 @@ export default function RankTrackingPage() {
             {submitting ? '...' : '추가'}
           </Button>
         </div>
-        <p className="text-[11px] text-gray-500">
+        <p className="text-[11px] text-fg-3">
           쿠팡 상품 URL <code>www.coupang.com/vp/products/<b>1234567</b></code> 에서 숫자 부분이 상품 ID. 광고 슬롯 포함 노출 순위로 기록됩니다.
         </p>
       </div>
 
       {/* 목록 */}
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-card border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-card-2 border-b">
             <tr>
               <th className="text-left px-3 py-2 font-medium">키워드 / 상품</th>
               <th className="text-left px-3 py-2 font-medium w-20">상태</th>
@@ -224,20 +226,20 @@ export default function RankTrackingPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="text-center py-6 text-gray-500">로딩...</td></tr>
+              <tr><td colSpan={7} className="text-center py-6 text-fg-3">로딩...</td></tr>
             )}
             {!loading && items.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-6 text-gray-500">아직 등록된 키워드가 없습니다.</td></tr>
+              <tr><td colSpan={7} className="text-center py-6 text-fg-3">아직 등록된 키워드가 없습니다.</td></tr>
             )}
             {items.map((it) => {
               const hits = (historyMap[it.id] || []).filter((h) => h.rank != null);
               const best = hits.length ? Math.min(...hits.map((h) => h.rank as number)) : null;
               const hitTarget = it.target_rank && it.last_rank && it.last_rank <= it.target_rank;
               return (
-                <tr key={it.id} className="border-b hover:bg-gray-50">
+                <tr key={it.id} className="border-b hover:bg-card-2">
                   <td className="px-3 py-2">
                     <div className="font-medium">{it.keyword}</div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-fg-3">
                       <a
                         href={`https://www.coupang.com/vp/products/${it.product_id}`}
                         target="_blank"
@@ -266,20 +268,20 @@ export default function RankTrackingPage() {
                         <span className={`font-semibold ${hitTarget ? 'text-green-600' : ''}`}>{it.last_rank}위</span>
                         {it.last_is_ad && <span className="text-[10px] bg-orange-100 text-orange-700 px-1 rounded">광고</span>}
                         {best != null && best < it.last_rank && (
-                          <span className="text-[10px] text-gray-400">최고 {best}</span>
+                          <span className="text-[10px] text-fg-5">최고 {best}</span>
                         )}
                       </div>
                     ) : it.last_checked_at ? (
-                      <span className="text-xs text-gray-400">미노출 ({it.max_pages}p 내)</span>
+                      <span className="text-xs text-fg-5">미노출 ({it.max_pages}p 내)</span>
                     ) : (
-                      <span className="text-xs text-gray-300">-</span>
+                      <span className="text-xs text-line">-</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">{it.target_rank ?? '-'}</td>
                   <td className="px-3 py-2">
                     <Sparkline points={historyMap[it.id] || []} />
                   </td>
-                  <td className="px-3 py-2 text-xs text-gray-500">
+                  <td className="px-3 py-2 text-xs text-fg-3">
                     {it.last_checked_at
                       ? new Date(it.last_checked_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                       : '-'}
@@ -288,12 +290,12 @@ export default function RankTrackingPage() {
                     <button
                       onClick={() => recheck(it.id)}
                       disabled={it.status === 'queued' || it.status === 'checking'}
-                      className="inline-block p-1 hover:bg-gray-200 rounded disabled:opacity-40"
+                      className="inline-block p-1 hover:bg-line rounded disabled:opacity-40"
                       title="지금 체크"
                     >
                       <Play className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => remove(it.id)} className="inline-block p-1 hover:bg-gray-200 rounded text-red-600" title="삭제">
+                    <button onClick={() => remove(it.id)} className="inline-block p-1 hover:bg-line rounded text-red-600" title="삭제">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>

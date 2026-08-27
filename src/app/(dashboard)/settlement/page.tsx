@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Loader2, CheckCircle2, Trash2, Save, ChevronDown, ChevronRight, ClipboardPaste, Lock, Unlock, RotateCcw, Upload, GripVertical } from 'lucide-react';
 import { BarChart, Bar, Line, ComposedChart, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 // ───────────────── Interactive Chart ─────────────────
 const METRIC_COLORS: Record<string, string> = {
   '실매출': '#10b981', '매입원가': '#f97316', '광고비': '#8b5cf6', '고정비': '#64748b',
@@ -40,18 +42,18 @@ function InteractiveChart({ data, metrics, defaultBars, defaultLines, unit = '�
           const active = inBars || inLines;
           return (
             <button key={m} onClick={() => toggleMetric(m)}
-              className={`h-6 px-2 rounded text-[10px] font-semibold transition-all ${active ? 'text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}
+              className={`h-6 px-2 rounded text-[10px] font-semibold transition-all ${active ? 'text-white' : 'bg-app text-fg-3 hover:bg-line'}`}
               style={active ? { backgroundColor: METRIC_COLORS[m] || '#6B7684' } : {}}>
               {m} {inBars ? '▊' : inLines ? '━' : ''}
             </button>
           );
         })}
         {activeMetrics.length > 0 && (
-          <div className="flex items-center gap-1 ml-1 border-l border-[#E5E8EB] pl-1.5">
-            <span className="text-[9px] text-[#6B7684]">보조축:</span>
+          <div className="flex items-center gap-1 ml-1 border-l border-line pl-1.5">
+            <span className="text-[9px] text-fg-3">보조축:</span>
             {activeMetrics.filter(m => !pctMetrics.has(m)).map(m => (
               <button key={m} onClick={() => setRightKeys(prev => { const n = new Set(prev); n.has(m) ? n.delete(m) : n.add(m); return n; })}
-                className={`h-5 px-1.5 rounded text-[9px] font-semibold ${rightKeys.has(m) ? 'text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}
+                className={`h-5 px-1.5 rounded text-[9px] font-semibold ${rightKeys.has(m) ? 'text-white' : 'bg-app text-fg-3'}`}
                 style={rightKeys.has(m) ? { backgroundColor: METRIC_COLORS[m] || '#6B7684' } : {}}>
                 {m}
               </button>
@@ -500,34 +502,34 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
 
   const allHistoryMonths = [...new Set(snapshots.map(s => s.year_month))].filter(ym => ym !== curYm).sort().reverse();
 
-  const inputCls = 'h-9 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] transition-colors';
+  const inputCls = 'h-9 px-2.5 rounded-lg border border-line text-[13px] focus:outline-none focus:border-brand transition-colors';
   const W = { drag: 'w-5', num: 'w-6', label: 'w-36', type: 'w-12', amount: 'w-28', vat: 'w-16', real: 'w-28', note: 'flex-1 min-w-[60px]', cat: 'w-20', lock: 'w-7', del: 'w-7' };
   const sortIcon = (key: 'label' | 'amount') => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   return (
-    <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-4 md:px-5 py-3 md:py-4 border-b border-[#F2F4F6]">
+    <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-4 md:px-5 py-3 md:py-4 border-b border-line-2">
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <h3 className="text-[14px] md:text-[15px] font-bold text-[#191F28]">월 정산</h3>
+          <h3 className="text-[14px] md:text-[15px] font-bold text-fg">월 정산</h3>
           <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)}
-            className="h-8 md:h-9 px-2 md:px-3 rounded-lg border border-[#E5E8EB] text-[12px] md:text-[13px] font-semibold text-[#3182F6] focus:outline-none focus:border-[#3182F6] bg-white cursor-pointer">
+            className="h-8 md:h-9 px-2 md:px-3 rounded-lg border border-line text-[12px] md:text-[13px] font-semibold text-brand focus:outline-none focus:border-brand bg-card cursor-pointer">
             {monthOptions.map(ym => <option key={ym} value={ym}>{ym.replace('-', '년 ')}월</option>)}
           </select>
           <div className="relative">
             <button onClick={() => pasteOpen ? setPasteOpen(false) : openPaste()}
-              className="h-8 md:h-9 px-2 md:px-3 rounded-lg border border-[#E5E8EB] text-[11px] md:text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] flex items-center gap-1 md:gap-1.5 transition-colors">
+              className="h-8 md:h-9 px-2 md:px-3 rounded-lg border border-line text-[11px] md:text-[12px] font-medium text-fg-3 hover:bg-app flex items-center gap-1 md:gap-1.5 transition-colors">
               <ClipboardPaste className="h-3 w-3 md:h-3.5 md:w-3.5" /> <span className="hidden sm:inline">이전 월</span> 붙여넣기
             </button>
             {pasteOpen && (
-              <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-lg border border-[#E5E8EB] z-50 min-w-[180px] py-1">
+              <div className="absolute top-full left-0 mt-1 bg-card rounded-xl shadow-lg border border-line z-50 min-w-[180px] py-1">
                 {pasteLoading ? (
-                  <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-[#3182F6]" /></div>
+                  <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-brand" /></div>
                 ) : pasteMonths.length === 0 ? (
-                  <p className="px-4 py-3 text-[12px] text-[#B0B8C1]">저장된 월이 없습니다</p>
+                  <p className="px-4 py-3 text-[12px] text-fg-5">저장된 월이 없습니다</p>
                 ) : (
                   pasteMonths.map(ym => (
                     <button key={ym} onClick={() => pasteFrom(ym)}
-                      className="w-full text-left px-4 py-2.5 text-[13px] text-[#191F28] hover:bg-[#F2F4F6] transition-colors">
+                      className="w-full text-left px-4 py-2.5 text-[13px] text-fg hover:bg-app transition-colors">
                       {ym.replace('-', '년 ')}월
                     </button>
                   ))
@@ -537,17 +539,17 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2 md:mt-0">
-          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+          <div className="flex bg-app rounded-lg p-0.5">
             <button onClick={() => safeSetTab('edit')}
-              className={`px-2.5 md:px-3 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${tab === 'edit' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              className={`px-2.5 md:px-3 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${tab === 'edit' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
               편집
             </button>
             <button onClick={() => safeSetTab('history')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'history' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'history' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
               월별 추이
             </button>
             <button onClick={() => safeSetTab('analysis')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'analysis' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'analysis' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
               분석
             </button>
           </div>
@@ -557,16 +559,16 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
       {tab === 'edit' ? (
         <div className="px-3 md:px-5 py-3 md:py-4 space-y-1 overflow-x-auto">
           {loading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
           ) : (
             <>
               {/* 헤더 */}
-              <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-[#B0B8C1]">
+              <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-fg-5">
                 <span className={W.drag} />
                 <span className={W.num}>#</span>
-                <button onClick={() => toggleSort('label')} className={`${W.label} text-left hover:text-[#191F28] transition-colors`}>항목{sortIcon('label')}</button>
+                <button onClick={() => toggleSort('label')} className={`${W.label} text-left hover:text-fg transition-colors`}>항목{sortIcon('label')}</button>
                 <span className={`${W.type} text-center`}>+/-</span>
-                <button onClick={() => toggleSort('amount')} className={`${W.amount} text-right hover:text-[#191F28] transition-colors`}>금액{sortIcon('amount')}</button>
+                <button onClick={() => toggleSort('amount')} className={`${W.amount} text-right hover:text-fg transition-colors`}>금액{sortIcon('amount')}</button>
                 <span className={`${W.vat} text-center`}>VAT</span>
                 <span className={`${W.real} text-right`}>VAT포함</span>
                 <span className={W.note}>비고</span>
@@ -602,20 +604,20 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       onDragLeave={() => setDragOver(null)}
                       onDrop={(e) => { e.preventDefault(); handleDrop(parent.id); }}
                       onDragEnd={() => { setDragId(null); setDragOver(null); }}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl group transition-colors ${parent.is_locked ? 'bg-amber-50/40' : ''} ${dragOver === parent.id && dragId !== parent.id ? 'bg-blue-50 ring-2 ring-[#3182F6]/30' : dragId === parent.id ? 'bg-[#F2F4F6] opacity-50' : !parent.is_locked ? 'bg-[#F8F9FB]' : ''}`}>
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl group transition-colors ${parent.is_locked ? 'bg-amber-50/40' : ''} ${dragOver === parent.id && dragId !== parent.id ? 'bg-brand-bg ring-2 ring-brand/30' : dragId === parent.id ? 'bg-app opacity-50' : !parent.is_locked ? 'bg-card-2' : ''}`}>
                       <span className={`${W.drag} flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity`}>
-                        <GripVertical className="h-3.5 w-3.5 text-[#B0B8C1]" />
+                        <GripVertical className="h-3.5 w-3.5 text-fg-5" />
                       </span>
                       {hasChildren ? (
                         <button onClick={() => setCollapsed(prev => { const next = new Set(prev); next.has(parent.id) ? next.delete(parent.id) : next.add(parent.id); return next; })}
                           className={`${W.num} flex items-center justify-center`}>
-                          {collapsed.has(parent.id) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684]" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684]" />}
+                          {collapsed.has(parent.id) ? <ChevronRight className="h-3.5 w-3.5 text-fg-3" /> : <ChevronDown className="h-3.5 w-3.5 text-fg-3" />}
                         </button>
                       ) : (
-                        <span className={`${W.num} text-[11px] text-[#B0B8C1] tabular-nums`}>{pIdx + 1}</span>
+                        <span className={`${W.num} text-[11px] text-fg-5 tabular-nums`}>{pIdx + 1}</span>
                       )}
                       <input lang="ko" value={parent.label} onChange={(e) => updateItem(parent.id, 'label', e.target.value)}
-                        className={`${inputCls} ${W.label} font-medium bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                        className={`${inputCls} ${W.label} font-medium bg-transparent border-transparent hover:border-line focus:bg-card`} />
                       {hasChildren ? (
                         <span className={W.type} />
                       ) : (
@@ -623,37 +625,37 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                           className={`${W.type} text-center px-1 py-1 rounded text-[10px] font-bold transition-all active:scale-95 ${
                             parent.is_income
                               ? 'bg-emerald-500 text-white ring-1 ring-emerald-500/30'
-                              : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                              : 'bg-app text-fg-3 hover:bg-line'
                           }`}>
                           {parent.is_income ? '+' : '−'}
                         </button>
                       )}
                       {hasChildren ? (
-                        <span className={`${W.amount} text-[13px] tabular-nums text-right ${amt < 0 ? 'text-emerald-600' : 'text-[#6B7684]'}`}>{amt < 0 ? '+' : ''}{fmt(Math.abs(amt))}원</span>
+                        <span className={`${W.amount} text-[13px] tabular-nums text-right ${amt < 0 ? 'text-emerald-600' : 'text-fg-3'}`}>{amt < 0 ? '+' : ''}{fmt(Math.abs(amt))}원</span>
                       ) : (
                         <input type="text" inputMode="numeric" value={parent.amount ? fmt(parent.amount) : ''} onChange={(e) => updateItem(parent.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
                           disabled={!!parent.is_locked}
-                          placeholder="0" className={`${inputCls} ${W.amount} text-right bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums ${parent.is_locked ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                          placeholder="0" className={`${inputCls} ${W.amount} text-right bg-transparent border-transparent hover:border-line focus:bg-card tabular-nums ${parent.is_locked ? 'opacity-60 cursor-not-allowed' : ''}`} />
                       )}
                       <button onClick={() => updateItem(parent.id, 'vat_applicable', !parent.vat_applicable)}
                         className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
                           hasChildren ? 'invisible' : parent.vat_applicable
-                            ? 'bg-blue-500 text-white ring-1 ring-blue-500/30'
-                            : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                            ? 'bg-brand text-white ring-1 ring-blue-500/30'
+                            : 'bg-app text-fg-3 hover:bg-line'
                         }`}>
                         {parent.vat_applicable ? 'VAT별도' : 'VAT포함'}
                       </button>
-                      <span className={`${W.real} text-[12px] tabular-nums text-right ${vatAmt < 0 ? 'text-emerald-600' : 'text-[#6B7684]'}`}>{vatAmt < 0 ? '+' : ''}{fmt(Math.abs(vatAmt))}원</span>
+                      <span className={`${W.real} text-[12px] tabular-nums text-right ${vatAmt < 0 ? 'text-emerald-600' : 'text-fg-3'}`}>{vatAmt < 0 ? '+' : ''}{fmt(Math.abs(vatAmt))}원</span>
                       <span className={W.note} />
                       <select value={catOf(parent)} onChange={(e) => { updateItem(parent.id, 'category', e.target.value); }}
-                        className={`${W.cat} h-7 px-1 rounded text-[9px] font-semibold border-0 bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#3182F6] ${CATEGORIES.find(c => c.id === catOf(parent))?.color || ''}`}>
+                        className={`${W.cat} h-7 px-1 rounded text-[9px] font-semibold border-0 bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand ${CATEGORIES.find(c => c.id === catOf(parent))?.color || ''}`}>
                         {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                       </select>
                       <button onClick={() => updateItem(parent.id, 'is_locked', !parent.is_locked)}
                         className={`${W.lock} flex justify-center transition-opacity ${parent.is_locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         {parent.is_locked
                           ? <Lock className="h-3 w-3 text-amber-500" />
-                          : <Unlock className="h-3 w-3 text-[#B0B8C1] hover:text-amber-500" />}
+                          : <Unlock className="h-3 w-3 text-fg-5 hover:text-amber-500" />}
                       </button>
                       <button onClick={() => handleDelete(parent.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
                         <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />
@@ -663,40 +665,40 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     {/* 세부항목 (접기/펼치기) */}
                     {!collapsed.has(parent.id) && <>
                       {children.map((child, cIdx) => (
-                        <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-[#E5E8EB] group">
-                          <span className={`${W.num} text-[10px] text-[#D0D5DD] tabular-nums`}>{pIdx + 1}-{cIdx + 1}</span>
+                        <div key={child.id} className="flex items-center gap-2 px-3 py-2 ml-6 border-l-2 border-line group">
+                          <span className={`${W.num} text-[10px] text-line tabular-nums`}>{pIdx + 1}-{cIdx + 1}</span>
                           <input lang="ko" value={child.label} onChange={(e) => updateItem(child.id, 'label', e.target.value)}
-                            className={`${inputCls} ${W.label} text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white`} />
+                            className={`${inputCls} ${W.label} text-[12px] bg-transparent border-transparent hover:border-line focus:bg-card`} />
                           <button onClick={() => updateItem(child.id, 'is_income', !child.is_income)}
                             className={`${W.type} text-center px-1 py-1 rounded text-[10px] font-bold transition-all active:scale-95 ${
                               child.is_income
                                 ? 'bg-emerald-500 text-white ring-1 ring-emerald-500/30'
-                                : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                                : 'bg-app text-fg-3 hover:bg-line'
                             }`}>
                             {child.is_income ? '+' : '−'}
                           </button>
                           <input type="text" inputMode="numeric" value={child.amount ? fmt(child.amount) : ''} onChange={(e) => updateItem(child.id, 'amount', Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
                             disabled={!!(child.is_locked || parent.is_locked)}
-                            placeholder="0" className={`${inputCls} ${W.amount} text-right text-[12px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white tabular-nums ${(child.is_locked || parent.is_locked) ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                            placeholder="0" className={`${inputCls} ${W.amount} text-right text-[12px] bg-transparent border-transparent hover:border-line focus:bg-card tabular-nums ${(child.is_locked || parent.is_locked) ? 'opacity-60 cursor-not-allowed' : ''}`} />
                           <button onClick={() => updateItem(child.id, 'vat_applicable', !child.vat_applicable)}
                             className={`${W.vat} text-center px-1.5 py-1 rounded text-[10px] font-semibold transition-all active:scale-95 ${
                               child.vat_applicable
-                                ? 'bg-blue-500 text-white ring-1 ring-blue-500/30'
-                                : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                                ? 'bg-brand text-white ring-1 ring-blue-500/30'
+                                : 'bg-app text-fg-3 hover:bg-line'
                             }`}>
                             {child.vat_applicable ? 'VAT별도' : 'VAT포함'}
                           </button>
-                          <span className={`${W.real} text-[11px] tabular-nums text-right ${child.is_income ? 'text-emerald-600' : 'text-[#B0B8C1]'}`}>
+                          <span className={`${W.real} text-[11px] tabular-nums text-right ${child.is_income ? 'text-emerald-600' : 'text-fg-5'}`}>
                             {child.is_income ? '+' : ''}{fmt(child.vat_applicable ? Math.round(Number(child.amount ?? 0) * 1.1) : Number(child.amount ?? 0))}원
                           </span>
                           <input lang="ko" value={child.note ?? ''} onChange={(e) => updateItem(child.id, 'note', e.target.value)}
-                            placeholder="비고" className={`${inputCls} ${W.note} text-[11px] bg-transparent border-transparent hover:border-[#E5E8EB] focus:bg-white text-[#6B7684]`} />
+                            placeholder="비고" className={`${inputCls} ${W.note} text-[11px] bg-transparent border-transparent hover:border-line focus:bg-card text-fg-3`} />
                           <span className={W.cat} />
                           <button onClick={() => updateItem(child.id, 'is_locked', !child.is_locked)}
                             className={`${W.lock} flex justify-center transition-opacity ${child.is_locked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                             {child.is_locked
                               ? <Lock className="h-2.5 w-2.5 text-amber-500" />
-                              : <Unlock className="h-2.5 w-2.5 text-[#B0B8C1] hover:text-amber-500" />}
+                              : <Unlock className="h-2.5 w-2.5 text-fg-5 hover:text-amber-500" />}
                           </button>
                           <button onClick={() => handleDelete(child.id)} className={`${W.del} flex justify-center opacity-0 group-hover:opacity-100`}>
                             <Trash2 className="h-3 w-3 text-red-300 hover:text-red-500" />
@@ -706,17 +708,17 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
 
                       {/* 세부항목 추가 */}
                       {newParent === parent.id ? (
-                        <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-[#E5E8EB]">
+                        <div className="flex items-center gap-2 ml-6 pl-3 py-1.5 border-l-2 border-line">
                           <span className={W.num} />
                           <input lang="ko" autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(parent.id); if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
                             placeholder="세부항목명" className={`${inputCls} ${W.label} text-[12px]`} />
-                          <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-[#3182F6] font-medium hover:underline">추가</button>
-                          <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
+                          <button onClick={() => handleAdd(parent.id)} className="text-[12px] text-brand font-medium hover:underline">추가</button>
+                          <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-fg-3">취소</button>
                         </div>
                       ) : (
                         <button onClick={() => { setNewParent(parent.id); setNewLabel(''); }}
-                          className="ml-6 pl-3 py-1 text-[11px] text-[#3182F6] hover:underline border-l-2 border-transparent">
+                          className="ml-6 pl-3 py-1 text-[11px] text-brand hover:underline border-l-2 border-transparent">
                           + 세부항목
                         </button>
                       )}
@@ -732,7 +734,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                 const netExVat = totalIncomeExVat - totalCostExVat;
                 const netInclVat = totalIncomeInclVat - totalCostInclVat;
                 return (
-                <div className="space-y-0.5 border-t border-[#E5E8EB] mt-3 pt-3">
+                <div className="space-y-0.5 border-t border-line mt-3 pt-3">
                   {totalIncomeExVat > 0 && <>
                     <div className="flex items-center gap-2 px-3 py-1.5">
                       <span className={W.drag} /><span className={W.num} />
@@ -744,7 +746,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     </div>
                     <div className="flex items-center gap-2 px-3 py-1.5">
                       <span className={W.drag} /><span className={W.num} />
-                      <span className={`${W.label} text-[12px] text-[#6B7684]`}>비용 소계</span>
+                      <span className={`${W.label} text-[12px] text-fg-3`}>비용 소계</span>
                       <span className={W.type} />
                       <span className={`${W.amount} text-[12px] text-red-500 tabular-nums text-right`}>-{fmt(totalCostExVat)}원</span>
                       <span className={W.vat} />
@@ -753,7 +755,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                   </>}
                   <div className="flex items-center gap-2 px-3 py-2">
                     <span className={W.drag} /><span className={W.num} />
-                    <span className={`${W.label} text-[13px] font-bold text-[#191F28]`}>{totalIncomeExVat > 0 ? '순합계' : '합계'}</span>
+                    <span className={`${W.label} text-[13px] font-bold text-fg`}>{totalIncomeExVat > 0 ? '순합계' : '합계'}</span>
                     <span className={W.type} />
                     <span className={`${W.amount} text-[13px] font-bold tabular-nums text-right ${netExVat >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{netExVat >= 0 ? '+' : ''}{fmt(netExVat)}원</span>
                     <span className={W.vat} />
@@ -764,11 +766,11 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
               })()}
 
               {/* 하단 액션 */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#F2F4F6]">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-line-2">
                 <div className="flex flex-wrap items-center gap-2">
                   {newParent === '' && newParent !== '__root__' ? (
                     <button onClick={() => { setNewParent('__root__'); setNewLabel(''); }}
-                      className="h-9 px-3.5 rounded-lg border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] flex items-center gap-1.5">
+                      className="h-9 px-3.5 rounded-lg border border-line text-[12px] font-medium text-fg-3 hover:bg-app flex items-center gap-1.5">
                       <Plus className="h-3.5 w-3.5" /> 항목 추가
                     </button>
                   ) : newParent === '__root__' ? (
@@ -777,8 +779,8 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                         onKeyDown={(e) => { if (e.key === 'Enter') { handleAdd(); setNewParent(''); } if (e.key === 'Escape') { setNewParent(''); setNewLabel(''); } }}
                         placeholder="새 항목명" className={`${inputCls} w-36`} />
                       <button onClick={() => { handleAdd(); setNewParent(''); }} disabled={!newLabel.trim()}
-                        className="h-9 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50">추가</button>
-                      <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-[#6B7684]">취소</button>
+                        className="h-9 px-3 rounded-lg bg-brand text-white text-[12px] font-medium hover:bg-brand-hover disabled:opacity-50">추가</button>
+                      <button onClick={() => { setNewParent(''); setNewLabel(''); }} className="text-[12px] text-fg-3">취소</button>
                     </div>
                   ) : null}
                   <button onClick={handleReset}
@@ -787,8 +789,8 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                   </button>
                 </div>
                 <button onClick={handleSaveAll} disabled={saving || !dirty}
-                  className={`h-9 px-5 rounded-lg text-[13px] font-semibold transition-all relative overflow-hidden ${dirty ? 'bg-[#3182F6] text-white hover:bg-[#1B64DA]' : 'bg-[#F2F4F6] text-[#B0B8C1] cursor-default'}`}>
-                  {saving && <span className="absolute inset-0 bg-[#1B64DA] transition-all" style={{ width: `${saveProgress}%` }} />}
+                  className={`h-9 px-5 rounded-lg text-[13px] font-semibold transition-all relative overflow-hidden ${dirty ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-app text-fg-5 cursor-default'}`}>
+                  {saving && <span className="absolute inset-0 bg-brand-hover transition-all" style={{ width: `${saveProgress}%` }} />}
                   <span className="relative">{saving ? `${saveProgress}%` : `${selectedYm.replace('-', '.')} 저장`}</span>
                 </button>
               </div>
@@ -801,22 +803,22 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
           {/* 기간 선택 */}
           {allHistoryMonths.length > 0 && (
             <div className="flex items-center gap-2 text-[12px]">
-              <span className="text-[#6B7684]">기간:</span>
+              <span className="text-fg-3">기간:</span>
               <select value={trendFrom || allHistoryMonths[allHistoryMonths.length - 1] || ''} onChange={e => setTrendFrom(e.target.value)}
-                className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white">
+                className="h-8 px-2 rounded-lg border border-line text-[12px] bg-card">
                 {allHistoryMonths.slice().reverse().map(ym => <option key={ym} value={ym}>{ym}</option>)}
               </select>
-              <span className="text-[#6B7684]">~</span>
+              <span className="text-fg-3">~</span>
               <select value={trendTo || allHistoryMonths[0] || ''} onChange={e => setTrendTo(e.target.value)}
-                className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white">
+                className="h-8 px-2 rounded-lg border border-line text-[12px] bg-card">
                 {allHistoryMonths.slice().reverse().map(ym => <option key={ym} value={ym}>{ym}</option>)}
               </select>
             </div>
           )}
           {snapLoading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
           ) : allHistoryMonths.length === 0 ? (
-            <p className="text-center text-[13px] text-[#B0B8C1] py-8">저장된 데이터가 없습니다. 편집 탭에서 저장하세요.</p>
+            <p className="text-center text-[13px] text-fg-5 py-8">저장된 데이터가 없습니다. 편집 탭에서 저장하세요.</p>
           ) : (() => {
             const from = trendFrom || allHistoryMonths[allHistoryMonths.length - 1];
             const to = trendTo || allHistoryMonths[0];
@@ -825,10 +827,10 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[12px]">
                 <thead>
-                  <tr className="border-b border-[#E5E8EB]">
-                    <th className="text-left px-3 py-2.5 text-[#6B7684] font-semibold min-w-[120px]">항목</th>
+                  <tr className="border-b border-line">
+                    <th className="text-left px-3 py-2.5 text-fg-3 font-semibold min-w-[120px]">항목</th>
                     {filteredMonths.map(ym => (
-                      <th key={ym} className="text-right px-3 py-2.5 text-[#6B7684] font-semibold min-w-[100px]">{ym}</th>
+                      <th key={ym} className="text-right px-3 py-2.5 text-fg-3 font-semibold min-w-[100px]">{ym}</th>
                     ))}
                   </tr>
                 </thead>
@@ -852,35 +854,35 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     for (const pid of parentIds) {
                       const kids = histChildrenOf(pid);
                       rows.push(
-                        <tr key={pid} className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
-                          <td className="px-3 py-2.5 font-semibold text-[#191F28]">{costMeta.get(pid)?.label}</td>
+                        <tr key={pid} className="border-b border-line-2 bg-card-2">
+                          <td className="px-3 py-2.5 font-semibold text-fg">{costMeta.get(pid)?.label}</td>
                           {filteredMonths.map(ym => {
                             const val = kids.length > 0 ? kids.reduce((s, kid) => s + Number(getAmt(ym, kid)), 0) : Number(getAmt(ym, pid));
-                            return <td key={ym} className="px-3 py-2.5 text-right tabular-nums text-[#191F28] font-medium">{fmt(val)}</td>;
+                            return <td key={ym} className="px-3 py-2.5 text-right tabular-nums text-fg font-medium">{fmt(val)}</td>;
                           })}
                         </tr>
                       );
                       for (const kid of kids) {
                         rows.push(
-                          <tr key={kid} className="border-b border-[#F2F4F6]">
-                            <td className="px-3 py-2 pl-7 text-[#6B7684]">{costMeta.get(kid)?.label}</td>
+                          <tr key={kid} className="border-b border-line-2">
+                            <td className="px-3 py-2 pl-7 text-fg-3">{costMeta.get(kid)?.label}</td>
                             {filteredMonths.map(ym => (
-                              <td key={ym} className="px-3 py-2 text-right tabular-nums text-[#6B7684]">{fmt(Number(getAmt(ym, kid)))}</td>
+                              <td key={ym} className="px-3 py-2 text-right tabular-nums text-fg-3">{fmt(Number(getAmt(ym, kid)))}</td>
                             ))}
                           </tr>
                         );
                       }
                     }
                     rows.push(
-                      <tr key="total" className="border-t-2 border-[#191F28]">
-                        <td className="px-3 py-2.5 font-bold text-[#191F28]">합계</td>
+                      <tr key="total" className="border-t-2 border-fg">
+                        <td className="px-3 py-2.5 font-bold text-fg">합계</td>
                         {filteredMonths.map(ym => {
                           const total = snapshots.filter(s => s.year_month === ym).reduce((s, r) => {
                             const isChild = !!costMeta.get(r.cost_id)?.parent_id;
                             const isParentWithKids = !isChild && histChildrenOf(r.cost_id).length > 0;
                             return s + (isParentWithKids ? 0 : Number(r.amount ?? 0));
                           }, 0);
-                          return <td key={ym} className="px-3 py-2.5 text-right tabular-nums font-bold text-[#191F28]">{fmt(total)}</td>;
+                          return <td key={ym} className="px-3 py-2.5 text-right tabular-nums font-bold text-fg">{fmt(total)}</td>;
                         })}
                       </tr>
                     );
@@ -895,18 +897,18 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
       ) : (
         /* 분석 탭 */
         <div className="px-3 md:px-5 py-3 md:py-4 space-y-4">
-          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5 w-fit">
+          <div className="flex bg-app rounded-lg p-0.5 w-fit">
             <button onClick={() => setAnalysisTab('current')}
-              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${analysisTab === 'current' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${analysisTab === 'current' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
               현재월 분석
             </button>
             <button onClick={() => setAnalysisTab('trend')}
-              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${analysisTab === 'trend' ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${analysisTab === 'trend' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
               월별 추이
             </button>
           </div>
           {loading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
           ) : (() => {
             const grossRevenue = catTotals['revenue']?.exVat ?? 0;
             const discount = discountTotals.exVat;
@@ -950,21 +952,21 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
                   {[
                     { label: '실매출', value: fmt(revenue) + '원', color: 'text-emerald-700', sub: discount > 0 ? `총 ${fmt(grossRevenue)} - 쿠폰 ${fmt(discount)}` : undefined },
-                    { label: 'ROAS', value: roas > 0 ? roas.toFixed(0) + '%' : '-', color: roas >= 300 ? 'text-emerald-600' : roas >= 200 ? 'text-blue-600' : 'text-red-600', sub: `매출/광고 ${fmt(revenue)}/${fmt(ad)}` },
-                    { label: '매출총이익률', value: grossMargin.toFixed(1) + '%', color: 'text-blue-600', sub: `${fmt(grossProfit)}원` },
-                    { label: '순이익률', value: netMargin.toFixed(1) + '%', color: netProfit >= 0 ? 'text-blue-600' : 'text-red-600', sub: `${fmt(netProfit)}원` },
+                    { label: 'ROAS', value: roas > 0 ? roas.toFixed(0) + '%' : '-', color: roas >= 300 ? 'text-emerald-600' : roas >= 200 ? 'text-brand' : 'text-red-600', sub: `매출/광고 ${fmt(revenue)}/${fmt(ad)}` },
+                    { label: '매출총이익률', value: grossMargin.toFixed(1) + '%', color: 'text-brand', sub: `${fmt(grossProfit)}원` },
+                    { label: '순이익률', value: netMargin.toFixed(1) + '%', color: netProfit >= 0 ? 'text-brand' : 'text-red-600', sub: `${fmt(netProfit)}원` },
                   ].map((kpi, i) => (
-                    <div key={i} className="bg-[#F8F9FB] rounded-xl px-3 md:px-4 py-2.5 md:py-3">
-                      <p className="text-[10px] text-[#6B7684] mb-0.5 md:mb-1">{kpi.label}</p>
+                    <div key={i} className="bg-card-2 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
+                      <p className="text-[10px] text-fg-3 mb-0.5 md:mb-1">{kpi.label}</p>
                       <p className={`text-[15px] md:text-[18px] font-bold tabular-nums ${kpi.color}`}>{kpi.value}</p>
-                      {kpi.sub && <p className="text-[9px] md:text-[10px] text-[#B0B8C1] tabular-nums mt-0.5 truncate">{kpi.sub}</p>}
+                      {kpi.sub && <p className="text-[9px] md:text-[10px] text-fg-5 tabular-nums mt-0.5 truncate">{kpi.sub}</p>}
                     </div>
                   ))}
                 </div>
 
                 {/* 손익 구조 바 차트 */}
                 <div>
-                  <h4 className="text-[13px] font-bold text-[#191F28] mb-3">손익 구조</h4>
+                  <h4 className="text-[13px] font-bold text-fg mb-3">손익 구조</h4>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={barData} layout="vertical" margin={{ left: 70, right: 30 }}>
@@ -983,7 +985,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                 {/* 매출 구성비 도넛 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div>
-                    <h4 className="text-[13px] font-bold text-[#191F28] mb-3">매출 대비 비용 구성</h4>
+                    <h4 className="text-[13px] font-bold text-fg mb-3">매출 대비 비용 구성</h4>
                     <div className="h-56">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -997,21 +999,21 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     </div>
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-bold text-[#191F28] mb-3">상세 비율</h4>
+                    <h4 className="text-[13px] font-bold text-fg mb-3">상세 비율</h4>
                     <div className="space-y-3 mt-4">
                       {[
                         { label: '원가율 (매입원가 / 매출)', value: cogsRate, color: 'bg-orange-500' },
                         { label: '광고비 비중 (광고·마케팅 / 매출)', value: adRate, color: 'bg-violet-500' },
                         { label: '고정비 비중 (고정비 / 매출)', value: fixedRate, color: 'bg-slate-500' },
                         { label: '변동비 비중 (변동비 / 매출)', value: variableRate, color: 'bg-cyan-500' },
-                        { label: '순이익률 (순이익 / 매출)', value: Math.max(0, netMargin), color: 'bg-blue-500' },
+                        { label: '순이익률 (순이익 / 매출)', value: Math.max(0, netMargin), color: 'bg-brand' },
                       ].map((bar, i) => (
                         <div key={i}>
                           <div className="flex justify-between text-[11px] mb-1">
-                            <span className="text-[#6B7684]">{bar.label}</span>
-                            <span className="font-semibold text-[#191F28]">{bar.value.toFixed(1)}%</span>
+                            <span className="text-fg-3">{bar.label}</span>
+                            <span className="font-semibold text-fg">{bar.value.toFixed(1)}%</span>
                           </div>
-                          <div className="h-2.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                          <div className="h-2.5 bg-app rounded-full overflow-hidden">
                             <div className={`h-full ${bar.color} rounded-full transition-all`} style={{ width: `${Math.min(bar.value, 100)}%` }} />
                           </div>
                         </div>
@@ -1022,9 +1024,9 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
 
                 {/* 카테고리별 요약 테이블 */}
                 <div>
-                  <h4 className="text-[13px] font-bold text-[#191F28] mb-3">카테고리별 요약</h4>
+                  <h4 className="text-[13px] font-bold text-fg mb-3">카테고리별 요약</h4>
                   <table className="w-full text-[12px] border-collapse">
-                    <thead><tr className="border-b border-[#E5E8EB] text-[#6B7684]">
+                    <thead><tr className="border-b border-line text-fg-3">
                       <th className="text-left py-2 px-3">카테고리</th>
                       <th className="text-right py-2 px-3">VAT제외</th>
                       <th className="text-right py-2 px-3">VAT포함</th>
@@ -1032,21 +1034,21 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                     </tr></thead>
                     <tbody>
                       {/* 매출 */}
-                      <tr className="border-b border-[#F2F4F6]">
+                      <tr className="border-b border-line-2">
                         <td className="py-2.5 px-3 font-semibold text-emerald-700">총매출</td>
                         <td className="py-2.5 px-3 text-right tabular-nums">{fmt(grossRevenue)}원</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(catTotals['revenue']?.inclVat ?? 0)}원</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{fmt(catTotals['revenue']?.inclVat ?? 0)}원</td>
                         <td className="py-2.5 px-3 text-right tabular-nums">-</td>
                       </tr>
                       {discount > 0 && (
-                        <tr className="border-b border-[#F2F4F6] text-[#6B7684]">
+                        <tr className="border-b border-line-2 text-fg-3">
                           <td className="py-2 px-3 pl-6 text-[11px]">판매자 할인쿠폰</td>
                           <td className="py-2 px-3 text-right tabular-nums text-red-500">-{fmt(discount)}원</td>
                           <td className="py-2 px-3 text-right tabular-nums text-red-400">-{fmt(discountTotals.inclVat)}원</td>
                           <td className="py-2 px-3 text-right tabular-nums">{revenue > 0 ? (discount / grossRevenue * 100).toFixed(1) : 0}%</td>
                         </tr>
                       )}
-                      <tr className="border-b border-[#E5E8EB] bg-emerald-50/50">
+                      <tr className="border-b border-line bg-emerald-50/50">
                         <td className="py-2.5 px-3 font-bold text-emerald-800">실매출</td>
                         <td className="py-2.5 px-3 text-right tabular-nums font-bold text-emerald-800">{fmt(revenue)}원</td>
                         <td className="py-2.5 px-3 text-right tabular-nums text-emerald-700">{fmt((catTotals['revenue']?.inclVat ?? 0) - discountTotals.inclVat)}원</td>
@@ -1057,19 +1059,19 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                         const t = catTotals[cat.id];
                         const ratio = revenue > 0 ? (t.exVat / revenue * 100) : 0;
                         return (
-                          <tr key={cat.id} className="border-b border-[#F2F4F6]">
+                          <tr key={cat.id} className="border-b border-line-2">
                             <td className={`py-2.5 px-3 font-semibold ${cat.color}`}>{cat.label}</td>
                             <td className="py-2.5 px-3 text-right tabular-nums">{fmt(t.exVat)}원</td>
-                            <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(t.inclVat)}원</td>
+                            <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{fmt(t.inclVat)}원</td>
                             <td className="py-2.5 px-3 text-right tabular-nums">{ratio.toFixed(1)}%</td>
                           </tr>
                         );
                       })}
-                      <tr className="border-t-2 border-[#191F28] font-bold">
+                      <tr className="border-t-2 border-fg font-bold">
                         <td className="py-2.5 px-3">순이익</td>
                         <td className="py-2.5 px-3 text-right tabular-nums">{fmt(netProfit)}원</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt((catTotals['revenue']?.inclVat ?? 0) - discountTotals.inclVat - (catTotals['cogs']?.inclVat ?? 0) - (catTotals['ad']?.inclVat ?? 0) - (catTotals['fixed']?.inclVat ?? 0) - (catTotals['variable']?.inclVat ?? 0))}원</td>
-                        <td className={`py-2.5 px-3 text-right tabular-nums font-bold ${netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{netMargin.toFixed(1)}%</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{fmt((catTotals['revenue']?.inclVat ?? 0) - discountTotals.inclVat - (catTotals['cogs']?.inclVat ?? 0) - (catTotals['ad']?.inclVat ?? 0) - (catTotals['fixed']?.inclVat ?? 0) - (catTotals['variable']?.inclVat ?? 0))}원</td>
+                        <td className={`py-2.5 px-3 text-right tabular-nums font-bold ${netProfit >= 0 ? 'text-brand' : 'text-red-600'}`}>{netMargin.toFixed(1)}%</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1120,15 +1122,15 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
-                        <h4 className="text-[13px] font-bold text-[#191F28]">월별 추이</h4>
+                        <h4 className="text-[13px] font-bold text-fg">월별 추이</h4>
                         <div className="flex items-center gap-1.5 text-[11px]">
                           <select value={trendFrom || allTrend[0]} onChange={e => setTrendFrom(e.target.value)}
-                            className="h-7 px-2 rounded border border-[#E5E8EB] text-[11px] bg-white">
+                            className="h-7 px-2 rounded border border-line text-[11px] bg-card">
                             {allTrend.map(ym => <option key={ym} value={ym}>{ym}</option>)}
                           </select>
-                          <span className="text-[#6B7684]">~</span>
+                          <span className="text-fg-3">~</span>
                           <select value={trendTo || allTrend[allTrend.length - 1]} onChange={e => setTrendTo(e.target.value)}
-                            className="h-7 px-2 rounded border border-[#E5E8EB] text-[11px] bg-white">
+                            className="h-7 px-2 rounded border border-line text-[11px] bg-card">
                             {allTrend.map(ym => <option key={ym} value={ym}>{ym}</option>)}
                           </select>
                         </div>
@@ -1142,7 +1144,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       {/* 월별 수치 테이블 */}
                       <div className="overflow-x-auto">
                         <table className="w-full text-[11px] border-collapse">
-                          <thead><tr className="border-b border-[#E5E8EB] text-[#6B7684]">
+                          <thead><tr className="border-b border-line text-fg-3">
                             <th className="text-left py-2 px-2">월</th>
                             <th className="text-right py-2 px-2">실매출</th>
                             <th className="text-right py-2 px-2">매입원가</th>
@@ -1155,16 +1157,16 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                           </tr></thead>
                           <tbody>
                             {monthlyData.map((d) => (
-                                <tr key={d.month} className={`border-b border-[#F2F4F6] ${d.month.includes('현재') ? 'bg-blue-50/30 font-semibold' : ''}`}>
-                                  <td className="py-1.5 px-2 text-[#191F28]">{d.month}</td>
+                                <tr key={d.month} className={`border-b border-line-2 ${d.month.includes('현재') ? 'bg-blue-50/30 font-semibold' : ''}`}>
+                                  <td className="py-1.5 px-2 text-fg">{d.month}</td>
                                   <td className="py-1.5 px-2 text-right tabular-nums">{fmt(d.실매출)}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(d.매입원가)}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(d.광고비)}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(d.고정비)}</td>
-                                  <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(d.변동비)}</td>
-                                  <td className={`py-1.5 px-2 text-right tabular-nums font-medium ${d.순이익 >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(d.순이익)}</td>
-                                  <td className={`py-1.5 px-2 text-right tabular-nums ${d.순이익률 >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{d.순이익률}%</td>
-                                  <td className={`py-1.5 px-2 text-right tabular-nums ${d.ROAS >= 300 ? 'text-emerald-600' : d.ROAS >= 200 ? 'text-blue-600' : 'text-red-600'}`}>{d.ROAS > 0 ? d.ROAS + '%' : '-'}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(d.매입원가)}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(d.광고비)}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(d.고정비)}</td>
+                                  <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(d.변동비)}</td>
+                                  <td className={`py-1.5 px-2 text-right tabular-nums font-medium ${d.순이익 >= 0 ? 'text-brand' : 'text-red-600'}`}>{fmt(d.순이익)}</td>
+                                  <td className={`py-1.5 px-2 text-right tabular-nums ${d.순이익률 >= 0 ? 'text-brand' : 'text-red-600'}`}>{d.순이익률}%</td>
+                                  <td className={`py-1.5 px-2 text-right tabular-nums ${d.ROAS >= 300 ? 'text-emerald-600' : d.ROAS >= 200 ? 'text-brand' : 'text-red-600'}`}>{d.ROAS > 0 ? d.ROAS + '%' : '-'}</td>
                                 </tr>
                             ))}
                           </tbody>
@@ -1179,7 +1181,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                 {analysisTab === 'current' && <>
                 {/* 플랫폼별 분석 */}
                 <div>
-                  <h4 className="text-[13px] font-bold text-[#191F28] mb-3">플랫폼별 매출·광고비 비중</h4>
+                  <h4 className="text-[13px] font-bold text-fg mb-3">플랫폼별 매출·광고비 비중</h4>
                   {(() => {
                     // 매출 자식 항목 (플랫폼별)
                     const revenueParent = parents.find(p => catOf(p) === 'revenue' && childrenOf(p.id).length > 0);
@@ -1253,12 +1255,12 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                       return { name: rc.label + (/쿠팡/.test(rc.label) && discountTotals.exVat > 0 ? ' (실매출)' : ''), revenue: platRevenue, ad: platAd, cogs: platCogs, fee: platFee, profit, margin, adRate: platRevenue > 0 ? (platAd / platRevenue * 100) : 0, share: revenue > 0 ? (platRevenue / revenue * 100) : 0, roas };
                     }).filter(d => d.revenue > 0).sort((a, b) => b.revenue - a.revenue);
 
-                    if (platData.length === 0) return <p className="text-[12px] text-[#B0B8C1]">매출 하위 플랫폼 데이터가 없습니다</p>;
+                    if (platData.length === 0) return <p className="text-[12px] text-fg-5">매출 하위 플랫폼 데이터가 없습니다</p>;
 
                     return (
                       <div className="space-y-4">
                         <table className="w-full text-[12px] border-collapse">
-                          <thead><tr className="border-b border-[#E5E8EB] text-[#6B7684]">
+                          <thead><tr className="border-b border-line text-fg-3">
                             <th className="text-left py-2 px-3">플랫폼</th>
                             <th className="text-right py-2 px-3">매출</th>
                             <th className="text-right py-2 px-3">매출 비중</th>
@@ -1272,17 +1274,17 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
                           </tr></thead>
                           <tbody>
                             {platData.map(p => (
-                              <tr key={p.name} className="border-b border-[#F2F4F6]">
-                                <td className="py-2.5 px-3 font-semibold text-[#191F28]">{p.name}</td>
+                              <tr key={p.name} className="border-b border-line-2">
+                                <td className="py-2.5 px-3 font-semibold text-fg">{p.name}</td>
                                 <td className="py-2.5 px-3 text-right tabular-nums">{fmt(p.revenue)}원</td>
-                                <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{p.share.toFixed(1)}%</td>
-                                <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(p.cogs)}원</td>
+                                <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{p.share.toFixed(1)}%</td>
+                                <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{fmt(p.cogs)}원</td>
                                 <td className="py-2.5 px-3 text-right tabular-nums">{fmt(p.ad)}원</td>
-                                <td className="py-2.5 px-3 text-right tabular-nums text-[#6B7684]">{fmt(p.fee)}원</td>
+                                <td className="py-2.5 px-3 text-right tabular-nums text-fg-3">{fmt(p.fee)}원</td>
                                 <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.adRate > 20 ? 'text-red-600' : p.adRate > 10 ? 'text-amber-600' : 'text-emerald-600'}`}>{p.adRate.toFixed(1)}%</td>
-                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.roas >= 300 ? 'text-emerald-600' : p.roas >= 200 ? 'text-blue-600' : p.roas > 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>{p.roas > 0 ? p.roas.toFixed(0) + '%' : '-'}</td>
-                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.profit > 0 ? 'text-emerald-600' : p.profit < 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>{fmt(p.profit)}원</td>
-                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.margin >= 10 ? 'text-emerald-600' : p.margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{p.margin.toFixed(1)}%</td>
+                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.roas >= 300 ? 'text-emerald-600' : p.roas >= 200 ? 'text-brand' : p.roas > 0 ? 'text-red-600' : 'text-fg-3'}`}>{p.roas > 0 ? p.roas.toFixed(0) + '%' : '-'}</td>
+                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.profit > 0 ? 'text-emerald-600' : p.profit < 0 ? 'text-red-600' : 'text-fg-3'}`}>{fmt(p.profit)}원</td>
+                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${p.margin >= 10 ? 'text-emerald-600' : p.margin > 0 ? 'text-brand' : 'text-red-600'}`}>{p.margin.toFixed(1)}%</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1314,7 +1316,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
       )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}
@@ -1471,29 +1473,29 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
   const curPlatform = PLATFORMS.find(p => p.id === platform)!;
 
   return (
-    <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#F2F4F6]">
-        <h3 className="text-[15px] font-bold text-[#191F28]">플랫폼별 매입원가</h3>
-        <p className="text-[12px] text-[#6B7684] mt-0.5">엑셀 업로드 → SKU 원가 자동 매칭 → 정산시트에 적용</p>
+    <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-line-2">
+        <h3 className="text-[15px] font-bold text-fg">플랫폼별 매입원가</h3>
+        <p className="text-[12px] text-fg-3 mt-0.5">엑셀 업로드 → SKU 원가 자동 매칭 → 정산시트에 적용</p>
       </div>
 
       <div className="px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
         {/* 플랫폼 탭 */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+          <div className="flex bg-app rounded-lg p-0.5">
             {PLATFORMS.map(p => (
               <button key={p.id} onClick={() => { setPlatform(p.id); setResult(null); }}
-                className={`px-2.5 md:px-3.5 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${platform === p.id ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'}`}>
+                className={`px-2.5 md:px-3.5 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${platform === p.id ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
                 {p.label}
               </button>
             ))}
           </div>
           {curPlatform.manualOnly ? (
-            <span className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#F2F4F6] text-[#6B7684] text-[11px] md:text-[12px] font-medium flex items-center">
+            <span className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-app text-fg-3 text-[11px] md:text-[12px] font-medium flex items-center">
               수동 입력 전용 — 정산 페이지에서 직접 금액 입력
             </span>
           ) : (
-            <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#3182F6] text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#1B64DA] flex items-center gap-1.5 cursor-pointer transition-colors">
+            <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-brand text-white text-[11px] md:text-[12px] font-semibold hover:bg-brand-hover flex items-center gap-1.5 cursor-pointer transition-colors">
               {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{curPlatform.hint}</span><span className="sm:hidden">업로드</span>
               <input type="file" accept={curPlatform.accept} onChange={handleUpload} className="hidden" />
@@ -1505,27 +1507,27 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
         {result && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">총 판매량</p>
-                <p className="text-[14px] font-bold text-[#191F28] tabular-nums">{fmt(result.totalQty)}건</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">총 판매량</p>
+                <p className="text-[14px] font-bold text-fg tabular-nums">{fmt(result.totalQty)}건</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">총 매출</p>
-                <p className="text-[14px] font-bold text-[#191F28] tabular-nums">{fmt(result.totalRevenue)}원</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">총 매출</p>
+                <p className="text-[14px] font-bold text-fg tabular-nums">{fmt(result.totalRevenue)}원</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">총 매입원가</p>
-                <p className="text-[14px] font-bold text-[#F97316] tabular-nums">{fmt(total)}원</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">총 매입원가</p>
+                <p className="text-[14px] font-bold text-warn tabular-nums">{fmt(total)}원</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">매칭</p>
-                <p className="text-[14px] font-bold text-[#191F28] tabular-nums">{result.matchCount}/{result.totalItems}</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">매칭</p>
+                <p className="text-[14px] font-bold text-fg tabular-nums">{result.matchCount}/{result.totalItems}</p>
               </div>
             </div>
 
-            <div className="max-h-80 overflow-y-auto border border-[#E5E8EB] rounded-xl">
+            <div className="max-h-80 overflow-y-auto border border-line rounded-xl">
               <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-[#F8F9FB]"><tr className="text-[#6B7684] border-b border-[#E5E8EB]">
+                <thead className="sticky top-0 bg-card-2"><tr className="text-fg-3 border-b border-line">
                   <th className="text-left py-2 px-3 min-w-[200px]">상품 / 옵션</th>
                   <th className="text-right py-2 px-2 w-12">수량</th>
                   <th className="text-right py-2 px-2 w-24">매출</th>
@@ -1535,32 +1537,32 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
                 </tr></thead>
                 <tbody>
                   {result.products.map((p, i) => (
-                    <tr key={i} className={`border-b border-[#F2F4F6] ${!p.matched ? 'bg-amber-50/50' : ''}`}>
-                      <td className="py-1.5 px-3 text-[#191F28] text-[10px]">{p.name}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.qty}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(p.revenue)}</td>
+                    <tr key={i} className={`border-b border-line-2 ${!p.matched ? 'bg-amber-50/50' : ''}`}>
+                      <td className="py-1.5 px-3 text-fg text-[10px]">{p.name}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{p.qty}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(p.revenue)}</td>
                       <td className="py-0.5 px-1">
                         <input type="text" inputMode="numeric" value={p.unitCost ? fmt(p.unitCost) : ''}
                           onChange={(e) => updateProductUnitCost(i, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
                           placeholder="0"
-                          className={`w-full h-7 px-2 text-right text-[11px] tabular-nums font-medium rounded border transition-colors focus:outline-none focus:border-[#3182F6] focus:bg-white ${!p.matched ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-transparent hover:border-[#E5E8EB] bg-transparent text-[#191F28]'}`} />
+                          className={`w-full h-7 px-2 text-right text-[11px] tabular-nums font-medium rounded border transition-colors focus:outline-none focus:border-brand focus:bg-card ${!p.matched ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-transparent hover:border-line bg-transparent text-fg'}`} />
                       </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.cost ? fmt(p.cost) : '-'}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{p.cost ? fmt(p.cost) : '-'}</td>
                       <td className="py-1.5 px-2 text-center">
                         {p.method === 'saved'
-                          ? <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">누적</span>
+                          ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">누적</span>
                           : p.matched
                           ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">자동</span>
                           : <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">수기</span>}
                       </td>
                     </tr>
                   ))}
-                  <tr className="border-t-2 border-[#E5E8EB] font-bold bg-[#F8F9FB]">
-                    <td className="py-2 px-3 text-[#191F28]">합계</td>
+                  <tr className="border-t-2 border-line font-bold bg-card-2">
+                    <td className="py-2 px-3 text-fg">합계</td>
                     <td className="py-2 px-2 text-right tabular-nums">{result.totalQty}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalRevenue)}</td>
                     <td className="py-2 px-2" />
-                    <td className="py-2 px-2 text-right tabular-nums text-[#F97316]">{fmt(total)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-warn">{fmt(total)}</td>
                     <td />
                   </tr>
                 </tbody>
@@ -1571,8 +1573,8 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
               <button onClick={() => setVatIncluded(!vatIncluded)}
                 className={`h-10 px-4 rounded-lg text-[12px] font-semibold transition-all active:scale-95 ${
                   vatIncluded
-                    ? 'bg-[#F97316] text-white ring-1 ring-[#F97316]/30'
-                    : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                    ? 'bg-warn text-white ring-1 ring-warn/30'
+                    : 'bg-app text-fg-3 hover:bg-line'
                 }`}>
                 {vatIncluded ? 'VAT 포함 ✓' : 'VAT 제외'}
               </button>
@@ -1583,7 +1585,7 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
                 </div>
               ) : (
                 <button onClick={applyToSettlement}
-                  className="flex-1 h-10 rounded-lg bg-[#F97316] text-white text-[13px] font-semibold hover:bg-[#EA6C0B] transition-colors flex items-center justify-center gap-2">
+                  className="flex-1 h-10 rounded-lg bg-warn text-white text-[13px] font-semibold hover:bg-[#EA6C0B] transition-colors flex items-center justify-center gap-2">
                   <Save className="h-4 w-4" />
                   정산시트에 적용: {fmt(total)}원{vatIncluded ? ' (VAT포함)' : ''}
                 </button>
@@ -1594,7 +1596,7 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}
@@ -1752,13 +1754,13 @@ function ProductProfitSection({ selectedYm }: { selectedYm: string }) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-[13px] font-bold text-[#191F28]">상품별 순이익 — {selectedYm}</h4>
-        <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+        <h4 className="text-[13px] font-bold text-fg">상품별 순이익 — {selectedYm}</h4>
+        <div className="flex bg-app rounded-lg p-0.5">
           {PLATFORMS.filter(p => !p.manualOnly).map(p => (
             <button key={p.id} onClick={() => setPlatform(p.id)}
               disabled={p.id !== 'coupang'}
               title={p.id !== 'coupang' ? '쿠팡만 우선 지원' : ''}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all ${platform === p.id ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all ${platform === p.id ? 'bg-card text-fg shadow-sm' : 'text-fg-3'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
               {p.label}
             </button>
           ))}
@@ -1766,16 +1768,16 @@ function ProductProfitSection({ selectedYm }: { selectedYm: string }) {
       </div>
 
       {loading ? (
-        <p className="text-[12px] text-[#B0B8C1] py-4">불러오는 중...</p>
+        <p className="text-[12px] text-fg-5 py-4">불러오는 중...</p>
       ) : aggregated.length === 0 ? (
-        <p className="text-[12px] text-[#B0B8C1] py-4">
+        <p className="text-[12px] text-fg-5 py-4">
           데이터가 없습니다. 정산시트에 상품 매출을 적용하고, 광고비 raw 엑셀을 업로드하세요.
         </p>
       ) : (
-        <div className="overflow-x-auto border border-[#E5E8EB] rounded-xl">
+        <div className="overflow-x-auto border border-line rounded-xl">
           <table className="w-full text-[11px] border-collapse min-w-[900px]">
-            <thead className="bg-[#F8F9FB]">
-              <tr className="text-[#6B7684] border-b border-[#E5E8EB]">
+            <thead className="bg-card-2">
+              <tr className="text-fg-3 border-b border-line">
                 <th className="text-left py-2 px-3 min-w-[180px]">상품</th>
                 <th className="text-right py-2 px-2 w-14">수량</th>
                 <th className="text-right py-2 px-2 w-24">매출</th>
@@ -1791,40 +1793,40 @@ function ProductProfitSection({ selectedYm }: { selectedYm: string }) {
               {aggregated.map(row => {
                 const oversize = detectOversize(row.productName, row.logisticsTier);
                 return (
-                  <tr key={(row.productId || row.productName)} className={`border-b border-[#F2F4F6] ${row.isUnmatched ? 'bg-amber-50/50' : ''}`}>
-                    <td className="py-2 px-3 text-[#191F28] text-[11px]">
+                  <tr key={(row.productId || row.productName)} className={`border-b border-line-2 ${row.isUnmatched ? 'bg-amber-50/50' : ''}`}>
+                    <td className="py-2 px-3 text-fg text-[11px]">
                       <div className="truncate" title={row.productName}>{row.productName}</div>
-                      <div className="text-[9px] text-[#B0B8C1]">
+                      <div className="text-[9px] text-fg-5">
                         {oversize ? '대형(4,850)' : '일반(4,100)'}
                         {row.logisticsTier && ` · ${row.logisticsTier}`}
                         {row.isUnmatched && ' · 미매칭'}
                       </div>
                     </td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{row.qty}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-fg-3">{row.qty}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{fmt(row.revenue)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#F97316]">{fmt(row.cogs)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(row.adCost)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{fmt(row.fee)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#6B7684]">{fmt(row.logistics)}</td>
-                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.profit > 0 ? 'text-emerald-600' : row.profit < 0 ? 'text-red-600' : 'text-[#6B7684]'}`}>
+                    <td className="py-2 px-2 text-right tabular-nums text-warn">{fmt(row.cogs)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-info">{fmt(row.adCost)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-fg-3">{fmt(row.fee)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-fg-3">{fmt(row.logistics)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.profit > 0 ? 'text-emerald-600' : row.profit < 0 ? 'text-red-600' : 'text-fg-3'}`}>
                       {fmt(row.profit)}
                     </td>
-                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.margin >= 10 ? 'text-emerald-600' : row.margin > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    <td className={`py-2 px-2 text-right tabular-nums font-semibold ${row.margin >= 10 ? 'text-emerald-600' : row.margin > 0 ? 'text-brand' : 'text-red-600'}`}>
                       {row.margin.toFixed(1)}%
                     </td>
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-[#E5E8EB] font-bold bg-[#F8F9FB]">
-                <td className="py-2 px-3 text-[#191F28]">합계</td>
+              <tr className="border-t-2 border-line font-bold bg-card-2">
+                <td className="py-2 px-3 text-fg">합계</td>
                 <td className="py-2 px-2 text-right tabular-nums">{totals.qty}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.revenue)}</td>
-                <td className="py-2 px-2 text-right tabular-nums text-[#F97316]">{fmt(totals.cogs)}</td>
-                <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(totals.adCost)}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-warn">{fmt(totals.cogs)}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-info">{fmt(totals.adCost)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.fee)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{fmt(totals.logistics)}</td>
                 <td className={`py-2 px-2 text-right tabular-nums ${totals.profit > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(totals.profit)}</td>
-                <td className={`py-2 px-2 text-right tabular-nums ${totalMargin >= 10 ? 'text-emerald-600' : totalMargin > 0 ? 'text-blue-600' : 'text-red-600'}`}>{totalMargin.toFixed(1)}%</td>
+                <td className={`py-2 px-2 text-right tabular-nums ${totalMargin >= 10 ? 'text-emerald-600' : totalMargin > 0 ? 'text-brand' : 'text-red-600'}`}>{totalMargin.toFixed(1)}%</td>
               </tr>
             </tbody>
           </table>
@@ -1924,25 +1926,25 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
   }
 
   return (
-    <section className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#F2F4F6]">
-        <h3 className="text-[15px] font-bold text-[#191F28]">광고비 raw 업로드 (월 1회)</h3>
-        <p className="text-[12px] text-[#6B7684] mt-0.5">상품별 광고비 영속화 — 상품별 순이익 분석에 사용. 광고 유형 자동 감지(PA/NCA)</p>
+    <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-line-2">
+        <h3 className="text-[15px] font-bold text-fg">광고비 raw 업로드 (월 1회)</h3>
+        <p className="text-[12px] text-fg-3 mt-0.5">상품별 광고비 영속화 — 상품별 순이익 분석에 사용. 광고 유형 자동 감지(PA/NCA)</p>
       </div>
 
       <div className="px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <div className="flex bg-[#F2F4F6] rounded-lg p-0.5">
+          <div className="flex bg-app rounded-lg p-0.5">
             {PLATFORMS.filter(p => !p.manualOnly).map(p => (
               <button key={p.id} onClick={() => { setPlatform(p.id); setResult(null); }}
                 disabled={p.id !== 'coupang'}
                 title={p.id !== 'coupang' ? '쿠팡만 우선 지원 — 다른 플랫폼은 추후' : ''}
-                className={`px-2.5 md:px-3.5 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${platform === p.id ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684]'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                className={`px-2.5 md:px-3.5 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${platform === p.id ? 'bg-card text-fg shadow-sm' : 'text-fg-3'} ${p.id !== 'coupang' ? 'opacity-40 cursor-not-allowed' : ''}`}>
                 {p.label}
               </button>
             ))}
           </div>
-          <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-[#8B5CF6] text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#7C3AED] flex items-center gap-1.5 cursor-pointer transition-colors">
+          <label className="h-8 md:h-9 px-3 md:px-4 rounded-lg bg-info text-white text-[11px] md:text-[12px] font-semibold hover:bg-[#7C3AED] flex items-center gap-1.5 cursor-pointer transition-colors">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             <span>광고 raw 엑셀</span>
             <input type="file" accept=".xlsx,.xls" onChange={handleUpload} className="hidden" />
@@ -1953,38 +1955,38 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
               {result.yearMonth !== selectedYm && ` (선택월 ${selectedYm}과 다름)`}
             </span>
           ) : (
-            <span className="text-[10px] text-[#B0B8C1]">엑셀 날짜로 자동 인식</span>
+            <span className="text-[10px] text-fg-5">엑셀 날짜로 자동 인식</span>
           )}
         </div>
 
         {result && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">광고 유형</p>
-                <p className="text-[13px] font-bold text-[#8B5CF6]">{AD_TYPE_LABEL[result.adType] || result.adType}</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">광고 유형</p>
+                <p className="text-[13px] font-bold text-info">{AD_TYPE_LABEL[result.adType] || result.adType}</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">총 광고비</p>
-                <p className="text-[14px] font-bold text-[#8B5CF6] tabular-nums">{fmt(result.totalCost)}원</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">총 광고비</p>
+                <p className="text-[14px] font-bold text-info tabular-nums">{fmt(result.totalCost)}원</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">노출 / 클릭</p>
-                <p className="text-[13px] font-bold text-[#191F28] tabular-nums">{fmt(result.totalImpressions)} / {fmt(result.totalClicks)}</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">노출 / 클릭</p>
+                <p className="text-[13px] font-bold text-fg tabular-nums">{fmt(result.totalImpressions)} / {fmt(result.totalClicks)}</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">매칭</p>
-                <p className="text-[14px] font-bold text-[#191F28] tabular-nums">{result.matchedItems}/{result.totalItems}</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">매칭</p>
+                <p className="text-[14px] font-bold text-fg tabular-nums">{result.matchedItems}/{result.totalItems}</p>
               </div>
-              <div className="bg-[#F8F9FB] rounded-lg px-3 py-2">
-                <p className="text-[10px] text-[#6B7684]">14일 전환 매출</p>
-                <p className="text-[13px] font-bold text-[#191F28] tabular-nums">{fmt(result.products.reduce((s, p) => s + p.rev14d, 0))}원</p>
+              <div className="bg-card-2 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-fg-3">14일 전환 매출</p>
+                <p className="text-[13px] font-bold text-fg tabular-nums">{fmt(result.products.reduce((s, p) => s + p.rev14d, 0))}원</p>
               </div>
             </div>
 
-            <div className="max-h-80 overflow-y-auto border border-[#E5E8EB] rounded-xl">
+            <div className="max-h-80 overflow-y-auto border border-line rounded-xl">
               <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-[#F8F9FB]"><tr className="text-[#6B7684] border-b border-[#E5E8EB]">
+                <thead className="sticky top-0 bg-card-2"><tr className="text-fg-3 border-b border-line">
                   <th className="text-left py-2 px-3 min-w-[220px]">상품 / 캠페인</th>
                   <th className="text-right py-2 px-2 w-28">광고비</th>
                   <th className="text-right py-2 px-2 w-20">노출</th>
@@ -1995,16 +1997,16 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
                 </tr></thead>
                 <tbody>
                   {result.products.map((p, i) => (
-                    <tr key={i} className={`border-b border-[#F2F4F6] ${!p.matched ? 'bg-amber-50/50' : ''}`}>
+                    <tr key={i} className={`border-b border-line-2 ${!p.matched ? 'bg-amber-50/50' : ''}`}>
                       <td className="py-1.5 px-3 text-[10px]">
-                        <div className="text-[#191F28] truncate" title={p.name}>{p.name}</div>
-                        <div className="text-[9px] text-[#B0B8C1] truncate">{p.campaignName} · {p.vendorItemId}</div>
+                        <div className="text-fg truncate" title={p.name}>{p.name}</div>
+                        <div className="text-[9px] text-fg-5 truncate">{p.campaignName} · {p.vendorItemId}</div>
                       </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-[#8B5CF6]">{fmt(p.cost)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(p.impressions)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{fmt(p.clicks)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.qty14d || '-'}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-[#6B7684]">{p.rev14d ? fmt(p.rev14d) : '-'}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-info">{fmt(p.cost)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(p.impressions)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{fmt(p.clicks)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{p.qty14d || '-'}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{p.rev14d ? fmt(p.rev14d) : '-'}</td>
                       <td className="py-1.5 px-2 text-center">
                         {p.matched
                           ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">자동</span>
@@ -2012,9 +2014,9 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
                       </td>
                     </tr>
                   ))}
-                  <tr className="border-t-2 border-[#E5E8EB] font-bold bg-[#F8F9FB]">
-                    <td className="py-2 px-3 text-[#191F28]">합계</td>
-                    <td className="py-2 px-2 text-right tabular-nums text-[#8B5CF6]">{fmt(result.totalCost)}</td>
+                  <tr className="border-t-2 border-line font-bold bg-card-2">
+                    <td className="py-2 px-3 text-fg">합계</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-info">{fmt(result.totalCost)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalImpressions)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalClicks)}</td>
                     <td colSpan={3} />
@@ -2031,7 +2033,7 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
                 </div>
               ) : (
                 <button onClick={saveToDb}
-                  className="flex-1 h-10 rounded-lg bg-[#8B5CF6] text-white text-[13px] font-semibold hover:bg-[#7C3AED] transition-colors flex items-center justify-center gap-2">
+                  className="flex-1 h-10 rounded-lg bg-info text-white text-[13px] font-semibold hover:bg-[#7C3AED] transition-colors flex items-center justify-center gap-2">
                   <Save className="h-4 w-4" />
                   DB 저장: {result.yearMonth} {AD_TYPE_LABEL[result.adType]} ({result.totalItems}건)
                 </button>
@@ -2042,7 +2044,7 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}
@@ -2059,8 +2061,8 @@ export default function SettlementPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-[20px] font-bold text-[#191F28]">정산</h1>
-        <p className="text-[13px] text-[#6B7684] mt-0.5">월별 매출, 매입원가, 비용을 관리하고 분석합니다</p>
+        <PageHeader title="정산" />
+        <p className="text-[13px] text-fg-3 mt-0.5">월별 매출, 매입원가, 비용을 관리하고 분석합니다</p>
       </div>
       <PlatformCostSection selectedYm={selectedYm} onApply={() => setCostReloadKey(k => k + 1)} />
       <PlatformAdSection selectedYm={selectedYm} />

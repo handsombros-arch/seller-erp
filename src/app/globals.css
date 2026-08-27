@@ -1,25 +1,116 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   LV ERP 디자인 토큰 — 단일 체계
+   페이지에서는 아래 토큰 클래스만 사용한다 (hex 하드코딩 금지).
+     텍스트  : text-fg / text-fg-2 / text-fg-3 / text-fg-4 / text-fg-5
+     브랜드  : bg-brand / hover:bg-brand-hover / bg-brand-bg / bg-brand-soft
+     배경    : bg-app / bg-card / bg-card-2
+     선      : border-line / border-line-2
+   다크 모드는 [data-theme="dark"] 에서 같은 토큰의 값만 교체한다.
+   ───────────────────────────────────────────────────────────── */
 @theme {
-  --color-background: oklch(0.964 0.004 258);
-  --color-foreground: oklch(0.158 0.012 260);
-  --color-primary: oklch(0.565 0.215 254);
-  --color-primary-foreground: oklch(1 0 0);
-  --color-muted: oklch(0.928 0.005 258);
-  --color-muted-foreground: oklch(0.52 0.018 258);
-  --color-border: oklch(0.928 0.005 258);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.158 0.012 260);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(1 0 0);
-  --color-accent: oklch(0.946 0.006 258);
-  --color-accent-foreground: oklch(0.158 0.012 260);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.158 0.012 260);
-  --color-secondary: oklch(0.946 0.006 258);
-  --color-secondary-foreground: oklch(0.158 0.012 260);
-  --color-ring: oklch(0.565 0.215 254);
+  /* 앱 토큰 */
+  --color-fg: #191F28;
+  --color-fg-2: #4E5968;
+  --color-fg-3: #6B7684;
+  --color-fg-4: #8B95A1;
+  --color-fg-5: #B0B8C1;
+  --color-brand: #3182F6;
+  --color-brand-hover: #1B64DA;
+  --color-brand-bg: #EBF1FE;
+  --color-brand-soft: #F8FAFF;
+  --color-app: #F2F4F6;
+  --color-card: #FFFFFF;
+  --color-card-2: #F8F9FB;
+  --color-line: #E5E8EB;
+  --color-line-2: #F2F4F6;
+  --color-success: #10B981;
+  --color-warn: #F97316;
+  --color-danger: #F43F5E;
+  --color-info: #8B5CF6;
+
+  /* shadcn 호환 토큰 — 위 앱 토큰과 같은 값 */
+  --color-background: #FFFFFF;
+  --color-foreground: #191F28;
+  --color-primary: #3182F6;
+  --color-primary-foreground: #FFFFFF;
+  --color-muted: #F2F4F6;
+  --color-muted-foreground: #6B7684;
+  --color-border: #E5E8EB;
+  --color-input: #E5E8EB;
+  --color-card-foreground: #191F28;
+  --color-destructive: #F43F5E;
+  --color-destructive-foreground: #FFFFFF;
+  --color-accent: #F2F4F6;
+  --color-accent-foreground: #191F28;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #191F28;
+  --color-secondary: #F2F4F6;
+  --color-secondary-foreground: #191F28;
+  --color-ring: #3182F6;
+
   --radius: 0.75rem;
+}
+
+/* ── Dark theme: 토큰 값만 교체 ───────────────────────────── */
+[data-theme="dark"] {
+  --color-fg: #F5F5F7;
+  --color-fg-2: #D1D1D6;
+  --color-fg-3: #A1A1A6;
+  --color-fg-4: #8E8E93;
+  --color-fg-5: #636366;
+  --color-brand: #4B9BFF;
+  --color-brand-hover: #6AAEFF;
+  --color-brand-bg: rgba(75, 155, 255, 0.16);
+  --color-brand-soft: rgba(75, 155, 255, 0.06);
+  --color-app: #161617;
+  --color-card: #1C1C1E;
+  --color-card-2: #232325;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-2: rgba(255, 255, 255, 0.05);
+
+  --color-background: #1C1C1E;
+  --color-foreground: #F5F5F7;
+  --color-primary: #4B9BFF;
+  --color-muted: #232325;
+  --color-muted-foreground: #A1A1A6;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-input: rgba(255, 255, 255, 0.08);
+  --color-card-foreground: #F5F5F7;
+  --color-accent: #232325;
+  --color-accent-foreground: #F5F5F7;
+  --color-popover: #1C1C1E;
+  --color-popover-foreground: #F5F5F7;
+  --color-secondary: #232325;
+  --color-secondary-foreground: #F5F5F7;
+}
+
+/* ── 레이아웃(사이드바/헤더) 전용 변수 — 앱 토큰에서 파생 ── */
+:root,
+[data-theme="light"] {
+  --bg-app: var(--color-app);
+  --bg-sidebar: rgba(246, 247, 249, 0.72);
+  --bg-card: var(--color-card);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --bg-header: rgba(255, 255, 255, 0.72);
+  --border-main: var(--color-line);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  --text-primary: var(--color-fg);
+  --text-secondary: var(--color-fg-2);
+  --text-tertiary: var(--color-fg-3);
+  --text-muted: var(--color-fg-5);
+  --accent-blue: var(--color-brand);
+  --accent-blue-bg: var(--color-brand-bg);
+}
+
+[data-theme="dark"] {
+  --bg-sidebar: rgba(30, 30, 32, 0.72);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-header: rgba(28, 28, 30, 0.72);
+  --border-subtle: rgba(255, 255, 255, 0.04);
 }
 
 * { box-sizing: border-box; }
@@ -30,153 +121,36 @@ textarea,
   ime-mode: active;
 }
 
-/* ── Light theme (default) ──────────────────────────── */
-:root,
-[data-theme="light"] {
-  --bg-app: #F2F4F6;
-  --bg-sidebar: rgba(246,247,249,0.72);
-  --bg-card: #FFFFFF;
-  --bg-hover: rgba(0,0,0,0.04);
-  --bg-active: rgba(0,0,0,0.06);
-  --bg-header: rgba(255,255,255,0.72);
-  --border-main: rgba(0,0,0,0.06);
-  --border-subtle: rgba(0,0,0,0.04);
-  --text-primary: #1D1D1F;
-  --text-secondary: #48484A;
-  --text-tertiary: #8E8E93;
-  --text-muted: #AEAEB2;
-  --accent-blue: #007AFF;
-  --accent-blue-bg: rgba(0,122,255,0.1);
-}
-
-/* ── Dark theme ─────────────────────────────────────── */
-[data-theme="dark"] {
-  --bg-app: #161617;
-  --bg-sidebar: rgba(30,30,32,0.72);
-  --bg-card: #1C1C1E;
-  --bg-hover: rgba(255,255,255,0.06);
-  --bg-active: rgba(255,255,255,0.08);
-  --bg-header: rgba(28,28,30,0.72);
-  --border-main: rgba(255,255,255,0.08);
-  --border-subtle: rgba(255,255,255,0.04);
-  --text-primary: #F5F5F7;
-  --text-secondary: #D1D1D6;
-  --text-tertiary: #8E8E93;
-  --text-muted: #636366;
-  --accent-blue: #0A84FF;
-  --accent-blue-bg: rgba(10,132,255,0.16);
-}
-
 body {
-  background-color: var(--bg-app);
-  color: var(--text-primary);
+  background-color: var(--color-app);
+  color: var(--color-fg);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   line-height: 1.35;
   letter-spacing: -0.01em;
 }
 
-/* Dark mode overrides for common patterns */
-[data-theme="dark"] .bg-white { background-color: var(--bg-card) !important; }
-[data-theme="dark"] .bg-\[\#F2F4F6\] { background-color: var(--bg-app) !important; }
-[data-theme="dark"] .bg-\[\#FAFBFC\] { background-color: rgba(255,255,255,0.03) !important; }
-[data-theme="dark"] .bg-\[\#F8FAFC\] { background-color: rgba(255,255,255,0.04) !important; }
-[data-theme="dark"] .bg-\[\#F8FAFF\] { background-color: rgba(10,132,255,0.06) !important; }
-[data-theme="dark"] .bg-\[\#FAFBFF\] { background-color: rgba(10,132,255,0.04) !important; }
-[data-theme="dark"] .border-\[\#F2F4F6\] { border-color: var(--border-main) !important; }
-[data-theme="dark"] .border-\[\#E5E8EB\] { border-color: var(--border-main) !important; }
-[data-theme="dark"] .text-\[\#191F28\] { color: var(--text-primary) !important; }
-[data-theme="dark"] .text-\[\#333D4B\] { color: var(--text-primary) !important; }
-[data-theme="dark"] .text-\[\#4E5968\] { color: var(--text-secondary) !important; }
-[data-theme="dark"] .text-\[\#6B7684\] { color: var(--text-tertiary) !important; }
-[data-theme="dark"] .text-\[\#8B95A1\] { color: var(--text-muted) !important; }
-[data-theme="dark"] .text-\[\#B0B8C1\] { color: var(--text-muted) !important; }
-[data-theme="dark"] .text-foreground { color: var(--text-primary) !important; }
-[data-theme="dark"] .border-dashed { border-color: var(--border-main) !important; }
-[data-theme="dark"] input,
-[data-theme="dark"] textarea,
-[data-theme="dark"] select {
-  background-color: var(--bg-card) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-main) !important;
+/* 폼 컨트롤 기본: 토큰 색 상속 (페이지별 hex 지정 불필요) */
+input, textarea, select {
+  color: var(--color-fg);
+  background-color: var(--color-card);
 }
-[data-theme="dark"] table th { color: var(--text-tertiary) !important; }
-[data-theme="dark"] table td { color: var(--text-secondary) !important; }
-[data-theme="dark"] .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.4) !important; }
-[data-theme="dark"] .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important; }
+input::placeholder, textarea::placeholder { color: var(--color-fg-5); }
 
-/* Dark mode: ALL light-colored hover backgrounds → dark-safe hover */
-[data-theme="dark"] .hover\:bg-white:hover,
-[data-theme="dark"] .hover\:bg-\[\#FAFAFA\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#FAFBFC\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#FAFBFF\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F8FAFF\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F8FAFC\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F8F9FB\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F8F9FA\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F9FAFB\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F0F3FA\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#EBF1FE\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#E5E8EB\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#F2F4F6\]:hover {
-  background-color: var(--bg-hover) !important;
-}
-[data-theme="dark"] .hover\:text-foreground:hover,
-[data-theme="dark"] .hover\:text-\[\#191F28\]:hover { color: var(--text-primary) !important; }
-[data-theme="dark"] .hover\:border-\[\#3182F6\]:hover { border-color: var(--accent-blue) !important; }
-[data-theme="dark"] .hover\:border-\[\#B0B8C1\]:hover { border-color: var(--text-muted) !important; }
-[data-theme="dark"] .hover\:text-\[\#3182F6\]:hover { color: var(--accent-blue) !important; }
-
-/* Dark mode: table row hover */
-[data-theme="dark"] tr:hover { background-color: var(--bg-hover) !important; }
-
-/* Dark mode: dropdown / popover */
-[data-theme="dark"] [data-radix-popper-content-wrapper] > div,
-[data-theme="dark"] [role="menu"],
-[data-theme="dark"] [role="dialog"] {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
-}
-[data-theme="dark"] [role="menuitem"]:hover,
-[data-theme="dark"] [role="menuitem"]:focus {
-  background-color: var(--bg-hover) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Dark mode: buttons with bg-white */
-[data-theme="dark"] button.bg-white,
-[data-theme="dark"] a.bg-white {
-  background-color: var(--bg-card) !important;
-  color: var(--text-secondary) !important;
-}
-
-/* Dark mode: pill tabs / toggle groups */
-[data-theme="dark"] .bg-\[\#F2F4F6\] > button,
-[data-theme="dark"] .bg-\[\#F2F4F6\] > a {
-  color: var(--text-tertiary) !important;
-}
-[data-theme="dark"] .bg-\[\#F2F4F6\] > button.bg-white,
-[data-theme="dark"] .bg-\[\#F2F4F6\] > a.bg-white {
-  background-color: var(--bg-active) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Dark mode: cards with explicit white bg */
-[data-theme="dark"] .rounded-2xl.border.bg-white,
-[data-theme="dark"] .rounded-xl.border.bg-white {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-main) !important;
-}
-
-/* Dark mode: chart tooltip */
+/* 다크 모드에서만 필요한 최소 보정 — 토큰을 못 쓰는 서드파티/유틸 */
 [data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-main) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--color-card) !important;
+  border-color: var(--color-line) !important;
+  color: var(--color-fg) !important;
 }
-
-/* Dark mode: sticky bottom bars */
-[data-theme="dark"] .sticky.bottom-0 {
-  background-color: rgba(28,28,30,0.95) !important;
-}
+[data-theme="dark"] .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+[data-theme="dark"] .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+[data-theme="dark"] .sticky.bottom-0 { background-color: rgba(28,28,30,0.95); }
+/* 시맨틱 배지(bg-green-50 등) 는 라이트 전용 색이라 다크에서 살짝 낮춤 */
+[data-theme="dark"] [class*="bg-green-50"],
+[data-theme="dark"] [class*="bg-red-50"],
+[data-theme="dark"] [class*="bg-amber-50"],
+[data-theme="dark"] [class*="bg-orange-50"],
+[data-theme="dark"] [class*="bg-blue-50"],
+[data-theme="dark"] [class*="bg-purple-50"],
+[data-theme="dark"] [class*="bg-emerald-50"] { filter: saturate(0.9) brightness(0.85); }

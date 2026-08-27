@@ -119,7 +119,7 @@ export default function PriceToolPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[20px] font-bold flex items-center gap-2">
+          <h1 className="text-[20px] font-bold tracking-[-0.03em] text-fg flex items-center gap-2">
             <Tag className="h-5 w-5" />
             가격 분석 도구
             <span className="text-[11px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">BETA</span>
@@ -150,7 +150,7 @@ export default function PriceToolPage() {
           {rows.length > 0 && (
             <button
               onClick={handleDownload}
-              className="h-9 px-4 rounded-lg border text-[13px] font-medium flex items-center gap-2 hover:bg-gray-50"
+              className="h-9 px-4 rounded-lg border text-[13px] font-medium flex items-center gap-2 hover:bg-card-2"
             >
               <Download className="h-4 w-4" />
               다운로드
@@ -167,35 +167,35 @@ export default function PriceToolPage() {
       {rows.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white border rounded-xl p-3">
+            <div className="bg-card border rounded-xl p-3">
               <p className="text-[11px] text-muted-foreground">전체 상품</p>
               <p className="text-[20px] font-bold">{totalProducts}개</p>
             </div>
-            <div className="bg-white border rounded-xl p-3">
+            <div className="bg-card border rounded-xl p-3">
               <p className="text-[11px] text-muted-foreground">쿠폰 적용</p>
-              <p className="text-[20px] font-bold text-blue-600">{withCoupon}개</p>
+              <p className="text-[20px] font-bold text-brand">{withCoupon}개</p>
             </div>
-            <div className="bg-white border rounded-xl p-3">
+            <div className="bg-card border rounded-xl p-3">
               <p className="text-[11px] text-muted-foreground">평균 할인율</p>
               <p className="text-[20px] font-bold text-red-500">{avgDiscount}%</p>
             </div>
           </div>
 
           {/* Bulk apply */}
-          <div className="bg-white border rounded-xl p-4">
+          <div className="bg-card border rounded-xl p-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[13px] font-medium">일괄 적용:</span>
               <div className="flex items-center border rounded-lg overflow-hidden">
                 <button
                   onClick={() => setCouponMode('amount')}
-                  className={`px-3 py-1.5 text-[12px] font-medium ${couponMode === 'amount' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-600'}`}
+                  className={`px-3 py-1.5 text-[12px] font-medium ${couponMode === 'amount' ? 'bg-primary text-white' : 'bg-card-2 text-fg-3'}`}
                 >
                   <BadgePercent className="h-3.5 w-3.5 inline mr-1" />
                   금액(원)
                 </button>
                 <button
                   onClick={() => setCouponMode('percent')}
-                  className={`px-3 py-1.5 text-[12px] font-medium ${couponMode === 'percent' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-600'}`}
+                  className={`px-3 py-1.5 text-[12px] font-medium ${couponMode === 'percent' ? 'bg-primary text-white' : 'bg-card-2 text-fg-3'}`}
                 >
                   <Percent className="h-3.5 w-3.5 inline mr-1" />
                   비율(%)
@@ -210,7 +210,7 @@ export default function PriceToolPage() {
               />
               <button
                 onClick={applyBulk}
-                className="h-8 px-4 rounded-lg bg-blue-500 text-white text-[12px] font-medium hover:bg-blue-600"
+                className="h-8 px-4 rounded-lg bg-brand text-white text-[12px] font-medium hover:bg-brand"
               >
                 전체 적용
               </button>
@@ -218,11 +218,11 @@ export default function PriceToolPage() {
           </div>
 
           {/* Table */}
-          <div className="bg-white border rounded-xl overflow-hidden">
+          <div className="bg-card border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead>
-                  <tr className="bg-gray-50 border-b">
+                  <tr className="bg-card-2 border-b">
                     <th className="px-3 py-2 text-left font-medium w-[40px]">#</th>
                     <th className="px-3 py-2 text-left font-medium min-w-[200px]">상품명</th>
                     <th className="px-3 py-2 text-left font-medium w-[80px]">브랜드</th>
@@ -258,7 +258,7 @@ export default function PriceToolPage() {
                             className="h-7 w-full border rounded px-2 text-[12px] text-center"
                           />
                         </td>
-                        <td className="px-3 py-2 text-right font-bold text-blue-600">
+                        <td className="px-3 py-2 text-right font-bold text-brand">
                           {formatNumber(r.actualPrice)}원
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -272,7 +272,7 @@ export default function PriceToolPage() {
                         <td className="px-3 py-2 text-center">
                           {r.link && (
                             <a href={r.link} target="_blank" rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-700">
+                              className="text-brand hover:text-brand-hover">
                               <ExternalLink className="h-3.5 w-3.5 inline" />
                             </a>
                           )}

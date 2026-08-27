@@ -84,10 +84,10 @@ export default function TrendsTab() {
             { label: '총 판매', value: formatNumber(summary.totalSales) + '개', sub: `최근 ${days}일` },
             { label: unit === 'day' ? '일평균 판매' : '총 주문', value: summary.avgDailySales !== null ? `${summary.avgDailySales}개` : formatNumber(summary.totalOrders) + '건', sub: unit === 'day' ? `${data.length}일 평균` : `최근 ${days}일` },
           ].map((card, i) => (
-            <div key={i} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4">
-              <p className="text-[12px] text-[#6B7684] font-medium">{card.label}</p>
-              <p className="text-[24px] font-bold text-[#191F28] mt-1 tabular-nums">{card.value}</p>
-              <p className="text-[11px] text-[#B0B8C1] mt-0.5">{card.sub}</p>
+            <div key={i} className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4">
+              <p className="text-[12px] text-fg-3 font-medium">{card.label}</p>
+              <p className="text-[24px] font-bold text-fg mt-1 tabular-nums">{card.value}</p>
+              <p className="text-[11px] text-fg-5 mt-0.5">{card.sub}</p>
             </div>
           ))}
         </div>
@@ -97,14 +97,14 @@ export default function TrendsTab() {
         <div className="flex items-center gap-1.5">
           {(['day', 'week', 'month'] as Unit[]).map((u) => (
             <button key={u} onClick={() => setUnit(u)}
-              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${unit === u ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${unit === u ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
               {UNIT_LABELS[u]}
             </button>
           ))}
-          <span className="text-[11px] text-[#B0B8C1] mx-1">|</span>
+          <span className="text-[11px] text-fg-5 mx-1">|</span>
           {DAYS_OPTIONS.map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#191F28] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-fg text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
               {d}일
             </button>
           ))}
@@ -113,7 +113,7 @@ export default function TrendsTab() {
           <select
             value={selectedSku}
             onChange={(e) => setSelectedSku(e.target.value)}
-            className="h-10 pl-3 pr-8 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors max-w-[280px] truncate"
+            className="h-10 pl-3 pr-8 rounded-xl border border-line text-[12px] text-fg focus:outline-none focus:border-brand transition-colors max-w-[280px] truncate"
           >
             {skuOptions.map((o) => (
               <option key={o.id} value={o.id}>{o.label}</option>
@@ -122,13 +122,13 @@ export default function TrendsTab() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
         {loading ? (
-          <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+          <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
         ) : data.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <BarChart3 className="h-10 w-10 text-[#B0B8C1] mb-3" />
-            <p className="text-[13px] text-[#6B7684]">데이터가 없습니다</p>
+            <BarChart3 className="h-10 w-10 text-fg-5 mb-3" />
+            <p className="text-[13px] text-fg-3">데이터가 없습니다</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={380}>
@@ -148,29 +148,29 @@ export default function TrendsTab() {
       </div>
 
       {!loading && data.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#F2F4F6]">
-            <span className="text-[13px] font-semibold text-[#191F28]">{UNIT_LABELS[unit]} 상세</span>
-            <span className="text-[12px] text-[#B0B8C1] ml-2">{data.length}개 기간</span>
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-2">
+            <span className="text-[13px] font-semibold text-fg">{UNIT_LABELS[unit]} 상세</span>
+            <span className="text-[12px] text-fg-5 ml-2">{data.length}개 기간</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                <tr className="bg-card-2 border-b border-line-2">
                   {['기간', '쿠팡 재고', '창고 재고', '합계', '판매량', '주문수'].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-fg-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F6]">
+              <tbody className="divide-y divide-line-2">
                 {[...data].reverse().map((d) => (
-                  <tr key={d.period} className="hover:bg-[#FAFAFA]">
-                    <td className="px-4 py-2.5 text-[13px] font-medium text-[#191F28] whitespace-nowrap">{formatPeriod(d.period, unit)}</td>
-                    <td className="px-4 py-2.5 text-[13px] text-[#FF6B00] tabular-nums">{formatNumber(d.coupang_qty)}</td>
+                  <tr key={d.period} className="hover:bg-card-2">
+                    <td className="px-4 py-2.5 text-[13px] font-medium text-fg whitespace-nowrap">{formatPeriod(d.period, unit)}</td>
+                    <td className="px-4 py-2.5 text-[13px] text-warn tabular-nums">{formatNumber(d.coupang_qty)}</td>
                     <td className="px-4 py-2.5 text-[13px] text-emerald-600 tabular-nums">{formatNumber(d.warehouse_qty)}</td>
-                    <td className="px-4 py-2.5 text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(d.total_qty)}</td>
-                    <td className="px-4 py-2.5 text-[13px] text-[#3182F6] tabular-nums">{d.sales_qty > 0 ? formatNumber(d.sales_qty) : '-'}</td>
-                    <td className="px-4 py-2.5 text-[13px] text-[#6B7684] tabular-nums">{d.order_count > 0 ? formatNumber(d.order_count) : '-'}</td>
+                    <td className="px-4 py-2.5 text-[13px] font-semibold text-fg tabular-nums">{formatNumber(d.total_qty)}</td>
+                    <td className="px-4 py-2.5 text-[13px] text-brand tabular-nums">{d.sales_qty > 0 ? formatNumber(d.sales_qty) : '-'}</td>
+                    <td className="px-4 py-2.5 text-[13px] text-fg-3 tabular-nums">{d.order_count > 0 ? formatNumber(d.order_count) : '-'}</td>
                   </tr>
                 ))}
               </tbody>

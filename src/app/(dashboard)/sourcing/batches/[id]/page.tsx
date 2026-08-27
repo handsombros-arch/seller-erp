@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RefreshCw, ExternalLink, Trash2 } from 'lucide-react';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 type Batch = {
   id: string;
   source_url: string;
@@ -42,8 +44,8 @@ const STATUS_LABEL: Record<Item['status'], string> = {
   failed: '실패',
 };
 const STATUS_COLOR: Record<Item['status'], string> = {
-  pending: 'bg-gray-100 text-gray-700',
-  crawling: 'bg-blue-100 text-blue-700',
+  pending: 'bg-card-2 text-fg-2',
+  crawling: 'bg-brand-bg text-brand-hover',
   analyzing: 'bg-purple-100 text-purple-700',
   done: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
@@ -83,8 +85,8 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
     if (r.ok) window.location.href = '/sourcing';
   }
 
-  if (loading) return <div className="p-6 text-gray-500">로딩...</div>;
-  if (!batch) return <div className="p-6 text-gray-500">배치를 찾을 수 없습니다.</div>;
+  if (loading) return <div className="p-6 text-fg-3">로딩...</div>;
+  if (!batch) return <div className="p-6 text-fg-3">배치를 찾을 수 없습니다.</div>;
 
   const stats = items.reduce(
     (acc, it) => {
@@ -107,14 +109,12 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/sourcing" className="text-gray-500 hover:text-gray-900 flex-shrink-0">
+          <Link href="/sourcing" className="text-fg-3 hover:text-fg flex-shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold truncate">
-              {batch.title || batch.source_type}
-            </h1>
-            <a href={batch.source_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-gray-400 hover:underline truncate block">
+            <PageHeader title={batch.title || batch.source_type} />
+            <a href={batch.source_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-fg-5 hover:underline truncate block">
               {batch.source_url}
             </a>
           </div>
@@ -128,35 +128,35 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* 진행 요약 */}
-      <div className="bg-white border rounded-lg p-4">
+      <div className="bg-card border rounded-lg p-4">
         <div className="flex gap-4 items-center flex-wrap">
           <div>
-            <div className="text-xs text-gray-500">진행률</div>
+            <div className="text-xs text-fg-3">진행률</div>
             <div className="text-2xl font-bold">{pct}%</div>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
+            <div className="w-full bg-line rounded h-2 overflow-hidden">
               <div className="bg-green-500 h-full transition-all" style={{ width: `${pct}%` }} />
             </div>
             <div className="flex gap-3 mt-2 text-xs">
               <span className="text-green-600">완료 {stats.done}</span>
-              <span className="text-blue-600">크롤링 {stats.crawling}</span>
+              <span className="text-brand">크롤링 {stats.crawling}</span>
               <span className="text-purple-600">분석중 {stats.analyzing}</span>
-              <span className="text-gray-500">대기 {stats.pending}</span>
+              <span className="text-fg-3">대기 {stats.pending}</span>
               {stats.failed > 0 && <span className="text-red-600">실패 {stats.failed}</span>}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <div className="text-xs text-gray-500">상품</div>
+              <div className="text-xs text-fg-3">상품</div>
               <div className="font-semibold">{stats.total}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500">총 리뷰</div>
+              <div className="text-xs text-fg-3">총 리뷰</div>
               <div className="font-semibold">{totalReviews.toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-xs text-gray-500">평균 별점</div>
+              <div className="text-xs text-fg-3">평균 별점</div>
               <div className="font-semibold">{avgRating ? `${avgRating}★` : '-'}</div>
             </div>
           </div>
@@ -243,39 +243,39 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
           .sort((a, b) => b.avg - a.avg);
 
         return (
-          <div className="bg-white border rounded-lg p-4 space-y-4">
+          <div className="bg-card border rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold">상위 {done.length}개 상품 공통점 요약</h3>
-              <span className="text-[11px] text-gray-400">분석 완료 기준 / 총 {stats.total}개 중</span>
+              <span className="text-[11px] text-fg-5">분석 완료 기준 / 총 {stats.total}개 중</span>
             </div>
 
             {/* KPI 카드 */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-[11px] text-gray-500">가격대</div>
+              <div className="bg-card-2 rounded-lg p-3">
+                <div className="text-[11px] text-fg-3">가격대</div>
                 <div className="text-sm font-bold mt-0.5">
                   {prices.length ? `${prices[0].toLocaleString()} ~ ${prices[prices.length - 1].toLocaleString()}원` : '-'}
                 </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">
+                <div className="text-[10px] text-fg-3 mt-0.5">
                   평균 {avgPrice?.toLocaleString() ?? '-'}원 · 중위 {medPrice?.toLocaleString() ?? '-'}원
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-[11px] text-gray-500">평균 별점</div>
+              <div className="bg-card-2 rounded-lg p-3">
+                <div className="text-[11px] text-fg-3">평균 별점</div>
                 <div className="text-sm font-bold mt-0.5">{avgRating ? `${avgRating.toFixed(2)} ★` : '-'}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">{ratings.length}개 상품 평균</div>
+                <div className="text-[10px] text-fg-3 mt-0.5">{ratings.length}개 상품 평균</div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-[11px] text-gray-500">상품당 평균 리뷰</div>
+              <div className="bg-card-2 rounded-lg p-3">
+                <div className="text-[11px] text-fg-3">상품당 평균 리뷰</div>
                 <div className="text-sm font-bold mt-0.5">{avgReviews?.toLocaleString() ?? '-'}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">총 {totalReviews.toLocaleString()}건</div>
+                <div className="text-[10px] text-fg-3 mt-0.5">총 {totalReviews.toLocaleString()}건</div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-[11px] text-gray-500">주요 카테고리</div>
+              <div className="bg-card-2 rounded-lg p-3">
+                <div className="text-[11px] text-fg-3">주요 카테고리</div>
                 <div className="text-sm font-bold mt-0.5 truncate" title={catSorted.map((c) => c[0]).join(', ')}>
                   {catSorted[0]?.[0] ?? '-'}
                 </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">
+                <div className="text-[10px] text-fg-3 mt-0.5">
                   {catSorted.map((c) => `${c[0]} (${c[1]})`).slice(0, 3).join(' · ')}
                 </div>
               </div>
@@ -284,11 +284,11 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
             {/* 공통 키워드 / 장점 / 단점 */}
             <div className="grid md:grid-cols-3 gap-3">
               <div>
-                <div className="text-[11px] font-semibold text-gray-600 mb-1.5">공통 키워드 ({commonKeywords.length})</div>
-                {commonKeywords.length === 0 && <div className="text-[11px] text-gray-400">2개 이상 상품에서 공통으로 나온 키워드 없음</div>}
+                <div className="text-[11px] font-semibold text-fg-3 mb-1.5">공통 키워드 ({commonKeywords.length})</div>
+                {commonKeywords.length === 0 && <div className="text-[11px] text-fg-5">2개 이상 상품에서 공통으로 나온 키워드 없음</div>}
                 <div className="flex flex-wrap gap-1">
                   {commonKeywords.map(([k, n]) => (
-                    <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                    <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-brand-bg text-brand-hover px-2 py-0.5 rounded">
                       {k}<span className="text-blue-400 text-[10px]">×{n}</span>
                     </span>
                   ))}
@@ -296,26 +296,26 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <div className="text-[11px] font-semibold text-green-700 mb-1.5">자주 언급된 장점 ({commonPros.length})</div>
-                {commonPros.length === 0 && <div className="text-[11px] text-gray-400">공통 장점 없음</div>}
+                {commonPros.length === 0 && <div className="text-[11px] text-fg-5">공통 장점 없음</div>}
                 <ul className="text-[11px] space-y-0.5">
                   {commonPros.map(([k, n]) => (
                     <li key={k} className="flex items-start gap-1">
                       <span className="text-green-500 mt-0.5">✓</span>
                       <span className="flex-1">{k}</span>
-                      <span className="text-gray-400">×{n}</span>
+                      <span className="text-fg-5">×{n}</span>
                     </li>
                   ))}
                 </ul>
               </div>
               <div>
                 <div className="text-[11px] font-semibold text-red-700 mb-1.5">자주 언급된 단점 ({commonCons.length})</div>
-                {commonCons.length === 0 && <div className="text-[11px] text-gray-400">공통 단점 없음</div>}
+                {commonCons.length === 0 && <div className="text-[11px] text-fg-5">공통 단점 없음</div>}
                 <ul className="text-[11px] space-y-0.5">
                   {commonCons.map(([k, n]) => (
                     <li key={k} className="flex items-start gap-1">
                       <span className="text-red-500 mt-0.5">✗</span>
                       <span className="flex-1">{k}</span>
-                      <span className="text-gray-400">×{n}</span>
+                      <span className="text-fg-5">×{n}</span>
                     </li>
                   ))}
                 </ul>
@@ -325,16 +325,16 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
             {/* 차원별 평균 점수 */}
             {dimAvg.length > 0 && (
               <div>
-                <div className="text-[11px] font-semibold text-gray-600 mb-1.5">차원별 평균 점수 ({dimAvg.length})</div>
+                <div className="text-[11px] font-semibold text-fg-3 mb-1.5">차원별 평균 점수 ({dimAvg.length})</div>
                 <div className="grid sm:grid-cols-2 gap-1.5">
                   {dimAvg.map((d) => (
                     <div key={d.dim} className="flex items-center gap-2 text-[11px]">
-                      <span className="w-24 truncate text-gray-700" title={d.dim}>{d.dim}</span>
-                      <div className="flex-1 bg-gray-100 rounded h-2 overflow-hidden">
+                      <span className="w-24 truncate text-fg-2" title={d.dim}>{d.dim}</span>
+                      <div className="flex-1 bg-card-2 rounded h-2 overflow-hidden">
                         <div className={`h-full ${d.avg >= 7 ? 'bg-green-500' : d.avg >= 5 ? 'bg-blue-400' : 'bg-orange-400'}`} style={{ width: `${(d.avg / 10) * 100}%` }} />
                       </div>
                       <span className="w-12 text-right font-semibold">{d.avg.toFixed(1)}/10</span>
-                      <span className="w-10 text-right text-gray-400 text-[10px]">n={d.n}</span>
+                      <span className="w-10 text-right text-fg-5 text-[10px]">n={d.n}</span>
                     </div>
                   ))}
                 </div>
@@ -346,12 +346,12 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* 배치 상태 — 아직 확장 안 됨 */}
       {batch.status !== 'expanded' && items.length === 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+        <div className="bg-brand-bg border border-blue-200 rounded-lg p-4 text-sm">
           {batch.status === 'pending' && (
             <>
               <div className="font-semibold text-blue-900">카테고리 확장 대기 중</div>
-              <div className="text-xs text-blue-700 mt-1">
-                로컬에서 <code className="bg-white px-1">python sourcing/expand_category.py --watch</code> 실행 필요.
+              <div className="text-xs text-brand-hover mt-1">
+                로컬에서 <code className="bg-card px-1">python sourcing/expand_category.py --watch</code> 실행 필요.
               </div>
             </>
           )}
@@ -366,9 +366,9 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* 상품 목록 */}
       {items.length > 0 && (
-        <div className="bg-white border rounded-lg overflow-hidden">
+        <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-card-2 border-b">
               <tr>
                 <th className="text-left px-3 py-2 font-medium w-12">#</th>
                 <th className="text-left px-3 py-2 font-medium">상품</th>
@@ -380,8 +380,8 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
             </thead>
             <tbody>
               {items.map((it) => (
-                <tr key={it.id} className="border-b hover:bg-gray-50">
-                  <td className="px-3 py-2 font-semibold text-gray-700">{it.batch_rank ?? '-'}</td>
+                <tr key={it.id} className="border-b hover:bg-card-2">
+                  <td className="px-3 py-2 font-semibold text-fg-2">{it.batch_rank ?? '-'}</td>
                   <td className="px-3 py-2">
                     <div className="flex gap-2 items-start">
                       {it.product_info?.thumbnailUrl && (
@@ -389,11 +389,11 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
                         <img src={it.product_info.thumbnailUrl} alt="" className="w-12 h-12 object-cover rounded border flex-shrink-0" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <Link href={`/sourcing/${it.id}`} className="text-blue-600 hover:underline line-clamp-2">
+                        <Link href={`/sourcing/${it.id}`} className="text-brand hover:underline line-clamp-2">
                           {it.product_info?.title || '(분석 대기)'}
                         </Link>
                         {(it.product_info?.finalPrice || it.product_info?.price) && (
-                          <span className="text-xs text-gray-500 ml-1">{it.product_info?.finalPrice || it.product_info?.price}</span>
+                          <span className="text-xs text-fg-3 ml-1">{it.product_info?.finalPrice || it.product_info?.price}</span>
                         )}
                         {it.error && <div className="text-xs text-red-600 mt-0.5">{it.error}</div>}
                       </div>
@@ -407,7 +407,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
                   <td className="px-3 py-2 text-xs">{it.review_stats?.total ?? '-'}</td>
                   <td className="px-3 py-2 text-xs">{it.review_stats?.avgRating ?? '-'}</td>
                   <td className="px-3 py-2 text-right">
-                    <a href={it.url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-gray-200 rounded">
+                    <a href={it.url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-line rounded">
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </td>

@@ -214,7 +214,7 @@ export default function OrdersChartTab() {
 
   const seg = (active: boolean) =>
     `h-8 px-3 rounded-lg text-[12px] font-medium transition-colors ${
-      active ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+      active ? 'bg-brand text-white' : 'bg-app text-fg-3 hover:bg-line'
     }`;
 
   const totalOrders  = filteredOrders.length;
@@ -225,27 +225,27 @@ export default function OrdersChartTab() {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[15px] font-bold text-[#191F28]">주문 분석</h3>
-        <p className="text-[13px] text-[#6B7684] mt-0.5">채널·상품별 주문 추이를 비교합니다</p>
+        <h3 className="text-[15px] font-bold text-fg">주문 분석</h3>
+        <p className="text-[13px] text-fg-3 mt-0.5">채널·상품별 주문 추이를 비교합니다</p>
       </div>
 
       {/* ── 컨트롤 바 ───────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
 
         {/* 날짜 */}
         <div className="flex items-center gap-2 flex-wrap">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
-          <span className="text-[12px] text-[#B0B8C1]">~</span>
+            className="h-10 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
+          <span className="text-[12px] text-fg-5">~</span>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+            className="h-10 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
 
           {/* 빠른 범위 */}
           <div className="flex items-center gap-1 ml-1">
             {QUICK_RANGES.map(({ label, days }) => (
               <button key={label}
                 onClick={() => { setDateFrom(daysAgo(days)); setDateTo(today); }}
-                className="h-8 px-2.5 rounded-lg text-[12px] font-medium bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB] transition-colors">
+                className="h-8 px-2.5 rounded-lg text-[12px] font-medium bg-app text-fg-3 hover:bg-line transition-colors">
                 {label}
               </button>
             ))}
@@ -253,9 +253,9 @@ export default function OrdersChartTab() {
 
           {/* 요약 */}
           {!loading && orders.length > 0 && (
-            <div className="ml-auto flex items-center gap-3 text-[12px] text-[#6B7684]">
-              <span>총 <strong className="text-[#191F28]">{totalOrders.toLocaleString()}</strong>건</span>
-              <span>수량 <strong className="text-[#191F28]">{totalQty.toLocaleString()}</strong>개</span>
+            <div className="ml-auto flex items-center gap-3 text-[12px] text-fg-3">
+              <span>총 <strong className="text-fg">{totalOrders.toLocaleString()}</strong>건</span>
+              <span>수량 <strong className="text-fg">{totalQty.toLocaleString()}</strong>개</span>
             </div>
           )}
         </div>
@@ -264,7 +264,7 @@ export default function OrdersChartTab() {
         <div className="flex items-center gap-4 flex-wrap">
           {/* 단위 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-[#B0B8C1] mr-1">단위</span>
+            <span className="text-[11px] text-fg-5 mr-1">단위</span>
             {(['daily', 'weekly', 'monthly'] as const).map((g) => (
               <button key={g} onClick={() => setGranularity(g)} className={seg(granularity === g)}>
                 {g === 'daily' ? '일별' : g === 'weekly' ? '주별' : '월별'}
@@ -272,20 +272,20 @@ export default function OrdersChartTab() {
             ))}
           </div>
 
-          <div className="w-px h-5 bg-[#E5E8EB]" />
+          <div className="w-px h-5 bg-line" />
 
           {/* 그룹 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-[#B0B8C1] mr-1">비교</span>
+            <span className="text-[11px] text-fg-5 mr-1">비교</span>
             <button onClick={() => setGroupBy('channel')} className={seg(groupBy === 'channel')}>채널별</button>
             <button onClick={() => setGroupBy('product')} className={seg(groupBy === 'product')}>상품별</button>
           </div>
 
-          <div className="w-px h-5 bg-[#E5E8EB]" />
+          <div className="w-px h-5 bg-line" />
 
           {/* 지표 */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-[#B0B8C1] mr-1">지표</span>
+            <span className="text-[11px] text-fg-5 mr-1">지표</span>
             <button onClick={() => setMetric('count')}    className={seg(metric === 'count')}>건수</button>
             <button onClick={() => setMetric('quantity')} className={seg(metric === 'quantity')}>수량</button>
           </div>
@@ -293,7 +293,7 @@ export default function OrdersChartTab() {
 
         {/* 채널 필터 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-[#B0B8C1] shrink-0">채널</span>
+          <span className="text-[11px] text-fg-5 shrink-0">채널</span>
           <button onClick={() => setSelectedChannels(new Set())}
             className={seg(selectedChannels.size === 0)}>전체</button>
           {channelOptions.map((ch) => (
@@ -309,13 +309,13 @@ export default function OrdersChartTab() {
 
         {/* 상품 필터 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-[#B0B8C1] shrink-0">상품</span>
+          <span className="text-[11px] text-fg-5 shrink-0">상품</span>
           <button onClick={() => setSelectedProducts(new Set())}
             className={seg(selectedProducts.size === 0)}>전체</button>
           {/* 선택된 상품 태그 */}
           {[...selectedProducts].map((name) => (
             <button key={name} onClick={() => setSelectedProducts((prev) => { const n = new Set(prev); n.delete(name); return n; })}
-              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-[#3182F6] text-white flex items-center gap-1 max-w-[180px]">
+              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-brand text-white flex items-center gap-1 max-w-[180px]">
               <span className="truncate">{name}</span>
               <X className="h-3 w-3 shrink-0" />
             </button>
@@ -323,15 +323,15 @@ export default function OrdersChartTab() {
           {/* 추가 드롭다운 */}
           <div className="relative">
             <button onClick={() => { setProductDropOpen(v => !v); setProductSearch(''); }}
-              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB] flex items-center gap-1">
+              className="h-8 px-3 rounded-lg text-[12px] font-medium bg-app text-fg-3 hover:bg-line flex items-center gap-1">
               <Plus className="h-3 w-3" /> 상품 선택
             </button>
             {productDropOpen && (
-              <div className="absolute left-0 top-9 z-30 w-80 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6]">
-                <div className="p-2 border-b border-[#F2F4F6]">
+              <div className="absolute left-0 top-9 z-30 w-80 bg-card rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-line-2">
+                <div className="p-2 border-b border-line-2">
                   <input lang="ko" autoFocus value={productSearch} onChange={e => setProductSearch(e.target.value)}
                     placeholder="상품명 검색..."
-                    className="w-full h-8 px-3 text-[12px] rounded-lg border border-[#E5E8EB] outline-none focus:border-[#3182F6]" />
+                    className="w-full h-8 px-3 text-[12px] rounded-lg border border-line outline-none focus:border-brand" />
                 </div>
                 <div className="max-h-[20rem] overflow-y-auto p-1">
                   {productOptions
@@ -343,16 +343,16 @@ export default function OrdersChartTab() {
                         <button key={p.name} onClick={() => {
                           setSelectedProducts(prev => { const n = new Set(prev); sel ? n.delete(p.name) : n.add(p.name); return n; });
                         }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${sel ? 'bg-[#EBF1FE]' : 'hover:bg-[#F8F9FB]'}`}>
-                          <span className="text-[13px] text-[#191F28] truncate">{p.name}</span>
-                          <span className="text-[11px] text-[#B0B8C1] shrink-0 ml-2 tabular-nums">{p.qty.toLocaleString()}개</span>
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${sel ? 'bg-brand-bg' : 'hover:bg-card-2'}`}>
+                          <span className="text-[13px] text-fg truncate">{p.name}</span>
+                          <span className="text-[11px] text-fg-5 shrink-0 ml-2 tabular-nums">{p.qty.toLocaleString()}개</span>
                         </button>
                       );
                     })}
                 </div>
-                <div className="p-2 border-t border-[#F2F4F6]">
+                <div className="p-2 border-t border-line-2">
                   <button onClick={() => setProductDropOpen(false)}
-                    className="w-full h-8 rounded-lg text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6]">닫기</button>
+                    className="w-full h-8 rounded-lg text-[12px] font-medium text-fg-3 hover:bg-app">닫기</button>
                 </div>
               </div>
             )}
@@ -361,15 +361,15 @@ export default function OrdersChartTab() {
       </div>
 
       {/* ── 꺾은선 차트 ─────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-6">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-6">
         {loading ? (
           <div className="h-80 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+            <Loader2 className="h-6 w-6 animate-spin text-brand" />
           </div>
         ) : chartData.length === 0 ? (
           <div className="h-80 flex items-center justify-center flex-col gap-2">
-            <p className="text-[13px] font-medium text-[#6B7684]">데이터가 없습니다</p>
-            <p className="text-[12px] text-[#B0B8C1]">날짜 범위를 조정하거나 주문을 동기화하세요</p>
+            <p className="text-[13px] font-medium text-fg-3">데이터가 없습니다</p>
+            <p className="text-[12px] text-fg-5">날짜 범위를 조정하거나 주문을 동기화하세요</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={380}>
@@ -393,9 +393,9 @@ export default function OrdersChartTab() {
                   fontSize: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
                 }}
                 labelStyle={{ fontWeight: 700, color: '#191F28', marginBottom: 4 }}
-                formatter={(value: number, name: string) => [
-                  `${value.toLocaleString()}${metric === 'count' ? '건' : '개'}`,
-                  name,
+                formatter={(value, name) => [
+                  `${Number(value ?? 0).toLocaleString()}${metric === 'count' ? '건' : '개'}`,
+                  String(name),
                 ]}
               />
               <Legend
@@ -422,20 +422,20 @@ export default function OrdersChartTab() {
 
       {/* ── 집계 테이블 ─────────────────────────────────────────────────────── */}
       {!loading && seriesKeys.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#F2F4F6]">
-            <p className="text-[13px] font-semibold text-[#191F28]">기간 합계</p>
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-2">
+            <p className="text-[13px] font-semibold text-fg">기간 합계</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#6B7684]">
+                <tr className="bg-card-2 border-b border-line-2">
+                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-fg-3">
                     {groupBy === 'channel' ? '채널' : '상품'}
                   </th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">건수</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">수량</th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-[#6B7684]">비율</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-fg-3">건수</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-fg-3">수량</th>
+                  <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-fg-3">비율</th>
                 </tr>
               </thead>
               <tbody>
@@ -447,27 +447,27 @@ export default function OrdersChartTab() {
                   const qty   = cnt.reduce((s, o) => s + (o.quantity ?? 0), 0);
                   const pct   = totalOrders > 0 ? Math.round(count / totalOrders * 100) : 0;
                   return (
-                    <tr key={key} className="border-b border-[#F2F4F6] hover:bg-[#FAFAFA]">
+                    <tr key={key} className="border-b border-line-2 hover:bg-card-2">
                       <td className="px-4 py-2.5 flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                        <span className="text-[13px] text-[#191F28] truncate">{key}</span>
+                        <span className="text-[13px] text-fg truncate">{key}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-[13px] font-semibold text-[#191F28] tabular-nums">
+                      <td className="px-4 py-2.5 text-right text-[13px] font-semibold text-fg tabular-nums">
                         {count.toLocaleString()}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-[13px] text-[#6B7684] tabular-nums">
+                      <td className="px-4 py-2.5 text-right text-[13px] text-fg-3 tabular-nums">
                         {qty.toLocaleString()}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-[#F2F4F6] overflow-hidden">
+                          <div className="w-16 h-1.5 rounded-full bg-app overflow-hidden">
                             <div className="h-full rounded-full" style={{
                               width: `${pct}%`,
                               backgroundColor: COLORS[i % COLORS.length],
                             }} />
                           </div>
-                          <span className="text-[12px] text-[#6B7684] tabular-nums w-8 text-right">{pct}%</span>
+                          <span className="text-[12px] text-fg-3 tabular-nums w-8 text-right">{pct}%</span>
                         </div>
                       </td>
                     </tr>

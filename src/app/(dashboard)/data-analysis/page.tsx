@@ -29,6 +29,8 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PageHeader } from '@/components/ui/page-header';
+
 import {
   LineChart,
   Line,
@@ -67,11 +69,11 @@ function nextSort<K extends string>(prev: SortState<K>, key: K): SortState<K> {
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir | null }) {
-  if (!active) return <ArrowUpDown className="w-3 h-3 inline ml-1 text-gray-300" />;
+  if (!active) return <ArrowUpDown className="w-3 h-3 inline ml-1 text-line" />;
   return dir === 'asc' ? (
-    <ArrowUp className="w-3 h-3 inline ml-1 text-blue-600" />
+    <ArrowUp className="w-3 h-3 inline ml-1 text-brand" />
   ) : (
-    <ArrowDown className="w-3 h-3 inline ml-1 text-blue-600" />
+    <ArrowDown className="w-3 h-3 inline ml-1 text-brand" />
   );
 }
 
@@ -92,7 +94,7 @@ function SortableTh<K extends string>({
   return (
     <th
       onClick={() => onSort(sortKey)}
-      className={`cursor-pointer select-none hover:text-gray-900 ${className || ''}`}
+      className={`cursor-pointer select-none hover:text-fg ${className || ''}`}
     >
       {children}
       <SortIcon active={active} dir={active ? sort!.dir : null} />
@@ -302,7 +304,7 @@ const ALL_COLUMNS: Record<ColumnKey, ColumnDef> = {
     label: '캡처일/하위',
     align: 'right',
     render: (n) => (
-      <span className="text-gray-500">
+      <span className="text-fg-3">
         {n.isLeaf && n.leafSnapshot ? fmtDate(n.leafSnapshot.captured_at) : `${n.leaf_count}개`}
       </span>
     ),
@@ -357,7 +359,7 @@ const ALL_COLUMNS: Record<ColumnKey, ColumnDef> = {
     renderHeader: () => (
       <span className="inline-flex items-center gap-1">
         평균 판매가
-        <Info className="w-3 h-3 text-gray-400" />
+        <Info className="w-3 h-3 text-fg-5" />
       </span>
     ),
     render: (n) => <>{fmtWon(n.avg_winner_price)}</>,
@@ -581,27 +583,27 @@ function SortableCompareRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={`group border-b border-black/[0.06] ${
-        isBaseline ? 'bg-[#0071E3]/5' : 'hover:bg-[#F5F5F7] transition-colors'
+      className={`group border-b border-line ${
+        isBaseline ? 'bg-brand/5' : 'hover:bg-app transition-colors'
       }`}
     >
-      <td className={`sticky left-0 z-10 p-2 ${isBaseline ? 'bg-[#0071E3]/5' : 'bg-white'}`}>
+      <td className={`sticky left-0 z-10 p-2 ${isBaseline ? 'bg-brand/5' : 'bg-card'}`}>
         <div className="flex items-center gap-1.5">
           <button
             {...attributes}
             {...listeners}
-            className="text-[#86868B] hover:text-[#1D1D1F] cursor-grab active:cursor-grabbing"
+            className="text-fg-4 hover:text-fg cursor-grab active:cursor-grabbing"
             title="드래그해서 순서 바꾸기 (맨 위 = 기준점)"
           >
             <GripVertical className="w-3.5 h-3.5" />
           </button>
           {isBaseline && (
-            <span className="inline-flex items-center px-1.5 h-4 rounded bg-[#0071E3] text-white text-[10px] font-medium">
+            <span className="inline-flex items-center px-1.5 h-4 rounded bg-brand text-white text-[10px] font-medium">
               기준
             </span>
           )}
           <span
-            className={`truncate max-w-[220px] ${isBaseline ? 'font-medium text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}
+            className={`truncate max-w-[220px] ${isBaseline ? 'font-medium text-fg' : 'text-fg'}`}
             title={snap.category_path?.join(' › ')}
           >
             {snap.category_name}
@@ -609,7 +611,7 @@ function SortableCompareRow({
           <button
             type="button"
             onClick={() => onRemove(snap.id)}
-            className="ml-auto text-[#86868B] opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+            className="ml-auto text-fg-4 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
             title="이 카테고리를 비교에서 제거"
           >
             ✕
@@ -619,7 +621,7 @@ function SortableCompareRow({
       {COMPARE_METRICS.map((m) => {
         const v = m.get(snap);
         return (
-          <td key={m.key} className={`p-2 text-right ${isBaseline ? 'font-medium text-[#1D1D1F]' : 'text-[#1D1D1F]'}`}>
+          <td key={m.key} className={`p-2 text-right ${isBaseline ? 'font-medium text-fg' : 'text-fg'}`}>
             {m.format(v)}
           </td>
         );
@@ -779,11 +781,11 @@ function CompareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[min(95vw,1400px)] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-[#1D1D1F] flex items-center gap-2">
-            <ArrowUpDown className="w-5 h-5 text-[#0071E3]" />
+          <DialogTitle className="text-fg flex items-center gap-2">
+            <ArrowUpDown className="w-5 h-5 text-brand" />
             카테고리 직접 비교 ({ordered.length}개)
           </DialogTitle>
-          <DialogDescription className="text-[#6E6E73]">
+          <DialogDescription className="text-fg-3">
             행을 드래그해서 순서를 바꾸면 <b>맨 위</b>가 자동으로 기준점이 됩니다.
             상승 초록 / 하락 빨강 (Ad% 는 반대 — 낮을수록 자연검색 강세).
             행 hover 시 우측 ✕ 으로 제거, 아래 '+ 카테고리 추가' 로 다른 카테고리 비교에 추가.
@@ -792,28 +794,28 @@ function CompareDialog({
 
         {/* 카테고리 추가/제거 컨트롤 */}
         <div className="flex flex-wrap items-center gap-2 py-1">
-          <span className="text-xs text-[#6E6E73]">비교 대상 {ordered.length}개</span>
+          <span className="text-xs text-fg-3">비교 대상 {ordered.length}개</span>
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowAddPicker((v) => !v)}
-              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[12px] border border-[#0071E3]/30 text-[#0071E3] hover:bg-[#0071E3]/5 transition-colors"
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[12px] border border-brand/30 text-brand hover:bg-brand/5 transition-colors"
             >
               + 카테고리 추가
             </button>
             {showAddPicker && (
-              <div className="absolute top-full left-0 mt-1 w-[420px] max-h-[320px] z-50 bg-white border border-black/[0.08] rounded-lg shadow-lg overflow-hidden flex flex-col">
+              <div className="absolute top-full left-0 mt-1 w-[420px] max-h-[320px] z-50 bg-card border border-black/[0.08] rounded-lg shadow-lg overflow-hidden flex flex-col">
                 <input
                   type="text"
                   value={addPickerInput}
                   onChange={(e) => setAddPickerInput(e.target.value)}
                   placeholder="카테고리명 또는 path 검색..."
                   autoFocus
-                  className="h-9 px-3 text-[13px] border-b border-black/[0.06] focus:outline-none focus:border-[#0071E3]"
+                  className="h-9 px-3 text-[13px] border-b border-line focus:outline-none focus:border-brand"
                 />
                 <div className="overflow-y-auto flex-1">
                   {addCandidates.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-[#86868B]">
+                    <div className="p-4 text-center text-xs text-fg-4">
                       {addPickerInput ? '매칭되는 카테고리 없음' : '추가할 카테고리 없음'}
                     </div>
                   ) : (
@@ -822,11 +824,11 @@ function CompareDialog({
                         key={s.id}
                         type="button"
                         onClick={() => handleAddCategory(s.id)}
-                        className="w-full text-left px-3 py-2 text-[12px] hover:bg-[#F5F5F7] transition-colors border-b border-black/[0.04] last:border-0"
+                        className="w-full text-left px-3 py-2 text-[12px] hover:bg-app transition-colors border-b border-line-2 last:border-0"
                       >
-                        <div className="font-medium text-[#1D1D1F]">{s.category_name}</div>
+                        <div className="font-medium text-fg">{s.category_name}</div>
                         {s.category_path && s.category_path.length > 1 && (
-                          <div className="text-[10px] text-[#86868B] truncate">
+                          <div className="text-[10px] text-fg-4 truncate">
                             {s.category_path.slice(0, -1).join(' › ')}
                           </div>
                         )}
@@ -837,7 +839,7 @@ function CompareDialog({
                 <button
                   type="button"
                   onClick={() => { setShowAddPicker(false); setAddPickerInput(''); }}
-                  className="text-[11px] text-[#6E6E73] py-1.5 hover:bg-[#F5F5F7] border-t border-black/[0.06]"
+                  className="text-[11px] text-fg-3 py-1.5 hover:bg-app border-t border-line"
                 >
                   닫기
                 </button>
@@ -848,7 +850,7 @@ function CompareDialog({
             <button
               type="button"
               onClick={() => setOrderedIds([])}
-              className="text-[11px] text-[#86868B] hover:text-red-500 ml-1"
+              className="text-[11px] text-fg-4 hover:text-red-500 ml-1"
               title="모두 제거"
             >
               전체 비우기
@@ -857,7 +859,7 @@ function CompareDialog({
         </div>
 
         {/* 탭 — 표 / 시계열 차트 */}
-        <div className="flex items-center gap-1 border-b border-black/[0.06] -mt-1">
+        <div className="flex items-center gap-1 border-b border-line -mt-1">
           {[
             { key: 'table' as const, label: '표 비교' },
             { key: 'chart' as const, label: '시계열 차트' },
@@ -867,8 +869,8 @@ function CompareDialog({
               onClick={() => setTab(t.key)}
               className={`px-3 h-9 text-[13px] border-b-2 transition-colors ${
                 tab === t.key
-                  ? 'border-[#0071E3] text-[#0071E3] font-medium'
-                  : 'border-transparent text-[#6E6E73] hover:text-[#1D1D1F]'
+                  ? 'border-brand text-brand font-medium'
+                  : 'border-transparent text-fg-3 hover:text-fg'
               }`}
             >
               {t.label}
@@ -898,13 +900,13 @@ function CompareDialog({
           >
             <div className="overflow-x-auto pt-2">
               <table className="w-full text-xs border-separate border-spacing-0">
-                <thead className="bg-[#F5F5F7] text-[#6E6E73]">
+                <thead className="bg-app text-fg-3">
                   <tr>
-                    <th className="sticky left-0 z-10 bg-[#F5F5F7] p-2 text-left min-w-[260px] border-b border-black/[0.06]">
+                    <th className="sticky left-0 z-10 bg-app p-2 text-left min-w-[260px] border-b border-line">
                       카테고리
                     </th>
                     {COMPARE_METRICS.map((m) => (
-                      <th key={m.key} className="p-2 text-right min-w-[110px] border-b border-black/[0.06]">
+                      <th key={m.key} className="p-2 text-right min-w-[110px] border-b border-line">
                         {m.label}
                       </th>
                     ))}
@@ -931,7 +933,7 @@ function CompareDialog({
                     <tr>
                       <td
                         colSpan={1 + COMPARE_METRICS.length}
-                        className="pt-4 pb-1 text-[11px] uppercase tracking-wider text-[#86868B]"
+                        className="pt-4 pb-1 text-[11px] uppercase tracking-wider text-fg-4"
                       >
                         변화율 (vs 기준)
                       </td>
@@ -939,10 +941,10 @@ function CompareDialog({
                     {others.map((s) => {
                       // 변화율 행 — 드래그 X, 단순 표시
                       return (
-                        <tr key={s.id + ':delta'} className="border-b border-black/[0.06]">
-                          <td className="sticky left-0 z-10 bg-white p-2">
+                        <tr key={s.id + ':delta'} className="border-b border-line">
+                          <td className="sticky left-0 z-10 bg-card p-2">
                             <span
-                              className="text-[12px] text-[#6E6E73] truncate max-w-[220px] inline-block"
+                              className="text-[12px] text-fg-3 truncate max-w-[220px] inline-block"
                               title={s.category_path?.join(' › ')}
                             >
                               {s.category_name}
@@ -950,7 +952,7 @@ function CompareDialog({
                           </td>
                           {COMPARE_METRICS.map((m) => {
                             const d = deltaPct(m.get(s), m.get(baseline));
-                            let deltaColor = 'text-[#86868B]';
+                            let deltaColor = 'text-fg-4';
                             if (d != null && m.direction !== 'neutral' && Math.abs(d) >= 0.5) {
                               const isGood = m.direction === 'high' ? d > 0 : d < 0;
                               deltaColor = isGood ? 'text-emerald-600' : 'text-red-500';
@@ -976,15 +978,15 @@ function CompareDialog({
           <div className="space-y-3 pt-2">
             {/* metric 선택 */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-[#6E6E73] mr-1">지표</span>
+              <span className="text-xs text-fg-3 mr-1">지표</span>
               {HISTORY_METRICS.map((m) => (
                 <button
                   key={m.key}
                   onClick={() => setChartMetricKey(m.key)}
                   className={`text-[11px] px-2.5 h-7 rounded-md border transition-colors ${
                     chartMetricKey === m.key
-                      ? 'bg-[#0071E3] text-white border-[#0071E3]'
-                      : 'bg-white text-[#6E6E73] border-black/[0.1] hover:bg-[#F5F5F7]'
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-card text-fg-3 border-black/[0.1] hover:bg-app'
                   }`}
                 >
                   {m.label}
@@ -993,11 +995,11 @@ function CompareDialog({
             </div>
 
             {chartData.length === 0 ? (
-              <div className="rounded-[12px] border border-black/[0.06] bg-white p-6 text-center text-sm text-[#86868B]">
+              <div className="rounded-[12px] border border-line bg-card p-6 text-center text-sm text-fg-4">
                 선택한 카테고리들에 캡처 데이터가 없습니다.
               </div>
             ) : (
-              <div className="rounded-[12px] border border-black/[0.06] bg-white p-3">
+              <div className="rounded-[12px] border border-line bg-card p-3">
                 <div style={{ width: '100%', height: 380 }}>
                   <ResponsiveContainer>
                     <LineChart data={chartData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
@@ -1048,7 +1050,7 @@ function CompareDialog({
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="text-[10px] text-[#86868B] mt-2">
+                <div className="text-[10px] text-fg-4 mt-2">
                   굵은 선 = 기준 (맨 위 행). N개 카테고리 × 모든 캡처일자 시계열 (값이 없는 날짜는
                   연결).
                 </div>
@@ -1111,7 +1113,7 @@ function NumericFilterCell({
           setOp(nextOp);
           if (text.trim() !== '') commit(text, nextOp);
         }}
-        className="h-6 px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+        className="h-6 px-1 text-[10px] border border-[#E5E5E7] rounded bg-card text-fg focus:outline-none focus:border-brand"
         title="비교 조건"
       >
         {(Object.keys(FILTER_OP_LABELS) as FilterOp[]).map((k) => (
@@ -1133,7 +1135,7 @@ function NumericFilterCell({
           }
         }}
         placeholder="값"
-        className={`h-6 w-14 px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3] ${align === 'right' ? 'text-right' : ''}`}
+        className={`h-6 w-14 px-1 text-[10px] border border-[#E5E5E7] rounded bg-card text-fg focus:outline-none focus:border-brand ${align === 'right' ? 'text-right' : ''}`}
       />
     </div>
   );
@@ -1154,7 +1156,7 @@ function SortableHeaderCell({ col }: { col: ColumnDef }) {
       title={col.headerTitle}
     >
       <span className="inline-flex items-center gap-1 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
-        <GripVertical className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <GripVertical className="w-3 h-3 text-line opacity-0 group-hover:opacity-100 transition-opacity" />
         {col.renderHeader ? col.renderHeader() : col.label}
       </span>
     </th>
@@ -1983,7 +1985,7 @@ export default function DataAnalysisPage() {
     return (
       <Fragment key={node.key}>
         <tr
-          className={`border-t border-black/5 hover:bg-[#F5F5F7] cursor-pointer transition-colors ${
+          className={`border-t border-black/5 hover:bg-app cursor-pointer transition-colors ${
             node.depth === 1 ? 'bg-[#FBFBFD]' : ''
           }`}
           onClick={onRowClick}
@@ -2005,7 +2007,7 @@ export default function DataAnalysisPage() {
             ) : null}
           </td>
           <td
-            className={`p-2 ${node.depth === 1 ? 'font-semibold text-[#1D1D1F]' : node.isLeaf ? 'text-[#1D1D1F]' : 'text-[#6E6E73]'}`}
+            className={`p-2 ${node.depth === 1 ? 'font-semibold text-fg' : node.isLeaf ? 'text-fg' : 'text-fg-3'}`}
             style={{
               paddingLeft: `${0.5 + (node.depth - 1) * 1}rem`,
               borderLeft: `2px solid ${DEPTH_COLORS[Math.min(node.depth - 1, DEPTH_COLORS.length - 1)]}`,
@@ -2019,7 +2021,7 @@ export default function DataAnalysisPage() {
                   <button
                     onClick={(e) => toggleBookmark(pathKey, e)}
                     className={`shrink-0 transition-colors ${
-                      isBm ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'
+                      isBm ? 'text-amber-500' : 'text-line hover:text-amber-400'
                     }`}
                     title={isBm ? '북마크 해제' : '북마크'}
                   >
@@ -2048,7 +2050,7 @@ export default function DataAnalysisPage() {
               </td>
             );
           })}
-          <td className="p-2 text-gray-500 truncate max-w-[140px]">
+          <td className="p-2 text-fg-3 truncate max-w-[140px]">
             {node.isLeaf && snap ? snap.memo || '' : ''}
           </td>
           <td className="p-2 text-center">
@@ -2079,11 +2081,11 @@ export default function DataAnalysisPage() {
               <td colSpan={14} className="p-0 bg-[#FBFBFD]">
                 <div className="p-3 space-y-3">
                   {loadingDetailFor === snap.id ? (
-                    <div className="text-sm text-gray-500">불러오는 중...</div>
+                    <div className="text-sm text-fg-3">불러오는 중...</div>
                   ) : (
                     <>
                       {/* sub-tab */}
-                      <div className="flex items-center gap-1 border-b border-black/[0.06]">
+                      <div className="flex items-center gap-1 border-b border-line">
                         {([
                           ['products', `상품 (${(products || []).length})`],
                           ['keywords', `TOP 검색어 (${topKws.length})`],
@@ -2094,8 +2096,8 @@ export default function DataAnalysisPage() {
                             onClick={() => setSubTab(key)}
                             className={`px-3 h-8 text-[12px] border-b-2 transition-colors ${
                               subTab === key
-                                ? 'border-[#0071E3] text-[#0071E3] font-semibold'
-                                : 'border-transparent text-[#6E6E73] hover:text-[#1D1D1F]'
+                                ? 'border-brand text-brand font-semibold'
+                                : 'border-transparent text-fg-3 hover:text-fg'
                             }`}
                           >
                             {label}
@@ -2104,7 +2106,7 @@ export default function DataAnalysisPage() {
                       </div>
                       {subTab === 'products' && (
                         (products || []).length === 0 ? (
-                          <div className="text-xs text-[#86868B] py-4 text-center">
+                          <div className="text-xs text-fg-4 py-4 text-center">
                             이 스냅샷에는 상품 데이터가 없습니다. TOP 20 경쟁상품 페이지를 페이스트하면 추가됩니다.
                           </div>
                         ) : (
@@ -2120,7 +2122,7 @@ export default function DataAnalysisPage() {
                       )}
                       {subTab === 'keywords' && (
                         topKws.length === 0 ? (
-                          <div className="text-xs text-[#86868B] py-4 text-center">
+                          <div className="text-xs text-fg-4 py-4 text-center">
                             이 스냅샷에는 TOP 검색어 데이터가 없습니다. TOP 20 검색어 페이지를 페이스트하면 추가됩니다.
                           </div>
                         ) : (
@@ -2129,7 +2131,7 @@ export default function DataAnalysisPage() {
                       )}
                       {subTab === 'brands' && (
                         topBrs.length === 0 ? (
-                          <div className="text-xs text-[#86868B] py-4 text-center">
+                          <div className="text-xs text-fg-4 py-4 text-center">
                             이 스냅샷에는 TOP 브랜드 데이터가 없습니다. TOP 브랜드 페이지를 페이스트하면 추가됩니다.
                           </div>
                         ) : (
@@ -2152,23 +2154,23 @@ export default function DataAnalysisPage() {
   );
 
   return (
-    <div className="p-8 space-y-8 max-w-[1400px] mx-auto text-[#1D1D1F]" style={{ fontFamily: 'var(--font-apple, -apple-system), BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard", system-ui, sans-serif' }}>
+    <div className="space-y-5">
       <div>
-        <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-[#1D1D1F]">데이터 분석</h1>
-        <p className="text-[14px] text-[#6E6E73] mt-1.5 tracking-[-0.01em]">
+        <PageHeader title="데이터 분석" />
+        <p className="text-[12px] text-fg-3 mt-1">
           쿠팡 셀러 광고진단 페이지 텍스트를 카테고리 단위로 붙여넣어 카테고리/상품/키워드를 한 번에 저장합니다.
         </p>
       </div>
 
       {/* 입력 */}
-      <div className="rounded-[18px] border border-black/[0.06] bg-white p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="rounded-[18px] border border-line bg-card p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-medium">새 데이터 추가</h2>
           <label
             className={`inline-flex items-center gap-2 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
               batchMode
-                ? 'bg-[#0071E3] border-[#0071E3] text-white'
-                : 'bg-white border-[#E5E5E7] text-[#6E6E73] hover:bg-[#F5F5F7]'
+                ? 'bg-brand border-brand text-white'
+                : 'bg-card border-[#E5E5E7] text-fg-3 hover:bg-app'
             }`}
             title="여러 카테고리 결과를 이어붙여서 한 번에 저장 (자동 분리)"
           >
@@ -2209,13 +2211,13 @@ export default function DataAnalysisPage() {
         </div>
 
         {batchMode && batchPreview && (
-          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900">
+          <div className="rounded-md bg-brand-bg border border-blue-200 px-3 py-2 text-sm text-blue-900">
             인식된 카테고리: <b>{batchPreview.count}</b>개
           </div>
         )}
 
         {batchSaving && (
-          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900">
+          <div className="rounded-md bg-brand-bg border border-blue-200 px-3 py-2 text-sm text-blue-900">
             저장 중... {batchSaving.done} / {batchSaving.total}
           </div>
         )}
@@ -2245,13 +2247,13 @@ export default function DataAnalysisPage() {
             ) : (
               <div className="text-orange-600">카테고리 헤더 미인식 — 카테고리 결과 줄부터 복사해주세요.</div>
             )}
-            <div className="text-gray-600 flex items-center gap-4 flex-wrap">
+            <div className="text-fg-3 flex items-center gap-4 flex-wrap">
               {/* 인식된 타입에 따라 다른 카운트 표시 */}
               {preview.type === 'products' && (
                 <span>
-                  <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-[#0071E3]/10 text-[#0071E3] text-[10px] font-semibold uppercase">상품</span>
-                  상품 <b className="text-gray-900">{preview.products.length}</b>개,
-                  키워드 <b className="text-gray-900">
+                  <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-brand/10 text-brand text-[10px] font-semibold uppercase">상품</span>
+                  상품 <b className="text-fg">{preview.products.length}</b>개,
+                  키워드 <b className="text-fg">
                     {preview.products.reduce((s, p) => s + p.keywords.length, 0)}
                   </b>개
                 </span>
@@ -2259,13 +2261,13 @@ export default function DataAnalysisPage() {
               {preview.type === 'keywords' && (
                 <span>
                   <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-amber-500/10 text-amber-700 text-[10px] font-semibold uppercase">검색어</span>
-                  TOP 검색어 <b className="text-gray-900">{preview.topKeywords.length}</b>개
+                  TOP 검색어 <b className="text-fg">{preview.topKeywords.length}</b>개
                 </span>
               )}
               {preview.type === 'brands' && (
                 <span>
                   <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-purple-500/10 text-purple-700 text-[10px] font-semibold uppercase">브랜드</span>
-                  TOP 브랜드 <b className="text-gray-900">{preview.topBrands.length}</b>개
+                  TOP 브랜드 <b className="text-fg">{preview.topBrands.length}</b>개
                 </span>
               )}
               {preview.warnings.length > 0 && (
@@ -2311,31 +2313,31 @@ export default function DataAnalysisPage() {
       </div>
 
       {/* 카테고리 트리 분석 */}
-      <div className="rounded-[18px] border border-black/[0.06] bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-        <div className="px-5 py-4 border-b border-black/[0.06] flex items-center justify-between flex-wrap gap-2">
+      <div className="rounded-[18px] border border-line bg-card overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="px-5 py-4 border-b border-line flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-medium">카테고리 분석 ({leafSnapshots.length}개 카테고리)</h2>
-            <span className="text-xs text-gray-500">선택 {selected.size}개</span>
+            <span className="text-xs text-fg-3">선택 {selected.size}개</span>
             {searchTerm && (
-              <span className="text-xs text-blue-600 font-medium">{matchCount}개 매칭</span>
+              <span className="text-xs text-brand font-medium">{matchCount}개 매칭</span>
             )}
-            <span className="text-xs text-gray-400">트리 합산은 카테고리당 최신 1건 기준</span>
+            <span className="text-xs text-fg-5">트리 합산은 카테고리당 최신 1건 기준</span>
           </div>
           <div className="flex gap-2 items-center">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-5 pointer-events-none" />
               <input
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="카테고리 검색 (실시간)"
-                className="h-8 pl-7 pr-2.5 text-xs border rounded-md w-56 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                className="h-8 pl-7 pr-2.5 text-xs border rounded-md w-56 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-brand"
               />
               {searchInput && (
                 <button
                   type="button"
                   onClick={() => setSearchInput('')}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-fg-5 hover:text-fg-3 text-xs"
                   aria-label="검색 지우기"
                 >
                   ×
@@ -2417,7 +2419,7 @@ export default function DataAnalysisPage() {
               className={`inline-flex items-center gap-1.5 text-xs px-2.5 h-8 rounded-md border cursor-pointer select-none transition-colors ${
                 adminMode
                   ? 'bg-red-50 border-red-200 text-red-700'
-                  : 'bg-white border-[#E5E5E7] text-[#6E6E73] hover:bg-[#F5F5F7]'
+                  : 'bg-card border-[#E5E5E7] text-fg-3 hover:bg-app'
               }`}
               title="관리 모드: 삭제 버튼이 보이고, 카테고리명 타이핑 확인 후 삭제 가능"
             >
@@ -2427,17 +2429,17 @@ export default function DataAnalysisPage() {
                 onChange={(e) => setAdminMode(e.target.checked)}
                 className="sr-only"
               />
-              <span className={`w-1.5 h-1.5 rounded-full ${adminMode ? 'bg-red-500' : 'bg-gray-300'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${adminMode ? 'bg-red-500' : 'bg-line'}`} />
               관리 모드
             </label>
           </div>
         </div>
         {loading ? (
-          <div className="p-6 text-center text-gray-500 text-sm">불러오는 중...</div>
+          <div className="p-6 text-center text-fg-3 text-sm">불러오는 중...</div>
         ) : tree.length === 0 ? (
-          <div className="p-6 text-center text-gray-500 text-sm">저장된 카테고리가 없습니다.</div>
+          <div className="p-6 text-center text-fg-3 text-sm">저장된 카테고리가 없습니다.</div>
         ) : filteredTree.length === 0 ? (
-          <div className="p-6 text-center text-gray-500 text-sm">
+          <div className="p-6 text-center text-fg-3 text-sm">
             {searchTerm
               ? `"${searchTerm}" 검색 결과 없음`
               : filtersActive
@@ -2447,7 +2449,7 @@ export default function DataAnalysisPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-card-2 text-fg-3">
                 <DndContext
                   sensors={dndSensors}
                   collisionDetection={closestCenter}
@@ -2467,7 +2469,7 @@ export default function DataAnalysisPage() {
                   </SortableContext>
                 </DndContext>
                 {filterRowOpen && (
-                  <tr className="bg-white border-t border-black/[0.06]">
+                  <tr className="bg-card border-t border-line">
                     <th className="p-1"></th>
                     <th className="p-1"></th>
                     <th className="p-1">
@@ -2476,7 +2478,7 @@ export default function DataAnalysisPage() {
                         value={filters.category}
                         onChange={(e) => setFilters((p) => ({ ...p, category: e.target.value }))}
                         placeholder="카테고리…"
-                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-card text-fg focus:outline-none focus:border-brand"
                       />
                     </th>
                     {columnOrder.map((key) => {
@@ -2500,14 +2502,14 @@ export default function DataAnalysisPage() {
                         value={filters.memo}
                         onChange={(e) => setFilters((p) => ({ ...p, memo: e.target.value }))}
                         placeholder="메모…"
-                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-white text-[#1D1D1F] focus:outline-none focus:border-[#0071E3]"
+                        className="h-6 w-full px-1 text-[10px] border border-[#E5E5E7] rounded bg-card text-fg focus:outline-none focus:border-brand"
                       />
                     </th>
                     <th className="p-1 text-center">
                       {filtersActive && (
                         <button
                           onClick={clearAllFilters}
-                          className="text-[10px] text-[#0071E3] hover:underline"
+                          className="text-[10px] text-brand hover:underline"
                           title="모든 필터 해제"
                         >
                           ✕
@@ -2527,17 +2529,17 @@ export default function DataAnalysisPage() {
 
       {/* 카테고리 헤더 미인식 스냅샷 (옛 데이터 등) */}
       {withoutCategory.length > 0 && (
-        <div className="rounded-[18px] border border-black/[0.06] bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="rounded-[18px] border border-line bg-card overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <div className="px-4 py-3 border-b">
-            <h2 className="font-medium text-gray-700">카테고리 헤더 없는 스냅샷 ({withoutCategory.length})</h2>
-            <p className="text-xs text-gray-500 mt-1">
+            <h2 className="font-medium text-fg-2">카테고리 헤더 없는 스냅샷 ({withoutCategory.length})</h2>
+            <p className="text-xs text-fg-3 mt-1">
               카테고리 헤더가 인식되지 않은 옛 데이터입니다. 삭제 후 재저장을 권장합니다.
             </p>
           </div>
           <div className="divide-y">
             {withoutCategory.map((s) => (
               <div key={s.id} className="px-4 py-2 flex items-center justify-between text-sm">
-                <span className="text-gray-600">
+                <span className="text-fg-3">
                   {fmtDate(s.captured_at)} · 상품 {s.products_count} / 키워드 {s.keywords_count}
                   {s.memo ? ` · ${s.memo}` : ''}
                 </span>
@@ -2585,22 +2587,22 @@ export default function DataAnalysisPage() {
       >
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#1D1D1F]">
+            <DialogTitle className="flex items-center gap-2 text-fg">
               <AlertTriangle className="w-5 h-5 text-red-500" />
               카테고리 스냅샷 삭제
             </DialogTitle>
-            <DialogDescription className="text-[#6E6E73]">
+            <DialogDescription className="text-fg-3">
               이 작업은 되돌릴 수 없습니다. 정말 삭제하시려면 아래에 카테고리명을 정확히 입력하세요.
             </DialogDescription>
           </DialogHeader>
           {deleteTarget && (
             <div className="space-y-3 py-2">
-              <div className="text-xs text-[#86868B]">카테고리 경로</div>
-              <div className="text-sm text-[#1D1D1F] bg-[#F5F5F7] rounded-md px-3 py-2 break-all">
+              <div className="text-xs text-fg-4">카테고리 경로</div>
+              <div className="text-sm text-fg bg-app rounded-md px-3 py-2 break-all">
                 {deleteTarget.path.length > 0 ? deleteTarget.path.join(' › ') : deleteTarget.name}
               </div>
-              <div className="text-xs text-[#86868B] pt-1">
-                확인을 위해 <b className="text-[#1D1D1F]">{deleteTarget.name}</b> 을(를) 정확히 입력
+              <div className="text-xs text-fg-4 pt-1">
+                확인을 위해 <b className="text-fg">{deleteTarget.name}</b> 을(를) 정확히 입력
               </div>
               <Input
                 value={deleteConfirmInput}
@@ -2647,9 +2649,9 @@ function coupangSearchUrl(productName: string): string {
 // 카테고리 단위 TOP 20 검색어 표
 function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
   return (
-    <div className="overflow-x-auto bg-white border rounded">
+    <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-gray-100 text-gray-600">
+        <thead className="bg-card-2 text-fg-3">
           <tr>
             <th className="p-2 w-12 text-left">순위</th>
             <th className="p-2 text-left">검색어</th>
@@ -2663,14 +2665,14 @@ function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
         </thead>
         <tbody>
           {rows.map((k) => (
-            <tr key={k.id} className="border-t hover:bg-gray-50">
+            <tr key={k.id} className="border-t hover:bg-card-2">
               <td className="p-2 font-medium">{k.rank}</td>
               <td className="p-2">
                 <a
                   href={coupangSearchUrl(k.keyword)}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#0071E3] hover:underline"
+                  className="text-brand hover:underline"
                   title={`쿠팡에서 검색: ${k.keyword}`}
                 >
                   {k.keyword}
@@ -2680,7 +2682,7 @@ function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
               <td className="p-2 text-right">{fmt(k.exposure)}</td>
               <td className="p-2 text-right">{fmt(k.clicks)}</td>
               <td className="p-2 text-right">{fmtWon(k.avg_price)}</td>
-              <td className="p-2 text-right text-[#86868B] text-[11px]">
+              <td className="p-2 text-right text-fg-4 text-[11px]">
                 {k.price_min != null && k.price_max != null
                   ? `${fmtWon(k.price_min)} ~ ${fmtWon(k.price_max)}`
                   : '-'}
@@ -2699,9 +2701,9 @@ function TopKeywordsTable({ rows }: { rows: TopKeywordRow[] }) {
 // 카테고리 단위 TOP 브랜드 표
 function TopBrandsTable({ rows }: { rows: TopBrandRow[] }) {
   return (
-    <div className="overflow-x-auto bg-white border rounded">
+    <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-gray-100 text-gray-600">
+        <thead className="bg-card-2 text-fg-3">
           <tr>
             <th className="p-2 w-12 text-left">순위</th>
             <th className="p-2 text-left">브랜드</th>
@@ -2712,14 +2714,14 @@ function TopBrandsTable({ rows }: { rows: TopBrandRow[] }) {
         </thead>
         <tbody>
           {rows.map((b) => (
-            <tr key={b.id} className="border-t hover:bg-gray-50">
+            <tr key={b.id} className="border-t hover:bg-card-2">
               <td className="p-2 font-medium">{b.rank}</td>
               <td className="p-2">
                 <a
                   href={coupangSearchUrl(b.brand_name)}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-[#0071E3] hover:underline"
+                  className="text-brand hover:underline"
                   title={`쿠팡에서 검색: ${b.brand_name}`}
                 >
                   {b.brand_name}
@@ -2765,15 +2767,15 @@ function ProductsTable({
   }, [filtered, sort]);
 
   if (products.length === 0) {
-    return <div className="text-sm text-gray-500">상품이 없습니다.</div>;
+    return <div className="text-sm text-fg-3">상품이 없습니다.</div>;
   }
   const bookmarkedCount = products.filter((p) => bookmarks.has(p.name)).length;
   const onSort = (k: ProductColKey) => setSort((p) => nextSort(p, k));
   return (
-    <div className="overflow-x-auto bg-white border rounded">
+    <div className="overflow-x-auto bg-card border rounded">
       {/* 상단: 북마크만 보기 토글 */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.06] text-xs">
-        <span className="text-[#6E6E73]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-line text-xs">
+        <span className="text-fg-3">
           {bookmarkOnly
             ? `북마크 ${sorted.length}개 표시 중 / 전체 ${products.length}개`
             : `상품 ${products.length}개 중 ${bookmarkedCount}개 북마크`}
@@ -2784,7 +2786,7 @@ function ProductsTable({
           className={`inline-flex items-center gap-1 h-6 px-2 rounded-md border transition-colors ${
             bookmarkOnly
               ? 'bg-emerald-500 border-emerald-500 text-white'
-              : 'bg-white border-black/[0.1] text-[#6E6E73] hover:bg-[#F5F5F7] disabled:opacity-40'
+              : 'bg-card border-black/[0.1] text-fg-3 hover:bg-app disabled:opacity-40'
           }`}
         >
           <Star className="w-3 h-3" fill={bookmarkOnly ? 'currentColor' : 'none'} />
@@ -2792,7 +2794,7 @@ function ProductsTable({
         </button>
       </div>
       <table className="w-full text-xs">
-        <thead className="bg-gray-100 text-gray-600">
+        <thead className="bg-card-2 text-fg-3">
           <tr>
             <th className="p-2 w-8"></th>
             <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
@@ -2812,7 +2814,7 @@ function ProductsTable({
             return (
               <Fragment key={p.id}>
                 <tr
-                  className={`border-t hover:bg-gray-50 ${p.is_my_product ? 'bg-blue-50' : ''}`}
+                  className={`border-t hover:bg-card-2 ${p.is_my_product ? 'bg-brand-bg' : ''}`}
                 >
                   <td
                     className="p-2 text-center cursor-pointer"
@@ -2827,14 +2829,14 @@ function ProductsTable({
                     onClick={() => onToggleProduct(p.id)}
                   >
                     {p.rank}
-                    {p.is_my_product && <span className="ml-1 text-blue-600 font-semibold">내</span>}
+                    {p.is_my_product && <span className="ml-1 text-brand font-semibold">내</span>}
                   </td>
                   <td className="p-2 max-w-[400px]" title={p.name}>
                     <div className="inline-flex items-center gap-1.5 max-w-full">
                       <button
                         onClick={(e) => { e.stopPropagation(); onToggleBookmark(p.name); }}
                         className={`shrink-0 transition-colors ${
-                          bookmarks.has(p.name) ? 'text-emerald-500' : 'text-gray-300 hover:text-emerald-400'
+                          bookmarks.has(p.name) ? 'text-emerald-500' : 'text-line hover:text-emerald-400'
                         }`}
                         title={bookmarks.has(p.name) ? '북마크 해제' : '상품 북마크'}
                       >
@@ -2845,7 +2847,7 @@ function ProductsTable({
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[#0071E3] hover:underline truncate"
+                        className="text-brand hover:underline truncate"
                         title={`쿠팡에서 검색: ${p.name.split(',')[0].trim()}`}
                       >
                         {p.name}
@@ -3001,9 +3003,9 @@ function KeywordsTable({ keywords }: { keywords: KeywordDetail[] }) {
   const onSort = (k: KeywordColKey) => setSort((p) => nextSort(p, k));
 
   return (
-    <div className="overflow-x-auto bg-white border rounded">
+    <div className="overflow-x-auto bg-card border rounded">
       <table className="w-full text-xs">
-        <thead className="bg-gray-100 text-gray-600">
+        <thead className="bg-card-2 text-fg-3">
           <tr>
             <SortableTh sortKey="rank" sort={sort} onSort={onSort} className="p-2 w-12 text-left">순위</SortableTh>
             <SortableTh sortKey="keyword" sort={sort} onSort={onSort} className="p-2 text-left">키워드</SortableTh>

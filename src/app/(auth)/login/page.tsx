@@ -29,16 +29,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F4F6] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-app flex items-center justify-center px-4">
       <div className="w-full max-w-[400px]">
         {/* 로고 */}
         <div className="flex flex-col items-center mb-10">
           <LVLogo size={56} className="mb-4 drop-shadow-lg" />
           <h1 className="text-[24px] font-bold text-foreground tracking-[-0.03em]">LV ERP</h1>
-          <p className="mt-1.5 text-[13px] text-[#6B7684]">재고 · 발주 · 예측 통합 관리</p>
+          <p className="mt-1.5 text-[13px] text-fg-3">재고 · 발주 · 예측 통합 관리</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-7">
+        <div className="bg-card rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-7">
           <form onSubmit={handleLogin} className="space-y-4">
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-[13px] text-red-600">
@@ -47,26 +47,26 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-[12px] font-medium text-[#6B7684]">이메일</label>
+              <label className="text-[12px] font-medium text-fg-3">이메일</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
                 required
-                className="w-full h-11 px-4 rounded-xl border border-[#E8EAED] text-[13px] text-foreground placeholder:text-[#B0B8C1] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                className="w-full h-11 px-4 rounded-xl border border-[#E8EAED] text-[13px] text-foreground placeholder:text-fg-5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[12px] font-medium text-[#6B7684]">비밀번호</label>
+              <label className="text-[12px] font-medium text-fg-3">비밀번호</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full h-11 px-4 rounded-xl border border-[#E8EAED] text-[13px] text-foreground placeholder:text-[#B0B8C1] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                className="w-full h-11 px-4 rounded-xl border border-[#E8EAED] text-[13px] text-foreground placeholder:text-fg-5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
               />
             </div>
 
@@ -81,7 +81,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-[12px] text-[#B0B8C1] mt-6">
+        <p className="text-center text-[12px] text-fg-5 mt-6">
           계정이 없으신가요? 관리자에게 문의하세요.
         </p>
       </div>

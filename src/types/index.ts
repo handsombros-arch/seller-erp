@@ -146,6 +146,8 @@ export interface OutboundRecord {
   arrival_date: string | null;
   coupang_center: string | null;
   note: string | null;
+  status?: 'shipped' | 'selling' | 'returned' | null;
+  selling_started_at?: string | null;
   created_at: string;
   sku?: Sku;
   warehouse?: Warehouse;

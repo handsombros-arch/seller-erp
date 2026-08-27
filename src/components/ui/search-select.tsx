@@ -123,23 +123,23 @@ export function SearchSelect({
       {/* 선택됐을 때 */}
       {selected ? (
         <div
-          className="flex items-center justify-between gap-2 h-10 px-3 rounded-xl border border-[#3182F6]/30 bg-[#EBF1FE] cursor-pointer"
+          className="flex items-center justify-between gap-2 h-10 px-3 rounded-xl border border-brand/30 bg-brand-bg cursor-pointer"
           onClick={openDropdown}
         >
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[#191F28] truncate">{selected.label}</p>
+            <p className="text-[13px] font-semibold text-fg truncate">{selected.label}</p>
             {(selected.sub || selected.extra) && (
-              <p className="text-[11px] text-[#3182F6] truncate">
+              <p className="text-[11px] text-brand truncate">
                 {selected.sub}
                 {selected.sub && selected.extra && ' · '}
-                {selected.extra && <span className="text-[#6B7684]">{selected.extra}</span>}
+                {selected.extra && <span className="text-fg-3">{selected.extra}</span>}
               </p>
             )}
           </div>
           <button
             type="button"
             onClick={clear}
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 text-[#B0B8C1] hover:text-red-500 transition-colors"
+            className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-100 text-fg-5 hover:text-red-500 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -157,9 +157,9 @@ export function SearchSelect({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             autoComplete="off"
-            className="w-full h-10 pl-3 pr-8 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white"
+            className="w-full h-10 pl-3 pr-8 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors bg-card"
           />
-          <ChevronDown className={`absolute right-2.5 top-3 h-4 w-4 text-[#B0B8C1] pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`absolute right-2.5 top-3 h-4 w-4 text-fg-5 pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
         </div>
       )}
 
@@ -167,10 +167,10 @@ export function SearchSelect({
       {open && !selected && (
         <div
           ref={listRef}
-          className="absolute z-30 w-full mt-1 bg-white border border-[#E5E8EB] rounded-xl shadow-lg max-h-[28rem] overflow-y-auto"
+          className="absolute z-30 w-full mt-1 bg-card border border-line rounded-xl shadow-lg max-h-[28rem] overflow-y-auto"
         >
           {filtered.length === 0 ? (
-            <p className="px-3 py-3 text-[12px] text-[#B0B8C1] text-center">검색 결과 없음</p>
+            <p className="px-3 py-3 text-[12px] text-fg-5 text-center">검색 결과 없음</p>
           ) : (
             filtered.map((opt, i) => (
               <button
@@ -179,12 +179,12 @@ export function SearchSelect({
                 onMouseDown={(e) => e.preventDefault()} // input blur 방지
                 onClick={() => select(opt.id)}
                 className={`w-full text-left px-3 py-2 transition-colors first:rounded-t-xl last:rounded-b-xl ${
-                  i === highlighted ? 'bg-[#EBF1FE]' : 'hover:bg-[#F2F4F6]'
+                  i === highlighted ? 'bg-brand-bg' : 'hover:bg-app'
                 }`}
               >
-                <p className="text-[13px] font-medium text-[#191F28]">{opt.label}</p>
+                <p className="text-[13px] font-medium text-fg">{opt.label}</p>
                 {(opt.sub || opt.extra) && (
-                  <p className="text-[11px] text-[#6B7684]">
+                  <p className="text-[11px] text-fg-3">
                     {opt.sub}
                     {opt.sub && opt.extra && ' · '}
                     {opt.extra}

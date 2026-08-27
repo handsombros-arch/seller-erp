@@ -3,6 +3,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
 import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Radio } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
+
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -379,17 +381,17 @@ export default function TossAdAnalysisPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <Megaphone className="h-5 w-5 text-[#3182F6]" />
-          <h1 className="text-[20px] font-bold text-[#191F28]">토스 광고 분석</h1>
+          <Megaphone className="h-5 w-5 text-brand" />
+          <PageHeader title="토스 광고 분석" />
           {dateRange && (
-            <span className="text-[12px] text-[#8B95A1]">데이터: {dateRange.from} ~ {dateRange.to}</span>
+            <span className="text-[12px] text-fg-4">데이터: {dateRange.from} ~ {dateRange.to}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => fileRef.current?.click()}
             disabled={loading}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B6AE5] disabled:opacity-60 transition-colors"
+            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 transition-colors"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             데이터 추가
@@ -397,7 +399,7 @@ export default function TossAdAnalysisPage() {
           {hasData && (
             <button
               onClick={deleteAll}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[#6B7684] text-[13px] font-medium hover:bg-[#F8F9FA] transition-colors"
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-fg-3 text-[13px] font-medium hover:bg-card-2 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" /> 초기화
             </button>
@@ -418,19 +420,19 @@ export default function TossAdAnalysisPage() {
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
-          className="border-2 border-dashed border-[#D1D6DB] rounded-2xl p-12 text-center hover:border-[#3182F6] hover:bg-[#F8FAFF] transition-colors cursor-pointer"
+          className="border-2 border-dashed border-[#D1D6DB] rounded-2xl p-12 text-center hover:border-brand hover:bg-brand-soft transition-colors cursor-pointer"
           onClick={() => !initialLoading && fileRef.current?.click()}
         >
           {initialLoading ? (
             <>
-              <Loader2 className="h-10 w-10 mx-auto text-[#3182F6] mb-3 animate-spin" />
-              <p className="text-[15px] font-semibold text-[#333D4B]">저장된 데이터 불러오는 중...</p>
+              <Loader2 className="h-10 w-10 mx-auto text-brand mb-3 animate-spin" />
+              <p className="text-[15px] font-semibold text-fg">저장된 데이터 불러오는 중...</p>
             </>
           ) : (
             <>
-              <Upload className="h-10 w-10 mx-auto text-[#B0B8C1] mb-3" />
-              <p className="text-[15px] font-semibold text-[#333D4B]">토스 광고 성과 보고서 (xlsx) 를 드래그하거나 클릭하세요</p>
-              <p className="text-[12px] text-[#8B95A1] mt-1">여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
+              <Upload className="h-10 w-10 mx-auto text-fg-5 mb-3" />
+              <p className="text-[15px] font-semibold text-fg">토스 광고 성과 보고서 (xlsx) 를 드래그하거나 클릭하세요</p>
+              <p className="text-[12px] text-fg-4 mt-1">여러 파일 동시 업로드 가능 · 중복 자동 제거</p>
             </>
           )}
         </div>
@@ -438,8 +440,8 @@ export default function TossAdAnalysisPage() {
 
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-[#3182F6]" />
-          <span className="ml-3 text-[15px] text-[#6B7684]">데이터 처리 중...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-brand" />
+          <span className="ml-3 text-[15px] text-fg-3">데이터 처리 중...</span>
         </div>
       )}
 
@@ -452,11 +454,11 @@ export default function TossAdAnalysisPage() {
             <div className="flex flex-wrap items-center gap-3">
               {campaigns.length > 1 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-[12px] font-medium text-[#6B7684]">캠페인</label>
+                  <label className="text-[12px] font-medium text-fg-3">캠페인</label>
                   <select
                     value={campaignFilter}
                     onChange={(e) => setCampaignFilter(e.target.value)}
-                    className="h-9 px-3 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]"
+                    className="h-9 px-3 rounded-lg border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand"
                   >
                     <option value="">전체 ({campaigns.length})</option>
                     {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -465,7 +467,7 @@ export default function TossAdAnalysisPage() {
               )}
               {products.length > 1 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-[12px] font-medium text-[#6B7684]">상품</label>
+                  <label className="text-[12px] font-medium text-fg-3">상품</label>
                   <ProductCombobox
                     value={productFilter}
                     onChange={setProductFilter}
@@ -476,7 +478,7 @@ export default function TossAdAnalysisPage() {
               {(campaignFilter || productFilter) && (
                 <button
                   onClick={() => { setCampaignFilter(''); setProductFilter(''); }}
-                  className="text-[12px] text-[#3182F6] font-medium hover:underline"
+                  className="text-[12px] text-brand font-medium hover:underline"
                 >
                   필터 초기화
                 </button>
@@ -487,8 +489,8 @@ export default function TossAdAnalysisPage() {
           {/* KPI 카드 */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[12px] text-[#8B95A1]">핵심 지표</span>
-              <span className="text-[11px] text-[#B0B8C1]">집계 {filteredRows.length.toLocaleString()}행 / 전체 {rows.length.toLocaleString()}행</span>
+              <span className="text-[12px] text-fg-4">핵심 지표</span>
+              <span className="text-[11px] text-fg-5">집계 {filteredRows.length.toLocaleString()}행 / 전체 {rows.length.toLocaleString()}행</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               <KPICard icon={<Eye className="h-4 w-4" />} label="노출" value={fmtN(totals.impressions)} accent="blue" />
@@ -503,32 +505,32 @@ export default function TossAdAnalysisPage() {
           </div>
 
           {/* 탭 바 (쿠팡과 동일) */}
-          <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 w-fit">
+          <div className="flex gap-1 bg-app rounded-xl p-1 w-fit">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  tab === t.key ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+                  tab === t.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
                 }`}
               >{t.label}</button>
             ))}
           </div>
 
           {/* 기간 선택 bar (쿠팡과 동일 위치: 탭 아래) */}
-          <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-[#F2F4F6] px-4 py-2.5">
-            <span className="text-[12px] font-semibold text-[#191F28]">기간</span>
+          <div className="flex flex-wrap items-center gap-2 bg-card rounded-xl border border-line-2 px-4 py-2.5">
+            <span className="text-[12px] font-semibold text-fg">기간</span>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
-            <span className="text-[11px] text-[#6B7684]">~</span>
+              className="h-8 px-2 rounded-lg border border-line text-[11px] bg-card" />
+            <span className="text-[11px] text-fg-3">~</span>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="h-8 px-2 rounded-lg border border-[#E5E8EB] text-[11px] bg-white" />
+              className="h-8 px-2 rounded-lg border border-line text-[11px] bg-card" />
             {(dateFrom || dateTo) && (
               <button onClick={() => { setDateFrom(''); setDateTo(''); }}
                 className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
             )}
             {(dateFrom || dateTo) && (
-              <span className="text-[10px] text-[#6B7684] ml-1">
+              <span className="text-[10px] text-fg-3 ml-1">
                 {daily.length}일 / {tab !== 'trend' ? `${listRows.length}항목` : `${filteredRows.length.toLocaleString()}행`}
               </span>
             )}
@@ -537,11 +539,11 @@ export default function TossAdAnalysisPage() {
           {/* 기간별 추이 탭 */}
           {tab === 'trend' && (
             <>
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5 space-y-4">
+              <div className="bg-card rounded-2xl border border-line-2 p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-[13px] font-bold text-[#191F28]">기간별 추이</h3>
-                    <p className="text-[11px] text-[#8B95A1] mt-0.5">칩 클릭 → 막대 → 꺾은선 → 숨김 · 보조축: 오른쪽 Y축 사용</p>
+                    <h3 className="text-[13px] font-bold text-fg">기간별 추이</h3>
+                    <p className="text-[11px] text-fg-4 mt-0.5">칩 클릭 → 막대 → 꺾은선 → 숨김 · 보조축: 오른쪽 Y축 사용</p>
                   </div>
                   <GranToggle gran={gran} onChange={setGran} />
                 </div>
@@ -564,7 +566,7 @@ export default function TossAdAnalysisPage() {
                     return (
                       <button key={m.key} onClick={handleClick}
                         className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
-                          active ? 'text-white shadow-sm' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'
+                          active ? 'text-white shadow-sm' : 'bg-app text-fg-3 hover:bg-line'
                         }`}
                         style={active ? { backgroundColor: m.color } : {}}>
                         {m.label} {active ? (currentType === 'bar' ? '▊' : '━') : ''}
@@ -572,8 +574,8 @@ export default function TossAdAnalysisPage() {
                     );
                   })}
                   {activeMetrics.length > 0 && (
-                    <div className="flex items-center gap-1 ml-1 border-l border-[#E5E8EB] pl-2">
-                      <span className="text-[10px] text-[#6B7684]">보조축:</span>
+                    <div className="flex items-center gap-1 ml-1 border-l border-line pl-2">
+                      <span className="text-[10px] text-fg-3">보조축:</span>
                       {activeMetrics.map((key) => {
                         const m = METRICS.find((x) => x.key === key);
                         if (!m) return null;
@@ -585,7 +587,7 @@ export default function TossAdAnalysisPage() {
                               if (n.has(key)) n.delete(key); else n.add(key);
                               return n;
                             })}
-                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-[#F2F4F6] text-[#6B7684]'}`}
+                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-app text-fg-3'}`}
                             style={isRight ? { backgroundColor: m.color } : {}}>
                             {m.label}
                           </button>
@@ -646,18 +648,18 @@ export default function TossAdAnalysisPage() {
                   );
                 })()}
                 {activeMetrics.length === 0 && (
-                  <div className="text-center py-10 text-[12px] text-[#B0B8C1]">칩을 클릭해서 지표를 추가하세요</div>
+                  <div className="text-center py-10 text-[12px] text-fg-5">칩을 클릭해서 지표를 추가하세요</div>
                 )}
               </div>
 
-              <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+              <div className="bg-card rounded-2xl border border-line-2 p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[13px] font-bold text-[#191F28]">기간별 상세</h3>
+                  <h3 className="text-[13px] font-bold text-fg">기간별 상세</h3>
                   <div className="flex gap-2">
                     <GranToggle gran={gran} onChange={setGran} />
                     <button
                       onClick={() => downloadXlsx(daily, `토스_${gran}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
-                      className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]">
+                      className="h-7 px-3 rounded-lg border border-line text-[11px] text-fg-3 flex items-center gap-1 hover:bg-card-2">
                       <Download className="h-3 w-3" /> xlsx
                     </button>
                   </div>
@@ -669,33 +671,33 @@ export default function TossAdAnalysisPage() {
 
           {/* 캠페인별 / 광고세트별 / 상품별 탭 */}
           {tab !== 'trend' && (
-            <div className="bg-white rounded-2xl border border-[#F2F4F6] p-5">
+            <div className="bg-card rounded-2xl border border-line-2 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h3 className="text-[13px] font-bold text-[#191F28]">
+                <h3 className="text-[13px] font-bold text-fg">
                   {tab === 'campaign' ? '캠페인별 분석' : tab === 'adSet' ? '광고세트별 분석' : '상품별 분석'}
-                  <span className="ml-2 text-[11px] font-normal text-[#8B95A1]">{listRows.length.toLocaleString()}개</span>
+                  <span className="ml-2 text-[11px] font-normal text-fg-4">{listRows.length.toLocaleString()}개</span>
                 </h3>
                 <div className="flex flex-wrap items-center gap-2">
                   {(tab === 'campaign' || tab === 'adSet') && (
-                    <span className="text-[11px] text-[#8B95A1]">행 클릭 → 일자별 상세</span>
+                    <span className="text-[11px] text-fg-4">행 클릭 → 일자별 상세</span>
                   )}
                   <GranToggle gran={gran} onChange={setGran} />
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="검색..."
-                      className="h-7 pl-8 pr-2 rounded-lg border border-[#E5E8EB] text-[11px] text-[#333D4B] bg-white w-40" />
+                      className="h-7 pl-8 pr-2 rounded-lg border border-line text-[11px] text-fg bg-card w-40" />
                   </div>
                   <button
                     onClick={() => downloadXlsx(listRows, `토스_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`)}
-                    className="h-7 px-3 rounded-lg border border-[#E5E8EB] text-[11px] text-[#6B7684] flex items-center gap-1 hover:bg-[#F8F9FA]">
+                    className="h-7 px-3 rounded-lg border border-line text-[11px] text-fg-3 flex items-center gap-1 hover:bg-card-2">
                     <Download className="h-3 w-3" /> xlsx
                   </button>
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
-                  <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
-                    <tr className="text-[11px] text-[#6B7684]">
+                  <thead className="bg-card-2 border-b border-line">
+                    <tr className="text-[11px] text-fg-3">
                       <th className="w-8"></th>
                       <th className="text-left px-3 py-2.5 font-medium">이름</th>
                       <SortTh k="impressions" label="노출" cur={sortKey} dir={sortDir} onClick={sortHandler} />
@@ -717,34 +719,34 @@ export default function TossAdAnalysisPage() {
                       return (
                         <Fragment key={g.key}>
                           <tr
-                            className={`border-b border-[#F1F3F5] hover:bg-[#F8FAFF] ${canExpand ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                            className={`border-b border-[#F1F3F5] hover:bg-brand-soft ${canExpand ? 'cursor-pointer' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
                             onClick={() => canExpand && toggleExpand(g.key)}>
-                            <td className="px-2 py-2.5 text-[#B0B8C1]">
+                            <td className="px-2 py-2.5 text-fg-5">
                               {canExpand && (isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
                             </td>
-                            <td className="px-3 py-2.5 max-w-[280px] truncate text-[#333D4B]" title={g.name}>{g.name}</td>
-                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.impressions)}</td>
+                            <td className="px-3 py-2.5 max-w-[280px] truncate text-fg" title={g.name}>{g.name}</td>
+                            <td className="px-3 py-2.5 text-right text-fg">{fmtN(g.impressions)}</td>
                             <td className="px-3 py-2.5 text-right text-[#F59E0B] font-medium">{fmtN(g.cpm)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.clicks)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.ctr)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtN(g.cpc)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#333D4B]">{fmtN(g.orderCount)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#6B7684]">{fmtPct(g.cvr)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#EF4444] font-medium">{fmtW(g.cost)}</td>
-                            <td className="px-3 py-2.5 text-right text-[#10B981] font-medium">{fmtW(g.revenue)}</td>
+                            <td className="px-3 py-2.5 text-right text-fg">{fmtN(g.clicks)}</td>
+                            <td className="px-3 py-2.5 text-right text-fg-3">{fmtPct(g.ctr)}</td>
+                            <td className="px-3 py-2.5 text-right text-fg-3">{fmtN(g.cpc)}</td>
+                            <td className="px-3 py-2.5 text-right text-fg">{fmtN(g.orderCount)}</td>
+                            <td className="px-3 py-2.5 text-right text-fg-3">{fmtPct(g.cvr)}</td>
+                            <td className="px-3 py-2.5 text-right text-danger font-medium">{fmtW(g.cost)}</td>
+                            <td className="px-3 py-2.5 text-right text-success font-medium">{fmtW(g.revenue)}</td>
                             <td className={`px-3 py-2.5 text-right font-bold ${
-                              g.roas >= 300 ? 'text-[#10B981]' : g.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
+                              g.roas >= 300 ? 'text-success' : g.roas >= 100 ? 'text-brand' : 'text-danger'
                             }`}>{g.roas.toFixed(0)}%</td>
                           </tr>
                           {isExpanded && (
                             <tr>
                               <td colSpan={12} className="p-0">
-                                <div className="bg-[#FAFBFC] border-l-2 border-[#3182F6] px-6 py-4">
+                                <div className="bg-card-2 border-l-2 border-brand px-6 py-4">
                                   <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[11px] font-semibold text-[#333D4B]">{g.name} — 일자별 상세</span>
+                                    <span className="text-[11px] font-semibold text-fg">{g.name} — 일자별 상세</span>
                                     <button
                                       onClick={(e) => { e.stopPropagation(); downloadXlsx(getDailyFor(g.key), `토스_${tab}_${g.name.slice(0, 20)}_${gran}.xlsx`); }}
-                                      className="h-6 px-2 rounded-md border border-[#E5E8EB] text-[10px] text-[#6B7684] flex items-center gap-1 hover:bg-white">
+                                      className="h-6 px-2 rounded-md border border-line text-[10px] text-fg-3 flex items-center gap-1 hover:bg-card">
                                       <Download className="h-3 w-3" /> xlsx
                                     </button>
                                   </div>
@@ -774,8 +776,8 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]">
-        <thead className="bg-[#F8F9FA] border-b border-[#E5E8EB]">
-          <tr className="text-[11px] text-[#6B7684]">
+        <thead className="bg-card-2 border-b border-line">
+          <tr className="text-[11px] text-fg-3">
             <th className={`text-left px-3 ${pad} font-medium`}>{gran === 'monthly' ? '월' : gran === 'weekly' ? '주' : '일자'}</th>
             <th className={`text-right px-3 ${pad} font-medium`}>노출</th>
             <th className={`text-right px-3 ${pad} font-medium`}>CPM</th>
@@ -795,24 +797,24 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
             const memo = hasMemo ? (memos![d.date] ?? '') : '';
             const hasValue = hasMemo && memo.length > 0;
             return (
-              <tr key={i} className={`border-b border-[#F1F3F5] hover:bg-[#F8FAFF] ${hasValue ? 'bg-amber-50/30' : ''}`}>
-                <td className={`px-3 ${pad} text-[#333D4B]`}>
+              <tr key={i} className={`border-b border-[#F1F3F5] hover:bg-brand-soft ${hasValue ? 'bg-amber-50/30' : ''}`}>
+                <td className={`px-3 ${pad} text-fg`}>
                   <div className="flex items-center gap-1.5">
                     {d.date}
                     {hasValue && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
                   </div>
                 </td>
-                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.impressions)}</td>
+                <td className={`px-3 ${pad} text-right text-fg`}>{fmtN(d.impressions)}</td>
                 <td className={`px-3 ${pad} text-right text-[#F59E0B] font-medium`}>{fmtN(d.cpm)}</td>
-                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.clicks)}</td>
-                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.ctr)}</td>
-                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtN(d.cpc)}</td>
-                <td className={`px-3 ${pad} text-right text-[#333D4B]`}>{fmtN(d.orderCount)}</td>
-                <td className={`px-3 ${pad} text-right text-[#6B7684]`}>{fmtPct(d.cvr)}</td>
-                <td className={`px-3 ${pad} text-right text-[#EF4444] font-medium`}>{fmtW(d.cost)}</td>
-                <td className={`px-3 ${pad} text-right text-[#10B981] font-medium`}>{fmtW(d.revenue)}</td>
+                <td className={`px-3 ${pad} text-right text-fg`}>{fmtN(d.clicks)}</td>
+                <td className={`px-3 ${pad} text-right text-fg-3`}>{fmtPct(d.ctr)}</td>
+                <td className={`px-3 ${pad} text-right text-fg-3`}>{fmtN(d.cpc)}</td>
+                <td className={`px-3 ${pad} text-right text-fg`}>{fmtN(d.orderCount)}</td>
+                <td className={`px-3 ${pad} text-right text-fg-3`}>{fmtPct(d.cvr)}</td>
+                <td className={`px-3 ${pad} text-right text-danger font-medium`}>{fmtW(d.cost)}</td>
+                <td className={`px-3 ${pad} text-right text-success font-medium`}>{fmtW(d.revenue)}</td>
                 <td className={`px-3 ${pad} text-right font-bold ${
-                  d.roas >= 300 ? 'text-[#10B981]' : d.roas >= 100 ? 'text-[#3182F6]' : 'text-[#EF4444]'
+                  d.roas >= 300 ? 'text-success' : d.roas >= 100 ? 'text-brand' : 'text-danger'
                 }`}>{d.roas.toFixed(0)}%</td>
                 {hasMemo && (
                   <td className={`px-3 ${pad}`}>
@@ -820,7 +822,7 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
                       value={memo}
                       onChange={(e) => onSaveMemo!(d.date, e.target.value)}
                       placeholder="메모"
-                      className="w-full min-w-[120px] h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:outline-none bg-transparent"
+                      className="w-full min-w-[120px] h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-line focus:border-brand focus:outline-none bg-transparent"
                     />
                   </td>
                 )}
@@ -828,7 +830,7 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
             );
           })}
           {rows.length === 0 && (
-            <tr><td colSpan={colSpan} className="px-3 py-6 text-center text-[11px] text-[#B0B8C1]">데이터 없음</td></tr>
+            <tr><td colSpan={colSpan} className="px-3 py-6 text-center text-[11px] text-fg-5">데이터 없음</td></tr>
           )}
         </tbody>
       </table>
@@ -838,22 +840,22 @@ function DailyTable({ rows, gran, dense = false, memos, onSaveMemo }: { rows: Da
 
 function KPICard({ icon, label, value, sub, accent = 'gray' }: { icon?: React.ReactNode; label: string; value: string; sub?: string; accent?: 'gray' | 'emerald' | 'red' | 'blue' | 'amber' }) {
   const badge = {
-    gray: 'bg-[#F2F4F6] text-[#6B7684]',
+    gray: 'bg-app text-fg-3',
     emerald: 'bg-green-50 text-green-600',
     red: 'bg-red-50 text-red-600',
-    blue: 'bg-blue-50 text-blue-600',
+    blue: 'bg-brand-bg text-brand',
     amber: 'bg-orange-50 text-orange-600',
   }[accent];
   return (
-    <div className="bg-white rounded-2xl border border-[#F2F4F6] p-4 flex flex-col gap-1">
+    <div className="bg-card rounded-2xl border border-line-2 p-4 flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${badge}`}>
           {icon}
         </div>
-        <span className="text-[12px] text-[#6B7684] font-medium">{label}</span>
+        <span className="text-[12px] text-fg-3 font-medium">{label}</span>
       </div>
-      <p className="text-[20px] font-bold text-[#191F28] mt-1">{value}</p>
-      {sub && <p className="text-[11px] text-[#B0B8C1]">{sub}</p>}
+      <p className="text-[20px] font-bold text-fg mt-1">{value}</p>
+      {sub && <p className="text-[11px] text-fg-5">{sub}</p>}
     </div>
   );
 }
@@ -904,12 +906,12 @@ function ProductCombobox({ value, onChange, options }: { value: string; onChange
             if (e.key === 'Escape') { setOpen(false); setQuery(value); }
           }}
           placeholder={`전체 (${options.length}) · 검색`}
-          className="h-9 pl-3 pr-7 rounded-lg border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] w-[280px]"
+          className="h-9 pl-3 pr-7 rounded-lg border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand w-[280px]"
         />
         {(value || query) && (
           <button
             onClick={() => { onChange(''); setQuery(''); setOpen(false); }}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full text-[#B0B8C1] hover:bg-[#F2F4F6] hover:text-[#6B7684] flex items-center justify-center text-[14px] leading-none"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full text-fg-5 hover:bg-app hover:text-fg-3 flex items-center justify-center text-[14px] leading-none"
             aria-label="필터 초기화"
           >
             ×
@@ -917,28 +919,28 @@ function ProductCombobox({ value, onChange, options }: { value: string; onChange
         )}
       </div>
       {open && (
-        <div className="absolute z-20 top-full mt-1 left-0 w-[340px] max-h-64 overflow-y-auto bg-white border border-[#E5E8EB] rounded-lg shadow-lg">
+        <div className="absolute z-20 top-full mt-1 left-0 w-[340px] max-h-64 overflow-y-auto bg-card border border-line rounded-lg shadow-lg">
           <button
             onClick={() => selectItem('')}
-            className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#F8FAFF] border-b border-[#F2F4F6] ${!value ? 'bg-[#EBF5FF] text-[#3182F6] font-medium' : 'text-[#6B7684]'}`}
+            className={`w-full px-3 py-2 text-left text-[12px] hover:bg-brand-soft border-b border-line-2 ${!value ? 'bg-[#EBF5FF] text-brand font-medium' : 'text-fg-3'}`}
           >
             전체 ({options.length})
           </button>
           {filtered.length === 0 && (
-            <div className="px-3 py-4 text-[12px] text-[#B0B8C1] text-center">일치하는 상품 없음</div>
+            <div className="px-3 py-4 text-[12px] text-fg-5 text-center">일치하는 상품 없음</div>
           )}
           {filtered.slice(0, 100).map((o) => (
             <button
               key={o}
               onClick={() => selectItem(o)}
-              className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#F8FAFF] truncate ${o === value ? 'bg-[#EBF5FF] text-[#3182F6] font-medium' : 'text-[#333D4B]'}`}
+              className={`w-full px-3 py-2 text-left text-[12px] hover:bg-brand-soft truncate ${o === value ? 'bg-[#EBF5FF] text-brand font-medium' : 'text-fg'}`}
               title={o}
             >
               {o}
             </button>
           ))}
           {filtered.length > 100 && (
-            <div className="px-3 py-1.5 text-[10px] text-[#B0B8C1] bg-[#FAFBFC] border-t border-[#F2F4F6]">
+            <div className="px-3 py-1.5 text-[10px] text-fg-5 bg-card-2 border-t border-line-2">
               상위 100개만 표시 · 더 좁히려면 검색어 입력
             </div>
           )}
@@ -950,11 +952,11 @@ function ProductCombobox({ value, onChange, options }: { value: string; onChange
 
 function GranToggle({ gran, onChange }: { gran: Gran; onChange: (g: Gran) => void }) {
   return (
-    <div className="flex gap-1 bg-[#F2F4F6] rounded-lg p-0.5">
+    <div className="flex gap-1 bg-app rounded-lg p-0.5">
       {(['daily', 'weekly', 'monthly'] as const).map((g) => (
         <button key={g} onClick={() => onChange(g)}
           className={`px-3 py-1.5 text-[12px] rounded-md font-medium transition-colors ${
-            gran === g ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#333D4B]'
+            gran === g ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
           }`}>
           {g === 'daily' ? '일별' : g === 'weekly' ? '주별' : '월별'}
         </button>
@@ -967,7 +969,7 @@ function SortTh({ k, label, cur, dir, onClick }: { k: SortKey; label: string; cu
   const active = cur === k;
   return (
     <th
-      className={`text-right px-3 py-2.5 font-medium cursor-pointer select-none hover:text-[#3182F6] ${active ? 'text-[#3182F6]' : ''}`}
+      className={`text-right px-3 py-2.5 font-medium cursor-pointer select-none hover:text-brand ${active ? 'text-brand' : ''}`}
       onClick={() => onClick(k)}
     >
       <span className="inline-flex items-center gap-0.5">

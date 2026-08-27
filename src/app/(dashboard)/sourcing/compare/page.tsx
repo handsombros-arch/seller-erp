@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, ExternalLink, Trophy, Minus, Plus, Save, FolderOpen, Trash2, X, Download } from 'lucide-react';
 import { getCategoryDimensions, matchDimension } from '@/lib/sourcing-dimensions';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 interface CustomRow {
   id: string;
   label: string;
@@ -26,11 +28,11 @@ type Item = any;
 
 function Badge({ children, color = 'gray' }: { children: React.ReactNode; color?: string }) {
   const colors: Record<string, string> = {
-    gray: 'bg-gray-100 text-gray-700',
+    gray: 'bg-card-2 text-fg-2',
     green: 'bg-green-100 text-green-700',
     yellow: 'bg-yellow-100 text-yellow-700',
     red: 'bg-red-100 text-red-700',
-    blue: 'bg-blue-100 text-blue-700',
+    blue: 'bg-brand-bg text-brand-hover',
     purple: 'bg-purple-100 text-purple-700',
   };
   return <span className={`px-2 py-0.5 rounded text-xs ${colors[color]}`}>{children}</span>;
@@ -102,7 +104,7 @@ function findWinner(values: (number | null)[], mode: WinnerMode): number | null 
 
 function WinnerCell({ children, isWinner, isMissing }: { children: React.ReactNode; isWinner?: boolean; isMissing?: boolean }) {
   if (isMissing) {
-    return <span className="inline-flex items-center gap-1 text-xs text-gray-400 italic"><Minus className="w-3 h-3" /> 미표기</span>;
+    return <span className="inline-flex items-center gap-1 text-xs text-fg-5 italic"><Minus className="w-3 h-3" /> 미표기</span>;
   }
   return (
     <span className={isWinner ? 'inline-flex items-center gap-1 font-bold text-green-700' : ''}>
@@ -397,8 +399,8 @@ export default function ComparePage() {
     return null;
   };
 
-  if (loading) return <div className="text-gray-500">로딩...</div>;
-  if (items.length === 0) return <div className="text-gray-500">선택된 상품이 없습니다.</div>;
+  if (loading) return <div className="text-fg-3">로딩...</div>;
+  if (items.length === 0) return <div className="text-fg-3">선택된 상품이 없습니다.</div>;
   if (!comparisons) return null;
 
   const c = comparisons;
@@ -406,19 +408,19 @@ export default function ComparePage() {
   return (
     <div className="space-y-6 max-w-full">
       <div className="flex items-center justify-between">
-        <Link href="/sourcing" className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900">
+        <Link href="/sourcing" className="flex items-center gap-1 text-sm text-fg-3 hover:text-fg">
           <ArrowLeft className="w-4 h-4" /> 목록으로
         </Link>
-        <div className="text-sm text-gray-500">{items.length}개 상품 비교 · 🏆 = 카테고리 1위</div>
+        <div className="text-sm text-fg-3">{items.length}개 상품 비교 · 🏆 = 카테고리 1위</div>
       </div>
 
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold">상품 비교</h1>
+          <PageHeader title="상품 비교" />
           {currentSnapshotId && currentSnapshotDate && (
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-fg-3 mt-1">
               스냅샷: <strong>{snapshots.find((s) => s.id === currentSnapshotId)?.name || '(이름 없음)'}</strong>
-              <span className="ml-2 text-gray-400">저장일 {new Date(currentSnapshotDate).toLocaleString('ko-KR')}</span>
+              <span className="ml-2 text-fg-5">저장일 {new Date(currentSnapshotDate).toLocaleString('ko-KR')}</span>
             </div>
           )}
         </div>
@@ -428,19 +430,19 @@ export default function ComparePage() {
           {snapshots.length > 0 && (
             <div className="relative">
               <details className="group">
-                <summary className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50 cursor-pointer list-none">
+                <summary className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-line bg-card hover:bg-card-2 cursor-pointer list-none">
                   <FolderOpen className="w-3.5 h-3.5" /> 불러오기 ({snapshots.length})
                 </summary>
-                <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg w-80 max-h-96 overflow-y-auto z-20">
+                <div className="absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg w-80 max-h-96 overflow-y-auto z-20">
                   {snapshots.map((s) => (
-                    <div key={s.id} className={`flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-blue-50 ${currentSnapshotId === s.id ? 'bg-blue-50' : ''}`}>
+                    <div key={s.id} className={`flex items-center justify-between px-3 py-2 text-xs border-b hover:bg-brand-bg ${currentSnapshotId === s.id ? 'bg-brand-bg' : ''}`}>
                       <button onClick={() => loadSnapshot(s.id)} className="flex-1 text-left">
-                        <div className="font-medium text-gray-900">{s.name}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">
+                        <div className="font-medium text-fg">{s.name}</div>
+                        <div className="text-[10px] text-fg-3 mt-0.5">
                           {new Date(s.created_at).toLocaleString('ko-KR')} · {s.item_ids.length}개 상품
                         </div>
                       </button>
-                      <button onClick={() => deleteSnapshot(s.id)} className="ml-2 p-1 text-gray-400 hover:text-red-600">
+                      <button onClick={() => deleteSnapshot(s.id)} className="ml-2 p-1 text-fg-5 hover:text-red-600">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
@@ -450,14 +452,14 @@ export default function ComparePage() {
             </div>
           )}
           {currentSnapshotId && (
-            <button onClick={newSnapshot} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">
+            <button onClick={newSnapshot} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-line bg-card hover:bg-card-2">
               <X className="w-3.5 h-3.5" /> 새로 시작
             </button>
           )}
           <button
             onClick={saveSnapshot}
             disabled={savingSnapshot}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-blue-500 bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-brand bg-brand text-white hover:bg-brand disabled:opacity-60"
           >
             <Save className="w-3.5 h-3.5" /> {currentSnapshotId ? '업데이트 저장' : '스냅샷 저장'}
           </button>
@@ -658,7 +660,7 @@ export default function ComparePage() {
               a.remove();
               URL.revokeObjectURL(url);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-green-600 bg-white text-green-700 hover:bg-green-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-green-600 bg-card text-green-700 hover:bg-green-50"
             title="비교 표 모든 섹션을 xlsx 로 다운로드"
           >
             <Download className="w-3.5 h-3.5" /> xlsx 다운로드
@@ -682,21 +684,21 @@ export default function ComparePage() {
         )}
       </div>
 
-      <div className="overflow-x-auto border rounded-lg bg-white">
+      <div className="overflow-x-auto border rounded-lg bg-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b sticky top-0 z-10">
+          <thead className="bg-card-2 border-b sticky top-0 z-10">
             <tr>
-              <th className="text-left px-3 py-2 font-medium w-32 sticky left-0 bg-gray-50 z-20"></th>
+              <th className="text-left px-3 py-2 font-medium w-32 sticky left-0 bg-card-2 z-20"></th>
               {items.map((it) => (
                 <th key={it.id} className="text-left px-3 py-3 font-normal min-w-[260px]" style={{verticalAlign: 'top'}}>
                   <div className="space-y-2">
                     {it.product_info?.thumbnailUrl && (
                       <img src={it.product_info.thumbnailUrl} alt="" className="w-20 h-20 object-cover rounded border" />
                     )}
-                    <Link href={`/sourcing/${it.id}`} className="text-blue-600 hover:underline font-medium block leading-tight">
+                    <Link href={`/sourcing/${it.id}`} className="text-brand hover:underline font-medium block leading-tight">
                       {it.product_info?.title || '(제목 없음)'}
                     </Link>
-                    <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:underline flex items-center gap-1">
+                    <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-xs text-fg-3 hover:underline flex items-center gap-1">
                       <ExternalLink className="w-3 h-3" /> 원본
                     </a>
                   </div>
@@ -719,7 +721,7 @@ export default function ComparePage() {
                   <div className="text-xs text-red-500 mt-0.5">+{((c.prices[i]! - c.prices[c.priceWinner]!)/c.prices[c.priceWinner]!*100).toFixed(0)}% 비쌈</div>
                 )}
                 {it.product_info?.originalPrice && it.product_info.originalPrice !== it.product_info.finalPrice && (
-                  <div className="text-xs text-gray-400 line-through">{it.product_info.originalPrice}</div>
+                  <div className="text-xs text-fg-5 line-through">{it.product_info.originalPrice}</div>
                 )}
               </div>
             )} />
@@ -748,7 +750,7 @@ export default function ComparePage() {
                 <div>
                   <div className="flex h-5 rounded overflow-hidden text-[10px]">
                     {sb.positive_pct > 0 && <div className="bg-green-500 text-white text-center" style={{width: `${sb.positive_pct}%`}}>{sb.positive_pct}</div>}
-                    {sb.neutral_pct > 0 && <div className="bg-gray-400 text-white text-center" style={{width: `${sb.neutral_pct}%`}}>{sb.neutral_pct}</div>}
+                    {sb.neutral_pct > 0 && <div className="bg-fg-5 text-white text-center" style={{width: `${sb.neutral_pct}%`}}>{sb.neutral_pct}</div>}
                     {sb.negative_pct > 0 && <div className="bg-red-500 text-white text-center" style={{width: `${sb.negative_pct}%`}}>{sb.negative_pct}</div>}
                   </div>
                 </div>
@@ -829,7 +831,7 @@ export default function ComparePage() {
                   {p.slice(0, 3).map((x: any, i: number) => (
                     <li key={i}>
                       {x.point}
-                      {x.severity && <span className="ml-1 text-gray-400">[{x.severity}]</span>}
+                      {x.severity && <span className="ml-1 text-fg-5">[{x.severity}]</span>}
                     </li>
                   ))}
                 </ul>
@@ -853,7 +855,7 @@ export default function ComparePage() {
               return (
                 <WinnerCell isWinner={i === c.weightWinner}>
                   {raw}
-                  {w.value !== parseFloat(String(raw).replace(/[^\d.]/g, '')) && <span className="ml-1 text-xs text-gray-400">({w.value}g)</span>}
+                  {w.value !== parseFloat(String(raw).replace(/[^\d.]/g, '')) && <span className="ml-1 text-xs text-fg-5">({w.value}g)</span>}
                 </WinnerCell>
               );
             }} />
@@ -864,7 +866,7 @@ export default function ComparePage() {
               return (
                 <WinnerCell isWinner={i === c.capacityWinner}>
                   {raw}
-                  {cap.value >= 1000 && <span className="ml-1 text-xs text-gray-400">({cap.value/1000}L)</span>}
+                  {cap.value >= 1000 && <span className="ml-1 text-xs text-fg-5">({cap.value/1000}L)</span>}
                 </WinnerCell>
               );
             }} />
@@ -875,7 +877,7 @@ export default function ComparePage() {
               return (
                 <div>
                   {raw}
-                  {parsed && <div className="text-xs text-gray-400 mt-0.5">부피: {(parsed.w * parsed.h * parsed.d / 1000).toFixed(1)}L</div>}
+                  {parsed && <div className="text-xs text-fg-5 mt-0.5">부피: {(parsed.w * parsed.h * parsed.d / 1000).toFixed(1)}L</div>}
                 </div>
               );
             }} />
@@ -932,11 +934,11 @@ export default function ComparePage() {
                       value={row.label}
                       onChange={(e) => updateCustomRow(row.id, { label: e.target.value })}
                       placeholder="항목명"
-                      className="flex-1 text-xs font-medium px-1.5 py-1 border border-gray-200 rounded bg-white min-w-0"
+                      className="flex-1 text-xs font-medium px-1.5 py-1 border border-line rounded bg-card min-w-0"
                     />
                     <button
                       onClick={() => removeCustomRow(row.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 shrink-0"
+                      className="p-1 text-fg-5 hover:text-red-600 shrink-0"
                       title="행 삭제"
                     >
                       <X className="w-3 h-3" />
@@ -950,17 +952,17 @@ export default function ComparePage() {
                       onChange={(e) => updateCustomCell(row.id, it.id, e.target.value)}
                       placeholder="값 입력..."
                       rows={1}
-                      className="w-full text-xs px-2 py-1 border border-gray-200 rounded bg-white resize-y min-h-[28px]"
+                      className="w-full text-xs px-2 py-1 border border-line rounded bg-card resize-y min-h-[28px]"
                     />
                   </td>
                 ))}
               </tr>
             ))}
             <tr>
-              <td colSpan={items.length + 1} className="px-3 py-2 bg-gray-50">
+              <td colSpan={items.length + 1} className="px-3 py-2 bg-card-2">
                 <button
                   onClick={addCustomRow}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  className="flex items-center gap-1 text-xs text-brand hover:text-blue-800 font-medium"
                 >
                   <Plus className="w-3.5 h-3.5" /> 수기 항목 추가
                 </button>
@@ -975,8 +977,8 @@ export default function ComparePage() {
 
 function Row({ label, items, render }: { label: string; items: Item[]; render: (it: Item, i: number) => React.ReactNode }) {
   return (
-    <tr className="hover:bg-gray-50">
-      <th className="text-left px-3 py-2 font-medium text-gray-600 bg-gray-50/50 sticky left-0 align-top whitespace-nowrap">{label}</th>
+    <tr className="hover:bg-card-2">
+      <th className="text-left px-3 py-2 font-medium text-fg-3 bg-gray-50/50 sticky left-0 align-top whitespace-nowrap">{label}</th>
       {items.map((it, i) => <td key={it.id} className="px-3 py-2 align-top">{render(it, i)}</td>)}
     </tr>
   );
@@ -985,18 +987,18 @@ function Row({ label, items, render }: { label: string; items: Item[]; render: (
 function SectionHead({ label, cols }: { label: string; cols: number }) {
   return (
     <tr>
-      <th colSpan={cols} className="text-left px-3 py-2 bg-gray-200 text-gray-700 font-bold text-xs uppercase tracking-wider sticky left-0">{label}</th>
+      <th colSpan={cols} className="text-left px-3 py-2 bg-line text-fg-2 font-bold text-xs uppercase tracking-wider sticky left-0">{label}</th>
     </tr>
   );
 }
 
 function Missing() {
-  return <span className="inline-flex items-center gap-1 text-xs text-gray-400 italic"><Minus className="w-3 h-3" /> 미표기</span>;
+  return <span className="inline-flex items-center gap-1 text-xs text-fg-5 italic"><Minus className="w-3 h-3" /> 미표기</span>;
 }
 
 function ScoreCell({ score }: { score?: number | null }) {
   if (score == null) return <Missing />;
-  const color = score >= 8 ? 'text-green-600' : score >= 6 ? 'text-blue-600' : score >= 4 ? 'text-yellow-600' : 'text-red-600';
+  const color = score >= 8 ? 'text-green-600' : score >= 6 ? 'text-brand' : score >= 4 ? 'text-yellow-600' : 'text-red-600';
   return <span className={`font-bold ${color}`}>{score}/10</span>;
 }
 
@@ -1012,17 +1014,17 @@ function DimensionCell({ d, isWinner, renamedFromOriginal, originals }: {
     ? 'bg-red-50 text-red-700'
     : d.verdict?.includes('강점')
       ? 'bg-green-50 text-green-700'
-      : 'bg-gray-100 text-gray-600';
+      : 'bg-card-2 text-fg-3';
   return (
     <div>
       {/* 1순위: 스펙 (있으면 크게) */}
       {hasSpec ? (
-        <div className={`text-sm leading-snug ${isWinner ? 'font-bold text-green-700' : 'text-gray-800'}`}>
+        <div className={`text-sm leading-snug ${isWinner ? 'font-bold text-green-700' : 'text-fg'}`}>
           {isWinner && <Trophy className="inline w-3.5 h-3.5 text-yellow-500 mr-1" />}
           📐 {spec}
         </div>
       ) : (
-        <div className="text-xs text-gray-400 italic">스펙 미표기</div>
+        <div className="text-xs text-fg-5 italic">스펙 미표기</div>
       )}
       {/* 2순위: 점수 + 판정 */}
       <div className="flex items-center gap-2 mt-1">
@@ -1030,7 +1032,7 @@ function DimensionCell({ d, isWinner, renamedFromOriginal, originals }: {
         {d.verdict && <span className={`text-[10px] px-1.5 py-0.5 rounded ${verdictColor}`}>{d.verdict}</span>}
       </div>
       {renamedFromOriginal && originals && (
-        <div className="text-[9px] text-gray-400 mt-0.5 italic">원본: {originals.join(' / ')}</div>
+        <div className="text-[9px] text-fg-5 mt-0.5 italic">원본: {originals.join(' / ')}</div>
       )}
     </div>
   );
@@ -1043,7 +1045,7 @@ function VerdictTag({ v }: { v?: string }) {
     risky: { label: '⚠️ 주의', color: 'bg-yellow-100 text-yellow-800' },
     avoid: { label: '❌ 비추천', color: 'bg-red-100 text-red-800' },
   };
-  const m = map[v] || { label: v, color: 'bg-gray-100 text-gray-700' };
+  const m = map[v] || { label: v, color: 'bg-card-2 text-fg-2' };
   return <span className={`px-2 py-1 rounded font-bold text-xs ${m.color}`}>{m.label}</span>;
 }
 
@@ -1053,8 +1055,8 @@ function SummaryCard({ label, winner, value }: { label: string; winner: any; val
       <div className="flex items-center gap-1 text-xs text-yellow-700 font-semibold mb-1">
         <Trophy className="w-3 h-3" /> {label}
       </div>
-      <div className="text-base font-bold text-gray-900 mb-1">{value}</div>
-      <Link href={`/sourcing/${winner.id}`} className="text-xs text-blue-600 hover:underline truncate block">
+      <div className="text-base font-bold text-fg mb-1">{value}</div>
+      <Link href={`/sourcing/${winner.id}`} className="text-xs text-brand hover:underline truncate block">
         {winner.product_info?.title || '(제목 없음)'}
       </Link>
     </div>

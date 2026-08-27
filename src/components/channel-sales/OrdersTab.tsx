@@ -88,43 +88,43 @@ function parseDateStr(v: string): string {
 // 주문상태 한글 통일 (원본값 → 한글)
 const STATUS_KO: Record<string, { label: string; cls: string }> = {
   // 공통
-  PAID:               { label: '결제완료',   cls: 'bg-blue-50 text-blue-600' },
+  PAID:               { label: '결제완료',   cls: 'bg-brand-bg text-brand' },
   DELIVERING:         { label: '배송중',     cls: 'bg-emerald-50 text-emerald-600' },
   DELIVERED:          { label: '배송완료',   cls: 'bg-green-50 text-green-700' },
   // 스마트스토어
   PURCHASE_DECIDED:   { label: '구매확정',   cls: 'bg-green-100 text-green-700' },
-  PAYED:              { label: '결제완료',   cls: 'bg-blue-50 text-blue-600' },
-  CANCELED:           { label: '취소',       cls: 'bg-gray-100 text-gray-500' },
+  PAYED:              { label: '결제완료',   cls: 'bg-brand-bg text-brand' },
+  CANCELED:           { label: '취소',       cls: 'bg-card-2 text-fg-3' },
   RETURNED:           { label: '반품완료',   cls: 'bg-red-100 text-red-600' },
   EXCHANGED:          { label: '교환완료',   cls: 'bg-purple-100 text-purple-500' },
   // 토스
   CONFIRMED_ORDER:    { label: '주문확인',   cls: 'bg-sky-50 text-sky-600' },
   PREPARING_PRODUCT:  { label: '상품준비중', cls: 'bg-amber-50 text-amber-600' },
-  CANCELED_PAYMENT:   { label: '결제취소',   cls: 'bg-gray-100 text-gray-500' },
+  CANCELED_PAYMENT:   { label: '결제취소',   cls: 'bg-card-2 text-fg-3' },
   PURCHASE_CONFIRMED: { label: '구매확정',   cls: 'bg-green-100 text-green-700' },
   SHIPPING:           { label: '배송중',     cls: 'bg-emerald-50 text-emerald-600' },
   // 쿠팡 Wing
   ACCEPT:             { label: '접수',       cls: 'bg-sky-50 text-sky-600' },
-  INSTRUCT:           { label: '발송지시',   cls: 'bg-blue-50 text-blue-600' },
+  INSTRUCT:           { label: '발송지시',   cls: 'bg-brand-bg text-brand' },
   // 쿠팡 그로스
   // PAID는 위에 공통
 };
 
 function statusLabel(raw: string | null): { label: string; cls: string } {
   if (!raw) return { label: '-', cls: '' };
-  return STATUS_KO[raw] ?? { label: raw, cls: 'bg-[#F2F4F6] text-[#6B7684]' };
+  return STATUS_KO[raw] ?? { label: raw, cls: 'bg-app text-fg-3' };
 }
 
 const CLAIM_LABEL: Record<string, { label: string; cls: string }> = {
   CANCEL_REQUEST:   { label: '취소요청',  cls: 'bg-yellow-100 text-yellow-700' },
-  CANCELED:         { label: '취소완료',  cls: 'bg-gray-100 text-gray-500' },
+  CANCELED:         { label: '취소완료',  cls: 'bg-card-2 text-fg-3' },
   RETURN_REQUEST:   { label: '반품요청',  cls: 'bg-orange-100 text-orange-600' },
   RETURNED:         { label: '반품완료',  cls: 'bg-red-100 text-red-600' },
   EXCHANGE_REQUEST: { label: '교환요청',  cls: 'bg-purple-100 text-purple-600' },
   EXCHANGED:        { label: '교환완료',  cls: 'bg-purple-100 text-purple-500' },
 };
 
-const inputCls = 'h-9 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors bg-white';
+const inputCls = 'h-9 px-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand transition-colors bg-card';
 const selectCls = inputCls + ' pr-8';
 
 // ─── Upload Dialog ────────────────────────────────────────────────────────────
@@ -261,43 +261,43 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">주문 엑셀 업로드</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">주문 엑셀 업로드</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
 
           {/* 양식 다운로드 */}
-          <div className="flex items-center justify-between bg-[#F8F9FB] rounded-xl px-4 py-3">
+          <div className="flex items-center justify-between bg-card-2 rounded-xl px-4 py-3">
             <div>
-              <p className="text-[13px] font-semibold text-[#191F28]">주문일자, 상품명, 옵션명, 주문번호, 수하인명, 수량, 배송비, 송장번호, 주문상태, 배송주소</p>
-              <p className="text-[12px] text-[#6B7684] mt-0.5">배송주소에 <strong>제주/도서산간</strong> 포함 시 배송비 +3,000원 자동 적용</p>
+              <p className="text-[13px] font-semibold text-fg">주문일자, 상품명, 옵션명, 주문번호, 수하인명, 수량, 배송비, 송장번호, 주문상태, 배송주소</p>
+              <p className="text-[12px] text-fg-3 mt-0.5">배송주소에 <strong>제주/도서산간</strong> 포함 시 배송비 +3,000원 자동 적용</p>
             </div>
             <a href="/api/csv-template?type=channel-orders" download
-              className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-[#3182F6] text-[12px] font-semibold text-[#3182F6] hover:bg-[#EBF1FE] transition-colors shrink-0 ml-3">
+              className="flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-brand text-[12px] font-semibold text-brand hover:bg-brand-bg transition-colors shrink-0 ml-3">
               <Download className="h-3.5 w-3.5" /> 양식
             </a>
           </div>
 
           {/* 파일 선택 */}
           {!rows.length && (
-            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[#E5E8EB] rounded-xl cursor-pointer hover:border-[#3182F6] hover:bg-[#EBF1FE]/30 transition-colors">
-              <Upload className="h-5 w-5 text-[#B0B8C1] mb-2" />
-              <span className="text-[13px] text-[#6B7684]">xlsx / xls / csv 파일 선택</span>
+            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-line rounded-xl cursor-pointer hover:border-brand hover:bg-brand-bg/30 transition-colors">
+              <Upload className="h-5 w-5 text-fg-5 mb-2" />
+              <span className="text-[13px] text-fg-3">xlsx / xls / csv 파일 선택</span>
               <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
             </label>
           )}
 
           {/* 컬럼 매핑 (파일 로드 후) */}
           {rows.length > 0 && (
-            <div className="bg-[#F8F9FB] rounded-xl p-4 space-y-3">
+            <div className="bg-card-2 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-[#191F28]">컬럼 매핑 확인</p>
+                <p className="text-[13px] font-semibold text-fg">컬럼 매핑 확인</p>
                 <button onClick={() => { setRows([]); setHeaders([]); setRawRows([]); }}
-                  className="text-[12px] text-[#6B7684] hover:text-red-500 flex items-center gap-1">
+                  className="text-[12px] text-fg-3 hover:text-red-500 flex items-center gap-1">
                   <X className="h-3.5 w-3.5" /> 파일 변경
                 </button>
               </div>
@@ -315,9 +315,9 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
                   { key: 'address', label: '배송주소 (제주감지)' },
                 ].map(({ key, label }) => (
                   <div key={key} className="space-y-0.5">
-                    <p className="text-[11px] font-medium text-[#6B7684]">{label}</p>
+                    <p className="text-[11px] font-medium text-fg-3">{label}</p>
                     <select value={colMap[key] ?? ''} onChange={(e) => setColMap((prev) => ({ ...prev, [key]: e.target.value }))}
-                      className="w-full h-8 px-2 rounded-lg border border-[#E5E8EB] text-[12px] bg-white focus:outline-none focus:border-[#3182F6]">
+                      className="w-full h-8 px-2 rounded-lg border border-line text-[12px] bg-card focus:outline-none focus:border-brand">
                       <option value="">선택 안 함</option>
                       {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                     </select>
@@ -330,22 +330,22 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           {/* 제주 할증 & 집계 */}
           {rows.length > 0 && (
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
-                <span className="text-[12px] text-[#6B7684]">총 주문</span>
-                <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(rows.length)}건</span>
+              <div className="flex items-center gap-2 px-3 py-2 bg-card-2 rounded-xl">
+                <span className="text-[12px] text-fg-3">총 주문</span>
+                <span className="text-[13px] font-bold text-fg">{formatNumber(rows.length)}건</span>
               </div>
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
-                <span className="text-[12px] text-[#6B7684]">수량 합계</span>
-                <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
+              <div className="flex items-center gap-2 px-3 py-2 bg-card-2 rounded-xl">
+                <span className="text-[12px] text-fg-3">수량 합계</span>
+                <span className="text-[13px] font-bold text-fg">{formatNumber(totalQty)}개</span>
               </div>
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#F8F9FB] rounded-xl">
-                <span className="text-[12px] text-[#6B7684]">배송비 합계</span>
-                <span className="text-[13px] font-bold text-[#191F28]">{formatCurrency(totalShip)}</span>
+              <div className="flex items-center gap-2 px-3 py-2 bg-card-2 rounded-xl">
+                <span className="text-[12px] text-fg-3">배송비 합계</span>
+                <span className="text-[13px] font-bold text-fg">{formatCurrency(totalShip)}</span>
               </div>
               {jejuCount > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 rounded-xl">
-                  <MapPin className="h-3.5 w-3.5 text-blue-500" />
-                  <span className="text-[12px] text-blue-700 font-medium">제주/도서산간 {jejuCount}건 (+{formatCurrency(jejuCount * JEJU_SURCHARGE)} 할증)</span>
+                <div className="flex items-center gap-1.5 px-3 py-2 bg-brand-bg rounded-xl">
+                  <MapPin className="h-3.5 w-3.5 text-brand" />
+                  <span className="text-[12px] text-brand-hover font-medium">제주/도서산간 {jejuCount}건 (+{formatCurrency(jejuCount * JEJU_SURCHARGE)} 할증)</span>
                 </div>
               )}
             </div>
@@ -354,42 +354,42 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           {/* 미리보기 */}
           {rows.length > 0 && (
             <div>
-              <p className="text-[13px] font-semibold text-[#191F28] mb-2">미리보기 (상위 5행)</p>
-              <div className="border border-[#F2F4F6] rounded-xl overflow-hidden overflow-x-auto">
+              <p className="text-[13px] font-semibold text-fg mb-2">미리보기 (상위 5행)</p>
+              <div className="border border-line-2 rounded-xl overflow-hidden overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                  <thead className="bg-card-2 border-b border-line-2">
                     <tr>
                       {['주문일자', '상품명', '옵션', '수하인', '수량', '배송비', '주문상태'].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-fg-3 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F2F4F6]">
+                  <tbody className="divide-y divide-line-2">
                     {rows.slice(0, 5).map((r, i) => (
                       <tr key={i} className={r.jeju_surcharge ? 'bg-blue-50/60' : ''}>
-                        <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.order_date}</td>
-                        <td className="px-3 py-2 text-[12px] text-[#191F28] max-w-[120px] truncate">{r.product_name}</td>
-                        <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.option_name || '-'}</td>
-                        <td className="px-3 py-2 text-[12px] text-[#191F28] whitespace-nowrap">
+                        <td className="px-3 py-2 text-[12px] text-fg-3 whitespace-nowrap">{r.order_date}</td>
+                        <td className="px-3 py-2 text-[12px] text-fg max-w-[120px] truncate">{r.product_name}</td>
+                        <td className="px-3 py-2 text-[12px] text-fg-3 whitespace-nowrap">{r.option_name || '-'}</td>
+                        <td className="px-3 py-2 text-[12px] text-fg whitespace-nowrap">
                           {r.recipient || '-'}
-                          {r.jeju_surcharge && <MapPin className="inline h-3 w-3 text-blue-500 ml-1" />}
+                          {r.jeju_surcharge && <MapPin className="inline h-3 w-3 text-brand ml-1" />}
                         </td>
-                        <td className="px-3 py-2 text-[12px] font-semibold text-[#191F28] whitespace-nowrap">{r.quantity}</td>
-                        <td className="px-3 py-2 text-[12px] text-[#191F28] whitespace-nowrap">
+                        <td className="px-3 py-2 text-[12px] font-semibold text-fg whitespace-nowrap">{r.quantity}</td>
+                        <td className="px-3 py-2 text-[12px] text-fg whitespace-nowrap">
                           {formatCurrency(r.shipping_cost)}
-                          {r.jeju_surcharge && <span className="text-[11px] text-blue-600 ml-1">(+3,000)</span>}
+                          {r.jeju_surcharge && <span className="text-[11px] text-brand ml-1">(+3,000)</span>}
                         </td>
-                        <td className="px-3 py-2 text-[12px] text-[#6B7684] whitespace-nowrap">{r.order_status || '-'}</td>
+                        <td className="px-3 py-2 text-[12px] text-fg-3 whitespace-nowrap">{r.order_status || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {rows.length > 5 && (
-                  <p className="text-center text-[11px] text-[#B0B8C1] py-2 border-t border-[#F2F4F6]">+ {rows.length - 5}행 더</p>
+                  <p className="text-center text-[11px] text-fg-5 py-2 border-t border-line-2">+ {rows.length - 5}행 더</p>
                 )}
               </div>
               {jejuCount > 0 && (
-                <p className="text-[11px] text-blue-600 mt-1.5 flex items-center gap-1">
+                <p className="text-[11px] text-brand mt-1.5 flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> 파란 행 = 제주/도서산간 +3,000원 할증 적용됨
                 </p>
               )}
@@ -404,9 +404,9 @@ function OrderUploadDialog({ open, channel, onClose, onUploaded }: {
           )}
 
           <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
+            <button onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">닫기</button>
             <button onClick={handleUpload} disabled={!rows.length || loading}
-              className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+              className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               업로드 ({rows.length}건)
             </button>
@@ -684,8 +684,8 @@ export default function OrdersTab() {
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-[15px] font-bold text-[#191F28]">주문 내역</h3>
-          <p className="text-[13px] text-[#6B7684] mt-0.5">스마트스토어, 토스 주문 데이터를 관리합니다</p>
+          <h3 className="text-[15px] font-bold text-fg">주문 내역</h3>
+          <p className="text-[13px] text-fg-3 mt-0.5">스마트스토어, 토스 주문 데이터를 관리합니다</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleClearData}
@@ -694,14 +694,14 @@ export default function OrdersTab() {
             {channel === 'all' ? '전체 초기화' : `${CHANNEL_OPTIONS.find(c => c.value === channel)?.label ?? channel} 초기화`}
           </button>
           <button onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors">
             <Upload className="h-4 w-4" /> 엑셀 업로드
           </button>
         </div>
       </div>
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           {/* 채널 */}
           <select value={channel} onChange={(e) => setChannel(e.target.value)} className={selectCls}>
@@ -732,40 +732,40 @@ export default function OrdersTab() {
               setDateTo(to.toISOString().slice(0, 10));
               setDatePreset(key);
             }}
-              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${datePreset === key ? 'bg-[#3182F6] text-white' : 'border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${datePreset === key ? 'bg-brand text-white' : 'border border-line text-fg-3 hover:bg-app'}`}>
               {label}
             </button>
           ))}
-          <span className="text-[11px] text-[#B0B8C1] mx-1">|</span>
+          <span className="text-[11px] text-fg-5 mx-1">|</span>
           <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDatePreset(''); }} className={inputCls} />
-          <span className="text-[12px] text-[#B0B8C1]">~</span>
+          <span className="text-[12px] text-fg-5">~</span>
           <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setDatePreset(''); }} className={inputCls} />
 
           {/* 검색 */}
           <div className="relative ml-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
             <input
               lang="ko"
               value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="상품명, 주문번호, 수하인 검색"
-              className="h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors w-56"
+              className="h-10 pl-8 pr-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand transition-colors w-56"
             />
           </div>
 
           {/* 컬럼 토글 */}
           <div className="relative" ref={colPanelRef}>
             <button onClick={() => setColPanelOpen((v) => !v)}
-              className="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              className="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-line text-[13px] text-fg-3 hover:bg-app transition-colors">
               <SlidersHorizontal className="h-3.5 w-3.5" /> 컬럼
             </button>
             {colPanelOpen && (
-              <div className="absolute right-0 top-11 z-30 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#F2F4F6] p-3 w-44">
-                <p className="text-[12px] font-semibold text-[#6B7684] mb-2">표시 항목</p>
+              <div className="absolute right-0 top-11 z-30 bg-card rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-line-2 p-3 w-44">
+                <p className="text-[12px] font-semibold text-fg-3 mb-2">표시 항목</p>
                 {ALL_COLS.map((c) => (
                   <label key={c.key} className="flex items-center gap-2 py-1.5 cursor-pointer">
                     <input type="checkbox" checked={visibleCols.has(c.key)} onChange={() => toggleCol(c.key)}
-                      className="w-3.5 h-3.5 rounded accent-[#3182F6]" />
-                    <span className="text-[13px] text-[#191F28]">{c.label}</span>
+                      className="w-3.5 h-3.5 rounded accent-brand" />
+                    <span className="text-[13px] text-fg">{c.label}</span>
                   </label>
                 ))}
               </div>
@@ -778,9 +778,9 @@ export default function OrdersTab() {
           {/* 상품명 드롭다운 */}
           {productOptions.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-[12px] text-[#6B7684] shrink-0">상품명:</span>
+              <span className="text-[12px] text-fg-3 shrink-0">상품명:</span>
               <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
-                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
+                className="h-8 px-2.5 rounded-xl border border-line text-[12px] text-fg bg-card focus:outline-none focus:border-brand transition-colors max-w-[200px]">
                 <option value="">전체</option>
                 {productOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -789,9 +789,9 @@ export default function OrdersTab() {
 
           {masterNameOptions.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-[12px] text-[#6B7684] shrink-0">관리용:</span>
+              <span className="text-[12px] text-fg-3 shrink-0">관리용:</span>
               <select value={selectedMasterName} onChange={(e) => setSelectedMasterName(e.target.value)}
-                className="h-8 px-2.5 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] transition-colors max-w-[200px]">
+                className="h-8 px-2.5 rounded-xl border border-line text-[12px] text-fg bg-card focus:outline-none focus:border-brand transition-colors max-w-[200px]">
                 <option value="">전체</option>
                 {masterNameOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -801,10 +801,10 @@ export default function OrdersTab() {
           {/* 주문상태 */}
           {statusOptions.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[12px] text-[#6B7684] shrink-0">주문상태:</span>
+              <span className="text-[12px] text-fg-3 shrink-0">주문상태:</span>
               {statusOptions.map((s) => (
                 <button key={s} onClick={() => toggleStatus(s)}
-                  className={`h-8 px-3 rounded-full text-[12px] font-medium transition-colors ${selectedStatuses.includes(s) ? 'bg-[#3182F6] text-white' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
+                  className={`h-8 px-3 rounded-full text-[12px] font-medium transition-colors ${selectedStatuses.includes(s) ? 'bg-brand text-white' : 'bg-app text-fg-3 hover:bg-line'}`}>
                   {statusLabel(s).label}
                 </button>
               ))}
@@ -814,60 +814,60 @@ export default function OrdersTab() {
       </div>
 
       {/* 테이블 */}
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed">
             <thead>
-              <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+              <tr className="bg-card-2 border-b border-line-2">
                 {visibleColList.map((c) => (
                   <th key={c.key} style={{ width: colWidths[c.key], minWidth: colWidths[c.key] }}
-                    className={`relative px-4 py-3 text-left text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none ${c.key === 'quantity' || c.key === 'shipping_cost' ? 'text-right' : ''}`}>
+                    className={`relative px-4 py-3 text-left text-[12px] font-semibold text-fg-3 whitespace-nowrap select-none ${c.key === 'quantity' || c.key === 'shipping_cost' ? 'text-right' : ''}`}>
                     {c.label}
                     <div onMouseDown={(e) => handleResizeStart(e, c.key)}
                       className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center group/resize">
-                      <div className="w-[2px] h-4 rounded-full bg-[#D1D5DB] group-hover/resize:bg-[#3182F6] group-hover/resize:h-full transition-all duration-100" />
+                      <div className="w-[2px] h-4 rounded-full bg-line group-hover/resize:bg-brand group-hover/resize:h-full transition-all duration-100" />
                     </div>
                   </th>
                 ))}
-                <th style={{ width: 44, minWidth: 44 }} className="px-2 py-3 text-center text-[12px] font-semibold text-[#6B7684]"></th>
+                <th style={{ width: 44, minWidth: 44 }} className="px-2 py-3 text-center text-[12px] font-semibold text-fg-3"></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={visibleColList.length} className="text-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#3182F6] mx-auto" />
+                  <Loader2 className="h-6 w-6 animate-spin text-brand mx-auto" />
                 </td></tr>
               ) : apiError ? (
                 <tr><td colSpan={visibleColList.length} className="text-center py-16">
                   <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-3" />
-                  <p className="text-[13px] font-medium text-[#6B7684]">데이터를 불러올 수 없습니다</p>
+                  <p className="text-[13px] font-medium text-fg-3">데이터를 불러올 수 없습니다</p>
                   <p className="text-[12px] text-red-500 mt-1 font-mono">{apiError}</p>
-                  <p className="text-[12px] text-[#B0B8C1] mt-2">Supabase에서 <strong>00013_channel_orders.sql</strong> 마이그레이션을 실행해 주세요.</p>
+                  <p className="text-[12px] text-fg-5 mt-2">Supabase에서 <strong>00013_channel_orders.sql</strong> 마이그레이션을 실행해 주세요.</p>
                 </td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={visibleColList.length} className="text-center py-16">
-                  <p className="text-[13px] font-medium text-[#6B7684]">주문 내역이 없습니다</p>
-                  <p className="text-[13px] text-[#B0B8C1] mt-1">위의 엑셀 업로드 버튼으로 주문 데이터를 불러오세요</p>
+                  <p className="text-[13px] font-medium text-fg-3">주문 내역이 없습니다</p>
+                  <p className="text-[13px] text-fg-5 mt-1">위의 엑셀 업로드 버튼으로 주문 데이터를 불러오세요</p>
                 </td></tr>
               ) : (
                 paged.map((o) => (
-                  <tr key={o.id} className={`border-b border-[#F2F4F6] hover:bg-[#FAFAFA] transition-colors ${o.jeju_surcharge ? 'bg-blue-50/30' : ''}`}>
+                  <tr key={o.id} className={`border-b border-line-2 hover:bg-card-2 transition-colors ${o.jeju_surcharge ? 'bg-blue-50/30' : ''}`}>
                     {visibleColList.map((c) => {
                       if (c.key === 'order_date') return (
                         <td key={c.key} className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-[13px] text-[#6B7684]">{formatDate(o.order_date)}</span>
+                          <span className="text-[13px] text-fg-3">{formatDate(o.order_date)}</span>
                         </td>
                       );
                       if (c.key === 'order_time') return (
                         <td key={c.key} className="px-4 py-3 whitespace-nowrap">
-                          <span className="text-[13px] text-[#6B7684] font-mono">{o.order_time ?? '-'}</span>
+                          <span className="text-[13px] text-fg-3 font-mono">{o.order_time ?? '-'}</span>
                         </td>
                       );
                       if (c.key === 'product_name') return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
-                          <p className="truncate text-[13px] font-medium text-[#191F28]">{o.product_name}</p>
+                          <p className="truncate text-[13px] font-medium text-fg">{o.product_name}</p>
                           {o.sku && (
-                            <span className="truncate text-[11px] font-mono text-[#3182F6] mt-0.5 block">{o.sku.sku_code}</span>
+                            <span className="truncate text-[11px] font-mono text-brand mt-0.5 block">{o.sku.sku_code}</span>
                           )}
                         </td>
                       );
@@ -876,20 +876,20 @@ export default function OrdersTab() {
                         return (
                           <td key={c.key} className="px-4 py-3 overflow-hidden">
                             {adminName
-                              ? <div className="truncate text-[13px] text-[#191F28]">{adminName}</div>
-                              : <span className="text-[12px] text-[#D0D5DD]">-</span>}
+                              ? <div className="truncate text-[13px] text-fg">{adminName}</div>
+                              : <span className="text-[12px] text-line">-</span>}
                           </td>
                         );
                       }
                       if (c.key === 'quantity') return (
-                        <td key={c.key} className="px-4 py-3 text-right text-[13px] font-semibold text-[#191F28] tabular-nums overflow-hidden">{formatNumber(o.quantity)}</td>
+                        <td key={c.key} className="px-4 py-3 text-right text-[13px] font-semibold text-fg tabular-nums overflow-hidden">{formatNumber(o.quantity)}</td>
                       );
                       if (c.key === 'shipping_cost') return (
                         <td key={c.key} className="px-4 py-3 text-right tabular-nums overflow-hidden">
                           <div className="truncate">
-                            <span className="text-[13px] text-[#191F28]">{formatCurrency(o.shipping_cost)}</span>
+                            <span className="text-[13px] text-fg">{formatCurrency(o.shipping_cost)}</span>
                             {o.jeju_surcharge && (
-                              <span className="ml-1.5 text-[11px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">+3,000</span>
+                              <span className="ml-1.5 text-[11px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded-full">+3,000</span>
                             )}
                           </div>
                         </td>
@@ -920,9 +920,9 @@ export default function OrdersTab() {
                       );}
                       if (c.key === 'recipient') return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
-                          <div className="truncate text-[13px] text-[#191F28]">
+                          <div className="truncate text-[13px] text-fg">
                             {o.recipient || '-'}
-                            {o.jeju_surcharge && <MapPin className="inline h-3 w-3 text-blue-500 ml-1 shrink-0" />}
+                            {o.jeju_surcharge && <MapPin className="inline h-3 w-3 text-brand ml-1 shrink-0" />}
                           </div>
                         </td>
                       );
@@ -930,16 +930,16 @@ export default function OrdersTab() {
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
                           {o.tracking_number
                             ? <a href={`https://www.ilogen.com/web/personal/trace/${o.tracking_number}`} target="_blank" rel="noreferrer"
-                                className="truncate block text-[13px] text-[#3182F6] hover:underline font-mono">
+                                className="truncate block text-[13px] text-brand hover:underline font-mono">
                                 {o.tracking_number}
                               </a>
-                            : <span className="text-[13px] text-[#B0B8C1]">-</span>}
+                            : <span className="text-[13px] text-fg-5">-</span>}
                         </td>
                       );
                       const val = (o as unknown as Record<string, unknown>)[c.key];
                       return (
                         <td key={c.key} className="px-4 py-3 overflow-hidden">
-                          <div className="truncate text-[13px] text-[#6B7684]">{val != null ? String(val) : '-'}</div>
+                          <div className="truncate text-[13px] text-fg-3">{val != null ? String(val) : '-'}</div>
                         </td>
                       );
                     })}
@@ -955,7 +955,7 @@ export default function OrdersTab() {
                           });
                           setOrders((prev) => prev.filter((x) => x.id !== o.id));
                         }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-[#B0B8C1] hover:text-orange-500 transition-colors mx-auto"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-fg-5 hover:text-orange-500 transition-colors mx-auto"
                       >
                         <PackageX className="h-3.5 w-3.5" />
                       </button>
@@ -970,27 +970,27 @@ export default function OrdersTab() {
 
         {/* 페이지네이션 */}
         {!loading && !apiError && filtered.length > 0 && (
-          <div className="px-5 py-3 border-t border-[#F2F4F6] flex items-center justify-between flex-wrap gap-2">
+          <div className="px-5 py-3 border-t border-line-2 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-[12px] text-[#6B7684]">페이지당</span>
+              <span className="text-[12px] text-fg-3">페이지당</span>
               <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="h-8 px-2 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6]">
+                className="h-8 px-2 rounded-xl border border-line text-[12px] text-fg bg-card focus:outline-none focus:border-brand">
                 {[20, 50, 100, 200].map((n) => <option key={n} value={n}>{n}개</option>)}
                 <option value={0}>전체</option>
               </select>
-              <span className="text-[12px] text-[#B0B8C1]">총 {filtered.length}건</span>
+              <span className="text-[12px] text-fg-5">총 {filtered.length}건</span>
             </div>
             {pageSize !== 0 && totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(1)} disabled={page === 1}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">«</button>
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-line text-[13px] text-fg-3 hover:bg-app disabled:opacity-30 disabled:cursor-not-allowed">«</button>
                 <button onClick={() => setPage((p) => p - 1)} disabled={page === 1}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
-                <span className="text-[12px] text-[#6B7684] px-3">{page} / {totalPages}</span>
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-line text-[13px] text-fg-3 hover:bg-app disabled:opacity-30 disabled:cursor-not-allowed">‹</button>
+                <span className="text-[12px] text-fg-3 px-3">{page} / {totalPages}</span>
                 <button onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">›</button>
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-line text-[13px] text-fg-3 hover:bg-app disabled:opacity-30 disabled:cursor-not-allowed">›</button>
                 <button onClick={() => setPage(totalPages)} disabled={page >= totalPages}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-[#E5E8EB] text-[13px] text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-30 disabled:cursor-not-allowed">»</button>
+                  className="h-8 w-8 flex items-center justify-center rounded-lg border border-line text-[13px] text-fg-3 hover:bg-app disabled:opacity-30 disabled:cursor-not-allowed">»</button>
               </div>
             )}
           </div>
@@ -1005,12 +1005,12 @@ export default function OrdersTab() {
 
       {/* 플로팅 합계 바 */}
       {filtered.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-white border border-[#E5E8EB] shadow-[0_4px_20px_rgba(0,0,0,0.12)] rounded-2xl px-5 py-3">
-          <span className="text-[12px] font-semibold text-[#6B7684]">합계 {formatNumber(filtered.length)}건</span>
-          {jejuCount > 0 && <span className="text-[11px] text-blue-600 font-medium">제주 {jejuCount}건</span>}
-          <div className="w-px h-4 bg-[#E5E8EB]" />
-          <span className="text-[13px] text-[#6B7684]">수량 <span className="font-bold text-[#191F28]">{formatNumber(totalQty)}개</span></span>
-          <span className="text-[13px] text-[#6B7684]">배송비 <span className="font-bold text-[#191F28]">{formatCurrency(totalShip)}</span></span>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-card border border-line shadow-[0_4px_20px_rgba(0,0,0,0.12)] rounded-2xl px-5 py-3">
+          <span className="text-[12px] font-semibold text-fg-3">합계 {formatNumber(filtered.length)}건</span>
+          {jejuCount > 0 && <span className="text-[11px] text-brand font-medium">제주 {jejuCount}건</span>}
+          <div className="w-px h-4 bg-line" />
+          <span className="text-[13px] text-fg-3">수량 <span className="font-bold text-fg">{formatNumber(totalQty)}개</span></span>
+          <span className="text-[13px] text-fg-3">배송비 <span className="font-bold text-fg">{formatCurrency(totalShip)}</span></span>
         </div>
       )}
 
@@ -1018,20 +1018,20 @@ export default function OrdersTab() {
       {exchangeOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setExchangeOrder(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-96 p-6">
-            <h3 className="text-[15px] font-bold text-[#191F28] mb-2">교환 처리</h3>
-            <div className="bg-[#F8F9FB] rounded-xl p-3 mb-4 space-y-1">
-              <p className="text-[13px] font-medium text-[#191F28]">{exchangeOrder.product_name}</p>
-              <p className="text-[12px] text-[#6B7684]">주문번호: {exchangeOrder.order_number}</p>
-              <p className="text-[12px] text-[#6B7684]">수량: {exchangeOrder.quantity}개 → 원래 상품 재고 복구됨</p>
+          <div className="relative bg-card rounded-2xl shadow-xl w-96 p-6">
+            <h3 className="text-[15px] font-bold text-fg mb-2">교환 처리</h3>
+            <div className="bg-card-2 rounded-xl p-3 mb-4 space-y-1">
+              <p className="text-[13px] font-medium text-fg">{exchangeOrder.product_name}</p>
+              <p className="text-[12px] text-fg-3">주문번호: {exchangeOrder.order_number}</p>
+              <p className="text-[12px] text-fg-3">수량: {exchangeOrder.quantity}개 → 원래 상품 재고 복구됨</p>
             </div>
-            <p className="text-[13px] font-medium text-[#191F28] mb-2">교환 발송 상품 선택 (재고 차감)</p>
+            <p className="text-[13px] font-medium text-fg mb-2">교환 발송 상품 선택 (재고 차감)</p>
             <input
               autoFocus
               value={exchangeSearch}
               onChange={(e) => setExchangeSearch(e.target.value)}
               placeholder="상품명 또는 SKU 검색..."
-              className="w-full h-10 px-3 text-[13px] border border-[#E5E8EB] rounded-xl outline-none focus:border-[#3182F6] mb-2"
+              className="w-full h-10 px-3 text-[13px] border border-line rounded-xl outline-none focus:border-brand mb-2"
             />
             <div className="max-h-[20rem] overflow-y-auto space-y-0.5 mb-4">
               {skuOptions
@@ -1039,13 +1039,13 @@ export default function OrdersTab() {
                 .slice(0, 30)
                 .map(o => (
                   <button key={o.id} onClick={() => setExchangeSkuId(o.id)}
-                    className={`w-full text-left px-3 py-2 text-[12px] rounded-lg transition-colors ${exchangeSkuId === o.id ? 'bg-[#EBF1FE] text-[#3182F6] font-medium' : 'text-[#191F28] hover:bg-[#F2F4F6]'}`}>
+                    className={`w-full text-left px-3 py-2 text-[12px] rounded-lg transition-colors ${exchangeSkuId === o.id ? 'bg-brand-bg text-brand font-medium' : 'text-fg hover:bg-app'}`}>
                     {o.label}
                   </button>
                 ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setExchangeOrder(null)} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">취소</button>
+              <button onClick={() => setExchangeOrder(null)} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">취소</button>
               <button onClick={processExchange} disabled={!exchangeSkuId || exchangeLoading}
                 className="flex-1 h-10 rounded-xl bg-purple-500 text-white text-[13px] font-semibold hover:bg-purple-600 disabled:opacity-60">
                 {exchangeLoading ? '처리 중...' : '교환 처리'}
@@ -1056,7 +1056,7 @@ export default function OrdersTab() {
       )}
 
       {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}

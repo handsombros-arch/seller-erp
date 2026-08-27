@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RefreshCw, Play, ExternalLink } from 'lucide-react';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 type Keyword = {
   id: string;
   keyword: string;
@@ -102,19 +104,19 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
     loadMeta();
   }
 
-  if (loading) return <div className="p-6 text-gray-500">로딩...</div>;
-  if (!keyword) return <div className="p-6 text-gray-500">키워드를 찾을 수 없습니다.</div>;
+  if (loading) return <div className="p-6 text-fg-3">로딩...</div>;
+  if (!keyword) return <div className="p-6 text-fg-3">키워드를 찾을 수 없습니다.</div>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/rank-tracking/keywords" className="text-gray-500 hover:text-gray-900">
+          <Link href="/rank-tracking/keywords" className="text-fg-3 hover:text-fg">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold">{keyword.keyword}</h1>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <PageHeader title={keyword.keyword} />
+            <p className="text-xs text-fg-3 mt-0.5">
               Top {keyword.top_n} · 자동 간격: {keyword.auto_interval_minutes ? `${keyword.auto_interval_minutes}분` : '수동'}
               {keyword.last_error && <span className="ml-2 text-red-600">· {keyword.last_error}</span>}
             </p>
@@ -135,7 +137,7 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <div className="bg-white border rounded-lg p-4">
+      <div className="bg-card border rounded-lg p-4">
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium">스냅샷 시점:</label>
           <select
@@ -151,13 +153,13 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
               </option>
             ))}
           </select>
-          <span className="text-xs text-gray-500">총 {snapshots.length}개 이력</span>
+          <span className="text-xs text-fg-3">총 {snapshots.length}개 이력</span>
         </div>
       </div>
 
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-card border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-card-2 border-b">
             <tr>
               <th className="text-left px-3 py-2 font-medium w-12">#</th>
               <th className="text-left px-3 py-2 font-medium">상품</th>
@@ -168,15 +170,15 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
             </tr>
           </thead>
           <tbody>
-            {itemsLoading && <tr><td colSpan={6} className="text-center py-6 text-gray-500">불러오는 중...</td></tr>}
+            {itemsLoading && <tr><td colSpan={6} className="text-center py-6 text-fg-3">불러오는 중...</td></tr>}
             {!itemsLoading && items.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-500">
+              <tr><td colSpan={6} className="text-center py-6 text-fg-3">
                 {snapshots.length === 0 ? '스냅샷을 찍으려면 "지금 스냅샷" 클릭 (워커 기동 필요)' : '항목 없음'}
               </td></tr>
             )}
             {!itemsLoading && items.map((it) => (
-              <tr key={it.rank} className="border-b hover:bg-gray-50">
-                <td className="px-3 py-2 font-semibold text-gray-700">{it.rank}</td>
+              <tr key={it.rank} className="border-b hover:bg-card-2">
+                <td className="px-3 py-2 font-semibold text-fg-2">{it.rank}</td>
                 <td className="px-3 py-2">
                   <div className="flex gap-2 items-start">
                     {it.thumbnail_url && (
@@ -184,7 +186,7 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="font-medium line-clamp-2">{it.title || '(제목 없음)'}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">pid: {it.product_id}</div>
+                      <div className="text-[10px] text-fg-5 mt-0.5">pid: {it.product_id}</div>
                     </div>
                   </div>
                 </td>
@@ -193,17 +195,17 @@ export default function KeywordSnapshotDetailPage({ params }: { params: Promise<
                 </td>
                 <td className="px-3 py-2 text-xs">
                   {it.rating != null && <div>★ {it.rating}</div>}
-                  {it.review_count != null && <div className="text-gray-500">({it.review_count.toLocaleString()})</div>}
+                  {it.review_count != null && <div className="text-fg-3">({it.review_count.toLocaleString()})</div>}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-1 flex-wrap">
                     {it.is_ad && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">광고</span>}
-                    {it.is_rocket && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">로켓</span>}
+                    {it.is_rocket && <span className="text-[10px] bg-brand-bg text-brand-hover px-1.5 py-0.5 rounded">로켓</span>}
                   </div>
                 </td>
                 <td className="px-3 py-2 text-right">
                   {it.product_url && (
-                    <a href={it.product_url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-gray-200 rounded">
+                    <a href={it.product_url} target="_blank" rel="noopener noreferrer" className="inline-block p-1 hover:bg-line rounded">
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}

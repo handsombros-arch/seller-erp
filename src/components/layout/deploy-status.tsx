@@ -112,7 +112,7 @@ export function DeployStatus({ deployedSha }: { deployedSha?: string | null }) {
     return (
       <span
         title={`배포된 버전: ${short}`}
-        className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-[#6E6E73] border border-black/[0.08] bg-white"
+        className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] text-fg-3 border border-black/[0.08] bg-card"
       >
         <Check className="w-3 h-3 text-emerald-500" />
         배포됨 {short}

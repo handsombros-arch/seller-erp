@@ -23,11 +23,12 @@ export async function GET() {
       .from('sourcing_batch_items')
       .select('batch_id, analysis:sourcing_analyses(status)')
       .in('batch_id', ids);
-    for (const l of (links || []) as Array<{ batch_id: string; analysis: { status: string } | null }>) {
+    for (const l of (links || []) as unknown as Array<{ batch_id: string; analysis: { status: string } | { status: string }[] | null }>) {
       const bid = l.batch_id;
       if (!statsByBatch[bid]) statsByBatch[bid] = { total: 0, done: 0, failed: 0, pending: 0, crawling: 0, analyzing: 0 };
       statsByBatch[bid].total++;
-      const s = (l.analysis?.status ?? '') as keyof typeof statsByBatch[string];
+      const a = Array.isArray(l.analysis) ? l.analysis[0] : l.analysis;
+      const s = (a?.status ?? '') as keyof typeof statsByBatch[string];
       if (s in statsByBatch[bid]) statsByBatch[bid][s]++;
     }
   }

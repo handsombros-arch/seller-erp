@@ -11,6 +11,8 @@ import OrdersTab from '@/components/channel-sales/OrdersTab';
 import OrdersChartTab from '@/components/channel-sales/OrdersChartTab';
 import DummyShipmentsTab from '@/components/channel-sales/DummyShipmentsTab';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CHANNELS = [
@@ -23,9 +25,9 @@ const CHANNELS = [
 
 const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
   smartstore:     { label: '스마트스토어', cls: 'bg-green-50 text-green-700' },
-  toss:           { label: '토스',         cls: 'bg-blue-50 text-blue-700' },
+  toss:           { label: '토스',         cls: 'bg-brand-bg text-brand-hover' },
   coupang_direct: { label: '쿠팡 Wing',     cls: 'bg-yellow-50 text-yellow-700' },
-  other:          { label: '기타',         cls: 'bg-[#F2F4F6] text-[#6B7684]' },
+  other:          { label: '기타',         cls: 'bg-app text-fg-3' },
 };
 
 function yesterday() {
@@ -52,11 +54,11 @@ function Dialog({ open, onClose, title, children, wide }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-h-[90vh] overflow-y-auto ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
@@ -65,8 +67,8 @@ function Dialog({ open, onClose, title, children, wide }: {
   );
 }
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
-const selectCls = `${inputCls} bg-white`;
+const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
+const selectCls = `${inputCls} bg-card`;
 
 // ─── Manual Add Dialog ───────────────────────────────────────────────────────
 
@@ -145,7 +147,7 @@ function AddDialog({ open, onClose, onSaved }: {
     <Dialog open={open} onClose={onClose} title="판매 수동 추가">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">채널 *</label>
+          <label className="text-[13px] font-medium text-fg">채널 *</label>
           <select value={form.channel} onChange={(e) => set('channel', e.target.value)} className={selectCls}>
             {CHANNELS.filter((c) => c.value !== 'all').map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -153,7 +155,7 @@ function AddDialog({ open, onClose, onSaved }: {
           </select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">SKU 연결 <span className="text-[#B0B8C1] font-normal">(선택)</span></label>
+          <label className="text-[13px] font-medium text-fg">SKU 연결 <span className="text-fg-5 font-normal">(선택)</span></label>
           <select value={form.sku_id} onChange={(e) => handleSkuSelect(e.target.value)} className={selectCls}>
             <option value="">SKU 선택 (선택사항)</option>
             {skus.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -161,30 +163,30 @@ function AddDialog({ open, onClose, onSaved }: {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">상품명 *</label>
+            <label className="text-[13px] font-medium text-fg">상품명 *</label>
             <input lang="ko" className={inputCls} value={form.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="상품명" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">옵션</label>
+            <label className="text-[13px] font-medium text-fg">옵션</label>
             <input lang="ko" className={inputCls} value={form.option_name} onChange={(e) => set('option_name', e.target.value)} placeholder="색상, 사이즈 등" />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">수량 *</label>
+            <label className="text-[13px] font-medium text-fg">수량 *</label>
             <input type="number" min="1" className={inputCls} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="0" required />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">매출액 <span className="text-[#B0B8C1] font-normal">(원)</span></label>
+            <label className="text-[13px] font-medium text-fg">매출액 <span className="text-fg-5 font-normal">(원)</span></label>
             <input type="number" min="0" className={inputCls} value={form.revenue} onChange={(e) => set('revenue', e.target.value)} placeholder="0" />
           </div>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">판매일 *</label>
+          <label className="text-[13px] font-medium text-fg">판매일 *</label>
           <input type="date" className={inputCls} value={form.sale_date} onChange={(e) => set('sale_date', e.target.value)} required />
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} 저장
           </button>
         </div>
@@ -448,7 +450,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
       {step === 1 ? (
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">판매 채널 *</label>
+            <label className="text-[13px] font-medium text-fg">판매 채널 *</label>
             <select value={channel} onChange={(e) => setChannel(e.target.value)} className={selectCls}>
               {CHANNELS.filter((c) => c.value !== 'all').map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -456,13 +458,13 @@ function UploadDialog({ open, onClose, onUploaded }: {
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">판매 기간 *</label>
+            <label className="text-[13px] font-medium text-fg">판매 기간 *</label>
             <div className="flex items-center gap-2">
               <input type="date" className={inputCls} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-              <span className="text-[13px] text-[#6B7684] shrink-0">~</span>
+              <span className="text-[13px] text-fg-3 shrink-0">~</span>
               <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </div>
-            <p className="text-[11px] text-[#B0B8C1]">엑셀 파일에 날짜가 없으므로 업로드 시 직접 지정합니다.</p>
+            <p className="text-[11px] text-fg-5">엑셀 파일에 날짜가 없으므로 업로드 시 직접 지정합니다.</p>
           </div>
 
           {/* 최근 업로드 이력 */}
@@ -471,15 +473,15 @@ function UploadDialog({ open, onClose, onUploaded }: {
             return (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-[#6B7684]" />
-                  <p className="text-[13px] font-semibold text-[#191F28]">최근 업로드 이력</p>
+                  <Clock className="h-3.5 w-3.5 text-fg-3" />
+                  <p className="text-[13px] font-semibold text-fg">최근 업로드 이력</p>
                   {overlapping.length > 0 && (
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                       {overlapping.length}건 기간 겹침
                     </span>
                   )}
                 </div>
-                <div className="border border-[#F2F4F6] rounded-xl overflow-hidden divide-y divide-[#F2F4F6]">
+                <div className="border border-line-2 rounded-xl overflow-hidden divide-y divide-line-2">
                   {batches.slice(0, 8).map((b) => {
                     const isOverlap = dateFrom && dateTo && doOverlap(dateFrom, dateTo, b.period_start, b.period_end);
                     const periodLabel = b.period_start === b.period_end
@@ -490,18 +492,18 @@ function UploadDialog({ open, onClose, onUploaded }: {
                         <div className="flex items-center gap-2 min-w-0">
                           {isOverlap && <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
                           <div className="min-w-0">
-                            <span className="text-[13px] font-medium text-[#191F28]">{periodLabel}</span>
-                            <span className="ml-2 text-[12px] text-[#6B7684]">{b.row_count}건</span>
+                            <span className="text-[13px] font-medium text-fg">{periodLabel}</span>
+                            <span className="ml-2 text-[12px] text-fg-3">{b.row_count}건</span>
                             {isOverlap && <span className="ml-2 text-[11px] font-semibold text-amber-600">기간 겹침 — 중복 주의</span>}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[11px] text-[#B0B8C1]">{relativeTime(b.uploaded_at)}</span>
+                          <span className="text-[11px] text-fg-5">{relativeTime(b.uploaded_at)}</span>
                           <button
                             onClick={() => handleDeleteBatch(b.batch_id)}
                             disabled={deletingBatch === b.batch_id}
                             title="이 배치 전체 삭제"
-                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors disabled:opacity-40"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors disabled:opacity-40"
                           >
                             {deletingBatch === b.batch_id
                               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -529,11 +531,11 @@ function UploadDialog({ open, onClose, onUploaded }: {
           })()}
 
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">파일 선택 *</label>
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[#E5E8EB] rounded-xl cursor-pointer hover:border-[#3182F6] hover:bg-[#EBF1FE]/30 transition-colors">
-              <Upload className="h-6 w-6 text-[#B0B8C1] mb-2" />
-              <span className="text-[13px] text-[#6B7684]">xlsx / xls 파일을 선택하세요</span>
-              <span className="text-[11px] text-[#B0B8C1] mt-0.5">쿠팡, 스마트스토어, 토스 판매내역 지원</span>
+            <label className="text-[13px] font-medium text-fg">파일 선택 *</label>
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-line rounded-xl cursor-pointer hover:border-brand hover:bg-brand-bg/30 transition-colors">
+              <Upload className="h-6 w-6 text-fg-5 mb-2" />
+              <span className="text-[13px] text-fg-3">xlsx / xls 파일을 선택하세요</span>
+              <span className="text-[11px] text-fg-5 mt-0.5">쿠팡, 스마트스토어, 토스 판매내역 지원</span>
               <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
             </label>
           </div>
@@ -553,8 +555,8 @@ function UploadDialog({ open, onClose, onUploaded }: {
           )}
 
           {/* Column mapping */}
-          <div className="bg-[#F8F9FB] rounded-xl p-4 space-y-3">
-            <p className="text-[13px] font-semibold text-[#191F28]">컬럼 매핑</p>
+          <div className="bg-card-2 rounded-xl p-4 space-y-3">
+            <p className="text-[13px] font-semibold text-fg">컬럼 매핑</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 { label: '상품명 컬럼 *', val: nameCol, set: setNameCol },
@@ -563,9 +565,9 @@ function UploadDialog({ open, onClose, onUploaded }: {
                 { label: '매출액 컬럼',   val: revCol,  set: setRevCol },
               ].map(({ label, val, set: setter }) => (
                 <div key={label} className="space-y-1">
-                  <label className="text-[12px] font-medium text-[#6B7684]">{label}</label>
+                  <label className="text-[12px] font-medium text-fg-3">{label}</label>
                   <select value={val} onChange={(e) => setter(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-lg border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6]">
+                    className="w-full h-10 px-2.5 rounded-lg border border-line text-[13px] bg-card focus:outline-none focus:border-brand">
                     <option value="">선택 안 함</option>
                     {headers.map((h) => <option key={h} value={h}>{h}</option>)}
                   </select>
@@ -580,9 +582,9 @@ function UploadDialog({ open, onClose, onUploaded }: {
               {Object.entries(channelStats).map(([ch, stat]) => {
                 const badge = CHANNEL_BADGE[ch] ?? CHANNEL_BADGE.other;
                 return (
-                  <div key={ch} className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${ch === 'coupang_direct' ? 'border-yellow-200 bg-yellow-50' : 'border-[#E5E8EB] bg-[#F8F9FB]'}`}>
+                  <div key={ch} className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${ch === 'coupang_direct' ? 'border-yellow-200 bg-yellow-50' : 'border-line bg-card-2'}`}>
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
-                    <span className="text-[12px] font-medium text-[#191F28]">{stat.count}건 · {formatNumber(stat.qty)}개</span>
+                    <span className="text-[12px] font-medium text-fg">{stat.count}건 · {formatNumber(stat.qty)}개</span>
                     {ch === 'coupang_direct' && <span className="text-[11px] text-yellow-700">쿠팡재고 차감</span>}
                   </div>
                 );
@@ -594,32 +596,32 @@ function UploadDialog({ open, onClose, onUploaded }: {
           {parsedRows.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[13px] font-semibold text-[#191F28]">미리보기</p>
-                <div className="flex items-center gap-3 text-[12px] text-[#6B7684]">
+                <p className="text-[13px] font-semibold text-fg">미리보기</p>
+                <div className="flex items-center gap-3 text-[12px] text-fg-3">
                   <span className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> SKU매칭 {parsedRows.filter((r) => r.matched).length}</span>
                   <span className="flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5 text-amber-500" /> 미매칭 {parsedRows.filter((r) => !r.matched).length}</span>
-                  <span className="font-medium text-[#191F28]">총 {parsedRows.length}건</span>
+                  <span className="font-medium text-fg">총 {parsedRows.length}건</span>
                 </div>
               </div>
-              <div className="border border-[#F2F4F6] rounded-xl overflow-hidden">
+              <div className="border border-line-2 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                 <div className="min-w-[560px]">
-                <div className="grid grid-cols-[1.8fr_1.2fr_0.7fr_1fr_1fr_1.8fr] gap-2 px-3 py-2 bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                <div className="grid grid-cols-[1.8fr_1.2fr_0.7fr_1fr_1fr_1.8fr] gap-2 px-3 py-2 bg-card-2 border-b border-line-2">
                   {['상품명', '옵션', '수량', '매출액', '채널', 'SKU 연결'].map((h) => (
-                    <span key={h} className="text-[11px] font-semibold text-[#6B7684]">{h}</span>
+                    <span key={h} className="text-[11px] font-semibold text-fg-3">{h}</span>
                   ))}
                 </div>
-                <div className="max-h-64 overflow-y-auto divide-y divide-[#F2F4F6]">
+                <div className="max-h-64 overflow-y-auto divide-y divide-line-2">
                   {parsedRows.map((r, i) => {
                     const ch = r.row_channel ?? channel;
                     const badge = CHANNEL_BADGE[ch] ?? CHANNEL_BADGE.other;
                     const matchedSku = r.sku_id ? skuOptions.find((s) => s.id === r.sku_id) : null;
                     return (
                       <div key={i} className={`grid grid-cols-[1.8fr_1.2fr_0.7fr_1fr_1fr_1.8fr] gap-2 px-3 py-2 items-center ${!r.matched ? 'bg-amber-50/40' : ''}`}>
-                        <span className="text-[12px] text-[#191F28] truncate">{r.product_name}</span>
-                        <span className="text-[12px] text-[#6B7684] truncate">{r.option_name || '-'}</span>
-                        <span className="text-[12px] font-semibold text-[#191F28]">{formatNumber(r.quantity)}</span>
-                        <span className="text-[12px] text-[#6B7684]">{r.revenue ? formatCurrency(r.revenue) : '-'}</span>
+                        <span className="text-[12px] text-fg truncate">{r.product_name}</span>
+                        <span className="text-[12px] text-fg-3 truncate">{r.option_name || '-'}</span>
+                        <span className="text-[12px] font-semibold text-fg">{formatNumber(r.quantity)}</span>
+                        <span className="text-[12px] text-fg-3">{r.revenue ? formatCurrency(r.revenue) : '-'}</span>
                         <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full w-fit ${badge.cls}`}>{badge.label}</span>
                         {/* SKU 매칭 셀 */}
                         {r.matched && matchedSku ? (
@@ -631,7 +633,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
                           <select
                             value={r.sku_id ?? ''}
                             onChange={(e) => manualMatchSku(i, e.target.value)}
-                            className="w-full h-8 px-1.5 rounded-lg border border-amber-300 bg-white text-[11px] text-[#191F28] focus:outline-none focus:border-[#3182F6] transition-colors"
+                            className="w-full h-8 px-1.5 rounded-lg border border-amber-300 bg-card text-[11px] text-fg focus:outline-none focus:border-brand transition-colors"
                           >
                             <option value="">SKU 선택...</option>
                             {skuOptions.map((s) => (
@@ -646,7 +648,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
                 </div>
                 </div>
               </div>
-              <p className="text-[11px] text-[#B0B8C1] mt-1.5">주황 행 = 자동 매칭 실패. 드롭다운으로 직접 SKU를 선택하세요.</p>
+              <p className="text-[11px] text-fg-5 mt-1.5">주황 행 = 자동 매칭 실패. 드롭다운으로 직접 SKU를 선택하세요.</p>
             </div>
           )}
 
@@ -668,7 +670,7 @@ function UploadDialog({ open, onClose, onUploaded }: {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmOverwrite(false)}
-                  className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-white transition-colors">
+                  className="flex-1 h-10 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-card transition-colors">
                   취소
                 </button>
                 <button onClick={() => handleUpload(true)} disabled={loading}
@@ -682,9 +684,9 @@ function UploadDialog({ open, onClose, onUploaded }: {
 
           {!confirmOverwrite && (
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setStep(1)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">이전</button>
+              <button onClick={() => setStep(1)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">이전</button>
               <button onClick={() => handleUpload(false)} disabled={loading || !parsedRows.length}
-                className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+                className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                 업로드 완료 ({parsedRows.length}건)
               </button>
@@ -744,42 +746,42 @@ function InsightsUploadDialog({ open, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-lg max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">셀러 인사이트 업로드</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-lg max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">셀러 인사이트 업로드</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 text-[12px] text-[#3182F6] space-y-1">
+          <div className="bg-brand-bg rounded-xl px-4 py-3 text-[12px] text-brand space-y-1">
             <p className="font-semibold">Wing &gt; 셀러 인사이트 &gt; 상품 성과 &gt; 기간 선택 후 다운로드</p>
             <p>다운로드한 VENDOR_ITEM_METRICS Excel 파일을 업로드하면 SKU별 판매량이 자동 업데이트됩니다.</p>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-[#191F28]">보고서 기간</label>
+            <label className="block text-[13px] font-medium text-fg">보고서 기간</label>
             <div className="flex items-center gap-2">
               <input type="date" value={startDate} max={endDate}
                 onChange={(e) => { setStartDate(e.target.value); setResult(null); }}
-                className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
-              <span className="text-[13px] text-[#B0B8C1]">~</span>
+                className="flex-1 h-10 px-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand" />
+              <span className="text-[13px] text-fg-5">~</span>
               <input type="date" value={endDate} min={startDate}
                 onChange={(e) => { setEndDate(e.target.value); setResult(null); }}
-                className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] focus:outline-none focus:border-[#3182F6]" />
+                className="flex-1 h-10 px-3 rounded-xl border border-line text-[13px] text-fg focus:outline-none focus:border-brand" />
             </div>
-            <p className="text-[12px] text-[#6B7684]">
-              {days}일 기간 · <span className="font-medium text-[#3182F6]">{period === '7d' ? '7일 판매량' : '30일 판매량'}</span> 필드 업데이트
+            <p className="text-[12px] text-fg-3">
+              {days}일 기간 · <span className="font-medium text-brand">{period === '7d' ? '7일 판매량' : '30일 판매량'}</span> 필드 업데이트
             </p>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-[#191F28]">Excel 파일 *</label>
-            <label className="flex items-center justify-center gap-2 h-24 border-2 border-dashed border-[#E5E8EB] rounded-xl cursor-pointer hover:border-[#3182F6] hover:bg-[#F8FAFF] transition-colors">
+            <label className="block text-[13px] font-medium text-fg">Excel 파일 *</label>
+            <label className="flex items-center justify-center gap-2 h-24 border-2 border-dashed border-line rounded-xl cursor-pointer hover:border-brand hover:bg-brand-soft transition-colors">
               <input type="file" accept=".xlsx,.xls" className="sr-only"
                 onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }} />
               {file ? (
-                <p className="text-[13px] font-medium text-[#3182F6]">{file.name}</p>
+                <p className="text-[13px] font-medium text-brand">{file.name}</p>
               ) : (
-                <p className="text-[13px] text-[#B0B8C1]">클릭하여 파일 선택 (.xlsx)</p>
+                <p className="text-[13px] text-fg-5">클릭하여 파일 선택 (.xlsx)</p>
               )}
             </label>
           </div>
@@ -788,14 +790,14 @@ function InsightsUploadDialog({ open, onClose, onDone }: {
             <div className="bg-[#F0FDF4] rounded-xl px-4 py-3 space-y-1">
               <p className="text-[13px] font-semibold text-green-700">SKU {result.updated}개 업데이트 완료</p>
               {result.return_count > 0 && (
-                <p className="text-[12px] text-blue-600">반품재판매 {result.return_count}건 제외됨 (재고예측 미반영)</p>
+                <p className="text-[12px] text-brand">반품재판매 {result.return_count}건 제외됨 (재고예측 미반영)</p>
               )}
               {result.unmatched_count > 0 && (
                 <>
                   <p className="text-[12px] text-amber-600">미매칭 {result.unmatched_count}건 — 마스터 시트 &gt; 상품명 별칭에 등록하면 다음에 자동 매칭됩니다</p>
                   <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                     {result.unmatched.map((u: any, i: number) => (
-                      <p key={i} className="text-[11px] text-[#6B7684]">· {u.optionName} ({u.qty}개)</p>
+                      <p key={i} className="text-[11px] text-fg-3">· {u.optionName} ({u.qty}개)</p>
                     ))}
                   </div>
                 </>
@@ -809,7 +811,7 @@ function InsightsUploadDialog({ open, onClose, onDone }: {
             </button>
           ) : (
           <button onClick={handleUpload} disabled={!file || loading}
-            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {loading ? '처리 중...' : '업로드 및 판매량 업데이트'}
           </button>
@@ -870,32 +872,32 @@ function CoupangSyncDialog({ open, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">쿠팡 그로스 데이터 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">쿠팡 그로스 데이터 동기화</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 text-[12px] text-[#3182F6]">
+          <div className="bg-brand-bg rounded-xl px-4 py-3 text-[12px] text-brand">
             선택 기간의 주문 + 반품 데이터를 쿠팡 Open API에서 가져옵니다.
             중복 주문은 자동으로 건너뜁니다.
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-[#191F28]">기간</label>
+            <label className="block text-[13px] font-medium text-fg">기간</label>
             <div className="flex items-center gap-2">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10" />
-              <span className="text-[#B0B8C1]">~</span>
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" />
+              <span className="text-fg-5">~</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10" />
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" />
             </div>
           </div>
           {error && <p className="text-[12px] text-red-500">{error}</p>}
           {result && <p className="text-[12px] text-green-600 font-medium">{result}</p>}
           <button onClick={handleSync} disabled={syncing}
-            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {syncing ? '동기화 중...' : '동기화 시작'}
           </button>
@@ -939,11 +941,11 @@ function NaverSyncDialog({ open, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">네이버 스마트스토어 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">네이버 스마트스토어 동기화</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
@@ -951,13 +953,13 @@ function NaverSyncDialog({ open, onClose, onDone }: {
             선택 기간의 주문 데이터를 네이버 커머스 API에서 가져옵니다. 중복 주문은 자동으로 건너뜁니다.
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-[#191F28]">기간</label>
+            <label className="block text-[13px] font-medium text-fg">기간</label>
             <div className="flex items-center gap-2">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
-              <span className="text-[#B0B8C1]">~</span>
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
+              <span className="text-fg-5">~</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
             </div>
           </div>
           {error  && <p className="text-[12px] text-red-500">{error}</p>}
@@ -1008,31 +1010,31 @@ function TossSyncDialog({ open, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">토스쇼핑 동기화</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full mx-4 max-w-md">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">토스쇼핑 동기화</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div className="bg-[#F0F4FF] rounded-xl px-4 py-3 text-[12px] text-blue-700">
+          <div className="bg-[#F0F4FF] rounded-xl px-4 py-3 text-[12px] text-brand-hover">
             선택 기간의 주문 데이터를 토스쇼핑 API에서 가져옵니다. 최대 31일 범위.
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-[#191F28]">기간</label>
+            <label className="block text-[13px] font-medium text-fg">기간</label>
             <div className="flex items-center gap-2">
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
-              <span className="text-[#B0B8C1]">~</span>
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
+              <span className="text-fg-5">~</span>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                className="flex-1 h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+                className="flex-1 h-11 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
             </div>
           </div>
           {error  && <p className="text-[12px] text-red-500">{error}</p>}
-          {result && <p className="text-[12px] text-blue-600 font-medium">{result}</p>}
+          {result && <p className="text-[12px] text-brand font-medium">{result}</p>}
           <button onClick={handleSync} disabled={syncing}
-            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-blue-600 text-white text-[13px] font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
+            className="flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {syncing ? '동기화 중...' : '동기화 시작'}
           </button>
@@ -1071,18 +1073,18 @@ const RETURN_CHANNELS = [
 
 const RETURN_CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
   smartstore: { label: '스마트스토어', cls: 'bg-green-50 text-green-700' },
-  toss:       { label: '토스',         cls: 'bg-blue-50 text-blue-700' },
+  toss:       { label: '토스',         cls: 'bg-brand-bg text-brand-hover' },
   coupang:    { label: '쿠팡 Wing',    cls: 'bg-yellow-50 text-yellow-700' },
 };
 
 const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   // 취소
-  CANCEL_COMPLETED:        { label: '취소완료',   cls: 'bg-gray-100 text-gray-600' },
-  CANCEL_DONE:             { label: '취소완료',   cls: 'bg-gray-100 text-gray-600' },
+  CANCEL_COMPLETED:        { label: '취소완료',   cls: 'bg-card-2 text-fg-3' },
+  CANCEL_DONE:             { label: '취소완료',   cls: 'bg-card-2 text-fg-3' },
   CANCEL_REQUEST:          { label: '취소요청',   cls: 'bg-yellow-50 text-yellow-700' },
-  CANCEL_REVOKED_REQUEST:  { label: '취소철회',   cls: 'bg-gray-50 text-gray-500' },
+  CANCEL_REVOKED_REQUEST:  { label: '취소철회',   cls: 'bg-card-2 text-fg-3' },
   CANCEL_REJECTED_REQUEST: { label: '취소거절',   cls: 'bg-red-50 text-red-600' },
-  CANCELED_PAYMENT:        { label: '결제취소',   cls: 'bg-gray-100 text-gray-600' },
+  CANCELED_PAYMENT:        { label: '결제취소',   cls: 'bg-card-2 text-fg-3' },
   // 반품
   RETURN_CREATED:          { label: '반품접수',   cls: 'bg-orange-50 text-orange-700' },
   RETURN_COMPLETED:        { label: '반품완료',   cls: 'bg-red-100 text-red-700' },
@@ -1090,7 +1092,7 @@ const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   RETURN_DONE:             { label: '반품완료',   cls: 'bg-red-100 text-red-700' },
   RETURN_PROCESSING:       { label: '반품처리중', cls: 'bg-orange-50 text-orange-600' },
   RETURN_REJECTED_REQUEST: { label: '반품거절',   cls: 'bg-red-50 text-red-500' },
-  RETURN_REVOKED_REQUEST:  { label: '반품철회',   cls: 'bg-gray-50 text-gray-500' },
+  RETURN_REVOKED_REQUEST:  { label: '반품철회',   cls: 'bg-card-2 text-fg-3' },
   RETURN_REJECT:           { label: '반품거절',   cls: 'bg-red-50 text-red-500' },
   REFUND_REQUEST:          { label: '환불요청',   cls: 'bg-orange-50 text-orange-600' },
   REFUND_DONE:             { label: '환불완료',   cls: 'bg-red-100 text-red-700' },
@@ -1104,7 +1106,7 @@ const RETURN_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   // 교환
   EXCHANGE_CREATED:        { label: '교환접수',   cls: 'bg-purple-50 text-purple-600' },
   EXCHANGE_COMPLETED:      { label: '교환완료',   cls: 'bg-purple-100 text-purple-700' },
-  EXCHANGE_REVOKED_REQUEST:{ label: '교환철회',   cls: 'bg-gray-50 text-gray-500' },
+  EXCHANGE_REVOKED_REQUEST:{ label: '교환철회',   cls: 'bg-card-2 text-fg-3' },
 };
 
 function ReturnsTab() {
@@ -1167,7 +1169,7 @@ function ReturnsTab() {
         <div className="flex gap-1.5">
           {RETURN_CHANNELS.map((c) => (
             <button key={c.value} onClick={() => setCh(c.value)}
-              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${ch === c.value ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${ch === c.value ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
               {c.label}
             </button>
           ))}
@@ -1175,19 +1177,19 @@ function ReturnsTab() {
         {/* 날짜 */}
         <div className="flex items-center gap-2">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
-          <span className="text-[#B0B8C1] text-[13px]">~</span>
+            className="h-10 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
+          <span className="text-fg-5 text-[13px]">~</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]" />
+            className="h-10 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand" />
           {(from || to) && (
             <button onClick={() => { setFrom(''); setTo(''); }}
-              className="h-10 w-9 flex items-center justify-center rounded-xl border border-[#E5E8EB] hover:bg-[#F2F4F6]">
-              <X className="h-4 w-4 text-[#6B7684]" />
+              className="h-10 w-9 flex items-center justify-center rounded-xl border border-line hover:bg-app">
+              <X className="h-4 w-4 text-fg-3" />
             </button>
           )}
         </div>
         <input lang="ko" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품명 검색"
-          className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-48" />
+          className="h-10 px-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand w-48" />
       </div>
 
       {/* 유형 필터 + 상태 필터 + 통계 */}
@@ -1195,15 +1197,15 @@ function ReturnsTab() {
         <div className="flex gap-1.5">
           {([['all', '전체', returns.length], ['return', '반품', returnCount], ['cancel', '취소', cancelCount], ['exchange', '교환', exchangeCount]] as const).map(([v, label, cnt]) => (
             <button key={v} onClick={() => { setTypeFilter(v); setStatusFilter('all'); }}
-              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${typeFilter === v ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
-              {label} <span className={`ml-1 ${typeFilter === v ? 'text-blue-200' : 'text-[#B0B8C1]'}`}>{cnt}</span>
+              className={`h-10 px-3 rounded-xl text-[12px] font-medium transition-colors ${typeFilter === v ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
+              {label} <span className={`ml-1 ${typeFilter === v ? 'text-blue-200' : 'text-fg-5'}`}>{cnt}</span>
             </button>
           ))}
         </div>
         {/* 상태 필터 */}
         {statusOptions.length > 0 && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] text-[#191F28] focus:outline-none focus:border-[#3182F6]">
+            className="h-10 px-3 rounded-xl border border-line text-[12px] text-fg focus:outline-none focus:border-brand">
             <option value="all">상태 전체</option>
             {statusOptions.map((s) => {
               const st = RETURN_STATUS_LABELS[s];
@@ -1212,58 +1214,58 @@ function ReturnsTab() {
           </select>
         )}
         {filtered.length > 0 && (
-          <div className="bg-white rounded-xl px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3 ml-auto">
-            <span className="text-[12px] text-[#6B7684]">{filtered.length}건</span>
-            <span className="text-[13px] font-bold text-[#191F28]">{formatNumber(totalQty)}개</span>
+          <div className="bg-card rounded-xl px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex items-center gap-3 ml-auto">
+            <span className="text-[12px] text-fg-3">{filtered.length}건</span>
+            <span className="text-[13px] font-bold text-fg">{formatNumber(totalQty)}개</span>
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" />
+            <Loader2 className="h-5 w-5 animate-spin text-brand" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <RotateCcw className="h-8 w-8 text-[#D0D5DD] mb-3" />
-            <p className="text-[13px] font-medium text-[#6B7684]">반품/취소 데이터가 없습니다</p>
-            <p className="text-[12px] text-[#B0B8C1] mt-1">우측 상단에서 채널별 동기화를 실행하세요</p>
+            <RotateCcw className="h-8 w-8 text-line mb-3" />
+            <p className="text-[13px] font-medium text-fg-3">반품/취소 데이터가 없습니다</p>
+            <p className="text-[12px] text-fg-5 mt-1">우측 상단에서 채널별 동기화를 실행하세요</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                <tr className="bg-card-2 border-b border-line-2">
                   {['반품일', '채널', '주문상품번호', '구매자', '상품명', '옵션', '수량', '사유', '유형', '상태'].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left px-4 py-3 text-[12px] font-semibold text-fg-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F6]">
+              <tbody className="divide-y divide-line-2">
                 {filtered.map((r) => {
-                  const badge = RETURN_CHANNEL_BADGE[r.channel] ?? { label: r.channel, cls: 'bg-[#F2F4F6] text-[#6B7684]' };
+                  const badge = RETURN_CHANNEL_BADGE[r.channel] ?? { label: r.channel, cls: 'bg-app text-fg-3' };
                   return (
-                    <tr key={r.id} className="hover:bg-[#FAFAFA] transition-colors">
-                      <td className="px-4 py-3 text-[13px] text-[#191F28] whitespace-nowrap">{formatDate(r.returned_at)}</td>
+                    <tr key={r.id} className="hover:bg-card-2 transition-colors">
+                      <td className="px-4 py-3 text-[13px] text-fg whitespace-nowrap">{formatDate(r.returned_at)}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
                       </td>
-                      <td className="px-4 py-3 text-[12px] text-[#6B7684] font-mono">{r.order_number ?? '-'}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#191F28]">{r.recipient ?? '-'}</td>
+                      <td className="px-4 py-3 text-[12px] text-fg-3 font-mono">{r.order_number ?? '-'}</td>
+                      <td className="px-4 py-3 text-[13px] text-fg">{r.recipient ?? '-'}</td>
                       <td className="px-4 py-3">
-                        <p className="text-[13px] font-medium text-[#191F28]">{r.product_name}</p>
+                        <p className="text-[13px] font-medium text-fg">{r.product_name}</p>
                         {r.sku && (
-                          <p className="text-[11px] text-[#B0B8C1] font-mono mt-0.5">{r.sku.sku_code}</p>
+                          <p className="text-[11px] text-fg-5 font-mono mt-0.5">{r.sku.sku_code}</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[13px] text-[#6B7684]">{r.option_name ?? '-'}</td>
-                      <td className="px-4 py-3 text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(r.quantity)}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6B7684] max-w-[160px] truncate">{r.return_reason ?? '-'}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6B7684]">
+                      <td className="px-4 py-3 text-[13px] text-fg-3">{r.option_name ?? '-'}</td>
+                      <td className="px-4 py-3 text-[13px] font-semibold text-fg tabular-nums">{formatNumber(r.quantity)}</td>
+                      <td className="px-4 py-3 text-[13px] text-fg-3 max-w-[160px] truncate">{r.return_reason ?? '-'}</td>
+                      <td className="px-4 py-3 text-[13px] text-fg-3">
                         {getType(r) === 'exchange' ? '교환' : getType(r) === 'cancel' ? '취소' : '반품'}
                       </td>
-                      <td className="px-4 py-3 text-[13px] text-[#191F28]">
+                      <td className="px-4 py-3 text-[13px] text-fg">
                         {(() => {
                           const st = RETURN_STATUS_LABELS[r.status ?? ''] ?? RETURN_STATUS_LABELS[r.claim_status ?? ''];
                           return st?.label ?? r.status ?? r.claim_status ?? '-';
@@ -1330,8 +1332,8 @@ export default function ChannelSalesPage() {
       <div className="space-y-3">
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div className="min-w-0">
-            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">채널 판매</h2>
-            <p className="mt-1 text-[12px] text-[#6B7684]">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
+            <PageHeader title="채널 판매" />
+            <p className="mt-1 text-[12px] text-fg-3">스마트스토어, 토스, 쿠팡 등 채널별 판매 수량을 기록합니다</p>
           </div>
           {/* 뷰별 액션 버튼 */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -1355,26 +1357,26 @@ export default function ChannelSalesPage() {
                   setSyncAllLoading(false);
                 }}
                 disabled={syncAllLoading}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-[13px] font-medium text-white hover:bg-[#1B64DA] transition-colors whitespace-nowrap disabled:opacity-50">
+                className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-[13px] font-medium text-white hover:bg-brand-hover transition-colors whitespace-nowrap disabled:opacity-50">
                 {syncAllLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {syncAllLoading ? '동기화 중...' : '전체 동기화'}
               </button>
               <button onClick={() => setNaverOpen(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg hover:bg-app transition-colors whitespace-nowrap">
                 <RefreshCw className="h-4 w-4" /> 네이버
               </button>
               <button onClick={() => setTossOpen(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg hover:bg-app transition-colors whitespace-nowrap">
                 <RefreshCw className="h-4 w-4" /> 토스
               </button>
               <button onClick={() => setSyncOpen(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg hover:bg-app transition-colors whitespace-nowrap">
                 <RefreshCw className="h-4 w-4" /> 쿠팡
               </button>
             </>}
             {viewMode === 'orders' && (
               <button onClick={() => setInsightsOpen(true)}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#D1D5DB] text-[13px] font-medium text-[#191F28] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+                className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg hover:bg-app transition-colors whitespace-nowrap">
                 <Upload className="h-4 w-4" /> 인사이트
               </button>
             )}
@@ -1383,10 +1385,10 @@ export default function ChannelSalesPage() {
       </div>
 
       {/* ── 탭바 ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-app rounded-xl p-1 overflow-x-auto">
         {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품'], ['dummy', '가배송']] as const).map(([mode, label]) => (
           <button key={mode} onClick={() => setViewMode(mode)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${viewMode === mode ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${viewMode === mode ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
             {label}
           </button>
         ))}
@@ -1404,7 +1406,7 @@ export default function ChannelSalesPage() {
       <CoupangSyncDialog open={syncOpen} onClose={() => setSyncOpen(false)} onDone={(msg) => { showToast(msg); setSyncOpen(false); load(); }} />
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}

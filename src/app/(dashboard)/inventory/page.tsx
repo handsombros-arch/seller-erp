@@ -14,8 +14,10 @@ import {
 import { SearchSelect } from '@/components/ui/search-select';
 import dynamic from 'next/dynamic';
 
-const TrendsTab = dynamic(() => import('@/components/inventory/TrendsTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
-const ForecastTab = dynamic(() => import('@/components/inventory/ForecastTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div> });
+import { PageHeader } from '@/components/ui/page-header';
+
+const TrendsTab = dynamic(() => import('@/components/inventory/TrendsTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
+const ForecastTab = dynamic(() => import('@/components/inventory/ForecastTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,16 +36,16 @@ const ROW_PY: Record<RowHeight, string> = { compact: 'py-1.5', normal: 'py-3', c
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   if (!active) return <ChevronsUpDown className="h-3 w-3 opacity-30 shrink-0" />;
   return dir === 'asc'
-    ? <ChevronUp className="h-3 w-3 text-[#3182F6] shrink-0" />
-    : <ChevronDown className="h-3 w-3 text-[#3182F6] shrink-0" />;
+    ? <ChevronUp className="h-3 w-3 text-brand shrink-0" />
+    : <ChevronDown className="h-3 w-3 text-brand shrink-0" />;
 }
 
 function RowHeightButtons({ value, onChange }: { value: RowHeight; onChange: (v: RowHeight) => void }) {
   return (
-    <div className="flex items-center gap-1 border border-[#E5E8EB] rounded-xl overflow-hidden">
+    <div className="flex items-center gap-1 border border-line rounded-xl overflow-hidden">
       {(['compact', 'normal', 'comfortable'] as RowHeight[]).map((h) => (
         <button key={h} onClick={() => onChange(h)}
-          className={`h-7 px-2.5 text-[11px] font-medium transition-colors ${value === h ? 'bg-[#3182F6] text-white' : 'text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+          className={`h-7 px-2.5 text-[11px] font-medium transition-colors ${value === h ? 'bg-brand text-white' : 'text-fg-3 hover:bg-app'}`}>
           {h === 'compact' ? '좁게' : h === 'normal' ? '보통' : '넓게'}
         </button>
       ))}
@@ -60,11 +62,11 @@ function Dialog({ open, onClose, title, children, wide }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full ${wide ? 'max-w-2xl' : 'max-w-md'} mx-4`}>
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28] tracking-[-0.02em]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] transition-colors">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className={`relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full ${wide ? 'max-w-2xl' : 'max-w-md'} mx-4`}>
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg tracking-[-0.02em]">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app transition-colors">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
@@ -84,7 +86,7 @@ function AdjustTabStrip({ current, onChange }: { current: AdjustTab; onChange: (
     { key: 'physical', label: '월별 실사', hint: '실사 기준으로 덮어쓰기' },
   ];
   return (
-    <div className="flex items-center gap-1 mb-4 -mt-1 border-b border-[#F2F4F6]">
+    <div className="flex items-center gap-1 mb-4 -mt-1 border-b border-line-2">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -93,8 +95,8 @@ function AdjustTabStrip({ current, onChange }: { current: AdjustTab; onChange: (
           title={t.hint}
           className={`px-3 h-9 text-[12px] border-b-2 transition-colors ${
             current === t.key
-              ? 'border-[#0071E3] text-[#0071E3] font-semibold'
-              : 'border-transparent text-[#6B7684] hover:text-[#191F28]'
+              ? 'border-brand text-brand font-semibold'
+              : 'border-transparent text-fg-3 hover:text-fg'
           }`}
         >
           {t.label}
@@ -179,17 +181,17 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
     } finally { setLoading(false); }
   }
 
-  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+  const selectCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
 
   return (
     <Dialog open={open} onClose={onClose} title="재고 조정" wide>
       {onTabChange && <AdjustTabStrip current="entry" onChange={onTabChange} />}
       {fetching ? (
-        <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+        <div className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">창고 <span className="text-red-500">*</span></label>
+            <label className="text-[13px] font-medium text-fg">창고 <span className="text-red-500">*</span></label>
             <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={selectCls}>
               <option value="">창고를 선택하세요</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -198,9 +200,9 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-[13px] font-medium text-[#191F28]">상품 / 수량 <span className="text-red-500">*</span></label>
+              <label className="text-[13px] font-medium text-fg">상품 / 수량 <span className="text-red-500">*</span></label>
               <button type="button" onClick={addRow}
-                className="text-[12px] font-medium text-[#3182F6] hover:text-[#1B64DA] transition-colors">
+                className="text-[12px] font-medium text-brand hover:text-brand-hover transition-colors">
                 + 상품 추가
               </button>
             </div>
@@ -216,10 +218,10 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
                     />
                   </div>
                   <input type="number" min="0" value={row.quantity} onChange={(e) => updateRow(idx, 'quantity', e.target.value)} placeholder="수량"
-                    className="w-[90px] h-11 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors text-right" />
+                    className="w-[90px] h-11 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors text-right" />
                   {rows.length > 1 && (
                     <button type="button" onClick={() => removeRow(idx)}
-                      className="h-11 w-9 flex items-center justify-center rounded-xl text-[#B0B8C1] hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
+                      className="h-11 w-9 flex items-center justify-center rounded-xl text-fg-5 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
                       <X className="h-4 w-4" />
                     </button>
                   )}
@@ -229,14 +231,14 @@ function EntryDialog({ open, onClose, onSave, onTabChange }: {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[#191F28]">사유 <span className="text-[#B0B8C1] font-normal">(선택)</span></label>
+            <label className="text-[13px] font-medium text-fg">사유 <span className="text-fg-5 font-normal">(선택)</span></label>
             <input lang="ko" type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="초기 재고 기입"
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+              className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors" />
           </div>
           {error && <p className="text-[13px] text-red-500">{error}</p>}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+            <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
+            <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />} {rows.filter((r) => r.sku_id).length > 1 ? `${rows.filter((r) => r.sku_id).length}건 기입` : '기입'}
             </button>
           </div>
@@ -342,9 +344,9 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
       <div className="space-y-4">
         {/* 월별 실사 모드 안내. physical 탭에선 강제 ON + 토글 숨김. csv 탭에선 사용자 선택 가능 */}
         {currentTab === 'physical' ? (
-          <div className="rounded-xl border border-[#0071E3] bg-[#0071E3]/5 p-3 text-[12px] text-[#1D1D1F]">
+          <div className="rounded-xl border border-brand bg-brand/5 p-3 text-[12px] text-fg">
             <div className="font-semibold text-[13px] mb-1">월별 실사 모드 (자동 적용)</div>
-            <div className="text-[#6E6E73] leading-relaxed">
+            <div className="text-fg-3 leading-relaxed">
               실사 결과로 재고를 덮어쓰고, 그 이후 발생한 주문/반품/쿠팡/토스/스마트스토어/기타마켓 변동만 자동 반영.
               사유에 <span className="font-mono">__PHYSICAL_COUNT__:오늘날짜</span> 자동 추가됨.
             </div>
@@ -353,8 +355,8 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
           <label
             className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
               physicalCount
-                ? 'border-[#0071E3] bg-[#0071E3]/5'
-                : 'border-[#E5E5EA] bg-white hover:bg-[#F5F5F7]'
+                ? 'border-brand bg-brand/5'
+                : 'border-[#E5E5EA] bg-card hover:bg-app'
             }`}
           >
             <input
@@ -364,10 +366,10 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
               className="mt-0.5"
             />
             <div className="flex-1 space-y-0.5">
-              <div className="text-[13px] font-medium text-[#1D1D1F]">
+              <div className="text-[13px] font-medium text-fg">
                 월별 실사 모드
               </div>
-              <div className="text-[11px] text-[#6E6E73] leading-relaxed">
+              <div className="text-[11px] text-fg-3 leading-relaxed">
                 실사 결과로 재고를 덮어쓰고, 그 이후 발생한 주문/반품/쿠팡/토스/스마트스토어/기타마켓 변동만 자동 반영.
                 사유에 <span className="font-mono">__PHYSICAL_COUNT__:오늘날짜</span> 자동 추가됨.
               </div>
@@ -376,19 +378,19 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
         )}
 
         {/* Format hint */}
-        <div className="bg-[#F8F9FB] rounded-xl p-3 space-y-1">
-          <p className="text-[12px] font-semibold text-[#6B7684]">CSV 형식</p>
-          <p className="text-[11px] text-[#B0B8C1] font-mono">SKU코드, 창고명, 수량, 사유(선택)</p>
-          <p className="text-[11px] text-[#B0B8C1] mt-1">• 헤더 행은 자동으로 건너뜁니다 · 수량은 절대값 기입 (현재 재고를 해당 수량으로 변경)</p>
+        <div className="bg-card-2 rounded-xl p-3 space-y-1">
+          <p className="text-[12px] font-semibold text-fg-3">CSV 형식</p>
+          <p className="text-[11px] text-fg-5 font-mono">SKU코드, 창고명, 수량, 사유(선택)</p>
+          <p className="text-[11px] text-fg-5 mt-1">• 헤더 행은 자동으로 건너뜁니다 · 수량은 절대값 기입 (현재 재고를 해당 수량으로 변경)</p>
         </div>
 
         {/* File upload */}
         <div className="flex gap-2">
-          <label className="flex items-center gap-1.5 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] cursor-pointer transition-colors">
+          <label className="flex items-center gap-1.5 h-10 px-3 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:bg-app cursor-pointer transition-colors">
             <Upload className="h-3.5 w-3.5" /> 파일 선택
             <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
           </label>
-          <span className="text-[12px] text-[#B0B8C1] self-center">또는 아래에 직접 붙여넣기</span>
+          <span className="text-[12px] text-fg-5 self-center">또는 아래에 직접 붙여넣기</span>
         </div>
 
         {/* Textarea */}
@@ -398,28 +400,28 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
           onChange={(e) => { setCsvText(e.target.value); parseCsv(e.target.value); }}
           rows={6}
           placeholder={"SKU001,국내창고,100,초기 기입\nSKU002,국내창고,50"}
-          className="w-full px-3 py-2.5 text-[12px] font-mono border border-[#E5E8EB] rounded-xl focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 resize-none placeholder:text-[#C5CAD3]"
+          className="w-full px-3 py-2.5 text-[12px] font-mono border border-line rounded-xl focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 resize-none placeholder:text-[#C5CAD3]"
         />
 
         {/* Parse preview */}
         {parsed.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[12px] font-medium text-[#191F28]">{parsed.length}행 인식됨</span>
+              <span className="text-[12px] font-medium text-fg">{parsed.length}행 인식됨</span>
               {validCount > 0 && <span className="text-[12px] text-green-600 font-medium">✓ {validCount}행 유효</span>}
               {invalidCount > 0 && <span className="text-[12px] text-red-500 font-medium">✗ {invalidCount}행 오류</span>}
             </div>
-            <div className="max-h-40 overflow-y-auto border border-[#E5E8EB] rounded-xl divide-y divide-[#F2F4F6]">
+            <div className="max-h-40 overflow-y-auto border border-line rounded-xl divide-y divide-line-2">
               {parsed.map((row, i) => (
                 <div key={i} className={`flex items-center gap-2 px-3 py-2 text-[12px] ${row.valid ? '' : 'bg-red-50'}`}>
-                  <span className="text-[#B0B8C1] w-5 shrink-0">{i + 1}</span>
-                  <span className="font-mono text-[#191F28] w-24 truncate">{row.sku_code}</span>
-                  <span className="text-[#6B7684] w-20 truncate">{row.warehouse_name}</span>
-                  <span className="text-[#191F28] w-12 text-right">{row.quantity}</span>
+                  <span className="text-fg-5 w-5 shrink-0">{i + 1}</span>
+                  <span className="font-mono text-fg w-24 truncate">{row.sku_code}</span>
+                  <span className="text-fg-3 w-20 truncate">{row.warehouse_name}</span>
+                  <span className="text-fg w-12 text-right">{row.quantity}</span>
                   {row.error ? (
                     <span className="text-red-500 flex-1 truncate">{row.error}</span>
                   ) : (
-                    <span className="text-[#B0B8C1] flex-1 truncate">{row.reason || '-'}</span>
+                    <span className="text-fg-5 flex-1 truncate">{row.reason || '-'}</span>
                   )}
                 </div>
               ))}
@@ -444,12 +446,12 @@ function CsvImportDialog({ open, onClose, onSave, defaultPhysicalCount, onTabCha
         )}
 
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={handleClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">닫기</button>
+          <button type="button" onClick={handleClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">닫기</button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={loading || validCount === 0}
-            className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2 transition-colors"
+            className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2 transition-colors"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {validCount > 0 ? `${validCount}개 기입` : '기입'}
@@ -499,17 +501,17 @@ function AdjustDialog({ open, onClose, item, onSave }: {
   return (
     <Dialog open={open} onClose={onClose} title="재고 조정">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="bg-[#F2F4F6] rounded-xl p-4 space-y-1">
-          <p className="text-[13px] font-semibold text-[#191F28]">{item.sku?.product?.name}</p>
-          <p className="text-[12px] text-[#6B7684]">{item.sku?.sku_code} · {skuOptionLabel(item.sku?.option_values ?? {})}</p>
-          <p className="text-[12px] text-[#6B7684]">{item.warehouse?.name}</p>
+        <div className="bg-app rounded-xl p-4 space-y-1">
+          <p className="text-[13px] font-semibold text-fg">{item.sku?.product?.name}</p>
+          <p className="text-[12px] text-fg-3">{item.sku?.sku_code} · {skuOptionLabel(item.sku?.option_values ?? {})}</p>
+          <p className="text-[12px] text-fg-3">{item.warehouse?.name}</p>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">
-            현재 재고: <span className="text-[#3182F6] font-bold">{formatNumber(item.quantity)}</span>개
+          <label className="text-[13px] font-medium text-fg">
+            현재 재고: <span className="text-brand font-bold">{formatNumber(item.quantity)}</span>개
           </label>
           <input type="number" min="0" value={newQty} onChange={(e) => setNewQty(e.target.value)} placeholder="새 재고 수량"
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+            className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors" />
           {newQty !== '' && !isNaN(Number(newQty)) && Number(newQty) !== item.quantity && (
             <p className={`text-[12px] font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
               {diff > 0 ? '+' : ''}{formatNumber(diff)}개 조정
@@ -517,14 +519,14 @@ function AdjustDialog({ open, onClose, item, onSave }: {
           )}
         </div>
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-[#191F28]">조정 사유</label>
+          <label className="text-[13px] font-medium text-fg">조정 사유</label>
           <input lang="ko" type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 실물 재고 확인 후 조정"
-            className="w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors" />
+            className="w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors" />
         </div>
         {error && <p className="text-[13px] text-red-500">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
+          <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 flex items-center justify-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin" />} 조정 저장
           </button>
         </div>
@@ -588,35 +590,35 @@ function InventoryHistoryModal({ skuId, skuCode, productName, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-[600px] max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+      <div className="relative bg-card rounded-2xl shadow-xl w-[600px] max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
           <div>
-            <h3 className="text-[15px] font-bold text-[#191F28]">재고 변동 이력</h3>
-            <p className="text-[12px] text-[#6B7684] mt-0.5">{productName} <span className="font-mono text-[#B0B8C1]">({skuCode})</span></p>
+            <h3 className="text-[15px] font-bold text-fg">재고 변동 이력</h3>
+            <p className="text-[12px] text-fg-3 mt-0.5">{productName} <span className="font-mono text-fg-5">({skuCode})</span></p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
           {/* 날짜 목록 */}
-          <div className="w-[140px] border-r border-[#F2F4F6] overflow-y-auto">
+          <div className="w-[140px] border-r border-line-2 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-[#3182F6]" /></div>
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-brand" /></div>
             ) : dates.length === 0 ? (
-              <p className="text-[12px] text-[#B0B8C1] text-center py-8">변동 없음</p>
+              <p className="text-[12px] text-fg-5 text-center py-8">변동 없음</p>
             ) : (
               dates.map(date => {
                 const entries = byDate[date] ?? [];
                 const totalChange = entries.reduce((s, e) => s + e.change, 0);
                 return (
                   <button key={date} onClick={() => setSelectedDate(date)}
-                    className={`w-full text-left px-4 py-3 border-b border-[#F2F4F6] transition-colors ${selectedDate === date ? 'bg-[#EBF1FE]' : 'hover:bg-[#F8F9FB]'}`}>
-                    <p className="text-[13px] font-medium text-[#191F28]">{date.slice(5)}</p>
+                    className={`w-full text-left px-4 py-3 border-b border-line-2 transition-colors ${selectedDate === date ? 'bg-brand-bg' : 'hover:bg-card-2'}`}>
+                    <p className="text-[13px] font-medium text-fg">{date.slice(5)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-[#B0B8C1]">{entries.length}건</span>
-                      <span className={`text-[11px] font-semibold ${totalChange > 0 ? 'text-blue-500' : totalChange < 0 ? 'text-red-500' : 'text-[#B0B8C1]'}`}>
+                      <span className="text-[11px] text-fg-5">{entries.length}건</span>
+                      <span className={`text-[11px] font-semibold ${totalChange > 0 ? 'text-brand' : totalChange < 0 ? 'text-red-500' : 'text-fg-5'}`}>
                         {totalChange > 0 ? '+' : ''}{totalChange}
                       </span>
                     </div>
@@ -630,34 +632,34 @@ function InventoryHistoryModal({ skuId, skuCode, productName, onClose }: {
           <div className="flex-1 overflow-y-auto">
             {!selectedDate ? (
               <div className="flex flex-col items-center justify-center h-full py-12">
-                <p className="text-[13px] text-[#B0B8C1]">날짜를 선택하세요</p>
+                <p className="text-[13px] text-fg-5">날짜를 선택하세요</p>
               </div>
             ) : detail.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-12">
-                <p className="text-[13px] text-[#B0B8C1]">변동 내역 없음</p>
+                <p className="text-[13px] text-fg-5">변동 내역 없음</p>
               </div>
             ) : (
-              <div className="divide-y divide-[#F2F4F6]">
+              <div className="divide-y divide-line-2">
                 {detail.map((e) => (
-                  <div key={e.id} className="px-4 py-3 hover:bg-[#FAFAFA]">
+                  <div key={e.id} className="px-4 py-3 hover:bg-card-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[15px] font-bold tabular-nums ${e.change > 0 ? 'text-blue-500' : e.change < 0 ? 'text-red-500' : 'text-[#B0B8C1]'}`}>
+                        <span className={`text-[15px] font-bold tabular-nums ${e.change > 0 ? 'text-brand' : e.change < 0 ? 'text-red-500' : 'text-fg-5'}`}>
                           {e.change > 0 ? '+' : ''}{e.change}
                         </span>
-                        <span className="text-[12px] text-[#6B7684]">{e.type}</span>
+                        <span className="text-[12px] text-fg-3">{e.type}</span>
                       </div>
-                      <span className="text-[12px] text-[#B0B8C1] tabular-nums">{e.before} → {e.after}</span>
+                      <span className="text-[12px] text-fg-5 tabular-nums">{e.before} → {e.after}</span>
                     </div>
                     {e.orderNumber && (
                       <div className="flex items-center gap-2 mt-1">
-                        {e.channel && <span className="text-[11px] text-[#6B7684]">{channelLabel(e.channel)}</span>}
-                        <a href={orderLink(e) ?? '#'} className="text-[11px] text-[#3182F6] font-mono hover:underline">
+                        {e.channel && <span className="text-[11px] text-fg-3">{channelLabel(e.channel)}</span>}
+                        <a href={orderLink(e) ?? '#'} className="text-[11px] text-brand font-mono hover:underline">
                           #{e.orderNumber.length > 20 ? e.orderNumber.slice(-15) : e.orderNumber}
                         </a>
                       </div>
                     )}
-                    <p className="text-[11px] text-[#B0B8C1] mt-0.5">{e.date.slice(11, 16)} · {e.warehouse ?? ''}</p>
+                    <p className="text-[11px] text-fg-5 mt-0.5">{e.date.slice(11, 16)} · {e.warehouse ?? ''}</p>
                   </div>
                 ))}
               </div>
@@ -749,15 +751,15 @@ function SummaryTab() {
   }, [filtered, sort]);
 
   const thCls = (col: SumCol) =>
-    `text-left px-4 text-[11px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA]
-    ${dragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
+    `text-left px-4 text-[11px] font-semibold text-fg-3 whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA]
+    ${dragOver === col ? 'border-l-2 border-l-brand' : ''}`;
 
-  if (loading) return <div className="flex items-center justify-center h-48"><Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-48"><Loader2 className="h-6 w-6 animate-spin text-brand" /></div>;
 
   if (!rows.length) return (
-    <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
-      <Package className="h-10 w-10 text-[#B0B8C1] mb-3" />
-      <p className="text-[13px] font-medium text-[#6B7684]">등록된 SKU가 없습니다</p>
+    <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+      <Package className="h-10 w-10 text-fg-5 mb-3" />
+      <p className="text-[13px] font-medium text-fg-3">등록된 SKU가 없습니다</p>
     </div>
   );
 
@@ -772,11 +774,11 @@ function SummaryTab() {
         <td key={col} className={`px-4 ${py} max-w-[200px]`}>
           <button onClick={() => setHistoryModal({ skuId: row.sku_id, skuCode: row.sku_code, productName: row.product_name })}
             className="text-left group w-full">
-            <p className="text-[13px] font-medium text-[#191F28] group-hover:text-[#3182F6] transition-colors truncate">{row.product_name}</p>
+            <p className="text-[13px] font-medium text-fg group-hover:text-brand transition-colors truncate">{row.product_name}</p>
             <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden">
-              <span className="text-[11px] text-[#6B7684] font-mono shrink-0">{row.sku_code}</span>
+              <span className="text-[11px] text-fg-3 font-mono shrink-0">{row.sku_code}</span>
               {Object.keys(row.option_values ?? {}).length > 0 && (
-                <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md truncate">{skuOptionLabel(row.option_values)}</span>
+                <span className="text-[11px] bg-app text-fg-3 px-1.5 py-0.5 rounded-md truncate">{skuOptionLabel(row.option_values)}</span>
               )}
               {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium shrink-0">부족</span>}
             </div>
@@ -785,7 +787,7 @@ function SummaryTab() {
       );
       case 'warehouse': return (
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
-          <span className="text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(row.warehouse_stock)}</span>
+          <span className="text-[13px] font-semibold text-fg tabular-nums">{formatNumber(row.warehouse_stock)}</span>
         </td>
       );
       case 'coupang': return (
@@ -799,11 +801,11 @@ function SummaryTab() {
             </span>
           ) : row.coupang_warehouse_stock > 0 ? (
             <span className="inline-flex items-center gap-1">
-              <span className="text-[13px] font-semibold text-[#3182F6] tabular-nums">{formatNumber(row.coupang_warehouse_stock)}</span>
-              <span className="text-[9px] px-1 py-px rounded bg-[#3182F6]/10 text-[#3182F6] font-medium">쿠팡창고</span>
+              <span className="text-[13px] font-semibold text-brand tabular-nums">{formatNumber(row.coupang_warehouse_stock)}</span>
+              <span className="text-[9px] px-1 py-px rounded bg-brand/10 text-brand font-medium">쿠팡창고</span>
             </span>
           ) : (
-            <span className="text-[13px] text-[#D1D5DB]">-</span>
+            <span className="text-[13px] text-line">-</span>
           )}
         </td>
       );
@@ -811,14 +813,14 @@ function SummaryTab() {
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           {row.transit_stock > 0
             ? <span className="text-[13px] font-semibold text-orange-500 tabular-nums">{formatNumber(row.transit_stock)}</span>
-            : <span className="text-[13px] text-[#D1D5DB]">-</span>}
+            : <span className="text-[13px] text-line">-</span>}
         </td>
       );
       case 'outbound': return (
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
           {row.outbound_stock > 0
-            ? <span className="text-[13px] font-semibold text-blue-500 tabular-nums">{formatNumber(row.outbound_stock)}</span>
-            : <span className="text-[13px] text-[#D1D5DB]">-</span>}
+            ? <span className="text-[13px] font-semibold text-brand tabular-nums">{formatNumber(row.outbound_stock)}</span>
+            : <span className="text-[13px] text-line">-</span>}
         </td>
       );
       case 'total': {
@@ -828,10 +830,10 @@ function SummaryTab() {
         const showBreakdown = ownN > 0 && rgN > 0;
         return (
           <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
-            <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(row.total_stock)}</span>
-            {daysLeft !== null && <span className="text-[11px] text-[#B0B8C1] ml-1">{daysLeft}일</span>}
+            <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-fg'}`}>{formatNumber(row.total_stock)}</span>
+            {daysLeft !== null && <span className="text-[11px] text-fg-5 ml-1">{daysLeft}일</span>}
             {showBreakdown && (
-              <div className="text-[10px] text-[#86868B] mt-0.5 leading-tight">
+              <div className="text-[10px] text-fg-4 mt-0.5 leading-tight">
                 자사 {formatNumber(ownN)} + RG {formatNumber(rgN)}
               </div>
             )}
@@ -840,22 +842,22 @@ function SummaryTab() {
       }
       case 'safety': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684] tabular-nums">{row.safety_stock > 0 ? formatNumber(row.safety_stock) : '-'}</span>
+          <span className="text-[13px] text-fg-3 tabular-nums">{row.safety_stock > 0 ? formatNumber(row.safety_stock) : '-'}</span>
         </td>
       );
       case 's30d': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_30d > 0 ? formatNumber(row.sales_30d) : '-'}</span>
+          <span className="text-[13px] text-fg-3 tabular-nums">{row.sales_30d > 0 ? formatNumber(row.sales_30d) : '-'}</span>
         </td>
       );
       case 's7d': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684] tabular-nums">{row.sales_7d > 0 ? formatNumber(row.sales_7d) : '-'}</span>
+          <span className="text-[13px] text-fg-3 tabular-nums">{row.sales_7d > 0 ? formatNumber(row.sales_7d) : '-'}</span>
         </td>
       );
       case 'daily': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684]">{dailyAvg !== null ? `${dailyAvg}개` : '-'}</span>
+          <span className="text-[13px] text-fg-3">{dailyAvg !== null ? `${dailyAvg}개` : '-'}</span>
         </td>
       );
     }
@@ -867,19 +869,19 @@ function SummaryTab() {
       <div className="flex items-center gap-3">
         <div className="relative">
           <input lang="ko" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="상품명, SKU, 옵션 검색..."
-            className="h-10 w-64 pl-3 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors" />
+            className="h-10 w-64 pl-3 pr-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors" />
         </div>
-        {searchQ && <span className="text-[12px] text-[#6B7684]">{filtered.length}개 결과</span>}
+        {searchQ && <span className="text-[12px] text-fg-3">{filtered.length}개 결과</span>}
       </div>
-    <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F2F4F6]">
-        <span className="text-[12px] text-[#B0B8C1]">헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬</span>
+    <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-line-2">
+        <span className="text-[12px] text-fg-5">헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬</span>
         <RowHeightButtons value={rowH} onChange={setRowH} />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
-            <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
+            <tr className="border-b border-line-2 bg-card-2">
               {colOrder.map((col) => (
                 <th
                   key={col}
@@ -891,7 +893,7 @@ function SummaryTab() {
                   onClick={() => toggleSort(col)}
                   className={thCls(col)}
                 >
-                  <div className={`flex items-center gap-1 py-3 ${sort?.col === col ? 'text-[#3182F6]' : ''}`}>
+                  <div className={`flex items-center gap-1 py-3 ${sort?.col === col ? 'text-brand' : ''}`}>
                     <GripVertical className="h-3 w-3 opacity-20 group-hover:opacity-60 shrink-0 transition-opacity" />
                     {SUM_LABELS[col]}
                     {SUM_SORTABLE[col] && <SortIcon active={sort?.col === col} dir={sort?.dir ?? 'asc'} />}
@@ -900,11 +902,11 @@ function SummaryTab() {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#F2F4F6]">
+          <tbody className="divide-y divide-line-2">
             {sorted.map((row) => {
               const isLow = row.total_stock <= row.safety_stock && row.safety_stock > 0;
               return (
-                <tr key={row.sku_id} className={`hover:bg-[#FAFAFA] transition-colors ${isLow ? 'bg-red-50/30' : ''}`}>
+                <tr key={row.sku_id} className={`hover:bg-card-2 transition-colors ${isLow ? 'bg-red-50/30' : ''}`}>
                   {colOrder.map((col) => renderCell(col, row))}
                 </tr>
               );
@@ -982,12 +984,12 @@ function RgInventoryTab() {
 
   const GRADES = ['미개봉', '최상', '상', '중'];
   const GRADE_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-    '미개봉': { bg: 'bg-blue-50',  text: 'text-blue-600',  border: 'border-l-blue-400' },
+    '미개봉': { bg: 'bg-brand-bg',  text: 'text-brand',  border: 'border-l-blue-400' },
     '최상':   { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-l-emerald-400' },
     '상':     { bg: 'bg-amber-50',  text: 'text-amber-600',  border: 'border-l-amber-400' },
     '중':     { bg: 'bg-rose-50',   text: 'text-rose-500',   border: 'border-l-rose-400' },
   };
-  const GRADE_DEFAULT_STYLE = { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-l-gray-300' };
+  const GRADE_DEFAULT_STYLE = { bg: 'bg-card-2', text: 'text-fg-3', border: 'border-l-line' };
   function gradeStyle(g: string | null) { return g ? (GRADE_STYLE[g] ?? GRADE_DEFAULT_STYLE) : GRADE_DEFAULT_STYLE; }
 
   const [skuFullData, setSkuFullData] = useState<any[]>([]);
@@ -1240,7 +1242,7 @@ function RgInventoryTab() {
   }, [items, sort, subTab]);
 
   const thCls = (col: RgCol) =>
-    `text-left px-4 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA] ${dragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
+    `text-left px-4 text-[12px] font-semibold text-fg-3 whitespace-nowrap select-none cursor-pointer group transition-colors hover:bg-[#F0F3FA] ${dragOver === col ? 'border-l-2 border-l-brand' : ''}`;
 
   // 반품 아이템의 표시명 결정 (linked_sku 우선)
   function returnDisplayName(item: RgInventoryItem) {
@@ -1284,30 +1286,30 @@ function RgInventoryTab() {
           {item.is_return ? (
             <>
               <div className="flex items-center gap-2 group">
-                <p className="text-[13px] font-medium text-[#191F28]">{productName}</p>
+                <p className="text-[13px] font-medium text-fg">{productName}</p>
                 <button
                   onClick={() => unclassify(item.vendor_item_id)}
                   disabled={isClassifying}
-                  className="opacity-0 group-hover:opacity-100 text-[11px] text-[#B0B8C1] hover:text-red-500 transition-all ml-auto shrink-0"
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-fg-5 hover:text-red-500 transition-all ml-auto shrink-0"
                 >해제</button>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
-                <span className="text-[11px] text-[#D1D5DB] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+                {optionLabel && <span className="text-[11px] bg-app text-fg-3 px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
+                <span className="text-[11px] text-line font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
                 {!item.linked_sku && (
                   <div className="relative">
                     <button
                       onClick={() => { setLinkTarget(item.vendor_item_id); setLinkSearch(''); }}
-                      className="text-[11px] text-[#B0B8C1] hover:text-blue-500 transition-colors"
+                      className="text-[11px] text-fg-5 hover:text-brand transition-colors"
                     >+ 연결</button>
                     {linkTarget === item.vendor_item_id && (
-                      <div className="absolute left-0 top-5 z-20 bg-white border border-[#E5E8EB] rounded-xl shadow-lg w-72 p-3">
+                      <div className="absolute left-0 top-5 z-20 bg-card border border-line rounded-xl shadow-lg w-72 p-3">
                         <input
                           autoFocus
                           value={linkSearch}
                           onChange={(e) => setLinkSearch(e.target.value)}
                           placeholder="상품명 또는 SKU 검색"
-                          className="w-full h-8 px-3 text-[12px] border border-[#E5E8EB] rounded-lg outline-none focus:border-[#3182F6] mb-2"
+                          className="w-full h-8 px-3 text-[12px] border border-line rounded-lg outline-none focus:border-brand mb-2"
                         />
                         <div className="max-h-[28rem] overflow-y-auto space-y-0.5">
                           {skuOptions
@@ -1315,12 +1317,12 @@ function RgInventoryTab() {
                             .slice(0, 30)
                             .map(o => (
                               <button key={o.id} onClick={() => linkSku(item.vendor_item_id, o.id)}
-                                className="w-full text-left px-2 py-1.5 text-[12px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg truncate">
+                                className="w-full text-left px-2 py-1.5 text-[12px] text-fg hover:bg-app rounded-lg truncate">
                                 {o.label}
                               </button>
                             ))}
                         </div>
-                        <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-[#B0B8C1] hover:text-[#6B7684]">취소</button>
+                        <button onClick={() => setLinkTarget(null)} className="mt-2 text-[11px] text-fg-5 hover:text-fg-3">취소</button>
                       </div>
                     )}
                   </div>
@@ -1330,17 +1332,17 @@ function RgInventoryTab() {
           ) : (
             <>
               <div className="flex items-center gap-2 group">
-                <p className="text-[13px] font-medium text-[#191F28]">{productName}</p>
+                <p className="text-[13px] font-medium text-fg">{productName}</p>
                 <button
                   onClick={() => classify(item.vendor_item_id, null)}
                   disabled={isClassifying}
-                  className="opacity-0 group-hover:opacity-100 text-[11px] text-[#B0B8C1] hover:text-orange-500 transition-all shrink-0 whitespace-nowrap"
+                  className="opacity-0 group-hover:opacity-100 text-[11px] text-fg-5 hover:text-orange-500 transition-all shrink-0 whitespace-nowrap"
                   title="반품재판매로 분류"
                 >↗ 반품</button>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
-                {optionLabel && <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
-                <span className="text-[11px] text-[#B0B8C1] font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
+                {optionLabel && <span className="text-[11px] bg-app text-fg-3 px-1.5 py-0.5 rounded-md">{optionLabel}</span>}
+                <span className="text-[11px] text-fg-5 font-mono">{item.external_sku_id ?? item.vendor_item_id}</span>
               </div>
             </>
           )}
@@ -1348,8 +1350,8 @@ function RgInventoryTab() {
       );
       case 'qty': return (
         <td key={col} className={`px-4 ${py} whitespace-nowrap`}>
-          <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-[#191F28]'}`}>{formatNumber(item.current_qty)}</span>
-          <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
+          <span className={`text-[15px] font-bold tabular-nums ${isLow ? 'text-red-500' : 'text-fg'}`}>{formatNumber(item.current_qty)}</span>
+          <span className="text-[11px] text-fg-5 ml-0.5">개</span>
           {isLow  && <span className="ml-1.5 text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">부족</span>}
           {isWarn && <span className="ml-1.5 text-[11px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-md font-medium">주의</span>}
         </td>
@@ -1357,7 +1359,7 @@ function RgInventoryTab() {
       case 'daily_changes': return (
         <td key={col} className={`px-4 ${py}`}>
           {recentChanges.length === 0 ? (
-            <span className="text-[12px] text-[#B0B8C1]">스냅샷 2일 이상 필요</span>
+            <span className="text-[12px] text-fg-5">스냅샷 2일 이상 필요</span>
           ) : (
             <div className="flex items-end gap-2">
               {recentChanges.map((d, i) => {
@@ -1366,13 +1368,13 @@ function RgInventoryTab() {
                 const inflow = change > 0 ? change : 0;
                 return (
                   <div key={i} className="flex flex-col items-center gap-0.5 min-w-[28px]">
-                    <span className="text-[9.5px] text-[#B0B8C1]">{d.date.slice(5)}</span>
+                    <span className="text-[9.5px] text-fg-5">{d.date.slice(5)}</span>
                     {outflow > 0 ? (
                       <span className="text-[11px] font-semibold text-red-500 tabular-nums">-{formatNumber(outflow)}</span>
                     ) : inflow > 0 ? (
-                      <span className="text-[11px] font-semibold text-blue-500 tabular-nums">+{formatNumber(inflow)}</span>
+                      <span className="text-[11px] font-semibold text-brand tabular-nums">+{formatNumber(inflow)}</span>
                     ) : (
-                      <span className="text-[11px] text-[#D1D5DB]">0</span>
+                      <span className="text-[11px] text-line">0</span>
                     )}
                   </div>
                 );
@@ -1383,22 +1385,22 @@ function RgInventoryTab() {
       );
       case 's30d': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684] tabular-nums">{item.sales_last_30d > 0 ? formatNumber(item.sales_last_30d) + '개' : '-'}</span>
+          <span className="text-[13px] text-fg-3 tabular-nums">{item.sales_last_30d > 0 ? formatNumber(item.sales_last_30d) + '개' : '-'}</span>
         </td>
       );
       case 'daily_avg': return (
         <td key={col} className={`px-4 ${py}`}>
-          <span className="text-[13px] text-[#6B7684]">{dailyAvg !== null ? `${dailyAvg}개` : '-'}</span>
+          <span className="text-[13px] text-fg-3">{dailyAvg !== null ? `${dailyAvg}개` : '-'}</span>
         </td>
       );
       case 'days_left': return (
         <td key={col} className={`px-4 ${py}`}>
           {item.days_remaining !== null ? (
-            <span className={`text-[13px] font-semibold tabular-nums ${isLow ? 'text-red-500' : isWarn ? 'text-amber-500' : 'text-[#191F28]'}`}>
+            <span className={`text-[13px] font-semibold tabular-nums ${isLow ? 'text-red-500' : isWarn ? 'text-amber-500' : 'text-fg'}`}>
               {item.days_remaining}일
             </span>
           ) : (
-            <span className="text-[13px] text-[#B0B8C1]">-</span>
+            <span className="text-[13px] text-fg-5">-</span>
           )}
         </td>
       );
@@ -1408,12 +1410,12 @@ function RgInventoryTab() {
   return (
     <div className="space-y-4">
       {/* 서브탭 */}
-      <div className="flex items-center gap-1 border-b border-[#E5E8EB]">
+      <div className="flex items-center gap-1 border-b border-line">
         {([['new', '신상품', newItems.length], ['return', '반품재판매', returnItems.length]] as const).map(([v, label, cnt]) => (
           <button key={v} onClick={() => { setSubTab(v); setChecked(new Set()); setReturnChecked(new Set()); lastCheckedIdx.current = null; }}
-            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-[#3182F6] text-[#3182F6]' : 'border-transparent text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-brand text-brand' : 'border-transparent text-fg-3 hover:text-fg'}`}>
             {label}
-            <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-[#3182F6]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>{cnt}</span>
+            <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-brand' : 'bg-app text-fg-5'}`}>{cnt}</span>
           </button>
         ))}
       </div>
@@ -1421,14 +1423,14 @@ function RgInventoryTab() {
       {/* 신상품 일괄 분류 액션바 */}
       {subTab === 'new' && checked.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-[#EBF3FF] rounded-xl">
-          <span className="text-[13px] font-medium text-[#3182F6]">{checked.size}개 선택됨</span>
-          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭으로 범위 선택</span>
+          <span className="text-[13px] font-medium text-brand">{checked.size}개 선택됨</span>
+          <span className="text-[11px] text-fg-5">Shift+클릭으로 범위 선택</span>
           <button onClick={() => setBulkModal(true)}
             className="h-8 px-3 rounded-lg bg-orange-500 text-white text-[12px] font-semibold hover:bg-orange-600 transition-colors">
             반품재판매로 이동
           </button>
           <button onClick={() => setChecked(new Set())}
-            className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors">
+            className="h-8 px-3 rounded-lg border border-line text-[12px] text-fg-3 hover:bg-card transition-colors">
             선택 해제
           </button>
         </div>
@@ -1438,22 +1440,22 @@ function RgInventoryTab() {
       {subTab === 'return' && returnChecked.size > 0 && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 rounded-xl flex-wrap">
           <span className="text-[13px] font-medium text-orange-600">{returnChecked.size}개 선택됨</span>
-          <span className="text-[11px] text-[#B0B8C1]">Shift+클릭 범위선택</span>
+          <span className="text-[11px] text-fg-5">Shift+클릭 범위선택</span>
           <div className="flex items-center gap-1.5 ml-auto">
             <button onClick={startBulkLink}
-              className="h-8 px-3 rounded-lg bg-blue-500 text-white text-[12px] font-semibold hover:bg-blue-600 transition-colors">
+              className="h-8 px-3 rounded-lg bg-brand text-white text-[12px] font-semibold hover:bg-brand transition-colors">
               개별 연결 ({returnChecked.size}개)
             </button>
             <button onClick={bulkUnlinkSku} disabled={bulkLinkLoading}
-              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors disabled:opacity-60">
+              className="h-8 px-3 rounded-lg border border-line text-[12px] text-fg-3 hover:bg-card transition-colors disabled:opacity-60">
               연결 해제
             </button>
             <button onClick={unclassifyBulk} disabled={bulkLoading}
-              className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60">
+              className="h-8 px-3 rounded-lg bg-brand text-white text-[12px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60">
               {bulkLoading ? '처리 중...' : '신상품으로 이동'}
             </button>
             <button onClick={() => setReturnChecked(new Set())}
-              className="h-8 px-3 rounded-lg border border-[#E5E8EB] text-[12px] text-[#6B7684] hover:bg-white transition-colors">
+              className="h-8 px-3 rounded-lg border border-line text-[12px] text-fg-3 hover:bg-card transition-colors">
               선택 해제
             </button>
           </div>
@@ -1464,21 +1466,21 @@ function RgInventoryTab() {
       {bulkLinkCurrent && bulkLinkCurrentItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setBulkLinkQueue([])} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-[440px] max-h-[80vh] flex flex-col">
-            <div className="px-6 pt-6 pb-3 border-b border-[#F2F4F6]">
+          <div className="relative bg-card rounded-2xl shadow-xl w-[440px] max-h-[80vh] flex flex-col">
+            <div className="px-6 pt-6 pb-3 border-b border-line-2">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[15px] font-bold text-[#191F28]">신상품 연결</h3>
-                <span className="text-[12px] text-[#B0B8C1]">{bulkLinkQueue.length}개 남음</span>
+                <h3 className="text-[15px] font-bold text-fg">신상품 연결</h3>
+                <span className="text-[12px] text-fg-5">{bulkLinkQueue.length}개 남음</span>
               </div>
-              <div className="bg-[#F8F9FB] rounded-xl p-3">
-                <p className="text-[13px] font-medium text-[#191F28]">{returnDisplayName(bulkLinkCurrentItem) || bulkLinkCurrentItem.external_sku_id || bulkLinkCurrentItem.vendor_item_id}</p>
-                <p className="text-[11px] text-[#B0B8C1] mt-0.5">{bulkLinkCurrentItem.external_sku_id ?? bulkLinkCurrentItem.vendor_item_id}</p>
+              <div className="bg-card-2 rounded-xl p-3">
+                <p className="text-[13px] font-medium text-fg">{returnDisplayName(bulkLinkCurrentItem) || bulkLinkCurrentItem.external_sku_id || bulkLinkCurrentItem.vendor_item_id}</p>
+                <p className="text-[11px] text-fg-5 mt-0.5">{bulkLinkCurrentItem.external_sku_id ?? bulkLinkCurrentItem.vendor_item_id}</p>
               </div>
             </div>
             <div className="px-6 py-2">
               <input lang="ko" autoFocus value={bulkLinkSearch} onChange={(e) => setBulkLinkSearch(e.target.value)}
                 placeholder="상품명 또는 SKU 검색..."
-                className="w-full h-10 px-3 text-[13px] border border-[#E5E8EB] rounded-xl outline-none focus:border-[#3182F6]" />
+                className="w-full h-10 px-3 text-[13px] border border-line rounded-xl outline-none focus:border-brand" />
             </div>
             <div className="flex-1 overflow-y-auto px-6 pb-2 space-y-0.5">
               {skuOptions
@@ -1486,14 +1488,14 @@ function RgInventoryTab() {
                 .slice(0, 50)
                 .map(o => (
                   <button key={o.id} onClick={() => bulkLinkSelectSku(o.id)}
-                    className="w-full text-left px-3 py-2.5 text-[13px] text-[#191F28] hover:bg-[#F2F4F6] rounded-lg">
+                    className="w-full text-left px-3 py-2.5 text-[13px] text-fg hover:bg-app rounded-lg">
                     {o.label}
                   </button>
                 ))}
             </div>
-            <div className="flex gap-2 px-6 py-4 border-t border-[#F2F4F6]">
-              <button onClick={skipBulkLink} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">건너뛰기</button>
-              <button onClick={() => setBulkLinkQueue([])} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">전체 취소</button>
+            <div className="flex gap-2 px-6 py-4 border-t border-line-2">
+              <button onClick={skipBulkLink} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">건너뛰기</button>
+              <button onClick={() => setBulkLinkQueue([])} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">전체 취소</button>
             </div>
           </div>
         </div>
@@ -1503,23 +1505,23 @@ function RgInventoryTab() {
       {bulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setBulkModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-80 p-6">
-            <h3 className="text-[15px] font-bold text-[#191F28] mb-4">반품재판매 등급 선택</h3>
-            <p className="text-[12px] text-[#6B7684] mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
+          <div className="relative bg-card rounded-2xl shadow-xl w-80 p-6">
+            <h3 className="text-[15px] font-bold text-fg mb-4">반품재판매 등급 선택</h3>
+            <p className="text-[12px] text-fg-3 mb-4">{checked.size}개 상품을 반품재판매로 분류합니다.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
               {GRADES.map((g) => (
                 <button key={g} onClick={() => setBulkGrade(g)}
-                  className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors ${bulkGrade === g ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-[#E5E8EB] text-[#6B7684] hover:border-orange-300'}`}>
+                  className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors ${bulkGrade === g ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-line text-fg-3 hover:border-orange-300'}`}>
                   {g}
                 </button>
               ))}
               <button onClick={() => setBulkGrade('')}
-                className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors col-span-2 ${bulkGrade === '' ? 'border-[#3182F6] bg-[#EBF3FF] text-[#3182F6]' : 'border-[#E5E8EB] text-[#B0B8C1] hover:border-[#3182F6]'}`}>
+                className={`h-11 rounded-xl text-[13px] font-semibold border-2 transition-colors col-span-2 ${bulkGrade === '' ? 'border-brand bg-[#EBF3FF] text-brand' : 'border-line text-fg-5 hover:border-brand'}`}>
                 등급 미지정
               </button>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setBulkModal(false)} className="flex-1 h-10 rounded-xl border border-[#E5E8EB] text-[13px] text-[#6B7684]">취소</button>
+              <button onClick={() => setBulkModal(false)} className="flex-1 h-10 rounded-xl border border-line text-[13px] text-fg-3">취소</button>
               <button onClick={classifyBulk} disabled={bulkLoading}
                 className="flex-1 h-10 rounded-xl bg-orange-500 text-white text-[13px] font-semibold hover:bg-orange-600 disabled:opacity-60">
                 {bulkLoading ? '처리 중...' : '이동'}
@@ -1531,10 +1533,10 @@ function RgInventoryTab() {
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[#6B7684] font-medium">스냅샷 조회</span>
+          <span className="text-[12px] text-fg-3 font-medium">스냅샷 조회</span>
           {[7, 14, 30].map((d) => (
             <button key={d} onClick={() => setDays(d)}
-              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+              className={`h-8 px-3 rounded-xl text-[12px] font-medium transition-colors ${days === d ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
               최근 {d}일
             </button>
           ))}
@@ -1543,32 +1545,32 @@ function RgInventoryTab() {
           {syncMsg && <span className="text-[12px] text-green-600 font-medium">{syncMsg}</span>}
           {error  && <span className="text-[12px] text-red-500">{error}</span>}
           <button onClick={handleSync} disabled={syncing}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors disabled:opacity-60">
+            className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors disabled:opacity-60">
             {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             재고 동기화
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F2F4F6]">
-          <span className="text-[12px] text-[#B0B8C1]">헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬</span>
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-line-2">
+          <span className="text-[12px] text-fg-5">헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬</span>
           <RowHeightButtons value={rowH} onChange={setRowH} />
         </div>
         {loading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+          <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
         ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <Package className="h-10 w-10 text-[#B0B8C1] mb-3" />
+            <Package className="h-10 w-10 text-fg-5 mb-3" />
             {subTab === 'return' ? (
               <>
-                <p className="text-[13px] font-medium text-[#6B7684]">반품재판매 상품이 없습니다</p>
-                <p className="text-[12px] text-[#B0B8C1] mt-1">마스터 시트에서 반품재판매 옵션 ID를 등록하면 자동 분류됩니다</p>
+                <p className="text-[13px] font-medium text-fg-3">반품재판매 상품이 없습니다</p>
+                <p className="text-[12px] text-fg-5 mt-1">마스터 시트에서 반품재판매 옵션 ID를 등록하면 자동 분류됩니다</p>
               </>
             ) : (
               <>
-                <p className="text-[13px] font-medium text-[#6B7684]">로켓그로스 재고 데이터가 없습니다</p>
-                <p className="text-[12px] text-[#B0B8C1] mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
+                <p className="text-[13px] font-medium text-fg-3">로켓그로스 재고 데이터가 없습니다</p>
+                <p className="text-[12px] text-fg-5 mt-1">재고 동기화 버튼을 눌러 데이터를 가져오세요</p>
               </>
             )}
           </div>
@@ -1576,12 +1578,12 @@ function RgInventoryTab() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px]">
               <thead>
-                <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
+                <tr className="border-b border-line-2 bg-card-2">
                   <th className="w-10 px-3">
                     <input type="checkbox"
                       checked={subTab === 'new' ? (newItems.length > 0 && checked.size === newItems.length) : (returnItems.length > 0 && returnChecked.size === returnItems.length)}
                       onChange={subTab === 'new' ? toggleAll : toggleReturnAll}
-                      className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                      className="w-3.5 h-3.5 accent-brand cursor-pointer" />
                   </th>
                   {activeColOrder.map((col) => (
                     <th key={col}
@@ -1593,7 +1595,7 @@ function RgInventoryTab() {
                       onClick={() => toggleSort(col)}
                       className={thCls(col)}
                     >
-                      <div className={`flex items-center gap-1 py-3 ${sort?.col === col ? 'text-[#3182F6]' : ''}`}>
+                      <div className={`flex items-center gap-1 py-3 ${sort?.col === col ? 'text-brand' : ''}`}>
                         {subTab === 'new' && <GripVertical className="h-3 w-3 opacity-20 group-hover:opacity-60 shrink-0 transition-opacity" />}
                         {col === 'daily_changes' ? `일자별 출고 (최근 ${showDays}일)` : RG_LABELS[col]}
                         <SortIcon active={sort?.col === col} dir={sort?.dir ?? 'asc'} />
@@ -1602,19 +1604,19 @@ function RgInventoryTab() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F6]">
+              <tbody className="divide-y divide-line-2">
                 {sorted.map((item, idx) => {
                   const isLow = item.days_remaining !== null && item.days_remaining <= 7;
                   const isWarn = !isLow && item.days_remaining !== null && item.days_remaining <= 14;
                   const isChecked = subTab === 'new' ? checked.has(item.vendor_item_id) : returnChecked.has(item.vendor_item_id);
                   return (
                     <tr key={item.vendor_item_id}
-                      className={`hover:bg-[#FAFAFA] transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
+                      className={`hover:bg-card-2 transition-colors ${isChecked ? 'bg-[#F0F7FF]' : isLow ? 'bg-red-50/30' : isWarn ? 'bg-amber-50/30' : ''}`}>
                       <td className="w-10 px-3">
                         <input type="checkbox" checked={isChecked}
                           onClick={(e) => subTab === 'new' ? toggleCheck(item.vendor_item_id, idx, e as any) : toggleReturnCheck(item.vendor_item_id, idx, e as any)}
                           readOnly
-                          className="w-3.5 h-3.5 accent-[#3182F6] cursor-pointer" />
+                          className="w-3.5 h-3.5 accent-brand cursor-pointer" />
                       </td>
                       {activeColOrder.map((col) => renderRgCell(col, item))}
                     </tr>
@@ -1785,11 +1787,11 @@ export default function InventoryPage() {
     const ss = item.sku?.safety_stock ?? 0;
     if (item.quantity <= rp) return 'text-red-500 font-bold';
     if (item.quantity <= ss * 2) return 'text-amber-500 font-semibold';
-    return 'text-[#191F28] font-semibold';
+    return 'text-fg font-semibold';
   }
 
   const whThCls = (col: WhCol) =>
-    `text-left px-4 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap select-none ${col !== 'adjust' ? 'cursor-pointer group hover:bg-[#F0F3FA]' : ''} transition-colors ${whDragOver === col ? 'border-l-2 border-l-[#3182F6]' : ''}`;
+    `text-left px-4 text-[12px] font-semibold text-fg-3 whitespace-nowrap select-none ${col !== 'adjust' ? 'cursor-pointer group hover:bg-[#F0F3FA]' : ''} transition-colors ${whDragOver === col ? 'border-l-2 border-l-brand' : ''}`;
 
   function renderWhCell(col: WhCol, item: InventoryRow) {
     const value = item.quantity * (item.sku?.cost_price ?? 0);
@@ -1800,11 +1802,11 @@ export default function InventoryPage() {
     switch (col) {
       case 'product': return (
         <td key={col} className={`px-4 ${py} min-w-0`}>
-          <p className="text-[13px] font-medium text-[#191F28] truncate">{item.sku?.product?.name}</p>
+          <p className="text-[13px] font-medium text-fg truncate">{item.sku?.product?.name}</p>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <span className="text-[11px] text-[#6B7684] font-mono">{item.sku?.sku_code}</span>
+            <span className="text-[11px] text-fg-3 font-mono">{item.sku?.sku_code}</span>
             {Object.keys(item.sku?.option_values ?? {}).length > 0 && (
-              <span className="text-[11px] bg-[#F2F4F6] text-[#6B7684] px-1.5 py-0.5 rounded-md">{skuOptionLabel(item.sku?.option_values ?? {})}</span>
+              <span className="text-[11px] bg-app text-fg-3 px-1.5 py-0.5 rounded-md">{skuOptionLabel(item.sku?.option_values ?? {})}</span>
             )}
             {isLow && <span className="text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md font-medium">발주점 이하</span>}
             {isWarn && <span className="text-[11px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-md font-medium">주의</span>}
@@ -1813,29 +1815,29 @@ export default function InventoryPage() {
       );
       case 'warehouse': return (
         <td key={col} className={`px-4 ${py}`}>
-          <p className="text-[13px] text-[#191F28]">{item.warehouse?.name}</p>
+          <p className="text-[13px] text-fg">{item.warehouse?.name}</p>
         </td>
       );
       case 'qty': return (
         <td key={col} className={`px-4 ${py} text-right`}>
           <span className={`text-[15px] tabular-nums ${quantityColor(item)}`}>{formatNumber(item.quantity)}</span>
-          <span className="text-[11px] text-[#B0B8C1] ml-0.5">개</span>
+          <span className="text-[11px] text-fg-5 ml-0.5">개</span>
         </td>
       );
       case 'cost': return (
         <td key={col} className={`px-4 ${py} text-right`}>
-          <span className="text-[13px] text-[#6B7684] tabular-nums">{formatCurrency(item.sku?.cost_price ?? 0)}</span>
-          {vatOn && <p className="text-[11px] text-[#B0B8C1]">+VAT {formatCurrency((item.sku?.cost_price ?? 0) * 0.1)}</p>}
+          <span className="text-[13px] text-fg-3 tabular-nums">{formatCurrency(item.sku?.cost_price ?? 0)}</span>
+          {vatOn && <p className="text-[11px] text-fg-5">+VAT {formatCurrency((item.sku?.cost_price ?? 0) * 0.1)}</p>}
         </td>
       );
       case 'value': return (
         <td key={col} className={`px-4 ${py} text-right`}>
-          <span className="text-[13px] font-medium text-[#191F28] tabular-nums">{formatCurrency(value * vatMult)}</span>
+          <span className="text-[13px] font-medium text-fg tabular-nums">{formatCurrency(value * vatMult)}</span>
         </td>
       );
       case 'adjust': return (
         <td key={col} className={`px-4 ${py} text-center`}>
-          <button onClick={() => setAdjustItem(item)} className="h-8 px-3 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:border-[#3182F6] hover:text-[#3182F6] hover:bg-[#EBF1FE] transition-colors whitespace-nowrap">조정</button>
+          <button onClick={() => setAdjustItem(item)} className="h-8 px-3 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:border-brand hover:text-brand hover:bg-brand-bg transition-colors whitespace-nowrap">조정</button>
         </td>
       );
     }
@@ -1847,21 +1849,21 @@ export default function InventoryPage() {
       <div className="space-y-3">
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div className="min-w-0">
-            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">재고 현황</h2>
-            <p className="mt-1 text-[13px] text-[#6B7684]">
+            <PageHeader title="재고 현황" />
+            <p className="mt-1 text-[13px] text-fg-3">
               창고별 재고 및 채널별 재고를 확인하세요
-              <span className="ml-2 text-[12px] text-[#B0B8C1]">· 원가·물류비는 부가세 별도 금액 기준</span>
+              <span className="ml-2 text-[12px] text-fg-5">· 원가·물류비는 부가세 별도 금액 기준</span>
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setAdjustTab('entry')} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
+            <button onClick={() => setAdjustTab('entry')} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap">
               <Plus className="h-4 w-4" /> 재고 조정
             </button>
-            <button onClick={() => setAdjustTab('physical')} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#0071E3]/40 bg-[#0071E3]/5 text-[#0071E3] text-[13px] font-semibold hover:bg-[#0071E3]/10 transition-colors whitespace-nowrap">
+            <button onClick={() => setAdjustTab('physical')} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-brand/40 bg-brand/5 text-brand text-[13px] font-semibold hover:bg-brand/10 transition-colors whitespace-nowrap">
               <Upload className="h-4 w-4" /> 월별 실사
             </button>
             {tab === 'warehouse' && (
-              <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              <button onClick={exportCsv} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
                 <Download className="h-4 w-4" /> CSV
               </button>
             )}
@@ -1915,10 +1917,10 @@ export default function InventoryPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#F2F4F6] rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-app rounded-xl p-1 overflow-x-auto">
         {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package], ['trends', '추이', BarChart3], ['forecast', '예측', TrendingUp]] as const).map(([value, label, Icon]) => (
           <button key={value} onClick={() => setTab(value)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${tab === value ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:text-[#191F28]'}`}>
+            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${tab === value ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
             <Icon className="h-4 w-4" /> {label}
           </button>
         ))}
@@ -1927,35 +1929,35 @@ export default function InventoryPage() {
       {/* Summary Cards (창고별 탭에서만) */}
       {tab === 'warehouse' && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
-            <div className="w-9 h-10 rounded-xl bg-[#EBF1FE] flex items-center justify-center mb-3">
-              <Package className="h-[18px] w-[18px] text-[#3182F6]" strokeWidth={2.5} />
+          <div className="bg-card rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <div className="w-9 h-10 rounded-xl bg-brand-bg flex items-center justify-center mb-3">
+              <Package className="h-[18px] w-[18px] text-brand" strokeWidth={2.5} />
             </div>
-            <p className="text-[11px] text-[#6B7684] font-medium mb-1">관리 SKU</p>
+            <p className="text-[11px] text-fg-3 font-medium mb-1">관리 SKU</p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[24px] font-bold text-[#3182F6] tracking-[-0.04em]">{formatNumber(stats.totalSkus)}</span>
-              <span className="text-[13px] text-[#B0B8C1]">개</span>
+              <span className="text-[24px] font-bold text-brand tracking-[-0.04em]">{formatNumber(stats.totalSkus)}</span>
+              <span className="text-[13px] text-fg-5">개</span>
             </div>
           </div>
-          <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="bg-card rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="w-9 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-3">
               <WarehouseIcon className="h-[18px] w-[18px] text-green-600" strokeWidth={2.5} />
             </div>
-            <p className="text-[11px] text-[#6B7684] font-medium mb-1">총 재고 수량</p>
+            <p className="text-[11px] text-fg-3 font-medium mb-1">총 재고 수량</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[24px] font-bold text-green-600 tracking-[-0.04em]">{formatNumber(stats.totalQty)}</span>
-              <span className="text-[13px] text-[#B0B8C1]">개</span>
+              <span className="text-[13px] text-fg-5">개</span>
             </div>
           </div>
-          <div className="bg-white rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+          <div className="bg-card rounded-2xl p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
             <div className="w-9 h-10 rounded-xl bg-orange-50 flex items-center justify-center mb-3">
-              <TrendingUp className="h-[18px] w-[18px] text-[#FF6B00]" strokeWidth={2.5} />
+              <TrendingUp className="h-[18px] w-[18px] text-warn" strokeWidth={2.5} />
             </div>
-            <p className="text-[11px] text-[#6B7684] font-medium mb-1">
-              재고 원가 총액 {vatOn && <span className="text-[11px] text-[#3182F6] font-semibold">(VAT+10%)</span>}
+            <p className="text-[11px] text-fg-3 font-medium mb-1">
+              재고 원가 총액 {vatOn && <span className="text-[11px] text-brand font-semibold">(VAT+10%)</span>}
             </p>
             <div className="flex items-baseline gap-1">
-              <span className="text-[18px] font-bold text-[#FF6B00] tracking-[-0.04em]">{formatCurrency(stats.totalValue * vatMult)}</span>
+              <span className="text-[18px] font-bold text-warn tracking-[-0.04em]">{formatCurrency(stats.totalValue * vatMult)}</span>
             </div>
           </div>
         </div>
@@ -1975,17 +1977,17 @@ export default function InventoryPage() {
           {/* Warehouse filter */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-[#6B7684]" />
-              <span className="text-[13px] font-medium text-[#6B7684]">창고</span>
+              <SlidersHorizontal className="h-4 w-4 text-fg-3" />
+              <span className="text-[13px] font-medium text-fg-3">창고</span>
             </div>
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setSelectedWarehouse('all')}
-                className={`h-8 px-3.5 rounded-xl text-[13px] font-medium transition-colors ${selectedWarehouse === 'all' ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+                className={`h-8 px-3.5 rounded-xl text-[13px] font-medium transition-colors ${selectedWarehouse === 'all' ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
                 전체
               </button>
               {warehouses.map((w) => (
                 <button key={w.id} onClick={() => setSelectedWarehouse(w.id)}
-                  className={`h-8 px-3.5 rounded-xl text-[13px] font-medium transition-colors ${selectedWarehouse === w.id ? 'bg-[#3182F6] text-white' : 'bg-white border border-[#E5E8EB] text-[#6B7684] hover:bg-[#F2F4F6]'}`}>
+                  className={`h-8 px-3.5 rounded-xl text-[13px] font-medium transition-colors ${selectedWarehouse === w.id ? 'bg-brand text-white' : 'bg-card border border-line text-fg-3 hover:bg-app'}`}>
                   {w.name}
                 </button>
               ))}
@@ -1993,18 +1995,18 @@ export default function InventoryPage() {
           </div>
 
           {/* Warehouse inventory table */}
-          <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F2F4F6]">
-              <span className="text-[12px] text-[#B0B8C1]">
+          <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-line-2">
+              <span className="text-[12px] text-fg-5">
                 헤더 드래그로 컬럼 순서 변경 · 클릭으로 정렬
-                {vatOn && <span className="ml-2 text-[#3182F6] font-semibold">· VAT 포함 표시 중</span>}
+                {vatOn && <span className="ml-2 text-brand font-semibold">· VAT 포함 표시 중</span>}
               </span>
               <RowHeightButtons value={whRowH} onChange={setWhRowH} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
                 <thead>
-                  <tr className="border-b border-[#F2F4F6] bg-[#F8F9FB]">
+                  <tr className="border-b border-line-2 bg-card-2">
                     {whColOrder.map((col) => (
                       <th
                         key={col}
@@ -2016,7 +2018,7 @@ export default function InventoryPage() {
                         onClick={() => toggleWhSort(col)}
                         className={whThCls(col)}
                       >
-                        <div className={`flex items-center gap-1 py-3 ${whSort?.col === col ? 'text-[#3182F6]' : ''}`}>
+                        <div className={`flex items-center gap-1 py-3 ${whSort?.col === col ? 'text-brand' : ''}`}>
                           {col !== 'adjust' && <GripVertical className="h-3 w-3 opacity-20 group-hover:opacity-60 shrink-0 transition-opacity" />}
                           {col === 'cost'
                             ? `원가 (VAT${vatOn ? '+10%' : ' 별도'})`
@@ -2030,26 +2032,26 @@ export default function InventoryPage() {
                   </tr>
                 </thead>
                 {loading ? (
-                  <tbody><tr><td colSpan={whColOrder.length} className="h-64 text-center"><Loader2 className="h-6 w-6 animate-spin text-[#3182F6] mx-auto" /></td></tr></tbody>
+                  <tbody><tr><td colSpan={whColOrder.length} className="h-64 text-center"><Loader2 className="h-6 w-6 animate-spin text-brand mx-auto" /></td></tr></tbody>
                 ) : whSorted.length === 0 ? (
                   <tbody><tr><td colSpan={whColOrder.length}>
                     <div className="flex flex-col items-center justify-center py-16">
-                      <div className="w-14 h-14 rounded-2xl bg-[#F2F4F6] flex items-center justify-center mb-3">
-                        <WarehouseIcon className="h-6 w-6 text-[#B0B8C1]" />
+                      <div className="w-14 h-14 rounded-2xl bg-app flex items-center justify-center mb-3">
+                        <WarehouseIcon className="h-6 w-6 text-fg-5" />
                       </div>
-                      <p className="text-[13px] font-medium text-[#6B7684]">재고 데이터가 없습니다</p>
-                      <button onClick={() => setAdjustTab('entry')} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+                      <p className="text-[13px] font-medium text-fg-3">재고 데이터가 없습니다</p>
+                      <button onClick={() => setAdjustTab('entry')} className="mt-4 flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors">
                         <Plus className="h-4 w-4" /> 재고 기입
                       </button>
                     </div>
                   </td></tr></tbody>
                 ) : (
-                  <tbody className="divide-y divide-[#F2F4F6]">
+                  <tbody className="divide-y divide-line-2">
                     {whSorted.map((item) => {
                       const isLow = item.quantity <= (item.sku?.reorder_point ?? 0);
                       const isWarn = !isLow && item.quantity <= (item.sku?.safety_stock ?? 0) * 2;
                       return (
-                        <tr key={item.id} className={`hover:bg-[#FAFAFA] transition-colors ${isLow ? 'bg-red-50/40' : isWarn ? 'bg-amber-50/40' : ''}`}>
+                        <tr key={item.id} className={`hover:bg-card-2 transition-colors ${isLow ? 'bg-red-50/40' : isWarn ? 'bg-amber-50/40' : ''}`}>
                           {whColOrder.map((col) => renderWhCell(col, item))}
                         </tr>
                       );
@@ -2059,11 +2061,11 @@ export default function InventoryPage() {
               </table>
             </div>
             {whSorted.length > 0 && (
-              <div className="flex items-center justify-between px-5 py-3 bg-[#F8F9FB] border-t border-[#F2F4F6]">
-                <span className="text-[12px] text-[#6B7684]">총 {formatNumber(whSorted.length)}건</span>
-                <span className="text-[13px] font-semibold text-[#191F28]">
+              <div className="flex items-center justify-between px-5 py-3 bg-card-2 border-t border-line-2">
+                <span className="text-[12px] text-fg-3">총 {formatNumber(whSorted.length)}건</span>
+                <span className="text-[13px] font-semibold text-fg">
                   합계 {formatCurrency(whSorted.reduce((s, i) => s + i.quantity * (i.sku?.cost_price ?? 0), 0) * vatMult)}
-                  {vatOn && <span className="text-[11px] text-[#3182F6] ml-1">(VAT포함)</span>}
+                  {vatOn && <span className="text-[11px] text-brand ml-1">(VAT포함)</span>}
                 </span>
               </div>
             )}

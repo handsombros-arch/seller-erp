@@ -7,6 +7,8 @@ import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Buildi
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Warehouse { id: string; name: string; }
@@ -55,9 +57,9 @@ function NumCell({ value, onChange }: { value: string; onChange: (v: string) => 
       onChange={(e) => onChange(e.target.value)}
       placeholder="0"
       className="w-full h-10 px-2.5 rounded-lg border border-transparent bg-transparent text-[13px] tabular-nums text-right
-        hover:border-[#E5E8EB] hover:bg-white
-        focus:outline-none focus:border-[#3182F6] focus:bg-white focus:ring-2 focus:ring-[#3182F6]/10
-        transition-all placeholder:text-[#D0D5DD]"
+        hover:border-line hover:bg-card
+        focus:outline-none focus:border-brand focus:bg-card focus:ring-2 focus:ring-brand/10
+        transition-all placeholder:text-line"
     />
   );
 }
@@ -73,9 +75,9 @@ function SelectCell({ value, onChange, options, placeholder }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full h-10 px-2 rounded-lg border border-transparent bg-transparent text-[13px]
-        hover:border-[#E5E8EB] hover:bg-white
-        focus:outline-none focus:border-[#3182F6] focus:bg-white focus:ring-2 focus:ring-[#3182F6]/10
-        transition-all text-[#191F28]"
+        hover:border-line hover:bg-card
+        focus:outline-none focus:border-brand focus:bg-card focus:ring-2 focus:ring-brand/10
+        transition-all text-fg"
     >
       <option value="">{placeholder ?? '–'}</option>
       {options.map((o) => (
@@ -151,68 +153,68 @@ function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: str
     return [...map.entries()].map(([name, skus]) => ({ name, skus }));
   })();
 
-  const inputCls = 'h-9 w-20 px-2 rounded-lg border border-transparent hover:border-[#E5E8EB] focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 text-[12px] text-center bg-transparent focus:bg-white transition-colors tabular-nums';
+  const inputCls = 'h-9 w-20 px-2 rounded-lg border border-transparent hover:border-line focus:border-brand focus:ring-2 focus:ring-brand/10 text-[12px] text-center bg-transparent focus:bg-card transition-colors tabular-nums';
 
   return (
     <div className="space-y-4">
-      <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
-        <AlertCircle className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
-        <p className="text-[13px] text-[#3182F6]">
+      <div className="bg-brand-bg rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <AlertCircle className="h-4 w-4 text-brand mt-0.5 shrink-0" />
+        <p className="text-[13px] text-brand">
           <span className="font-semibold">SKU별 등급별 할인율</span>을 입력하세요. 신상품 판매가 대비 비율(%)로 입력합니다. 예: 85 = 신상품가의 85%
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#F2F4F6]">
-          <span className="text-[13px] font-semibold text-[#191F28]">반품 재판매 할인율 (%)</span>
+      <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-line-2">
+          <span className="text-[13px] font-semibold text-fg">반품 재판매 할인율 (%)</span>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
               <input lang="ko" value={q} onChange={(e) => setQ(e.target.value)} placeholder="검색"
-                className="h-8 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6] w-36" />
+                className="h-8 pl-8 pr-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand w-36" />
             </div>
             <a href="/api/sku-grade-discounts?format=csv" download
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
               <Download className="h-3.5 w-3.5" /> CSV
             </a>
             <button onClick={() => setImportOpen(true)}
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-[#E5E8EB] text-[12px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl border border-line text-[12px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
               <Upload className="h-3.5 w-3.5" /> 업로드
             </button>
             <button onClick={handleSaveAll} disabled={saving || !dirty}
-              className={`h-8 px-4 rounded-xl text-[12px] font-semibold transition-all ${dirty ? 'bg-[#3182F6] text-white hover:bg-[#1B64DA]' : 'bg-[#F2F4F6] text-[#B0B8C1]'}`}>
+              className={`h-8 px-4 rounded-xl text-[12px] font-semibold transition-all ${dirty ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-app text-fg-5'}`}>
               {saving ? '저장 중...' : '저장'}
             </button>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-[#3182F6]" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
-                  <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-[#6B7684] min-w-[200px]">상품 / SKU</th>
+                <tr className="bg-card-2 border-b border-line-2">
+                  <th className="text-left px-5 py-2.5 text-[12px] font-semibold text-fg-3 min-w-[200px]">상품 / SKU</th>
                   {GRADES.map(g => (
-                    <th key={g} className="text-center px-3 py-2.5 text-[12px] font-semibold text-[#6B7684] min-w-[90px]">{g}</th>
+                    <th key={g} className="text-center px-3 py-2.5 text-[12px] font-semibold text-fg-3 min-w-[90px]">{g}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {groups.map((group) => (
                   <Fragment key={group.name}>
-                    <tr className="bg-[#F8F9FB] border-y border-[#E5E8EB]">
+                    <tr className="bg-card-2 border-y border-line">
                       <td colSpan={1 + GRADES.length} className="px-5 py-2">
-                        <span className="text-[12px] font-semibold text-[#191F28]">{group.name}</span>
-                        <span className="text-[11px] text-[#B0B8C1] ml-2">{group.skus.length}개</span>
+                        <span className="text-[12px] font-semibold text-fg">{group.name}</span>
+                        <span className="text-[11px] text-fg-5 ml-2">{group.skus.length}개</span>
                       </td>
                     </tr>
                     {group.skus.map((sku) => (
-                      <tr key={sku.id} className="border-b border-[#F2F4F6] hover:bg-[#FAFAFA]">
+                      <tr key={sku.id} className="border-b border-line-2 hover:bg-card-2">
                         <td className="px-5 py-2.5">
-                          <p className="text-[13px] text-[#191F28]">{sku.option_label || '기본'}</p>
-                          <p className="text-[11px] text-[#B0B8C1] font-mono">{sku.sku_code}</p>
+                          <p className="text-[13px] text-fg">{sku.option_label || '기본'}</p>
+                          <p className="text-[11px] text-fg-5 font-mono">{sku.sku_code}</p>
                         </td>
                         {GRADES.map(g => (
                           <td key={g} className="text-center px-2 py-2">
@@ -246,7 +248,7 @@ function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: str
       />
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28] text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
         </div>
       )}
@@ -291,12 +293,12 @@ const EMPTY_SUPPLIER_FORM: SupplierFormState = {
   addresses: [],
 };
 
-const sfInputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+const sfInputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
 
 function SfField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[13px] font-medium text-[#191F28]">
+      <label className="text-[13px] font-medium text-fg">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
@@ -348,7 +350,7 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
       <SfField label="연락처">
         <div className="flex gap-2">
           <select value={form.phone_country_code} onChange={(e) => set('phone_country_code', e.target.value)}
-            className="h-11 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors shrink-0">
+            className="h-11 px-2 rounded-xl border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors shrink-0">
             {COUNTRY_CODES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
           </select>
           <input lang="ko" className={sfInputCls} placeholder="010-1234-5678" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
@@ -360,53 +362,53 @@ function SupplierFormDialog({ initial, onSave, onCancel, saving }: {
       <SfField label="기본 리드타임 (일)">
         <div className="flex items-center gap-2">
           <input className={sfInputCls} type="number" min="1" max="365" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
-          <span className="text-[13px] text-[#6B7684] whitespace-nowrap">일</span>
+          <span className="text-[13px] text-fg-3 whitespace-nowrap">일</span>
         </div>
-        <p className="text-[11px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
+        <p className="text-[11px] text-fg-5 mt-1">발주일로부터 입고까지 평균 소요 기간</p>
       </SfField>
       <SfField label="주요 상품">
         <input lang="ko" className={sfInputCls} placeholder="예: 백팩, 가방류, 의류" value={form.main_products} onChange={(e) => set('main_products', e.target.value)} />
       </SfField>
       <div className="space-y-2">
-        <label className="text-[13px] font-medium text-[#191F28]">주소</label>
+        <label className="text-[13px] font-medium text-fg">주소</label>
         {form.addresses.map((addr, i) => (
-          <div key={i} className="flex items-start gap-2 bg-[#F8F9FB] rounded-xl px-3 py-2.5">
-            <MapPin className="h-3.5 w-3.5 text-[#B0B8C1] mt-0.5 shrink-0" />
+          <div key={i} className="flex items-start gap-2 bg-card-2 rounded-xl px-3 py-2.5">
+            <MapPin className="h-3.5 w-3.5 text-fg-5 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-[#6B7684]">{addr.label}</p>
-              <p className="text-[13px] text-[#191F28] break-all">{addr.address}</p>
+              <p className="text-[11px] font-semibold text-fg-3">{addr.label}</p>
+              <p className="text-[13px] text-fg break-all">{addr.address}</p>
             </div>
-            <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors shrink-0">
+            <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors shrink-0">
               <XIcon className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-        <div className="border border-[#E5E8EB] rounded-xl p-3 space-y-2">
+        <div className="border border-line rounded-xl p-3 space-y-2">
           <div className="flex gap-2">
             <select value={addrInput.type} onChange={(e) => handleAddrTypeChange(e.target.value as SupplierAddress['type'])}
-              className="h-10 px-2 rounded-xl border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6] transition-colors shrink-0">
+              className="h-10 px-2 rounded-xl border border-line text-[13px] bg-card focus:outline-none focus:border-brand transition-colors shrink-0">
               {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <input
               lang="ko"
-              className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="flex-1 h-10 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors"
               placeholder="주소 입력" value={addrInput.address}
               onChange={(e) => setAddrInput((a) => ({ ...a, address: e.target.value }))}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAddress(); } }}
             />
-            <button type="button" onClick={addAddress} className="h-10 w-9 flex items-center justify-center rounded-xl bg-[#EBF1FE] text-[#3182F6] hover:bg-[#3182F6] hover:text-white transition-colors shrink-0">
+            <button type="button" onClick={addAddress} className="h-10 w-9 flex items-center justify-center rounded-xl bg-brand-bg text-brand hover:bg-brand hover:text-white transition-colors shrink-0">
               <Plus className="h-4 w-4" />
             </button>
           </div>
         </div>
       </div>
       <SfField label="메모">
-        <textarea lang="ko" className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
+        <textarea lang="ko" className="w-full px-3.5 py-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors resize-none"
           rows={2} placeholder="특이사항, 계좌 정보 등" value={form.note} onChange={(e) => set('note', e.target.value)} />
       </SfField>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
-        <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
+        <button type="submit" disabled={saving} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           저장
         </button>
@@ -489,12 +491,12 @@ function SuppliersTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</span>
+        <span className="text-[13px] text-fg-3">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</span>
         <div className="flex items-center gap-2">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
             <Upload className="h-3.5 w-3.5" /> CSV 업로드
           </button>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors">
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors">
             <Plus className="h-3.5 w-3.5" /> 공급처 추가
           </button>
         </div>
@@ -502,54 +504,54 @@ function SuppliersTab() {
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand" />
         </div>
       ) : suppliers.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
-          <Building2 className="h-10 w-10 text-[#B0B8C1] mb-3" />
-          <p className="text-[13px] font-medium text-[#6B7684]">등록된 공급처가 없습니다</p>
-          <p className="text-[13px] text-[#B0B8C1] mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+          <Building2 className="h-10 w-10 text-fg-5 mb-3" />
+          <p className="text-[13px] font-medium text-fg-3">등록된 공급처가 없습니다</p>
+          <p className="text-[13px] text-fg-5 mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
         </div>
       ) : (
         <div className="grid gap-3">
           {suppliers.map((s) => (
-            <div key={s.id} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+            <div key={s.id} className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#F2F4F6] flex items-center justify-center shrink-0">
-                    <Building2 className="h-5 w-5 text-[#6B7684]" />
+                  <div className="w-10 h-10 rounded-xl bg-app flex items-center justify-center shrink-0">
+                    <Building2 className="h-5 w-5 text-fg-3" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-[15px] font-bold text-[#191F28]">{s.name}</h3>
-                      {s.alias && <span className="text-[11px] font-medium px-2 py-0.5 bg-[#EBF1FE] text-[#3182F6] rounded-full">{s.alias}</span>}
-                      {s.country && <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F2F4F6] text-[#6B7684] rounded-full">{s.country}</span>}
+                      <h3 className="text-[15px] font-bold text-fg">{s.name}</h3>
+                      {s.alias && <span className="text-[11px] font-medium px-2 py-0.5 bg-brand-bg text-brand rounded-full">{s.alias}</span>}
+                      {s.country && <span className="text-[11px] font-medium px-2 py-0.5 bg-app text-fg-3 rounded-full">{s.country}</span>}
                     </div>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      {s.contact_person && <span className="text-[12px] text-[#6B7684]"><span className="text-[#B0B8C1]">담당자</span> {s.contact_person}</span>}
-                      {s.phone && <span className="flex items-center gap-1 text-[12px] text-[#6B7684]"><Phone className="h-3.5 w-3.5 text-[#B0B8C1]" />{s.phone_country_code && `${s.phone_country_code} `}{s.phone}</span>}
-                      {s.email && <span className="flex items-center gap-1 text-[12px] text-[#6B7684]"><Mail className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.email}</span>}
-                      <span className="flex items-center gap-1 text-[12px] font-medium text-[#3182F6]"><Clock className="h-3.5 w-3.5" /> 리드타임 {s.lead_time_days}일</span>
-                      {s.main_products && <span className="flex items-center gap-1 text-[12px] text-[#6B7684]"><Package className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.main_products}</span>}
+                      {s.contact_person && <span className="text-[12px] text-fg-3"><span className="text-fg-5">담당자</span> {s.contact_person}</span>}
+                      {s.phone && <span className="flex items-center gap-1 text-[12px] text-fg-3"><Phone className="h-3.5 w-3.5 text-fg-5" />{s.phone_country_code && `${s.phone_country_code} `}{s.phone}</span>}
+                      {s.email && <span className="flex items-center gap-1 text-[12px] text-fg-3"><Mail className="h-3.5 w-3.5 text-fg-5" /> {s.email}</span>}
+                      <span className="flex items-center gap-1 text-[12px] font-medium text-brand"><Clock className="h-3.5 w-3.5" /> 리드타임 {s.lead_time_days}일</span>
+                      {s.main_products && <span className="flex items-center gap-1 text-[12px] text-fg-3"><Package className="h-3.5 w-3.5 text-fg-5" /> {s.main_products}</span>}
                     </div>
                     {(s.addresses ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-1.5">
                         {s.addresses.map((addr, i) => (
-                          <span key={i} className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                            <MapPin className="h-3 w-3 text-[#B0B8C1]" />
-                            <span className="text-[#B0B8C1] font-medium">{addr.label}</span> {addr.address}
+                          <span key={i} className="flex items-center gap-1 text-[12px] text-fg-3">
+                            <MapPin className="h-3 w-3 text-fg-5" />
+                            <span className="text-fg-5 font-medium">{addr.label}</span> {addr.address}
                           </span>
                         ))}
                       </div>
                     )}
-                    {s.note && <p className="text-[12px] text-[#B0B8C1] mt-1.5 line-clamp-1">{s.note}</p>}
+                    {s.note && <p className="text-[12px] text-fg-5 mt-1.5 line-clamp-1">{s.note}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => setEditTarget(s)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#6B7684] transition-colors">
+                  <button onClick={() => setEditTarget(s)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app text-fg-5 hover:text-fg-3 transition-colors">
                     <Edit2 className="h-4 w-4" />
                   </button>
-                  <button onClick={() => setDeleteId(s.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors">
+                  <button onClick={() => setDeleteId(s.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -570,11 +572,11 @@ function SuppliersTab() {
       {addOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setAddOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-              <h2 className="text-[15px] font-bold text-[#191F28]">공급처 추가</h2>
-              <button onClick={() => setAddOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-                <XIcon className="h-4 w-4 text-[#6B7684]" />
+          <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+              <h2 className="text-[15px] font-bold text-fg">공급처 추가</h2>
+              <button onClick={() => setAddOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+                <XIcon className="h-4 w-4 text-fg-3" />
               </button>
             </div>
             <div className="px-6 py-5">
@@ -588,11 +590,11 @@ function SuppliersTab() {
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setEditTarget(null)} />
-          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-              <h2 className="text-[15px] font-bold text-[#191F28]">공급처 수정</h2>
-              <button onClick={() => setEditTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-                <XIcon className="h-4 w-4 text-[#6B7684]" />
+          <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+              <h2 className="text-[15px] font-bold text-fg">공급처 수정</h2>
+              <button onClick={() => setEditTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+                <XIcon className="h-4 w-4 text-fg-3" />
               </button>
             </div>
             <div className="px-6 py-5">
@@ -621,11 +623,11 @@ function SuppliersTab() {
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteId(null)} />
-          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
-            <h3 className="text-[15px] font-bold text-[#191F28] mb-2">공급처 삭제</h3>
-            <p className="text-[13px] text-[#6B7684]">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
+          <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+            <h3 className="text-[15px] font-bold text-fg mb-2">공급처 삭제</h3>
+            <p className="text-[13px] text-fg-3">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">취소</button>
+              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">취소</button>
               <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors">삭제</button>
             </div>
           </div>
@@ -690,11 +692,11 @@ export default function MasterPage() {
 
   const rTh = (key: string, children: React.ReactNode, className = '') => (
     <th style={{ width: colWidths[key] ?? 100, minWidth: colWidths[key] ?? 100 }}
-      className={`relative px-3 py-2 text-[11px] font-medium text-[#6B7684] whitespace-nowrap select-none overflow-hidden ${className}`}>
+      className={`relative px-3 py-2 text-[11px] font-medium text-fg-3 whitespace-nowrap select-none overflow-hidden ${className}`}>
       {children}
       <div onMouseDown={(e) => handleResizeStart(e, key)}
         className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center group/resize">
-        <div className="w-[2px] h-4 rounded-full bg-[#D1D5DB] group-hover/resize:bg-[#3182F6] group-hover/resize:h-full transition-all duration-100" />
+        <div className="w-[2px] h-4 rounded-full bg-line group-hover/resize:bg-brand group-hover/resize:h-full transition-all duration-100" />
       </div>
     </th>
   );
@@ -1119,12 +1121,12 @@ export default function MasterPage() {
   const totalCols = 1 /* checkbox */ + 1 /* name */ + skuBasicColCount + warehouses.length
     + channels.reduce((s, c) => s + (c.type === 'coupang' ? 10 : 3), 0) + 1 /* save */;
 
-  const platformInputCls = 'w-full h-10 px-2.5 rounded-lg border border-[#E5E8EB] text-[12px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors bg-white';
+  const platformInputCls = 'w-full h-10 px-2.5 rounded-lg border border-line text-[12px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors bg-card';
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+        <Loader2 className="h-6 w-6 animate-spin text-brand" />
       </div>
     );
   }
@@ -1132,16 +1134,16 @@ export default function MasterPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="sticky top-[60px] z-20 bg-[#F2F4F6] pb-3 -mb-2 space-y-3">
+      <div className="sticky top-14 z-20 bg-app pb-3 -mb-2 space-y-3">
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div className="min-w-0">
-            <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">마스터 시트</h2>
-            <p className="mt-1 text-[13px] text-[#6B7684]">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
+            <PageHeader title="마스터 시트" />
+            <p className="mt-1 text-[13px] text-fg-3">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
           </div>
-          <div className="flex items-center gap-1 bg-[#F2F4F6] p-1 rounded-xl shrink-0">
+          <div className="flex items-center gap-1 bg-app p-1 rounded-xl shrink-0">
             {([['master', 'SKU 마스터'], ['discount', '반품 할인율'], ['supplier', '공급처']] as const).map(([t, label]) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-white text-[#191F28] shadow-sm' : 'text-[#6B7684] hover:bg-white/60'}`}>
+                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:bg-white/60'}`}>
                 {label}
               </button>
             ))}
@@ -1150,32 +1152,32 @@ export default function MasterPage() {
         {tab === 'master' && (
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[140px] max-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#B0B8C1]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
               <input
                 lang="ko"
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 placeholder="상품명·SKU 검색"
-                className="w-full h-10 pl-8 pr-3 rounded-xl border border-[#E5E8EB] text-[13px] focus:outline-none focus:border-[#3182F6]"
+                className="w-full h-10 pl-8 pr-3 rounded-xl border border-line text-[13px] focus:outline-none focus:border-brand"
               />
             </div>
-            <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+            <button onClick={load} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
               <RefreshCw className="h-4 w-4" /> 새로고침
             </button>
             {channels.some((c) => c.type === 'coupang') && (
               <button onClick={syncIds} disabled={syncing}
                 title={syncResult ?? '쿠팡 옵션ID 자동 매핑 (externalSkuId -> vendorItemId)'}
-                className="flex items-center gap-1.5 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] disabled:opacity-60 transition-colors whitespace-nowrap">
+                className="flex items-center gap-1.5 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app disabled:opacity-60 transition-colors whitespace-nowrap">
                 {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                 쿠팡 ID 동기화
               </button>
             )}
             <button onClick={() => setImportOpen(true)}
-              className="flex items-center gap-1.5 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+              className="flex items-center gap-1.5 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
               <Upload className="h-4 w-4" /> 엑셀 업로드
             </button>
             {dirtyCount > 0 && (
-              <button onClick={saveAllDirty} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 whitespace-nowrap">
+              <button onClick={saveAllDirty} disabled={savingAll} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 whitespace-nowrap">
                 {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 저장 ({dirtyCount})
               </button>
@@ -1193,9 +1195,9 @@ export default function MasterPage() {
       {/* SKU 마스터 (unified) 탭 */}
       {tab === 'master' && <>
       {/* 안내 */}
-      <div className="bg-[#EBF1FE] rounded-xl px-4 py-3 flex items-start gap-2.5">
-        <FileSpreadsheet className="h-4 w-4 text-[#3182F6] mt-0.5 shrink-0" />
-        <p className="text-[13px] text-[#3182F6]">
+      <div className="bg-brand-bg rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <FileSpreadsheet className="h-4 w-4 text-brand mt-0.5 shrink-0" />
+        <p className="text-[13px] text-brand">
           <span className="font-semibold">원가·리드타임·발주점·안전재고</span>와 <span className="font-semibold">플랫폼 상품정보</span>를 한 화면에서 관리하세요.
           창고 재고 수량은 조회만 가능하며, 수정은{' '}
           <Link href="/inventory" className="font-semibold underline underline-offset-2">재고현황</Link>에서 합니다.
@@ -1204,31 +1206,31 @@ export default function MasterPage() {
 
       {/* 일괄 쿠폰할인 바 */}
       {selected.size > 0 && coupangChannel && (
-        <div className="flex items-center gap-3 px-5 py-2.5 bg-[#EBF1FE] rounded-xl border border-[#D4E2FC]">
-          <span className="text-[12px] font-semibold text-[#3182F6]">{selected.size}개 선택</span>
+        <div className="flex items-center gap-3 px-5 py-2.5 bg-brand-bg rounded-xl border border-[#D4E2FC]">
+          <span className="text-[12px] font-semibold text-brand">{selected.size}개 선택</span>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-[#6B7684]">쿠폰할인 일괄:</span>
+            <span className="text-[12px] text-fg-3">쿠폰할인 일괄:</span>
             <input type="text" inputMode="numeric" value={bulkDiscount} onChange={(e) => setBulkDiscount(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="금액" className="h-8 w-24 px-2.5 rounded-lg border border-[#D4E2FC] text-[12px] focus:outline-none focus:border-[#3182F6]" />
+              placeholder="금액" className="h-8 w-24 px-2.5 rounded-lg border border-[#D4E2FC] text-[12px] focus:outline-none focus:border-brand" />
             <button onClick={applyBulkDiscount} disabled={bulkSaving || !bulkDiscount.trim()}
-              className="h-8 px-3.5 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] disabled:opacity-50 whitespace-nowrap">
+              className="h-8 px-3.5 rounded-lg bg-brand text-white text-[12px] font-medium hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap">
               {bulkSaving ? '저장중...' : '일괄 적용'}
             </button>
           </div>
           <button onClick={() => { setSelected(new Set()); setBulkDiscount(''); }}
-            className="text-[12px] text-[#6B7684] hover:text-[#191F28] ml-auto">취소</button>
+            className="text-[12px] text-fg-3 hover:text-fg ml-auto">취소</button>
         </div>
       )}
 
       {/* Dirty rows warning */}
       {dirtyCount > 0 && (
         <div className="flex items-center gap-3 px-5 py-2.5 bg-[#FFF7ED] rounded-xl border border-[#FED7AA]">
-          <AlertCircle className="h-4 w-4 text-[#F97316] shrink-0" />
+          <AlertCircle className="h-4 w-4 text-warn shrink-0" />
           <span className="text-[12px] font-medium text-[#9A3412]">
             {dirtyCount}개 행 수정됨 — 저장하지 않으면 사라집니다
           </span>
           <button onClick={saveAllDirty} disabled={rows.some((r) => r.saving)}
-            className="ml-auto h-8 px-4 rounded-lg bg-[#F97316] text-white text-[12px] font-semibold hover:bg-[#EA580C] disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap">
+            className="ml-auto h-8 px-4 rounded-lg bg-warn text-white text-[12px] font-semibold hover:bg-[#EA580C] disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap">
             {rows.some((r) => r.saving) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             전체 저장
           </button>
@@ -1236,53 +1238,53 @@ export default function MasterPage() {
       )}
 
       {rows.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
-          <FileSpreadsheet className="h-10 w-10 text-[#B0B8C1] mb-3" />
-          <p className="text-[13px] font-medium text-[#6B7684]">상품 관리에서 상품을 먼저 등록하세요</p>
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+          <FileSpreadsheet className="h-10 w-10 text-fg-5 mb-3" />
+          <p className="text-[13px] font-medium text-fg-3">상품 관리에서 상품을 먼저 등록하세요</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 {/* Row 1: Group headers */}
-                <tr className="bg-[#F8F9FB]">
-                  <th rowSpan={2} className="w-10 px-2 py-2 border-b border-[#F2F4F6] sticky left-0 bg-[#F8F9FB] z-10">
+                <tr className="bg-card-2">
+                  <th rowSpan={2} className="w-10 px-2 py-2 border-b border-line-2 sticky left-0 bg-card-2 z-10">
                     <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
-                      className="w-3.5 h-3.5 rounded border-[#D0D5DD] text-[#3182F6] focus:ring-[#3182F6]/20 cursor-pointer" />
+                      className="w-3.5 h-3.5 rounded border-line text-brand focus:ring-brand/20 cursor-pointer" />
                   </th>
-                  <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap min-w-[180px] sticky left-[40px] bg-[#F8F9FB] z-10 border-b border-[#F2F4F6] border-r border-r-[#E5E8EB]">
+                  <th rowSpan={2} className="text-left px-5 py-2 text-[12px] font-semibold text-fg-3 whitespace-nowrap min-w-[180px] sticky left-[40px] bg-card-2 z-10 border-b border-line-2 border-r border-r-line">
                     상품 / SKU
                   </th>
-                  <th colSpan={skuBasicColCount} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">
+                  <th colSpan={skuBasicColCount} className="text-center px-3 py-2 text-[12px] font-semibold text-fg-3 whitespace-nowrap border-b border-line border-l border-line-2">
                     SKU 기본
                   </th>
                   {warehouses.length > 0 && (
-                    <th colSpan={warehouses.length} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#F2F4F6]">
+                    <th colSpan={warehouses.length} className="text-center px-3 py-2 text-[12px] font-semibold text-fg-3 whitespace-nowrap border-b border-line border-l border-line-2">
                       창고재고
                     </th>
                   )}
                   {channels.map((c) => (
-                    <th key={c.id} colSpan={c.type === 'coupang' ? 10 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-[#6B7684] whitespace-nowrap border-b border-[#E5E8EB] border-l border-[#E5E8EB]">
+                    <th key={c.id} colSpan={c.type === 'coupang' ? 10 : 3} className="text-center px-3 py-2 text-[12px] font-semibold text-fg-3 whitespace-nowrap border-b border-line border-l border-line">
                       {c.name}
                       {c.type === 'coupang' && (<>
                         <button onClick={() => setRgVatIncluded(!rgVatIncluded)}
-                          className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgVatIncluded ? 'bg-[#F97316] text-white ring-2 ring-[#F97316]/30' : 'bg-[#F2F4F6] text-[#6B7684] hover:bg-[#E5E8EB]'}`}>
+                          className={`ml-2 px-2 py-0.5 rounded text-[10px] font-semibold transition-all active:scale-95 ${rgVatIncluded ? 'bg-warn text-white ring-2 ring-warn/30' : 'bg-app text-fg-3 hover:bg-line'}`}>
                           VAT {rgVatIncluded ? '포함' : '제외'}
                         </button>
                         {rgSaverEnabled && (
-                          <span className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#3182F6]/10 text-[#3182F6]">세이버</span>
+                          <span className="ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-brand/10 text-brand">세이버</span>
                         )}
                       </>)}
                     </th>
                   ))}
-                  <th rowSpan={2} className="border-b border-[#F2F4F6] min-w-[60px]" />
+                  <th rowSpan={2} className="border-b border-line-2 min-w-[60px]" />
                 </tr>
                 {/* Row 2: Sub-headers */}
-                <tr className="bg-[#F8F9FB] border-b border-[#F2F4F6]">
+                <tr className="bg-card-2 border-b border-line-2">
                   {/* SKU basic sub-headers */}
-                  {rTh('supplier', '공급처', 'text-left border-l border-[#F2F4F6]')}
-                  {rTh('cost', <span>원가 <span className="font-normal text-[#B0B8C1]">(VAT제외)</span></span>, 'text-right')}
+                  {rTh('supplier', '공급처', 'text-left border-l border-line-2')}
+                  {rTh('cost', <span>원가 <span className="font-normal text-fg-5">(VAT제외)</span></span>, 'text-right')}
                   {rTh('lead', '리드타임', 'text-right')}
                   {rTh('reorder', '발주점', 'text-right')}
                   {rTh('safety', '안전재고', 'text-right')}
@@ -1292,12 +1294,12 @@ export default function MasterPage() {
                   {/* Warehouse sub-headers */}
                   {warehouses.map((w) => (
                     <th key={w.id} style={{ width: colWidths[`wh_${w.id}`] ?? 110, minWidth: colWidths[`wh_${w.id}`] ?? 110 }}
-                      className={`relative text-right px-3 py-2 text-[11px] font-medium text-[#6B7684] whitespace-nowrap select-none overflow-hidden ${warehouses.indexOf(w) === 0 ? 'border-l border-[#F2F4F6]' : ''}`}>
+                      className={`relative text-right px-3 py-2 text-[11px] font-medium text-fg-3 whitespace-nowrap select-none overflow-hidden ${warehouses.indexOf(w) === 0 ? 'border-l border-line-2' : ''}`}>
                       <span>{w.name}</span>
-                      <span className="ml-1 text-[10px] font-normal text-[#B0B8C1]">조회</span>
+                      <span className="ml-1 text-[10px] font-normal text-fg-5">조회</span>
                       <div onMouseDown={(e) => handleResizeStart(e, `wh_${w.id}`)}
                         className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize flex items-center justify-center group/resize">
-                        <div className="w-[2px] h-4 rounded-full bg-[#D1D5DB] group-hover/resize:bg-[#3182F6] group-hover/resize:h-full transition-all duration-100" />
+                        <div className="w-[2px] h-4 rounded-full bg-line group-hover/resize:bg-brand group-hover/resize:h-full transition-all duration-100" />
                       </div>
                     </th>
                   ))}
@@ -1305,27 +1307,27 @@ export default function MasterPage() {
                   {/* Channel sub-headers */}
                   {channels.map((c) => (
                     <Fragment key={c.id}>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[180px] border-l border-[#E5E8EB]">플랫폼상품명</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[100px]">판매가</th>
-                      {c.type === 'coupang' && <th className="text-left px-3 py-2 text-[11px] font-medium text-[#B0B8C1] whitespace-nowrap min-w-[80px]">쿠폰할인</th>}
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[180px] border-l border-line">플랫폼상품명</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[100px]">판매가</th>
+                      {c.type === 'coupang' && <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[80px]">쿠폰할인</th>}
                       {c.type === 'coupang' && <>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">입출고배송</th>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">반품회수</th>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">반품재입고</th>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">창고발송</th>
-                        <th className="text-left px-3 py-2 text-[11px] font-medium text-[#F97316] whitespace-nowrap min-w-[70px]">포장비</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-warn whitespace-nowrap min-w-[70px]">입출고배송</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-warn whitespace-nowrap min-w-[70px]">반품회수</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-warn whitespace-nowrap min-w-[70px]">반품재입고</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-warn whitespace-nowrap min-w-[70px]">창고발송</th>
+                        <th className="text-left px-3 py-2 text-[11px] font-medium text-warn whitespace-nowrap min-w-[70px]">포장비</th>
                       </>}
                     </Fragment>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F6]">
+              <tbody className="divide-y divide-line-2">
                 {masterGroups.map((group, gIdx) => (
                   <Fragment key={group.name}>
                     {/* 상품 그룹 헤더 */}
                     <tr
-                      className={`bg-[#F8F9FB] border-y border-[#E5E8EB] select-none transition-colors ${dragOverGroup === group.name ? 'outline outline-2 outline-[#3182F6]' : 'hover:bg-[#F0F3FA]'}`}
+                      className={`bg-card-2 border-y border-line select-none transition-colors ${dragOverGroup === group.name ? 'outline outline-2 outline-brand' : 'hover:bg-[#F0F3FA]'}`}
                       draggable
                       onDragStart={() => handleDragStart(group.name)}
                       onDragOver={(e) => handleDragOver(e, group.name)}
@@ -1334,15 +1336,15 @@ export default function MasterPage() {
                     >
                       <td colSpan={totalCols} className="px-4 py-2.5 sticky left-0 bg-inherit">
                         <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 text-[#B0B8C1] shrink-0 cursor-grab" />
+                          <GripVertical className="h-4 w-4 text-fg-5 shrink-0 cursor-grab" />
                           <button onClick={() => toggleMaster(group.name)} className="flex items-center gap-2">
-                            {!expandedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-[#6B7684] shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-[#6B7684] shrink-0" />}
+                            {!expandedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-fg-3 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-fg-3 shrink-0" />}
                           </button>
-                          <span className="text-[12px] font-bold text-[#3182F6]">{gIdx + 1}.</span>
-                          <button onClick={() => toggleMaster(group.name)} className="text-[13px] font-semibold text-[#191F28] hover:text-[#3182F6] transition-colors">
+                          <span className="text-[12px] font-bold text-brand">{gIdx + 1}.</span>
+                          <button onClick={() => toggleMaster(group.name)} className="text-[13px] font-semibold text-fg hover:text-brand transition-colors">
                             {group.name}
                           </button>
-                          <span className="text-[11px] text-[#B0B8C1]">{group.skus.length}개 옵션</span>
+                          <span className="text-[11px] text-fg-5">{group.skus.length}개 옵션</span>
                         </div>
                       </td>
                     </tr>
@@ -1351,25 +1353,25 @@ export default function MasterPage() {
                   const isDirty = row.skuDirty || row.platformDirty;
 
                   return (
-                    <tr key={row.id} className={`transition-colors border-b border-[#F2F4F6] ${selected.has(row.id) ? 'bg-[#EBF1FE]/30' : isDirty ? 'bg-[#EBF1FE]/20' : 'hover:bg-[#FAFAFA]'}`}>
+                    <tr key={row.id} className={`transition-colors border-b border-line-2 ${selected.has(row.id) ? 'bg-brand-bg/30' : isDirty ? 'bg-brand-bg/20' : 'hover:bg-card-2'}`}>
                       {/* Checkbox */}
-                      <td className={`w-10 px-2 py-2.5 sticky left-0 z-10 ${selected.has(row.id) ? 'bg-[#EBF1FE]/40' : isDirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      <td className={`w-10 px-2 py-2.5 sticky left-0 z-10 ${selected.has(row.id) ? 'bg-brand-bg/40' : isDirty ? 'bg-brand-bg/30' : 'bg-card'}`}>
                         <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)}
-                          className="w-3.5 h-3.5 rounded border-[#D0D5DD] text-[#3182F6] focus:ring-[#3182F6]/20 cursor-pointer" />
+                          className="w-3.5 h-3.5 rounded border-line text-brand focus:ring-brand/20 cursor-pointer" />
                       </td>
                       {/* 상품/SKU */}
-                      <td className={`px-4 py-2.5 sticky left-[40px] z-10 border-r border-[#E5E8EB] ${selected.has(row.id) ? 'bg-[#EBF1FE]/40' : isDirty ? 'bg-[#EBF1FE]/30' : 'bg-white'}`}>
+                      <td className={`px-4 py-2.5 sticky left-[40px] z-10 border-r border-line ${selected.has(row.id) ? 'bg-brand-bg/40' : isDirty ? 'bg-brand-bg/30' : 'bg-card'}`}>
                         <div className="flex items-center gap-2 pl-2">
-                          <span className="text-[11px] text-[#B0B8C1] tabular-nums w-7 shrink-0">{gIdx + 1}-{sIdx + 1}</span>
+                          <span className="text-[11px] text-fg-5 tabular-nums w-7 shrink-0">{gIdx + 1}-{sIdx + 1}</span>
                           <div className="min-w-0">
                             {row.option_label
-                              ? <p className="text-[13px] font-medium text-[#191F28]">{row.option_label}</p>
-                              : <p className="text-[12px] text-[#B0B8C1]">기본</p>}
+                              ? <p className="text-[13px] font-medium text-fg">{row.option_label}</p>
+                              : <p className="text-[12px] text-fg-5">기본</p>}
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[11px] text-[#B0B8C1] font-mono">{row.sku_code}</span>
+                              <span className="text-[11px] text-fg-5 font-mono">{row.sku_code}</span>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setAliasModal({ skuId: row.id, productName: row.product_name, optionLabel: row.option_label, skuCode: row.sku_code }); setNewAlias(''); }}
-                                className="text-[11px] text-[#3182F6] hover:underline whitespace-nowrap"
+                                className="text-[11px] text-brand hover:underline whitespace-nowrap"
                               >
                                 연동 {(aliases[row.id] ?? []).length}개
                               </button>
@@ -1380,7 +1382,7 @@ export default function MasterPage() {
 
                       {/* ── SKU basic columns ── */}
                       {/* 공급처 */}
-                      <td className="px-2 py-2 border-l border-[#F2F4F6]">
+                      <td className="px-2 py-2 border-l border-line-2">
                         <SelectCell
                           value={row.supplier_id}
                           onChange={(v) => {
@@ -1399,7 +1401,7 @@ export default function MasterPage() {
                       <td className="px-2 py-2">
                         <NumCell value={row.cost_price} onChange={(v) => markDirty(row.id, { cost_price: v })} />
                         {row.cost_price && (
-                          <p className="text-[11px] text-[#B0B8C1] text-right pr-2.5">
+                          <p className="text-[11px] text-fg-5 text-right pr-2.5">
                             {formatCurrency(Number(row.cost_price))} · VAT포함 {formatCurrency(Math.round(Number(row.cost_price) * 1.1))}
                           </p>
                         )}
@@ -1409,7 +1411,7 @@ export default function MasterPage() {
                       <td className="px-2 py-2">
                         <NumCell value={row.lead_time_days} onChange={(v) => markDirty(row.id, { lead_time_days: v })} />
                         {row.lead_time_days && (
-                          <p className="text-[11px] text-[#B0B8C1] text-right pr-2.5">{row.lead_time_days}일</p>
+                          <p className="text-[11px] text-fg-5 text-right pr-2.5">{row.lead_time_days}일</p>
                         )}
                       </td>
 
@@ -1417,7 +1419,7 @@ export default function MasterPage() {
                       <td className="px-2 py-2">
                         <NumCell value={row.reorder_point} onChange={(v) => markDirty(row.id, { reorder_point: v })} />
                         {row.reorder_point && (
-                          <p className="text-[11px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.reorder_point))}개</p>
+                          <p className="text-[11px] text-fg-5 text-right pr-2.5">{formatNumber(Number(row.reorder_point))}개</p>
                         )}
                       </td>
 
@@ -1425,7 +1427,7 @@ export default function MasterPage() {
                       <td className="px-2 py-2">
                         <NumCell value={row.safety_stock} onChange={(v) => markDirty(row.id, { safety_stock: v })} />
                         {row.safety_stock && (
-                          <p className="text-[11px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.safety_stock))}개</p>
+                          <p className="text-[11px] text-fg-5 text-right pr-2.5">{formatNumber(Number(row.safety_stock))}개</p>
                         )}
                       </td>
 
@@ -1433,23 +1435,23 @@ export default function MasterPage() {
                       <td className="px-2 py-2">
                         <NumCell value={row.sales_30d} onChange={(v) => markDirty(row.id, { sales_30d: v })} />
                         {row.sales_30d && (
-                          <p className="text-[11px] text-[#B0B8C1] text-right pr-2.5">{formatNumber(Number(row.sales_30d))}개</p>
+                          <p className="text-[11px] text-fg-5 text-right pr-2.5">{formatNumber(Number(row.sales_30d))}개</p>
                         )}
                       </td>
 
                       {/* 일일 평균 (읽기전용) */}
                       <td className="px-3 py-2 text-right">
-                        <span className="text-[13px] text-[#6B7684] tabular-nums">
+                        <span className="text-[13px] text-fg-3 tabular-nums">
                           {dailyAvg !== null ? `${Math.round(dailyAvg * 10) / 10}개` : '–'}
                         </span>
                       </td>
 
                       {/* ── 창고별 재고 (읽기 전용) ── */}
                       {warehouses.map((w, wIdx) => (
-                        <td key={w.id} className={`px-4 py-2.5 text-right ${wIdx === 0 ? 'border-l border-[#F2F4F6]' : ''}`}>
+                        <td key={w.id} className={`px-4 py-2.5 text-right ${wIdx === 0 ? 'border-l border-line-2' : ''}`}>
                           {row.inventory[w.id]
-                            ? <span className="text-[13px] font-semibold text-[#191F28] tabular-nums">{formatNumber(Number(row.inventory[w.id]))}<span className="text-[11px] font-normal text-[#B0B8C1] ml-0.5">개</span></span>
-                            : <span className="text-[13px] text-[#D0D5DD]">–</span>
+                            ? <span className="text-[13px] font-semibold text-fg tabular-nums">{formatNumber(Number(row.inventory[w.id]))}<span className="text-[11px] font-normal text-fg-5 ml-0.5">개</span></span>
+                            : <span className="text-[13px] text-line">–</span>
                           }
                         </td>
                       ))}
@@ -1459,7 +1461,7 @@ export default function MasterPage() {
                         const e = row.entries[c.id] ?? { ...EMPTY_ENTRY };
                         return (
                           <Fragment key={c.id}>
-                            <td className="px-2 py-2 border-l border-[#E5E8EB]">
+                            <td className="px-2 py-2 border-l border-line">
                               <input lang="ko" value={e.name} onChange={(ev) => updatePlatformEntry(row.id, c.id, 'name', ev.target.value)}
                                 placeholder="플랫폼 상품명" className={platformInputCls} />
                             </td>
@@ -1491,7 +1493,7 @@ export default function MasterPage() {
                                         const stored = rgVatIncluded && v !== '' ? String(Math.round(Number(v) / 1.1)) : v;
                                         updatePlatformEntry(row.id, c.id, field as keyof ChannelEntry, stored);
                                       }}
-                                      placeholder="0" className={`${platformInputCls} ${saverZero ? 'bg-[#F2F4F6] text-[#B0B8C1]' : ''}`} />
+                                      placeholder="0" className={`${platformInputCls} ${saverZero ? 'bg-app text-fg-5' : ''}`} />
                                   </td>
                                 );
                               })}
@@ -1504,7 +1506,7 @@ export default function MasterPage() {
                       <td className="px-3 py-2 text-center">
                         {row.error && <p className="text-[11px] text-red-500 mb-1 max-w-[100px] truncate" title={row.error}>{row.error}</p>}
                         {row.saving ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-[#3182F6] mx-auto" />
+                          <Loader2 className="h-4 w-4 animate-spin text-brand mx-auto" />
                         ) : row.saved ? (
                           <Check className="h-4 w-4 text-green-500 mx-auto" />
                         ) : row.error ? (
@@ -1514,11 +1516,11 @@ export default function MasterPage() {
                           </button>
                         ) : isDirty ? (
                           <button onClick={() => saveRow(row)}
-                            className="h-8 px-3 rounded-lg bg-[#3182F6] text-white text-[12px] font-medium hover:bg-[#1B64DA] whitespace-nowrap">
+                            className="h-8 px-3 rounded-lg bg-brand text-white text-[12px] font-medium hover:bg-brand-hover whitespace-nowrap">
                             저장
                           </button>
                         ) : (
-                          <Check className="h-4 w-4 text-[#D0D5DD] mx-auto" />
+                          <Check className="h-4 w-4 text-line mx-auto" />
                         )}
                       </td>
                     </tr>
@@ -1531,10 +1533,10 @@ export default function MasterPage() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-5 py-3 bg-[#F8F9FB] border-t border-[#F2F4F6]">
-            <span className="text-[12px] text-[#6B7684]">총 {formatNumber(rows.length)}개 SKU</span>
+          <div className="flex items-center justify-between px-5 py-3 bg-card-2 border-t border-line-2">
+            <span className="text-[12px] text-fg-3">총 {formatNumber(rows.length)}개 SKU</span>
             {dirtyCount > 0 && (
-              <span className="text-[12px] text-[#3182F6] font-medium">{dirtyCount}개 행 변경됨</span>
+              <span className="text-[12px] text-brand font-medium">{dirtyCount}개 행 변경됨</span>
             )}
           </div>
         </div>
@@ -1544,31 +1546,31 @@ export default function MasterPage() {
       {aliasModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setAliasModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-[480px] max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
+          <div className="relative bg-card rounded-2xl shadow-xl w-[480px] max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
               <div>
-                <h3 className="text-[15px] font-bold text-[#191F28]">연동 상품명 관리</h3>
-                <p className="text-[12px] text-[#6B7684] mt-0.5">{aliasModal.productName} · {aliasModal.optionLabel || '기본'} <span className="text-[#B0B8C1] font-mono">({aliasModal.skuCode})</span></p>
+                <h3 className="text-[15px] font-bold text-fg">연동 상품명 관리</h3>
+                <p className="text-[12px] text-fg-3 mt-0.5">{aliasModal.productName} · {aliasModal.optionLabel || '기본'} <span className="text-fg-5 font-mono">({aliasModal.skuCode})</span></p>
               </div>
-              <button onClick={() => setAliasModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-                <XIcon className="h-4 w-4 text-[#6B7684]" />
+              <button onClick={() => setAliasModal(null)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+                <XIcon className="h-4 w-4 text-fg-3" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
               {(aliases[aliasModal.skuId] ?? []).length === 0 ? (
-                <p className="text-[13px] text-[#B0B8C1] text-center py-6">등록된 연동 상품명이 없습니다</p>
+                <p className="text-[13px] text-fg-5 text-center py-6">등록된 연동 상품명이 없습니다</p>
               ) : (
                 (aliases[aliasModal.skuId] ?? []).map((a, i) => (
-                  <div key={a.channel_name} className="flex items-center gap-3 px-3 py-2.5 bg-[#F8F9FB] rounded-xl group">
-                    <span className="text-[11px] text-[#B0B8C1] w-5 shrink-0 tabular-nums">{i + 1}</span>
-                    <span className="text-[13px] text-[#191F28] flex-1 break-all">{a.channel_name}</span>
+                  <div key={a.channel_name} className="flex items-center gap-3 px-3 py-2.5 bg-card-2 rounded-xl group">
+                    <span className="text-[11px] text-fg-5 w-5 shrink-0 tabular-nums">{i + 1}</span>
+                    <span className="text-[13px] text-fg flex-1 break-all">{a.channel_name}</span>
                     <button onClick={() => removeAlias(aliasModal.skuId, a.id, a.channel_name)}
                       className="opacity-0 group-hover:opacity-100 text-[12px] text-red-400 hover:text-red-600 shrink-0 transition-opacity">삭제</button>
                   </div>
                 ))
               )}
             </div>
-            <div className="px-6 py-4 border-t border-[#F2F4F6]">
+            <div className="px-6 py-4 border-t border-line-2">
               <div className="flex gap-2">
                 <input
                   autoFocus
@@ -1576,12 +1578,12 @@ export default function MasterPage() {
                   onChange={(e) => setNewAlias(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && newAlias.trim()) addAlias(aliasModal.skuId, newAlias); }}
                   placeholder="채널에서 사용하는 상품명 입력"
-                  className="flex-1 h-10 px-3 text-[13px] rounded-xl border border-[#E5E8EB] outline-none focus:border-[#3182F6]"
+                  className="flex-1 h-10 px-3 text-[13px] rounded-xl border border-line outline-none focus:border-brand"
                 />
                 <button onClick={() => { if (newAlias.trim()) addAlias(aliasModal.skuId, newAlias); }}
-                  className="h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA]">추가</button>
+                  className="h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover">추가</button>
               </div>
-              <p className="text-[11px] text-[#B0B8C1] mt-2">플랫폼에서 사용하는 상품명을 등록하면 주문 동기화 시 자동 매칭됩니다.</p>
+              <p className="text-[11px] text-fg-5 mt-2">플랫폼에서 사용하는 상품명을 등록하면 주문 동기화 시 자동 매칭됩니다.</p>
             </div>
           </div>
         </div>

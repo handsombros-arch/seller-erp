@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
+
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
@@ -269,7 +271,7 @@ const KPI_DEFS: KpiDef[] = [
     getValue: (t) => fmtW(t.cost) },
   { key: 'roas', label: 'ROAS (14일)', icon: TrendingUp, color: 'bg-green-50 text-green-600',
     getValue: (t) => `${(t.cost > 0 ? t.revenue14d / t.cost * 100 : 0).toFixed(0)}%` },
-  { key: 'revenue', label: '전환매출 (14일)', icon: Target, color: 'bg-blue-50 text-blue-600',
+  { key: 'revenue', label: '전환매출 (14일)', icon: Target, color: 'bg-brand-bg text-brand',
     getValue: (t) => fmtW(t.revenue14d) },
   { key: 'orders', label: '주문수 (14일)', icon: Megaphone, color: 'bg-purple-50 text-purple-600',
     getValue: (t) => `${t.orders14d}건` },
@@ -290,7 +292,7 @@ const KPI_DEFS: KpiDef[] = [
   { key: 'adRatio', label: '광고비율', icon: TrendingDown, color: 'bg-rose-50 text-rose-600',
     getValue: (t) => t.revenue14d > 0 ? pct(t.cost / t.revenue14d) : '-',
     getSub: () => '광고비 ÷ 매출' },
-  { key: 'impressions', label: '노출수', icon: Eye, color: 'bg-gray-50 text-gray-600',
+  { key: 'impressions', label: '노출수', icon: Eye, color: 'bg-card-2 text-fg-3',
     getValue: (t) => formatNumber(t.impressions) },
   { key: 'clicks', label: '클릭수', icon: MousePointerClick, color: 'bg-violet-50 text-violet-600',
     getValue: (t) => formatNumber(t.clicks) },
@@ -315,15 +317,15 @@ function KPI({ label, value, sub, icon: Icon, color }: {
   icon: React.ElementType; color: string;
 }) {
   return (
-    <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 flex flex-col gap-1">
+    <div className="bg-card rounded-[18px] border border-line p-4 flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${color}`}>
           <Icon className="h-4 w-4" />
         </div>
-        <span className="text-[12px] text-[#6E6E73] font-medium">{label}</span>
+        <span className="text-[12px] text-fg-3 font-medium">{label}</span>
       </div>
-      <p className="text-[20px] font-bold text-[#1D1D1F] mt-1">{value}</p>
-      {sub && <p className="text-[11px] text-[#D2D2D7]">{sub}</p>}
+      <p className="text-[20px] font-bold text-fg mt-1">{value}</p>
+      {sub && <p className="text-[11px] text-fg-5">{sub}</p>}
     </div>
   );
 }
@@ -336,8 +338,8 @@ function MetricChip({ m, active, onClick }: { m: MetricDef; active: boolean; onC
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
         active
-          ? 'border-[#1D1D1F] bg-white text-[#1D1D1F] shadow-sm'
-          : 'border-black/[0.08] bg-[#FBFBFD] text-[#86868B] hover:border-[#D2D2D7]'
+          ? 'border-fg bg-card text-fg shadow-sm'
+          : 'border-black/[0.08] bg-[#FBFBFD] text-fg-4 hover:border-fg-5'
       }`}
     >
       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: m.color, opacity: active ? 1 : 0.4 }} />
@@ -473,7 +475,7 @@ export default function AdAnalysisPage() {
       renderTotal: (t) => formatNumber(t.impressions) },
     { key: 'clicks', label: '클릭',
       render: (d) => formatNumber(d.clicks),
-      renderTotal: (t) => formatNumber(t.clicks), className: 'text-[#1D1D1F]' },
+      renderTotal: (t) => formatNumber(t.clicks), className: 'text-fg' },
     { key: 'ctr', label: 'CTR',
       render: (d) => d.impressions > 0 ? pct(d.clicks / d.impressions) : '-',
       renderTotal: (t) => t.impressions > 0 ? pct(t.clicks / t.impressions) : '-' },
@@ -482,13 +484,13 @@ export default function AdAnalysisPage() {
       renderTotal: (t) => t.clicks > 0 ? fmtW(Math.round(t.cost / t.clicks)) : '-' },
     { key: 'cost', label: '광고비(VAT)',
       render: (d) => fmtW(d.cost),
-      renderTotal: (t) => fmtW(t.cost), className: 'text-[#F43F5E] font-medium' },
+      renderTotal: (t) => fmtW(t.cost), className: 'text-danger font-medium' },
     { key: 'orders14d', label: '주문(14d)',
       render: (d) => d.orders14d,
       renderTotal: (t) => t.orders14d },
     { key: 'revenue14d', label: '매출(14d)',
       render: (d) => fmtW(d.revenue14d),
-      renderTotal: (t) => fmtW(t.revenue14d), className: 'text-[#0071E3] font-medium' },
+      renderTotal: (t) => fmtW(t.revenue14d), className: 'text-brand font-medium' },
     { key: 'roas', label: 'ROAS(14d)',
       render: (d) => { const r = d.cost > 0 ? d.revenue14d / d.cost : 0; return <span className={r >= 1 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>{d.cost > 0 ? `${(r * 100).toFixed(0)}%` : '-'}</span>; },
       renderTotal: (t) => { const r = t.cost > 0 ? t.revenue14d / t.cost : 0; return <span className={r >= 1 ? 'text-green-600' : 'text-red-500'}>{(r * 100).toFixed(0)}%</span>; } },
@@ -512,10 +514,10 @@ export default function AdAnalysisPage() {
       renderTotal: (t) => { const p = t.revenue14d - t.cogs14d - (t.commission14d ?? 0) - t.cost; return <span className={p >= 0 ? 'text-green-600' : 'text-red-500'}>{fmtW(p)}</span>; } },
     { key: 'keywordCount', label: '노출 키워드수',
       render: (d) => formatNumber(d.keywordCount ?? 0),
-      renderTotal: () => '-', className: 'text-[#8B5CF6] font-medium' },
+      renderTotal: () => '-', className: 'text-info font-medium' },
     { key: 'clickKeywordCount', label: '유입 키워드수',
       render: (d) => formatNumber(d.clickKeywordCount ?? 0),
-      renderTotal: () => '-', className: 'text-[#10B981] font-medium' },
+      renderTotal: () => '-', className: 'text-success font-medium' },
   ];
 
   const DEFAULT_TABLE_COLS: TableColKey[] = ['impressions', 'clicks', 'ctr', 'cpc', 'cost', 'orders14d', 'revenue14d', 'roas', 'keywordCount', 'clickKeywordCount'];
@@ -1630,14 +1632,14 @@ export default function AdAnalysisPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <Megaphone className="h-5 w-5 text-[#0071E3]" />
-          <h1 className="text-[20px] font-bold text-[#1D1D1F]">광고 분석</h1>
+          <Megaphone className="h-5 w-5 text-brand" />
+          <PageHeader title="광고 분석" />
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => fileRef.current?.click()}
             disabled={loading}
-            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#0071E3] text-white text-[13px] font-semibold hover:bg-[#0077ED] disabled:opacity-60 transition-colors"
+            className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 transition-colors"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             데이터 추가
@@ -1645,7 +1647,7 @@ export default function AdAnalysisPage() {
           {data && (
             <button
               onClick={() => { if (confirm('모든 광고 데이터를 삭제하시겠습니까?')) { setData(null); } }}
-              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-black/[0.08] text-[#6E6E73] text-[13px] font-medium hover:bg-[#FBFBFD] transition-colors"
+              className="flex items-center gap-2 h-10 px-4 rounded-xl border border-black/[0.08] text-fg-3 text-[13px] font-medium hover:bg-[#FBFBFD] transition-colors"
             >
               초기화
             </button>
@@ -1670,20 +1672,20 @@ export default function AdAnalysisPage() {
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
-          className="border-2 border-dashed border-[#D1D6DB] rounded-[18px] p-12 text-center hover:border-[#0071E3] hover:bg-[#F8FAFF] transition-colors cursor-pointer"
+          className="border-2 border-dashed border-[#D1D6DB] rounded-[18px] p-12 text-center hover:border-brand hover:bg-brand-soft transition-colors cursor-pointer"
           onClick={() => !initialLoading && fileRef.current?.click()}
         >
           {initialLoading ? (
             <>
-              <Loader2 className="h-10 w-10 mx-auto text-[#0071E3] mb-3 animate-spin" />
-              <p className="text-[15px] font-semibold text-[#1D1D1F]">저장된 데이터 불러오는 중...</p>
-              <p className="text-[12px] text-[#86868B] mt-1">이전에 업로드한 광고 데이터를 복원합니다</p>
+              <Loader2 className="h-10 w-10 mx-auto text-brand mb-3 animate-spin" />
+              <p className="text-[15px] font-semibold text-fg">저장된 데이터 불러오는 중...</p>
+              <p className="text-[12px] text-fg-4 mt-1">이전에 업로드한 광고 데이터를 복원합니다</p>
             </>
           ) : (
             <>
-              <Upload className="h-10 w-10 mx-auto text-[#D2D2D7] mb-3" />
-              <p className="text-[15px] font-semibold text-[#1D1D1F]">쿠팡 광고 데이터 (xlsx · csv · tsv) 를 드래그하거나 클릭하세요</p>
-              <p className="text-[12px] text-[#86868B] mt-1">PA 일별 키워드 리포트 · 큰 CSV/TSV 도 OK · 여러 파일 동시 업로드 · 중복 자동 제거</p>
+              <Upload className="h-10 w-10 mx-auto text-fg-5 mb-3" />
+              <p className="text-[15px] font-semibold text-fg">쿠팡 광고 데이터 (xlsx · csv · tsv) 를 드래그하거나 클릭하세요</p>
+              <p className="text-[12px] text-fg-4 mt-1">PA 일별 키워드 리포트 · 큰 CSV/TSV 도 OK · 여러 파일 동시 업로드 · 중복 자동 제거</p>
             </>
           )}
         </div>
@@ -1691,8 +1693,8 @@ export default function AdAnalysisPage() {
 
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-[#0071E3]" />
-          <span className="ml-3 text-[15px] text-[#6E6E73]">데이터 처리 중...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-brand" />
+          <span className="ml-3 text-[15px] text-fg-3">데이터 처리 중...</span>
         </div>
       )}
 
@@ -1717,7 +1719,7 @@ export default function AdAnalysisPage() {
 
       {/* 데이터 요약 + 수동 DB 백업 */}
       {data?._rawRows && (
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#86868B]">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-fg-4">
           <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨 (로컬)</span>
           {data.dateRange?.from && data.dateRange?.to && (
             <span>· 데이터 기간: {data.dateRange.from} ~ {data.dateRange.to}</span>
@@ -1732,7 +1734,7 @@ export default function AdAnalysisPage() {
           <button
             onClick={handleSyncToDb}
             disabled={!!syncProgress}
-            className="ml-auto h-7 px-2.5 rounded-lg border border-[#BFD7FF] text-[#0071E3] hover:bg-[#F0F6FF] disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
+            className="ml-auto h-7 px-2.5 rounded-lg border border-[#BFD7FF] text-brand hover:bg-[#F0F6FF] disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
             title="다른 PC 와 공유하려면 눌러 DB 에 백업. 평소엔 로컬(IDB)만으로 동작."
           >
             {syncProgress
@@ -1744,13 +1746,13 @@ export default function AdAnalysisPage() {
 
       {/* 기간 선택 (데이터 있으면 항상 노출 — hasData 와 무관) */}
       {data && (
-        <div className="flex flex-wrap items-center gap-2 bg-white rounded-xl border border-black/[0.06] px-4 py-2.5">
-          <span className="text-[12px] font-semibold text-[#1D1D1F]">기간</span>
+        <div className="flex flex-wrap items-center gap-2 bg-card rounded-xl border border-line px-4 py-2.5">
+          <span className="text-[12px] font-semibold text-fg">기간</span>
           <input type="date" value={dateFrom} onChange={e => setDateFromUser(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-black/[0.08] text-[11px] bg-white" />
-          <span className="text-[11px] text-[#6E6E73]">~</span>
+            className="h-8 px-2 rounded-lg border border-black/[0.08] text-[11px] bg-card" />
+          <span className="text-[11px] text-fg-3">~</span>
           <input type="date" value={dateTo} onChange={e => setDateToUser(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-black/[0.08] text-[11px] bg-white" />
+            className="h-8 px-2 rounded-lg border border-black/[0.08] text-[11px] bg-card" />
           {(dateFrom || dateTo) && (
             <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); persistRange('', ''); }}
               className="h-8 px-2 rounded-lg text-[10px] text-red-400 hover:bg-red-50 border border-red-200">초기화</button>
@@ -1761,10 +1763,10 @@ export default function AdAnalysisPage() {
               setDateFrom(data.dateRange.from);
               setDateTo(data.dateRange.to);
               persistRange(data.dateRange.from, data.dateRange.to);
-            }} className="h-8 px-2 rounded-lg text-[10px] text-[#0071E3] hover:bg-[#F0F6FF] border border-[#BFD7FF]">데이터 전체 기간</button>
+            }} className="h-8 px-2 rounded-lg text-[10px] text-brand hover:bg-[#F0F6FF] border border-[#BFD7FF]">데이터 전체 기간</button>
           )}
           {(dateFrom || dateTo) && (
-            <span className="text-[10px] text-[#6E6E73] ml-1">
+            <span className="text-[10px] text-fg-3 ml-1">
               {dateFiltered.daily.length}일 / {dateFiltered.keywords.length}키워드
             </span>
           )}
@@ -1801,7 +1803,7 @@ export default function AdAnalysisPage() {
               </button>
             )}
             <button onClick={() => { dateTouchedRef.current = true; setDateFrom(''); setDateTo(''); persistRange('', ''); }}
-              className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-800 text-[11px] font-semibold hover:bg-amber-100">
+              className="px-3 py-1.5 rounded-lg bg-card border border-amber-300 text-amber-800 text-[11px] font-semibold hover:bg-amber-100">
               기간 필터 해제
             </button>
           </div>
@@ -1810,10 +1812,10 @@ export default function AdAnalysisPage() {
 
       {/* 매칭 확인 패널 */}
       {pendingMatches.length > 0 && (
-        <div className="bg-white rounded-[18px] border-2 border-[#0071E3] p-5 space-y-3">
+        <div className="bg-card rounded-[18px] border-2 border-brand p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-[14px] font-bold text-[#1D1D1F]">상품 매칭 확인</h3>
-            <span className="text-[11px] text-[#86868B]">
+            <h3 className="text-[14px] font-bold text-fg">상품 매칭 확인</h3>
+            <span className="text-[11px] text-fg-4">
               광고 CSV 상품명 → DB 상품 자동 매칭 결과를 확인하세요
             </span>
           </div>
@@ -1821,27 +1823,27 @@ export default function AdAnalysisPage() {
             {pendingMatches.map((m, i) => (
               <div key={m.adName} className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border text-[12px] ${
                 m.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200' :
-                m.status === 'ignored' ? 'bg-gray-50 border-gray-200 opacity-50' :
+                m.status === 'ignored' ? 'bg-card-2 border-line opacity-50' :
                 'bg-amber-50 border-amber-200'
               }`}>
                 <div className="flex-1 min-w-[200px]">
-                  <p className="font-medium text-[#1D1D1F]">{m.adName}</p>
-                  <p className="text-[#6E6E73] mt-0.5">
+                  <p className="font-medium text-fg">{m.adName}</p>
+                  <p className="text-fg-3 mt-0.5">
                     → {m.dbName} · {m.price?.toLocaleString()}원 · 원가 {m.cost_price?.toLocaleString()}원 · 수수료 {m.commission_rate}%
-                    <span className="ml-2 text-[10px] text-[#D2D2D7]">신뢰도 {Math.round(m.score * 100)}%</span>
+                    <span className="ml-2 text-[10px] text-fg-5">신뢰도 {Math.round(m.score * 100)}%</span>
                   </p>
                 </div>
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => setPendingMatches(prev => prev.map((p, j) => j === i ? { ...p, status: 'confirmed' } : p))}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                      m.status === 'confirmed' ? 'bg-emerald-600 text-white' : 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                      m.status === 'confirmed' ? 'bg-emerald-600 text-white' : 'bg-card border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
                     }`}
                   >확인</button>
                   <button
                     onClick={() => setPendingMatches(prev => prev.map((p, j) => j === i ? { ...p, status: 'ignored' } : p))}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                      m.status === 'ignored' ? 'bg-gray-500 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                      m.status === 'ignored' ? 'bg-fg-3 text-white' : 'bg-card border border-line text-fg-3 hover:bg-card-2'
                     }`}
                   >무시</button>
                 </div>
@@ -1856,11 +1858,11 @@ export default function AdAnalysisPage() {
             <button
               onClick={handleConfirmMatches}
               disabled={!pendingMatches.some(m => m.status !== 'pending')}
-              className="px-4 py-2 rounded-lg bg-[#0071E3] text-white text-[12px] font-semibold hover:bg-[#0077ED] disabled:opacity-40"
+              className="px-4 py-2 rounded-lg bg-brand text-white text-[12px] font-semibold hover:bg-brand-hover disabled:opacity-40"
             >적용</button>
             <button
               onClick={() => { setPendingMatches([]); setPendingRaw(null); }}
-              className="px-4 py-2 rounded-lg border border-black/[0.08] text-[#6E6E73] text-[12px] font-medium hover:bg-[#FBFBFD]"
+              className="px-4 py-2 rounded-lg border border-black/[0.08] text-fg-3 text-[12px] font-medium hover:bg-[#FBFBFD]"
             >취소</button>
           </div>
         </div>
@@ -1898,7 +1900,7 @@ export default function AdAnalysisPage() {
             <div className="flex flex-wrap items-center gap-3">
               {data.campaigns.length > 1 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-[12px] font-medium text-[#6E6E73]">캠페인</label>
+                  <label className="text-[12px] font-medium text-fg-3">캠페인</label>
                   <select
                     value={filterCampaign}
                     onChange={(e) => {
@@ -1911,7 +1913,7 @@ export default function AdAnalysisPage() {
                         if (!nextProducts.includes(filterProduct)) setFilterProduct('all');
                       }
                     }}
-                    className="h-9 px-3 rounded-lg border border-black/[0.08] text-[13px] text-[#1D1D1F] bg-white focus:outline-none focus:border-[#0071E3]"
+                    className="h-9 px-3 rounded-lg border border-black/[0.08] text-[13px] text-fg bg-card focus:outline-none focus:border-brand"
                   >
                     <option value="all">전체 ({campaignsForProduct.length})</option>
                     {campaignsForProduct.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -1920,11 +1922,11 @@ export default function AdAnalysisPage() {
               )}
               {data.products.length > 1 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-[12px] font-medium text-[#6E6E73]">상품</label>
+                  <label className="text-[12px] font-medium text-fg-3">상품</label>
                   <select
                     value={filterProduct}
                     onChange={(e) => setFilterProduct(e.target.value)}
-                    className="h-9 px-3 rounded-lg border border-black/[0.08] text-[13px] text-[#1D1D1F] bg-white focus:outline-none focus:border-[#0071E3] max-w-[300px] truncate"
+                    className="h-9 px-3 rounded-lg border border-black/[0.08] text-[13px] text-fg bg-card focus:outline-none focus:border-brand max-w-[300px] truncate"
                   >
                     <option value="all">전체 ({productsForCampaign.length})</option>
                     {productsForCampaign.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -1934,7 +1936,7 @@ export default function AdAnalysisPage() {
               {(filterCampaign !== 'all' || filterProduct !== 'all') && (
                 <button
                   onClick={() => { setFilterCampaign('all'); setFilterProduct('all'); }}
-                  className="text-[12px] text-[#0071E3] font-medium hover:underline"
+                  className="text-[12px] text-brand font-medium hover:underline"
                 >
                   필터 초기화
                 </button>
@@ -1946,10 +1948,10 @@ export default function AdAnalysisPage() {
           {/* KPI Cards */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[12px] text-[#86868B]">핵심 지표</span>
+              <span className="text-[12px] text-fg-4">핵심 지표</span>
               <button
                 onClick={() => setKpiEditOpen(!kpiEditOpen)}
-                className="text-[12px] text-[#0071E3] font-medium hover:underline"
+                className="text-[12px] text-brand font-medium hover:underline"
               >
                 {kpiEditOpen ? '완료' : '편집'}
               </button>
@@ -1962,8 +1964,8 @@ export default function AdAnalysisPage() {
                     onClick={() => toggleKpi(kd.key)}
                     className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
                       activeKpis.includes(kd.key)
-                        ? 'border-[#0071E3] bg-[#EBF1FE] text-[#0071E3]'
-                        : 'border-black/[0.08] bg-white text-[#86868B] hover:border-[#D2D2D7]'
+                        ? 'border-brand bg-brand-bg text-brand'
+                        : 'border-black/[0.08] bg-card text-fg-4 hover:border-fg-5'
                     }`}
                   >
                     {kd.label}
@@ -2004,28 +2006,28 @@ export default function AdAnalysisPage() {
             const perOrderProfit = t.orders14d > 0 ? Math.round(netProfit / t.orders14d) : 0;
             return hasCogs ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-white rounded-[18px] border border-black/[0.06] p-4">
-                  <p className="text-[12px] text-[#6E6E73]">광고 순이익 (14일) = 매출 − 원가 − 수수료 − 광고비</p>
+                <div className="bg-card rounded-[18px] border border-line p-4">
+                  <p className="text-[12px] text-fg-3">광고 순이익 (14일) = 매출 − 원가 − 수수료 − 광고비</p>
                   <p className={`text-[20px] font-bold mt-1 ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {fmtW(netProfit)}
                   </p>
-                  <p className="text-[11px] text-[#D2D2D7]">
+                  <p className="text-[11px] text-fg-5">
                     매출 {fmtW(t.revenue14d)} − 원가 {fmtW(t.cogs14d)}{commission > 0 ? ` − 수수료 ${fmtW(Math.round(commission))}` : ''} − 광고비 {fmtW(t.cost)}
                   </p>
                 </div>
-                <div className="bg-white rounded-[18px] border border-black/[0.06] p-4">
-                  <p className="text-[12px] text-[#6E6E73]">건당 광고비</p>
-                  <p className="text-[20px] font-bold mt-1 text-[#1D1D1F]">
+                <div className="bg-card rounded-[18px] border border-line p-4">
+                  <p className="text-[12px] text-fg-3">건당 광고비</p>
+                  <p className="text-[20px] font-bold mt-1 text-fg">
                     {perOrderCost ? fmtW(perOrderCost) : '-'}
                   </p>
-                  <p className="text-[11px] text-[#D2D2D7]">광고비 ÷ 주문수(14일)</p>
+                  <p className="text-[11px] text-fg-5">광고비 ÷ 주문수(14일)</p>
                 </div>
-                <div className="bg-white rounded-[18px] border border-black/[0.06] p-4">
-                  <p className="text-[12px] text-[#6E6E73]">건당 순이익</p>
+                <div className="bg-card rounded-[18px] border border-line p-4">
+                  <p className="text-[12px] text-fg-3">건당 순이익</p>
                   <p className={`text-[20px] font-bold mt-1 ${perOrderProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {perOrderProfit ? fmtW(perOrderProfit) : '-'}
                   </p>
-                  <p className="text-[11px] text-[#D2D2D7]">(매출 − 원가 − 수수료 − 광고비) ÷ 주문수</p>
+                  <p className="text-[11px] text-fg-5">(매출 − 원가 − 수수료 − 광고비) ÷ 주문수</p>
                 </div>
               </div>
             ) : (
@@ -2112,8 +2114,8 @@ export default function AdAnalysisPage() {
             const colors = { danger: 'bg-red-50 border-red-200 text-red-700', warn: 'bg-amber-50 border-amber-200 text-amber-700', good: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
             const icons = { danger: '!', warn: '?', good: '+' };
             return (
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-2">
-                <h3 className="text-[13px] font-bold text-[#1D1D1F]">자동 인사이트</h3>
+              <div className="bg-card rounded-[18px] border border-line p-5 space-y-2">
+                <h3 className="text-[13px] font-bold text-fg">자동 인사이트</h3>
                 {insights.map((ins, i) => (
                   <div key={i} className={`${colors[ins.type]} border rounded-lg px-3 py-2 text-[12px] flex items-start gap-2`}>
                     <span className="font-bold shrink-0 w-4 text-center">{icons[ins.type]}</span>
@@ -2125,13 +2127,13 @@ export default function AdAnalysisPage() {
           })()}
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-[#F5F5F7] rounded-xl p-1 w-fit">
+          <div className="flex gap-1 bg-app rounded-xl p-1 w-fit">
             {tabs.map((tb) => (
               <button
                 key={tb.key}
                 onClick={() => setTab(tb.key)}
                 className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  tab === tb.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  tab === tb.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
                 }`}
               >
                 {tb.label}
@@ -2143,17 +2145,17 @@ export default function AdAnalysisPage() {
           {tab === 'daily' && (
             <div className="space-y-4">
               {/* Controls: granularity + metric chips */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-4">
+              <div className="bg-card rounded-[18px] border border-line p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">기간별 추이</h3>
+                  <h3 className="text-[13px] font-bold text-fg">기간별 추이</h3>
                   {/* Granularity toggle */}
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {granOptions.map((g) => (
                       <button
                         key={g.key}
                         onClick={() => setGran(g.key)}
                         className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-                          gran === g.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                          gran === g.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
                         }`}
                       >
                         {g.label}
@@ -2164,11 +2166,11 @@ export default function AdAnalysisPage() {
 
                 {/* 쿠팡 검색/비검색 지면 필터 */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] text-[#86868B]">지면</span>
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <span className="text-[11px] text-fg-4">지면</span>
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {([['all', '전체'], ['search', '검색지면'], ['nonsearch', '비검색지면']] as const).map(([k, l]) => (
                       <button key={k} onClick={() => setPlaceTypeFilter(k)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeTypeFilter === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'}`}>
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeTypeFilter === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
                         {l}
                       </button>
                     ))}
@@ -2199,7 +2201,7 @@ export default function AdAnalysisPage() {
                       <button key={m.key}
                         onClick={handleClick}
                         className={`h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
-                          active ? 'text-white shadow-sm' : 'bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#E5E5EA]'
+                          active ? 'text-white shadow-sm' : 'bg-app text-fg-3 hover:bg-[#E5E5EA]'
                         }`}
                         style={active ? { backgroundColor: m.color } : {}}>
                         {m.label} {active ? (currentType === 'bar' ? '▊' : '━') : ''}
@@ -2208,14 +2210,14 @@ export default function AdAnalysisPage() {
                   })}
                   {activeMetrics.length > 0 && (
                     <div className="flex items-center gap-1 ml-1 border-l border-black/[0.08] pl-2">
-                      <span className="text-[10px] text-[#6E6E73]">보조축:</span>
+                      <span className="text-[10px] text-fg-3">보조축:</span>
                       {activeMetrics.map(key => {
                         const m = METRICS.find(x => x.key === key);
                         if (!m) return null;
                         const isRight = rightAxisKeys.has(key);
                         return (
                           <button key={key} onClick={() => setRightAxisKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; })}
-                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-[#F5F5F7] text-[#6E6E73]'}`}
+                            className={`h-6 px-1.5 rounded text-[9px] font-semibold transition-all ${isRight ? 'text-white' : 'bg-app text-fg-3'}`}
                             style={isRight ? { backgroundColor: m.color } : {}}>
                             {m.label}
                           </button>
@@ -2281,22 +2283,22 @@ export default function AdAnalysisPage() {
                   </div>
                 )}
                 {activeDefs.length === 0 && (
-                  <p className="text-center text-[13px] text-[#D2D2D7] py-10">표시할 지표를 선택하세요</p>
+                  <p className="text-center text-[13px] text-fg-5 py-10">표시할 지표를 선택하세요</p>
                 )}
               </div>
 
               {/* Data table */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-x-auto">
+              <div className="bg-card rounded-[18px] border border-line overflow-x-auto">
                 <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                  <span className="text-[12px] text-[#86868B]">헤더 클릭 정렬 · 헤더 드래그 순서 변경</span>
+                  <span className="text-[12px] text-fg-4">헤더 클릭 정렬 · 헤더 드래그 순서 변경</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setTableColEdit(!tableColEdit)}
                       className={`flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
-                        tableColEdit ? 'border-[#0071E3] bg-[#EBF1FE] text-[#0071E3]' : 'border-black/[0.08] text-[#6E6E73] hover:border-[#D2D2D7]'
+                        tableColEdit ? 'border-brand bg-brand-bg text-brand' : 'border-black/[0.08] text-fg-3 hover:border-fg-5'
                       }`}>
                       <Settings className="h-3 w-3" /> 컬럼
                     </button>
-                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-[#0071E3] text-[#0071E3] bg-white hover:bg-[#EBF1FE] transition-colors">
+                    <button onClick={handleDownload} className="flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-medium border border-brand text-brand bg-card hover:bg-brand-bg transition-colors">
                       <Download className="h-3 w-3" /> xlsx · 일자 + 일자×키워드
                     </button>
                   </div>
@@ -2307,8 +2309,8 @@ export default function AdAnalysisPage() {
                       <button key={c.key} onClick={() => toggleCol(c.key)}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
                           activeCols.includes(c.key)
-                            ? 'border-[#0071E3] bg-[#EBF1FE] text-[#0071E3]'
-                            : 'border-black/[0.08] bg-white text-[#86868B] hover:border-[#D2D2D7]'
+                            ? 'border-brand bg-brand-bg text-brand'
+                            : 'border-black/[0.08] bg-card text-fg-4 hover:border-fg-5'
                         }`}>
                         {c.label}
                       </button>
@@ -2317,9 +2319,9 @@ export default function AdAnalysisPage() {
                 )}
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-black/[0.06] bg-[#FAFBFC]">
+                    <tr className="border-b border-line bg-card-2">
                       <th onClick={() => toggleTrendSort('date')}
-                        className="text-left px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] select-none whitespace-nowrap">
+                        className="text-left px-3 py-2.5 font-semibold text-fg-3 cursor-pointer hover:text-fg select-none whitespace-nowrap">
                         {gran === 'daily' ? '날짜' : gran === 'weekly' ? '주차' : '월'} <TrendSortIcon k="date" />
                       </th>
                       {visibleCols.map((col) => (
@@ -2329,11 +2331,11 @@ export default function AdAnalysisPage() {
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleColDrop(col.key)}
                           onClick={() => toggleTrendSort(col.key)}
-                          className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] cursor-grab hover:text-[#1D1D1F] select-none whitespace-nowrap active:cursor-grabbing">
+                          className="text-right px-3 py-2.5 font-semibold text-fg-3 cursor-grab hover:text-fg select-none whitespace-nowrap active:cursor-grabbing">
                           {col.label} <TrendSortIcon k={col.key} />
                         </th>
                       ))}
-                      <th className="px-2 py-2.5 text-[#6E6E73] font-semibold text-left whitespace-nowrap">메모</th>
+                      <th className="px-2 py-2.5 text-fg-3 font-semibold text-left whitespace-nowrap">메모</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2357,42 +2359,42 @@ export default function AdAnalysisPage() {
                         : [];
                       return (
                         <Fragment key={d.date}>
-                          <tr className={`border-b border-black/[0.06] hover:bg-[#FAFBFC] ${memos[d.date] ? 'bg-amber-50/30' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''} ${canDrill ? 'cursor-pointer' : ''}`}
+                          <tr className={`border-b border-line hover:bg-card-2 ${memos[d.date] ? 'bg-amber-50/30' : ''} ${isExpanded ? 'bg-[#F0F7FF]' : ''} ${canDrill ? 'cursor-pointer' : ''}`}
                             onClick={(e) => {
                               if (!canDrill) return;
                               const t = e.target as HTMLElement;
                               if (t.tagName === 'INPUT') return;
                               setExpandedDate(isExpanded ? null : d.date);
                             }}>
-                            <td className="px-3 py-2.5 font-medium text-[#1D1D1F]">
+                            <td className="px-3 py-2.5 font-medium text-fg">
                               <div className="flex items-center gap-1.5">
-                                {canDrill && <span className="text-[#D2D2D7]">{isExpanded ? '▾' : '▸'}</span>}
+                                {canDrill && <span className="text-fg-5">{isExpanded ? '▾' : '▸'}</span>}
                                 {d.label}
                                 {memos[d.date] && <span className="text-[9px] text-amber-600 bg-amber-100 px-1 rounded">메모</span>}
                               </div>
                             </td>
                             {visibleCols.map((col) => (
-                              <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-[#6E6E73]'}`}>
+                              <td key={col.key} className={`px-3 py-2.5 text-right ${col.className ?? 'text-fg-3'}`}>
                                 {col.render(d)}
                               </td>
                             ))}
                             <td className="px-1 py-1">
                               <input value={memos[d.date] ?? ''} onChange={e => saveMemo(d.date, e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                placeholder="메모" className="w-24 h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-black/[0.08] focus:border-[#0071E3] focus:outline-none bg-transparent" />
+                                placeholder="메모" className="w-24 h-7 px-1.5 text-[10px] rounded border border-transparent hover:border-black/[0.08] focus:border-brand focus:outline-none bg-transparent" />
                             </td>
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={visibleCols.length + 2} className="p-0 bg-[#FAFBFC] border-b border-black/[0.08]">
+                              <td colSpan={visibleCols.length + 2} className="p-0 bg-card-2 border-b border-black/[0.08]">
                                 <div className="px-6 py-3">
-                                  <div className="text-[11px] font-semibold text-[#6E6E73] mb-2">
+                                  <div className="text-[11px] font-semibold text-fg-3 mb-2">
                                     {d.label} — 키워드별 성과 ({kwForDate.length}개 키워드, 광고비 순)
                                   </div>
                                   <div className="overflow-auto max-h-96">
                                     <table className="w-full text-[11px]">
-                                      <thead className="bg-white sticky top-0">
-                                        <tr className="text-[#86868B] border-b border-black/[0.06]">
+                                      <thead className="bg-card sticky top-0">
+                                        <tr className="text-fg-4 border-b border-line">
                                           <th className="text-left px-2 py-1.5 font-medium">키워드</th>
                                           <th className="text-right px-2 py-1.5 font-medium">노출</th>
                                           <th className="text-right px-2 py-1.5 font-medium">클릭</th>
@@ -2407,7 +2409,7 @@ export default function AdAnalysisPage() {
                                       </thead>
                                       <tbody>
                                         {kwForDate.length === 0 && (
-                                          <tr><td colSpan={10} className="text-center py-3 text-[#D2D2D7]">키워드 데이터 없음</td></tr>
+                                          <tr><td colSpan={10} className="text-center py-3 text-fg-5">키워드 데이터 없음</td></tr>
                                         )}
                                         {kwForDate.map((kd) => {
                                           const ctr = kd.impressions > 0 ? kd.clicks / kd.impressions : 0;
@@ -2415,16 +2417,16 @@ export default function AdAnalysisPage() {
                                           const cvr = kd.clicks > 0 ? kd.orders14d / kd.clicks : 0;
                                           const roas = kd.cost > 0 ? kd.revenue14d / kd.cost : 0;
                                           return (
-                                            <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-white">
-                                              <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-[#1D1D1F]" title={kd.keyword}>{kd.keyword}</td>
+                                            <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-card">
+                                              <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-fg" title={kd.keyword}>{kd.keyword}</td>
                                               <td className="px-2 py-1.5 text-right">{formatNumber(kd.impressions)}</td>
                                               <td className="px-2 py-1.5 text-right">{formatNumber(kd.clicks)}</td>
-                                              <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(ctr)}</td>
-                                              <td className="px-2 py-1.5 text-right text-[#6E6E73]">{kd.clicks > 0 ? fmtW(cpc) : '-'}</td>
-                                              <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(kd.cost)}</td>
+                                              <td className="px-2 py-1.5 text-right text-fg-3">{pct(ctr)}</td>
+                                              <td className="px-2 py-1.5 text-right text-fg-3">{kd.clicks > 0 ? fmtW(cpc) : '-'}</td>
+                                              <td className="px-2 py-1.5 text-right text-danger">{fmtW(kd.cost)}</td>
                                               <td className="px-2 py-1.5 text-right">{kd.orders14d}</td>
-                                              <td className="px-2 py-1.5 text-right text-[#0071E3]">{fmtW(kd.revenue14d)}</td>
-                                              <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(cvr)}</td>
+                                              <td className="px-2 py-1.5 text-right text-brand">{fmtW(kd.revenue14d)}</td>
+                                              <td className="px-2 py-1.5 text-right text-fg-3">{pct(cvr)}</td>
                                               <td className={`px-2 py-1.5 text-right font-semibold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                                                 {kd.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
                                               </td>
@@ -2444,10 +2446,10 @@ export default function AdAnalysisPage() {
                   </tbody>
                 </table>
                 {/* 플로팅 합계 */}
-                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-black/[0.08]">
+                <div className="sticky bottom-0 bg-card-2 border-t-2 border-black/[0.08]">
                   <table className="w-full text-[12px]"><tbody>
                     <tr className="font-bold">
-                      <td className="px-3 py-2.5 text-[#1D1D1F]">합계</td>
+                      <td className="px-3 py-2.5 text-fg">합계</td>
                       {visibleCols.map((col) => (
                         <td key={col.key} className="px-3 py-2.5 text-right">
                           {col.renderTotal(trendTotal)}
@@ -2467,20 +2469,20 @@ export default function AdAnalysisPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <button
                   onClick={() => setPivotAxis(pivotAxis === 'kw-date' ? 'date-kw' : 'kw-date')}
-                  className="flex items-center gap-2 h-8 px-3 rounded-lg border border-[#0071E3] bg-white hover:bg-[#EBF1FE] text-[#0071E3] text-[12px] font-medium transition-colors"
+                  className="flex items-center gap-2 h-8 px-3 rounded-lg border border-brand bg-card hover:bg-brand-bg text-brand text-[12px] font-medium transition-colors"
                   title="행/열 전환 (엑셀 피벗처럼 축 바꾸기)"
                 >
                   <ArrowUpDown className="h-3.5 w-3.5" />
                   {pivotAxis === 'kw-date' ? '행: 키워드 → 열: 일자' : '행: 일자 → 열: 키워드'}
-                  <span className="text-[#D2D2D7]">↔</span>
+                  <span className="text-fg-5">↔</span>
                 </button>
-                <span className="text-[11px] text-[#86868B]">
+                <span className="text-[11px] text-fg-4">
                   {pivotAxis === 'kw-date' ? '키워드 클릭 → 일자별 펼침' : '일자 클릭 → 키워드별 펼침'}
                 </span>
                 <div className="flex items-center gap-2 ml-auto">
-                  <label className="text-[12px] font-medium text-[#6E6E73]">차트 지표</label>
+                  <label className="text-[12px] font-medium text-fg-3">차트 지표</label>
                   <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value as typeof pivotMetric)}
-                    className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] bg-white focus:outline-none focus:border-[#0071E3]">
+                    className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] bg-card focus:outline-none focus:border-brand">
                     <optgroup label="볼륨">
                       <option value="impressions">노출수 (impressions)</option>
                       <option value="clicks">유입수 (clicks)</option>
@@ -2555,14 +2557,14 @@ export default function AdAnalysisPage() {
                   return [formatNumber(v), info.label];
                 };
                 return (
-                  <div className="bg-white rounded-[18px] border border-black/[0.06] p-5">
+                  <div className="bg-card rounded-[18px] border border-line p-5">
                     <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-[13px] font-bold text-[#1D1D1F]">
+                        <h3 className="text-[13px] font-bold text-fg">
                           기간별 {info.label} 추이
                         </h3>
                         {expandedKw && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] bg-[#EBF1FE] text-[#0071E3] px-2 py-0.5 rounded-full font-medium">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] bg-brand-bg text-brand px-2 py-0.5 rounded-full font-medium">
                             <Search className="h-3 w-3" />
                             {expandedKw}
                             <button onClick={() => setExpandedKw(null)} className="ml-0.5 hover:bg-white/50 rounded-full w-4 h-4 flex items-center justify-center" title="선택 해제">
@@ -2570,16 +2572,16 @@ export default function AdAnalysisPage() {
                             </button>
                           </span>
                         )}
-                        {!expandedKw && <span className="text-[11px] text-[#86868B]">· 키워드 클릭 시 해당 키워드 기준 차트로 전환</span>}
+                        {!expandedKw && <span className="text-[11px] text-fg-4">· 키워드 클릭 시 해당 키워드 기준 차트로 전환</span>}
                       </div>
-                      <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                      <div className="flex gap-1 bg-app rounded-lg p-0.5">
                         {([
                           { key: 'daily' as Granularity, label: '일' },
                           { key: 'weekly' as Granularity, label: '주' },
                           { key: 'monthly' as Granularity, label: '월' },
                         ]).map((g) => (
                           <button key={g.key} onClick={() => setGran(g.key)}
-                            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${gran === g.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73] hover:text-[#1D1D1F]'}`}>
+                            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${gran === g.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
                             {g.label}
                           </button>
                         ))}
@@ -2606,35 +2608,35 @@ export default function AdAnalysisPage() {
               {pivotAxis === 'kw-date' && (
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px] max-w-[360px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D2D2D7]" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-5" />
                   <input
                     type="text"
                     value={kwSearch}
                     onChange={(e) => setKwSearch(e.target.value)}
                     placeholder="키워드 검색..."
-                    className="w-full h-10 pl-9 pr-3 rounded-xl border border-black/[0.08] text-[13px] focus:outline-none focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/10"
+                    className="w-full h-10 pl-9 pr-3 rounded-xl border border-black/[0.08] text-[13px] focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
                   />
                 </div>
                 <button onClick={() => setKwOnlyOrders(!kwOnlyOrders)}
-                  className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-all ${kwOnlyOrders ? 'border-[#0071E3] bg-[#EBF1FE] text-[#0071E3]' : 'border-black/[0.08] text-[#6E6E73]'}`}>
+                  className={`h-8 px-3 rounded-lg text-[12px] font-medium border transition-all ${kwOnlyOrders ? 'border-brand bg-brand-bg text-brand' : 'border-black/[0.08] text-fg-3'}`}>
                   구매 키워드만
                 </button>
-                <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-[#0071E3] text-[#0071E3] bg-white hover:bg-[#EBF1FE] transition-colors">
+                <button onClick={handleDownload} className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border border-brand text-brand bg-card hover:bg-brand-bg transition-colors">
                   <Download className="h-3.5 w-3.5" /> xlsx · 엑셀 피벗테이블 ({pivotAxis === 'kw-date' ? '행: 키워드→일자' : '행: 일자→키워드'})
                 </button>
-                <span className="text-[12px] text-[#86868B]">
+                <span className="text-[12px] text-fg-4">
                   {sortedKeywords.length}개{kwSearch ? ' (필터)' : ''} / 전체 {dateFiltered.keywords.length}개 키워드
                 </span>
               </div>
               )}
 
               {pivotAxis === 'kw-date' && (<>
-              <div className="bg-white rounded-[18px] border border-black/[0.06] max-h-[70vh] overflow-auto">
+              <div className="bg-card rounded-[18px] border border-line max-h-[70vh] overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-black/[0.06] bg-[#FAFBFC] shadow-sm">
-                      <th className="w-6 bg-[#FAFBFC]"></th>
-                      <th className="text-left px-3 py-2.5 font-semibold text-[#6E6E73] min-w-[180px] bg-[#FAFBFC]">키워드</th>
+                    <tr className="border-b border-line bg-card-2 shadow-sm">
+                      <th className="w-6 bg-card-2"></th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-fg-3 min-w-[180px] bg-card-2">키워드</th>
                       {([
                         ['impressions', '노출'], ['clicks', '클릭'], ['cost', '광고비'],
                         ['ctr', 'CTR'], ['cpc', 'CPC'], ['orders14d', '주문(14d)'],
@@ -2642,7 +2644,7 @@ export default function AdAnalysisPage() {
                       ] as [SortKey, string][]).map(([k, label]) => (
                         <th key={k}
                           onClick={() => toggleSort(k)}
-                          className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] whitespace-nowrap select-none bg-[#FAFBFC]"
+                          className="text-right px-3 py-2.5 font-semibold text-fg-3 cursor-pointer hover:text-fg whitespace-nowrap select-none bg-card-2"
                         >
                           <span className="inline-flex items-center gap-1">{label} <SortIcon k={k} /></span>
                         </th>
@@ -2669,33 +2671,33 @@ export default function AdAnalysisPage() {
                       return (
                         <Fragment key={k.keyword}>
                           <tr
-                            className={`border-b border-black/[0.06] hover:bg-[#FAFBFC] cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                            className={`border-b border-line hover:bg-card-2 cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
                             onClick={() => setExpandedKw(isExpanded ? null : k.keyword)}
                           >
-                            <td className="px-1.5 py-2 text-center text-[#D2D2D7]">
+                            <td className="px-1.5 py-2 text-center text-fg-5">
                               {isExpanded ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
                             </td>
-                            <td className="px-3 py-2 font-medium text-[#1D1D1F] max-w-[260px] truncate">{k.keyword}</td>
-                            <td className="px-3 py-2 text-right text-[#6E6E73]">{formatNumber(k.impressions)}</td>
-                            <td className="px-3 py-2 text-right text-[#1D1D1F]">{formatNumber(k.clicks)}</td>
-                            <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(k.cost)}</td>
-                            <td className="px-3 py-2 text-right text-[#6E6E73]">{pct(k.ctr)}</td>
-                            <td className="px-3 py-2 text-right text-[#6E6E73]">{fmtW(k.cpc)}</td>
-                            <td className="px-3 py-2 text-right text-[#1D1D1F]">{k.orders14d}</td>
-                            <td className="px-3 py-2 text-right text-[#0071E3]">{fmtW(k.revenue14d)}</td>
-                            <td className="px-3 py-2 text-right text-[#6E6E73]">{pct(k.cvr)}</td>
+                            <td className="px-3 py-2 font-medium text-fg max-w-[260px] truncate">{k.keyword}</td>
+                            <td className="px-3 py-2 text-right text-fg-3">{formatNumber(k.impressions)}</td>
+                            <td className="px-3 py-2 text-right text-fg">{formatNumber(k.clicks)}</td>
+                            <td className="px-3 py-2 text-right text-danger">{fmtW(k.cost)}</td>
+                            <td className="px-3 py-2 text-right text-fg-3">{pct(k.ctr)}</td>
+                            <td className="px-3 py-2 text-right text-fg-3">{fmtW(k.cpc)}</td>
+                            <td className="px-3 py-2 text-right text-fg">{k.orders14d}</td>
+                            <td className="px-3 py-2 text-right text-brand">{fmtW(k.revenue14d)}</td>
+                            <td className="px-3 py-2 text-right text-fg-3">{pct(k.cvr)}</td>
                             <td className={`px-3 py-2 text-right font-bold ${k.roas14d >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                               {k.cost > 0 ? `${(k.roas14d * 100).toFixed(0)}%` : '-'}
                             </td>
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={11} className="p-0 bg-[#FAFBFC] border-b border-black/[0.08]">
+                              <td colSpan={11} className="p-0 bg-card-2 border-b border-black/[0.08]">
                                 <div className="px-6 py-3">
-                                  <div className="text-[11px] font-semibold text-[#6E6E73] mb-2">{k.keyword} — 일자별 성과 ({dailyList.length}일)</div>
+                                  <div className="text-[11px] font-semibold text-fg-3 mb-2">{k.keyword} — 일자별 성과 ({dailyList.length}일)</div>
                                   <table className="w-full text-[11px]">
                                     <thead>
-                                      <tr className="text-[#86868B] border-b border-black/[0.06]">
+                                      <tr className="text-fg-4 border-b border-line">
                                         <th className="text-left px-2 py-1.5 font-medium">날짜</th>
                                         <th className="text-right px-2 py-1.5 font-medium">노출</th>
                                         <th className="text-right px-2 py-1.5 font-medium">클릭</th>
@@ -2710,7 +2712,7 @@ export default function AdAnalysisPage() {
                                     </thead>
                                     <tbody>
                                       {dailyList.length === 0 && (
-                                        <tr><td colSpan={10} className="text-center py-3 text-[#D2D2D7]">해당 기간 노출 없음</td></tr>
+                                        <tr><td colSpan={10} className="text-center py-3 text-fg-5">해당 기간 노출 없음</td></tr>
                                       )}
                                       {dailyList.map((d) => {
                                         const ctr = d.impressions > 0 ? d.clicks / d.impressions : 0;
@@ -2718,16 +2720,16 @@ export default function AdAnalysisPage() {
                                         const cvr = d.clicks > 0 ? d.orders14d / d.clicks : 0;
                                         const roas = d.cost > 0 ? d.revenue14d / d.cost : 0;
                                         return (
-                                          <tr key={d.date} className="border-b border-[#F5F6F7] hover:bg-white">
-                                            <td className="px-2 py-1.5 font-mono text-[#1D1D1F]">{d.date}</td>
+                                          <tr key={d.date} className="border-b border-[#F5F6F7] hover:bg-card">
+                                            <td className="px-2 py-1.5 font-mono text-fg">{d.date}</td>
                                             <td className="px-2 py-1.5 text-right">{formatNumber(d.impressions)}</td>
                                             <td className="px-2 py-1.5 text-right">{formatNumber(d.clicks)}</td>
-                                            <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(ctr)}</td>
-                                            <td className="px-2 py-1.5 text-right text-[#6E6E73]">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
-                                            <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(d.cost)}</td>
+                                            <td className="px-2 py-1.5 text-right text-fg-3">{pct(ctr)}</td>
+                                            <td className="px-2 py-1.5 text-right text-fg-3">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
+                                            <td className="px-2 py-1.5 text-right text-danger">{fmtW(d.cost)}</td>
                                             <td className="px-2 py-1.5 text-right">{d.orders14d}</td>
-                                            <td className="px-2 py-1.5 text-right text-[#0071E3]">{fmtW(d.revenue14d)}</td>
-                                            <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(cvr)}</td>
+                                            <td className="px-2 py-1.5 text-right text-brand">{fmtW(d.revenue14d)}</td>
+                                            <td className="px-2 py-1.5 text-right text-fg-3">{pct(cvr)}</td>
                                             <td className={`px-2 py-1.5 text-right font-semibold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                                               {d.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
                                             </td>
@@ -2751,7 +2753,7 @@ export default function AdAnalysisPage() {
                 <div className="text-center">
                   <button
                     onClick={() => setKwLimit((l) => l + 50)}
-                    className="text-[13px] text-[#0071E3] font-medium hover:underline"
+                    className="text-[13px] text-brand font-medium hover:underline"
                   >
                     더 보기
                   </button>
@@ -2776,26 +2778,26 @@ export default function AdAnalysisPage() {
                   return Object.values(map).sort((a: any, b: any) => b.cost - a.cost);
                 };
                 return (
-                  <div className="bg-white rounded-[18px] border border-black/[0.06] max-h-[70vh] overflow-auto">
+                  <div className="bg-card rounded-[18px] border border-line max-h-[70vh] overflow-auto">
                     <table className="w-full text-[12px]">
                       <thead className="sticky top-0 z-10">
-                        <tr className="border-b border-black/[0.06] bg-[#FAFBFC] shadow-sm">
-                          <th className="w-6 bg-[#FAFBFC]"></th>
-                          <th className="text-left px-3 py-2.5 font-semibold text-[#6E6E73] min-w-[120px] bg-[#FAFBFC]">일자</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">노출</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">클릭</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">CTR</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">CPC</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">광고비</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">주문(14d)</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">매출(14d)</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">CVR</th>
-                          <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] bg-[#FAFBFC]">ROAS</th>
+                        <tr className="border-b border-line bg-card-2 shadow-sm">
+                          <th className="w-6 bg-card-2"></th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-fg-3 min-w-[120px] bg-card-2">일자</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">노출</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">클릭</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">CTR</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">CPC</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">광고비</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">주문(14d)</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">매출(14d)</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">CVR</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-fg-3 bg-card-2">ROAS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {daily.length === 0 && (
-                          <tr><td colSpan={11} className="text-center py-6 text-[#D2D2D7]">일자 데이터 없음</td></tr>
+                          <tr><td colSpan={11} className="text-center py-6 text-fg-5">일자 데이터 없음</td></tr>
                         )}
                         {daily.map((d: any) => {
                           const isExpanded = expandedDate === d.date;
@@ -2806,35 +2808,35 @@ export default function AdAnalysisPage() {
                           const kws = isExpanded ? kwForDate(d.date) : [];
                           return (
                             <Fragment key={d.date}>
-                              <tr className={`border-b border-black/[0.06] hover:bg-[#FAFBFC] cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
+                              <tr className={`border-b border-line hover:bg-card-2 cursor-pointer ${isExpanded ? 'bg-[#F0F7FF]' : ''}`}
                                   onClick={() => setExpandedDate(isExpanded ? null : d.date)}>
-                                <td className="px-1.5 py-2 text-center text-[#D2D2D7]">
+                                <td className="px-1.5 py-2 text-center text-fg-5">
                                   {isExpanded ? <ChevronDown className="h-3.5 w-3.5 inline" /> : <ChevronRight className="h-3.5 w-3.5 inline" />}
                                 </td>
-                                <td className="px-3 py-2 font-mono text-[#1D1D1F]">{d.date}</td>
-                                <td className="px-3 py-2 text-right text-[#6E6E73]">{formatNumber(d.impressions)}</td>
-                                <td className="px-3 py-2 text-right text-[#1D1D1F]">{formatNumber(d.clicks)}</td>
-                                <td className="px-3 py-2 text-right text-[#6E6E73]">{pct(ctr)}</td>
-                                <td className="px-3 py-2 text-right text-[#6E6E73]">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
-                                <td className="px-3 py-2 text-right text-[#F43F5E]">{fmtW(d.cost)}</td>
-                                <td className="px-3 py-2 text-right text-[#1D1D1F]">{d.orders14d}</td>
-                                <td className="px-3 py-2 text-right text-[#0071E3]">{fmtW(d.revenue14d)}</td>
-                                <td className="px-3 py-2 text-right text-[#6E6E73]">{pct(cvr)}</td>
+                                <td className="px-3 py-2 font-mono text-fg">{d.date}</td>
+                                <td className="px-3 py-2 text-right text-fg-3">{formatNumber(d.impressions)}</td>
+                                <td className="px-3 py-2 text-right text-fg">{formatNumber(d.clicks)}</td>
+                                <td className="px-3 py-2 text-right text-fg-3">{pct(ctr)}</td>
+                                <td className="px-3 py-2 text-right text-fg-3">{d.clicks > 0 ? fmtW(cpc) : '-'}</td>
+                                <td className="px-3 py-2 text-right text-danger">{fmtW(d.cost)}</td>
+                                <td className="px-3 py-2 text-right text-fg">{d.orders14d}</td>
+                                <td className="px-3 py-2 text-right text-brand">{fmtW(d.revenue14d)}</td>
+                                <td className="px-3 py-2 text-right text-fg-3">{pct(cvr)}</td>
                                 <td className={`px-3 py-2 text-right font-bold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                                   {d.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}
                                 </td>
                               </tr>
                               {isExpanded && (
                                 <tr>
-                                  <td colSpan={11} className="p-0 bg-[#FAFBFC] border-b border-black/[0.08]">
+                                  <td colSpan={11} className="p-0 bg-card-2 border-b border-black/[0.08]">
                                     <div className="px-6 py-3">
-                                      <div className="text-[11px] font-semibold text-[#6E6E73] mb-2">
+                                      <div className="text-[11px] font-semibold text-fg-3 mb-2">
                                         {d.date} — 키워드별 성과 ({kws.length}개 · 광고비 순)
                                       </div>
                                       <div className="overflow-auto max-h-96">
                                         <table className="w-full text-[11px]">
-                                          <thead className="bg-white sticky top-0">
-                                            <tr className="text-[#86868B] border-b border-black/[0.06]">
+                                          <thead className="bg-card sticky top-0">
+                                            <tr className="text-fg-4 border-b border-line">
                                               <th className="text-left px-2 py-1.5 font-medium">키워드</th>
                                               <th className="text-right px-2 py-1.5 font-medium">노출</th>
                                               <th className="text-right px-2 py-1.5 font-medium">클릭</th>
@@ -2849,7 +2851,7 @@ export default function AdAnalysisPage() {
                                           </thead>
                                           <tbody>
                                             {kws.length === 0 && (
-                                              <tr><td colSpan={10} className="text-center py-3 text-[#D2D2D7]">키워드 데이터 없음</td></tr>
+                                              <tr><td colSpan={10} className="text-center py-3 text-fg-5">키워드 데이터 없음</td></tr>
                                             )}
                                             {kws.map((kd: any) => {
                                               const kctr = kd.impressions > 0 ? kd.clicks / kd.impressions : 0;
@@ -2857,16 +2859,16 @@ export default function AdAnalysisPage() {
                                               const kcvr = kd.clicks > 0 ? kd.orders14d / kd.clicks : 0;
                                               const kroas = kd.cost > 0 ? kd.revenue14d / kd.cost : 0;
                                               return (
-                                                <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-white">
-                                                  <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-[#1D1D1F]" title={kd.keyword}>{kd.keyword}</td>
+                                                <tr key={kd.keyword} className="border-b border-[#F5F6F7] hover:bg-card">
+                                                  <td className="px-2 py-1.5 max-w-[260px] truncate font-medium text-fg" title={kd.keyword}>{kd.keyword}</td>
                                                   <td className="px-2 py-1.5 text-right">{formatNumber(kd.impressions)}</td>
                                                   <td className="px-2 py-1.5 text-right">{formatNumber(kd.clicks)}</td>
-                                                  <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(kctr)}</td>
-                                                  <td className="px-2 py-1.5 text-right text-[#6E6E73]">{kd.clicks > 0 ? fmtW(kcpc) : '-'}</td>
-                                                  <td className="px-2 py-1.5 text-right text-[#F43F5E]">{fmtW(kd.cost)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-fg-3">{pct(kctr)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-fg-3">{kd.clicks > 0 ? fmtW(kcpc) : '-'}</td>
+                                                  <td className="px-2 py-1.5 text-right text-danger">{fmtW(kd.cost)}</td>
                                                   <td className="px-2 py-1.5 text-right">{kd.orders14d}</td>
-                                                  <td className="px-2 py-1.5 text-right text-[#0071E3]">{fmtW(kd.revenue14d)}</td>
-                                                  <td className="px-2 py-1.5 text-right text-[#6E6E73]">{pct(kcvr)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-brand">{fmtW(kd.revenue14d)}</td>
+                                                  <td className="px-2 py-1.5 text-right text-fg-3">{pct(kcvr)}</td>
                                                   <td className={`px-2 py-1.5 text-right font-semibold ${kroas >= 1 ? 'text-green-600' : 'text-red-500'}`}>
                                                     {kd.cost > 0 ? `${(kroas * 100).toFixed(0)}%` : '-'}
                                                   </td>
@@ -2925,12 +2927,12 @@ export default function AdAnalysisPage() {
               const ctr = r.impressions > 0 ? r.clicks / r.impressions : 0;
               const roas = r.cost > 0 ? r.revenue14d / r.cost : 0;
               return (<>
-                <td className="px-3 py-2 text-right text-[#6E6E73]">{formatNumber(r.impressions)}</td>
-                <td className="px-3 py-2 text-right text-[#1D1D1F]">{formatNumber(r.clicks)}</td>
-                <td className="px-3 py-2 text-right text-[#6E6E73]">{pct(ctr)}</td>
-                <td className="px-3 py-2 text-right text-[#F43F5E] font-medium">{fmtW(r.cost)}</td>
-                <td className="px-3 py-2 text-right text-[#1D1D1F]">{r.orders14d}</td>
-                <td className="px-3 py-2 text-right text-[#0071E3] font-medium">{fmtW(r.revenue14d)}</td>
+                <td className="px-3 py-2 text-right text-fg-3">{formatNumber(r.impressions)}</td>
+                <td className="px-3 py-2 text-right text-fg">{formatNumber(r.clicks)}</td>
+                <td className="px-3 py-2 text-right text-fg-3">{pct(ctr)}</td>
+                <td className="px-3 py-2 text-right text-danger font-medium">{fmtW(r.cost)}</td>
+                <td className="px-3 py-2 text-right text-fg">{r.orders14d}</td>
+                <td className="px-3 py-2 text-right text-brand font-medium">{fmtW(r.revenue14d)}</td>
                 <td className={`px-3 py-2 text-right font-bold ${roas >= 1 ? 'text-green-600' : 'text-red-500'}`}>{r.cost > 0 ? `${(roas * 100).toFixed(0)}%` : '-'}</td>
               </>);
             };
@@ -2976,34 +2978,34 @@ export default function AdAnalysisPage() {
               {/* 컨트롤 바 */}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[160px] max-w-[300px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D2D2D7]" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
                   <input value={placeSearch} onChange={(e) => setPlaceSearch(e.target.value)} placeholder="지면 검색"
-                    className="w-full h-9 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]" />
+                    className="w-full h-9 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand" />
                 </div>
-                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                <div className="flex gap-1 bg-app rounded-lg p-0.5">
                   {([['total', '합산'], ['daily', '일'], ['weekly', '주'], ['monthly', '월']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setPlaceGran(k)}
-                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeGran === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                      className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
                   ))}
                 </div>
-                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                <div className="flex gap-1 bg-app rounded-lg p-0.5">
                   {placeMetricOpts.map(({ key, label }) => (
                     <button key={key} onClick={() => setPlaceMetric(key)}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${placeMetric === key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{label}</button>
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${placeMetric === key ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{label}</button>
                   ))}
                 </div>
                 <button onClick={() => setPlaceShowRoas(v => !v)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${placeShowRoas ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]' : 'bg-white text-[#6E6E73] border-black/[0.08] hover:border-[#D2D2D7]'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${placeShowRoas ? 'bg-fg text-white border-fg' : 'bg-card text-fg-3 border-black/[0.08] hover:border-fg-5'}`}>
                   ROAS {placeShowRoas ? 'ON' : 'OFF'}
                 </button>
               </div>
 
               {/* 100% 누적 영역 차트 + ROAS 보조축 */}
               {chartDataPct.length > 1 && (
-                <div className="bg-white rounded-[18px] border border-black/[0.06] p-5">
+                <div className="bg-card rounded-[18px] border border-line p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[13px] font-bold text-[#1D1D1F]">지면별 {placeMetricLabel} 비중 추이</h3>
-                    {placeShowRoas && <span className="text-[11px] text-[#6E6E73]">--- ROAS (우축)</span>}
+                    <h3 className="text-[13px] font-bold text-fg">지면별 {placeMetricLabel} 비중 추이</h3>
+                    {placeShowRoas && <span className="text-[11px] text-fg-3">--- ROAS (우축)</span>}
                   </div>
                   <div className="h-[280px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -3047,18 +3049,18 @@ export default function AdAnalysisPage() {
               )}
 
               {/* 테이블 */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-x-auto relative">
+              <div className="bg-card rounded-[18px] border border-line overflow-x-auto relative">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-black/[0.06] bg-[#FAFBFC]">
-                      <th className="text-left px-3 py-2.5 font-semibold text-[#6E6E73]">지면</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">노출</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">클릭</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">CTR</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">광고비</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">주문</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">매출</th>
-                      <th className="text-right px-3 py-2.5 font-semibold text-[#6E6E73]">ROAS</th>
+                    <tr className="border-b border-line bg-card-2">
+                      <th className="text-left px-3 py-2.5 font-semibold text-fg-3">지면</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">노출</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">클릭</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">CTR</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">광고비</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">주문</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">매출</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-fg-3">ROAS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3067,9 +3069,9 @@ export default function AdAnalysisPage() {
                       const subRows = placeData.byPeriod.filter((r: any) => r.placement === p.placement).sort((a: any, b: any) => a.period.localeCompare(b.period));
                       return (
                         <Fragment key={p.placement}>
-                          <tr className="border-b border-black/[0.06] hover:bg-[#FAFBFC] cursor-pointer"
+                          <tr className="border-b border-line hover:bg-card-2 cursor-pointer"
                             onClick={() => setExpandedPlaces((prev) => { const n = new Set(prev); n.has(p.placement) ? n.delete(p.placement) : n.add(p.placement); return n; })}>
-                            <td className="px-3 py-2.5 font-medium text-[#1D1D1F] flex items-center gap-1.5">
+                            <td className="px-3 py-2.5 font-medium text-fg flex items-center gap-1.5">
                               <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PLACE_COLORS[plNames.indexOf(p.placement) % PLACE_COLORS.length] }} />
                               {placeGran !== 'total' && (isExp ? <ChevronDown className="h-3 w-3 inline" /> : <ChevronUp className="h-3 w-3 inline rotate-90" />)}
                               {p.placement}
@@ -3077,8 +3079,8 @@ export default function AdAnalysisPage() {
                             {renderMetricRow(p)}
                           </tr>
                           {isExp && subRows.map((sr: any) => (
-                            <tr key={`${p.placement}||${sr.period}`} className="border-b border-black/[0.06] bg-[#FAFBFF]">
-                              <td className="px-3 py-2 pl-10 text-[11px] text-[#6E6E73]">{sr.periodLabel}</td>
+                            <tr key={`${p.placement}||${sr.period}`} className="border-b border-line bg-brand-soft">
+                              <td className="px-3 py-2 pl-10 text-[11px] text-fg-3">{sr.periodLabel}</td>
                               {renderMetricRow(sr, true)}
                             </tr>
                           ))}
@@ -3088,10 +3090,10 @@ export default function AdAnalysisPage() {
                   </tbody>
                 </table>
                 {/* 플로팅 합계 */}
-                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-black/[0.08]">
+                <div className="sticky bottom-0 bg-card-2 border-t-2 border-black/[0.08]">
                   <table className="w-full text-[12px]"><tbody>
                     <tr className="font-bold">
-                      <td className="px-3 py-2.5 text-[#1D1D1F]">합계</td>
+                      <td className="px-3 py-2.5 text-fg">합계</td>
                       {renderMetricRow(t)}
                     </tr>
                   </tbody></table>
@@ -3227,12 +3229,12 @@ export default function AdAnalysisPage() {
             // 테이블용 메트릭 컬럼
             const metricCols = [
               { key: 'impressions', label: '노출', get: (r: any) => r.impressions, fmt: (v: number) => formatNumber(v) },
-              { key: 'clicks', label: '클릭', get: (r: any) => r.clicks, fmt: (v: number) => formatNumber(v), cls: 'text-[#1D1D1F]' },
+              { key: 'clicks', label: '클릭', get: (r: any) => r.clicks, fmt: (v: number) => formatNumber(v), cls: 'text-fg' },
               { key: 'ctr', label: 'CTR', get: (r: any) => r.impressions > 0 ? r.clicks / r.impressions : 0, fmt: (v: number) => pct(v) },
               { key: 'cpc', label: 'CPC', get: (r: any) => r.clicks > 0 ? r.cost / r.clicks : 0, fmt: (v: number) => fmtW(Math.round(v)) },
-              { key: 'cost', label: '광고비', get: (r: any) => r.cost, fmt: (v: number) => fmtW(v), cls: 'text-[#F43F5E] font-medium' },
+              { key: 'cost', label: '광고비', get: (r: any) => r.cost, fmt: (v: number) => fmtW(v), cls: 'text-danger font-medium' },
               { key: 'orders14d', label: '주문', get: (r: any) => r.orders14d, fmt: (v: number) => String(v) },
-              { key: 'revenue14d', label: '매출', get: (r: any) => r.revenue14d, fmt: (v: number) => fmtW(v), cls: 'text-[#0071E3] font-medium' },
+              { key: 'revenue14d', label: '매출', get: (r: any) => r.revenue14d, fmt: (v: number) => fmtW(v), cls: 'text-brand font-medium' },
               { key: 'aov', label: 'AOV', get: (r: any) => r.orders14d > 0 ? r.revenue14d / r.orders14d : 0, fmt: (v: number) => v > 0 ? fmtW(Math.round(v)) : '-' },
               { key: 'cvr', label: 'CVR', get: (r: any) => r.clicks > 0 ? r.orders14d / r.clicks : 0, fmt: (v: number) => pct(v) },
               { key: 'roas', label: 'ROAS', get: (r: any) => r.cost > 0 ? r.revenue14d / r.cost : 0,
@@ -3256,13 +3258,13 @@ export default function AdAnalysisPage() {
             return (
             <div className="space-y-4">
               {/* 비교 차트 */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-4">
+              <div className="bg-card rounded-[18px] border border-line p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">{dimLabel}별 비교</h3>
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <h3 className="text-[13px] font-bold text-fg">{dimLabel}별 비교</h3>
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {metricOpts.map((m) => (
                       <button key={m.key} onClick={() => setProdMetric(m.key)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${prodMetric === m.key ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${prodMetric === m.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
                         {m.label}
                       </button>
                     ))}
@@ -3286,14 +3288,14 @@ export default function AdAnalysisPage() {
                   </div>
                 )}
                 {/* 상품 선택 칩 */}
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-black/[0.06]">
-                  <span className="text-[11px] text-[#D2D2D7] py-1">비교 대상:</span>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-line">
+                  <span className="text-[11px] text-fg-5 py-1">비교 대상:</span>
                   {allDims.map((dim, i) => (
                     <button key={dim} onClick={() => toggleProduct(dim)}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
                         sel.has(dim)
                           ? 'text-white border-transparent'
-                          : 'border-black/[0.08] bg-white text-[#86868B] hover:border-[#D2D2D7]'
+                          : 'border-black/[0.08] bg-card text-fg-4 hover:border-fg-5'
                       }`}
                       style={sel.has(dim) ? { backgroundColor: COLORS[allDims.indexOf(dim) % COLORS.length] } : undefined}>
                       {dim.length > 20 ? dim.slice(0, 20) + '…' : dim}
@@ -3303,37 +3305,37 @@ export default function AdAnalysisPage() {
               </div>
 
               {/* 엑셀 피벗 스타일 테이블 */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-x-auto relative">
+              <div className="bg-card rounded-[18px] border border-line overflow-x-auto relative">
                 <div className="flex flex-wrap items-center gap-3 px-4 pt-3 pb-2">
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {([['product', '상품'], ['campaign', '캠페인'], ['keyword', '키워드']] as const).map(([k, l]) => (
                       <button key={k} onClick={() => { setPivotDim(k); setSelectedProducts(new Set()); setExpandedDims(new Set()); }}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotDim === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotDim === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {([['weekly', '주'], ['monthly', '월'], ['daily', '일']] as const).map(([k, l]) => (
                       <button key={k} onClick={() => setPivotGran(k)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotGran === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>
+                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${pivotGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
                   <div className="relative flex-1 min-w-[140px] max-w-[260px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#D2D2D7]" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-fg-5" />
                     <input value={pivotSearch} onChange={(e) => setPivotSearch(e.target.value)} placeholder={`${dimLabel} 검색`}
-                      className="w-full h-8 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]" />
+                      className="w-full h-8 pl-8 pr-3 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand" />
                   </div>
-                  <span className="text-[11px] text-[#86868B] ml-auto">{allDims.length}개</span>
+                  <span className="text-[11px] text-fg-4 ml-auto">{allDims.length}개</span>
                 </div>
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-black/[0.06] bg-[#FAFBFC]">
-                      <th onClick={() => togglePSort('dim')} className="text-left px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] whitespace-nowrap select-none">{dimLabel}{si('dim')}</th>
+                    <tr className="border-b border-line bg-card-2">
+                      <th onClick={() => togglePSort('dim')} className="text-left px-3 py-2.5 font-semibold text-fg-3 cursor-pointer hover:text-fg whitespace-nowrap select-none">{dimLabel}{si('dim')}</th>
                       {metricCols.map((col) => (
-                        <th key={col.key} onClick={() => togglePSort(col.key)} className="text-right px-3 py-2.5 font-semibold text-[#6E6E73] cursor-pointer hover:text-[#1D1D1F] whitespace-nowrap select-none">{col.label}{si(col.key)}</th>
+                        <th key={col.key} onClick={() => togglePSort(col.key)} className="text-right px-3 py-2.5 font-semibold text-fg-3 cursor-pointer hover:text-fg whitespace-nowrap select-none">{col.label}{si(col.key)}</th>
                       ))}
                     </tr>
                   </thead>
@@ -3365,24 +3367,24 @@ export default function AdAnalysisPage() {
                         const dimColor = COLORS[allDims.indexOf(dt.dim) % COLORS.length];
                         return (
                           <Fragment key={dt.dim}>
-                            <tr className={`border-b border-black/[0.06] hover:bg-[#FAFBFC] cursor-pointer ${isSel ? 'bg-[#F8FAFF]' : ''}`}
+                            <tr className={`border-b border-line hover:bg-card-2 cursor-pointer ${isSel ? 'bg-brand-soft' : ''}`}
                               onClick={() => { toggleProduct(dt.dim); setExpandedDims((prev) => { const n = new Set(prev); n.has(dt.dim) ? n.delete(dt.dim) : n.add(dt.dim); return n; }); }}>
-                              <td className="px-3 py-2.5 font-semibold text-[#1D1D1F] max-w-[260px] truncate" title={dt.dim}>
-                                {isExp ? <ChevronDown className="h-3 w-3 inline mr-1.5 text-[#6E6E73]" /> : <ChevronUp className="h-3 w-3 inline mr-1.5 text-[#D2D2D7] rotate-90" />}
+                              <td className="px-3 py-2.5 font-semibold text-fg max-w-[260px] truncate" title={dt.dim}>
+                                {isExp ? <ChevronDown className="h-3 w-3 inline mr-1.5 text-fg-3" /> : <ChevronUp className="h-3 w-3 inline mr-1.5 text-fg-5 rotate-90" />}
                                 {isSel && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: dimColor }} />}
                                 {dt.dim}
                               </td>
                               {metricCols.map((col) => (
-                                <td key={col.key} className={`px-3 py-2.5 text-right font-semibold ${col.cls ?? 'text-[#6E6E73]'}`}>
+                                <td key={col.key} className={`px-3 py-2.5 text-right font-semibold ${col.cls ?? 'text-fg-3'}`}>
                                   {col.render ? col.render(dt) : col.fmt!(col.get(dt))}
                                 </td>
                               ))}
                             </tr>
                             {isExp && subRows.map((sr: any) => (
-                              <tr key={`${sr.dim}||${sr.period}`} className="border-b border-black/[0.06] bg-[#FAFBFF]">
-                                <td className="px-3 py-2 pl-8 text-[11px] text-[#6E6E73]">{sr.periodLabel}</td>
+                              <tr key={`${sr.dim}||${sr.period}`} className="border-b border-line bg-brand-soft">
+                                <td className="px-3 py-2 pl-8 text-[11px] text-fg-3">{sr.periodLabel}</td>
                                 {metricCols.map((col) => (
-                                  <td key={col.key} className={`px-3 py-2 text-right text-[11px] ${col.cls ?? 'text-[#86868B]'}`}>
+                                  <td key={col.key} className={`px-3 py-2 text-right text-[11px] ${col.cls ?? 'text-fg-4'}`}>
                                     {col.render ? col.render(sr) : col.fmt!(col.get(sr))}
                                   </td>
                                 ))}
@@ -3395,10 +3397,10 @@ export default function AdAnalysisPage() {
                   </tbody>
                 </table>
                 {/* 플로팅 합계 */}
-                <div className="sticky bottom-0 bg-[#F8FAFC] border-t-2 border-black/[0.08]">
+                <div className="sticky bottom-0 bg-card-2 border-t-2 border-black/[0.08]">
                   <table className="w-full text-[12px]"><tbody>
                     <tr className="font-bold">
-                      <td className="px-3 py-2.5 text-[#1D1D1F]">합계</td>
+                      <td className="px-3 py-2.5 text-fg">합계</td>
                       {metricCols.map((col) => (
                         <td key={col.key} className="px-3 py-2.5 text-right">
                           {col.render ? col.render(t) : col.fmt!(col.get(t))}
@@ -3435,7 +3437,7 @@ export default function AdAnalysisPage() {
             }
             const periods = [...periodSet].sort();
             if (periods.length === 0) {
-              return <div className="bg-white rounded-[18px] border border-black/[0.06] p-10 text-center text-[13px] text-[#86868B]">데이터가 없습니다.</div>;
+              return <div className="bg-card rounded-[18px] border border-line p-10 text-center text-[13px] text-fg-4">데이터가 없습니다.</div>;
             }
 
             const curP = (momCurPeriod && periods.includes(momCurPeriod)) ? momCurPeriod : periods[periods.length - 1];
@@ -3486,10 +3488,10 @@ export default function AdAnalysisPage() {
             };
             // 색상 통일: 부호 기준 — 증가=초록, 감소=빨강 (지표 종류 무관)
             const rateCell = (cur: number, base: number) => {
-              if (base === 0 && cur === 0) return { text: '–', cls: 'text-[#D2D2D7]', rate: null as number | null };
-              if (base === 0) return { text: '신규', cls: 'text-[#0071E3] font-semibold', rate: null as number | null };
+              if (base === 0 && cur === 0) return { text: '–', cls: 'text-fg-5', rate: null as number | null };
+              if (base === 0) return { text: '신규', cls: 'text-brand font-semibold', rate: null as number | null };
               const d = (cur - base) / base;
-              if (Math.abs(d) < 0.0001) return { text: '0%', cls: 'text-[#86868B]', rate: 0 };
+              if (Math.abs(d) < 0.0001) return { text: '0%', cls: 'text-fg-4', rate: 0 };
               return { text: `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}%`, cls: d > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold', rate: d };
             };
 
@@ -3517,22 +3519,22 @@ export default function AdAnalysisPage() {
             return (
             <div className="space-y-4">
               {/* 컨트롤 — 단위 + 캠페인/상품(글로벌 필터와 동일 state) */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-4 flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+              <div className="bg-card rounded-[18px] border border-line p-4 flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 bg-app rounded-lg p-0.5">
                   {granOpts.map(([k, l]) => (
-                    <button key={k} onClick={() => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momGran === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                    <button key={k} onClick={() => { setMomGran(k); setMomCurPeriod(''); setMomBasePeriod(''); }} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${momGran === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
                   ))}
                 </div>
                 <label className="flex items-center gap-1.5 text-[12px]">
-                  <span className="text-[#86868B] whitespace-nowrap">캠페인</span>
-                  <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-[#0071E3]">
+                  <span className="text-fg-4 whitespace-nowrap">캠페인</span>
+                  <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-brand">
                     <option value="all">전체</option>
                     {campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </label>
                 <label className="flex items-center gap-1.5 text-[12px]">
-                  <span className="text-[#86868B] whitespace-nowrap">상품</span>
-                  <select value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-[#0071E3]">
+                  <span className="text-fg-4 whitespace-nowrap">상품</span>
+                  <select value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] max-w-[220px] focus:outline-none focus:border-brand">
                     <option value="all">전체</option>
                     {products.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -3541,24 +3543,24 @@ export default function AdAnalysisPage() {
               </div>
 
               {/* MoM/WoW 증감 시각화 (카드 / 막대 전환) */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] p-5 space-y-3">
+              <div className="bg-card rounded-[18px] border border-line p-5 space-y-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <h3 className="text-[13px] font-bold text-[#1D1D1F]">지표 증감</h3>
-                  <div className="flex gap-1 bg-[#F5F5F7] rounded-lg p-0.5">
+                  <h3 className="text-[13px] font-bold text-fg">지표 증감</h3>
+                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
                     {([['cards', '카드'], ['bars', '막대']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => setMomView(k)} className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${momView === k ? 'bg-white text-[#1D1D1F] shadow-sm' : 'text-[#6E6E73]'}`}>{l}</button>
+                      <button key={k} onClick={() => setMomView(k)} className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${momView === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>{l}</button>
                     ))}
                   </div>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B]">기준</span>
-                    <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
+                    <span className="text-fg-4">기준</span>
+                    <select value={curP} onChange={(e) => setMomCurPeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand">
                       {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
                     </select>
                   </label>
-                  <span className="text-[#D2D2D7] text-[12px]">vs</span>
+                  <span className="text-fg-5 text-[12px]">vs</span>
                   <label className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[#86868B]">비교</span>
-                    <select value={baseP} onChange={(e) => setMomBasePeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-[#0071E3]">
+                    <span className="text-fg-4">비교</span>
+                    <select value={baseP} onChange={(e) => setMomBasePeriod(e.target.value)} className="h-8 px-2 rounded-lg border border-black/[0.08] text-[12px] focus:outline-none focus:border-brand">
                       {[...periods].reverse().map((p) => <option key={p} value={p}>{periodLabel(p)}</option>)}
                     </select>
                   </label>
@@ -3576,9 +3578,9 @@ export default function AdAnalysisPage() {
                       const dir = rc.rate == null ? 0 : rc.rate > 0 ? 1 : rc.rate < 0 ? -1 : 0;
                       const col = dir > 0 ? GREEN : dir < 0 ? RED : '#94A3B8';
                       return (
-                        <div key={m.key} className="rounded-[14px] border border-black/[0.06] p-3">
-                          <div className="text-[11px] text-[#86868B] mb-0.5 truncate">{m.label}</div>
-                          <div className="text-[15px] font-bold text-[#1D1D1F]">{fmtVal(m.unit, cv)}</div>
+                        <div key={m.key} className="rounded-[14px] border border-line p-3">
+                          <div className="text-[11px] text-fg-4 mb-0.5 truncate">{m.label}</div>
+                          <div className="text-[15px] font-bold text-fg">{fmtVal(m.unit, cv)}</div>
                           <div className={`text-[12px] font-semibold ${rc.cls}`}>{dir > 0 ? '▲ ' : dir < 0 ? '▼ ' : ''}{rc.text}</div>
                           <div className="mt-1.5">{sparkline(m.key, col)}</div>
                           <div className="text-[10px] text-[#C7C7CC] mt-0.5">전 {fmtVal(m.unit, bv)}</div>
@@ -3603,24 +3605,24 @@ export default function AdAnalysisPage() {
                   </div>
                 ) : <div className="h-[160px] flex items-center justify-center text-[12px] text-[#C7C7CC]">비교할 증감율이 없습니다 (이전 기간 데이터 없음).</div>}
 
-                <div className="text-[11px] text-[#86868B]">기준 <b>{periodLabel(curP)}</b> vs 비교 <b>{periodLabel(baseP)}</b> · 각 지표가 이전 기간 대비 얼마나 변했는지{momView === 'cards' ? ' (스파크라인 = 최근 추이)' : ''}</div>
+                <div className="text-[11px] text-fg-4">기준 <b>{periodLabel(curP)}</b> vs 비교 <b>{periodLabel(baseP)}</b> · 각 지표가 이전 기간 대비 얼마나 변했는지{momView === 'cards' ? ' (스파크라인 = 최근 추이)' : ''}</div>
               </div>
 
               {/* 상세 비교표 (전 지표) */}
-              <div className="bg-white rounded-[18px] border border-black/[0.06] overflow-hidden">
-                <div className="px-5 py-3 border-b border-black/[0.06] flex items-center justify-between">
-                  <span className="text-[13px] font-bold text-[#1D1D1F]">상세 비교</span>
-                  <span className="text-[11px] text-[#86868B]">{filterCampaign === 'all' ? '전체 캠페인' : filterCampaign} · {filterProduct === 'all' ? '전체 상품' : filterProduct}</span>
+              <div className="bg-card rounded-[18px] border border-line overflow-hidden">
+                <div className="px-5 py-3 border-b border-line flex items-center justify-between">
+                  <span className="text-[13px] font-bold text-fg">상세 비교</span>
+                  <span className="text-[11px] text-fg-4">{filterCampaign === 'all' ? '전체 캠페인' : filterCampaign} · {filterProduct === 'all' ? '전체 상품' : filterProduct}</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
                     <thead>
-                      <tr className="border-b border-black/[0.06] bg-[#FAFBFC]">
-                        <th className="text-left px-5 py-2.5 font-semibold text-[#6E6E73] whitespace-nowrap">지표</th>
-                        <th className="text-right px-4 py-2.5 font-semibold text-[#86868B] whitespace-nowrap">비교 ({periodLabel(baseP)})</th>
-                        <th className="text-right px-4 py-2.5 font-semibold text-[#1D1D1F] whitespace-nowrap">기준 ({periodLabel(curP)})</th>
-                        <th className="text-right px-4 py-2.5 font-semibold text-[#6E6E73] whitespace-nowrap">증감</th>
-                        <th className="text-right px-5 py-2.5 font-semibold text-[#6E6E73] whitespace-nowrap">증감율</th>
+                      <tr className="border-b border-line bg-card-2">
+                        <th className="text-left px-5 py-2.5 font-semibold text-fg-3 whitespace-nowrap">지표</th>
+                        <th className="text-right px-4 py-2.5 font-semibold text-fg-4 whitespace-nowrap">비교 ({periodLabel(baseP)})</th>
+                        <th className="text-right px-4 py-2.5 font-semibold text-fg whitespace-nowrap">기준 ({periodLabel(curP)})</th>
+                        <th className="text-right px-4 py-2.5 font-semibold text-fg-3 whitespace-nowrap">증감</th>
+                        <th className="text-right px-5 py-2.5 font-semibold text-fg-3 whitespace-nowrap">증감율</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3628,10 +3630,10 @@ export default function AdAnalysisPage() {
                         const cv = v(curAgg, m.key), bv = v(baseAgg, m.key);
                         const rc = rateCell(cv, bv);
                         return (
-                          <tr key={m.key} className="border-b border-black/[0.04] hover:bg-[#FAFBFC]">
-                            <td className="px-5 py-2.5 font-medium text-[#1D1D1F] whitespace-nowrap">{m.label}</td>
-                            <td className="px-4 py-2.5 text-right text-[#86868B] whitespace-nowrap">{fmtVal(m.unit, bv)}</td>
-                            <td className="px-4 py-2.5 text-right font-semibold text-[#1D1D1F] whitespace-nowrap">{fmtVal(m.unit, cv)}</td>
+                          <tr key={m.key} className="border-b border-line-2 hover:bg-card-2">
+                            <td className="px-5 py-2.5 font-medium text-fg whitespace-nowrap">{m.label}</td>
+                            <td className="px-4 py-2.5 text-right text-fg-4 whitespace-nowrap">{fmtVal(m.unit, bv)}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-fg whitespace-nowrap">{fmtVal(m.unit, cv)}</td>
                             <td className={`px-4 py-2.5 text-right whitespace-nowrap ${rc.cls}`}>{fmtDelta(m.unit, cv, bv)}</td>
                             <td className={`px-5 py-2.5 text-right whitespace-nowrap ${rc.cls}`}>{rc.text}</td>
                           </tr>

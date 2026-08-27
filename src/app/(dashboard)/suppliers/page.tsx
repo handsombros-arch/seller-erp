@@ -6,6 +6,8 @@ import type { SupplierAddress } from '@/types';
 import type { Supplier } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 
+import { PageHeader } from '@/components/ui/page-header';
+
 // ─── Dialog ──────────────────────────────────────────────────────────────────
 
 function Dialog({ open, onClose, title, children }: {
@@ -15,11 +17,11 @@ function Dialog({ open, onClose, title, children }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#F2F4F6]">
-          <h2 className="text-[15px] font-bold text-[#191F28]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6]">
-            <X className="h-4 w-4 text-[#6B7684]" />
+      <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-2">
+          <h2 className="text-[15px] font-bold text-fg">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app">
+            <X className="h-4 w-4 text-fg-3" />
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
@@ -31,7 +33,7 @@ function Dialog({ open, onClose, title, children }: {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[13px] font-medium text-[#191F28]">
+      <label className="text-[13px] font-medium text-fg">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
@@ -39,7 +41,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors';
+const inputCls = 'w-full h-11 px-3.5 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors';
 
 // ─── Supplier Form ────────────────────────────────────────────────────────────
 
@@ -122,7 +124,7 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
           <select
             value={form.phone_country_code}
             onChange={(e) => set('phone_country_code', e.target.value)}
-            className="h-11 px-2 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] bg-white focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors shrink-0"
+            className="h-11 px-2 rounded-xl border border-line text-[13px] text-fg bg-card focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors shrink-0"
           >
             {COUNTRY_CODES.map((c) => (
               <option key={c.code} value={c.code}>{c.label}</option>
@@ -142,9 +144,9 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
       <Field label="기본 리드타임 (일)">
         <div className="flex items-center gap-2">
           <input className={inputCls} type="number" min="1" max="365" placeholder="21" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
-          <span className="text-[13px] text-[#6B7684] whitespace-nowrap">일</span>
+          <span className="text-[13px] text-fg-3 whitespace-nowrap">일</span>
         </div>
-        <p className="text-[11px] text-[#B0B8C1] mt-1">발주일로부터 입고까지 평균 소요 기간</p>
+        <p className="text-[11px] text-fg-5 mt-1">발주일로부터 입고까지 평균 소요 기간</p>
       </Field>
 
       <Field label="주요 상품">
@@ -153,37 +155,37 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
 
       {/* 주소 관리 */}
       <div className="space-y-2">
-        <label className="text-[13px] font-medium text-[#191F28]">주소</label>
+        <label className="text-[13px] font-medium text-fg">주소</label>
         {form.addresses.map((addr, i) => (
-          <div key={i} className="flex items-start gap-2 bg-[#F8F9FB] rounded-xl px-3 py-2.5">
-            <MapPin className="h-3.5 w-3.5 text-[#B0B8C1] mt-0.5 shrink-0" />
+          <div key={i} className="flex items-start gap-2 bg-card-2 rounded-xl px-3 py-2.5">
+            <MapPin className="h-3.5 w-3.5 text-fg-5 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-[#6B7684]">{addr.label}</p>
-              <p className="text-[13px] text-[#191F28] break-all">{addr.address}</p>
+              <p className="text-[11px] font-semibold text-fg-3">{addr.label}</p>
+              <p className="text-[13px] text-fg break-all">{addr.address}</p>
             </div>
-            <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors shrink-0">
+            <button type="button" onClick={() => removeAddress(i)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors shrink-0">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-        <div className="border border-[#E5E8EB] rounded-xl p-3 space-y-2">
+        <div className="border border-line rounded-xl p-3 space-y-2">
           <div className="flex gap-2">
             <select
               value={addrInput.type}
               onChange={(e) => handleAddrTypeChange(e.target.value as SupplierAddress['type'])}
-              className="h-10 px-2 rounded-xl border border-[#E5E8EB] text-[13px] bg-white focus:outline-none focus:border-[#3182F6] transition-colors shrink-0"
+              className="h-10 px-2 rounded-xl border border-line text-[13px] bg-card focus:outline-none focus:border-brand transition-colors shrink-0"
             >
               {ADDRESS_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             <input
               lang="ko"
-              className="flex-1 h-10 px-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] transition-colors"
+              className="flex-1 h-10 px-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand transition-colors"
               placeholder="주소 입력"
               value={addrInput.address}
               onChange={(e) => setAddrInput((a) => ({ ...a, address: e.target.value }))}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAddress(); } }}
             />
-            <button type="button" onClick={addAddress} className="h-10 w-9 flex items-center justify-center rounded-xl bg-[#EBF1FE] text-[#3182F6] hover:bg-[#3182F6] hover:text-white transition-colors shrink-0">
+            <button type="button" onClick={addAddress} className="h-10 w-9 flex items-center justify-center rounded-xl bg-brand-bg text-brand hover:bg-brand hover:text-white transition-colors shrink-0">
               <Plus className="h-4 w-4" />
             </button>
           </div>
@@ -193,16 +195,16 @@ function SupplierForm({ initial, onSave, onCancel, loading }: {
       <Field label="메모">
         <textarea
           lang="ko"
-          className="w-full px-3.5 py-3 rounded-xl border border-[#E5E8EB] text-[13px] text-[#191F28] placeholder:text-[#B0B8C1] focus:outline-none focus:border-[#3182F6] focus:ring-2 focus:ring-[#3182F6]/10 transition-colors resize-none"
+          className="w-full px-3.5 py-3 rounded-xl border border-line text-[13px] text-fg placeholder:text-fg-5 focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-colors resize-none"
           rows={2} placeholder="특이사항, 계좌 정보 등"
           value={form.note} onChange={(e) => set('note', e.target.value)}
         />
       </Field>
       <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
           취소
         </button>
-        <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        <button type="submit" disabled={loading} className="flex-1 h-11 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           저장
         </button>
@@ -288,14 +290,14 @@ export default function SuppliersPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div className="min-w-0">
-          <h2 className="text-[20px] font-bold tracking-[-0.03em] text-[#191F28]">공급처 관리</h2>
-          <p className="mt-1 text-[13px] text-[#6B7684]">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
+          <PageHeader title="공급처 관리" />
+          <p className="mt-1 text-[13px] text-fg-3">제조사 / 공급처 정보를 등록하고 발주 시 불러옵니다</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors whitespace-nowrap">
+          <button onClick={() => setCsvOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
             <Upload className="h-4 w-4" /> CSV 업로드
           </button>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-[#3182F6] text-white text-[13px] font-semibold hover:bg-[#1B64DA] transition-colors whitespace-nowrap">
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover transition-colors whitespace-nowrap">
             <Plus className="h-4 w-4" /> 공급처 추가
           </button>
         </div>
@@ -304,81 +306,81 @@ export default function SuppliersPage() {
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-6 w-6 animate-spin text-[#3182F6]" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand" />
         </div>
       ) : suppliers.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
-          <Building2 className="h-10 w-10 text-[#B0B8C1] mb-3" />
-          <p className="text-[13px] font-medium text-[#6B7684]">등록된 공급처가 없습니다</p>
-          <p className="text-[13px] text-[#B0B8C1] mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
+        <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center py-16">
+          <Building2 className="h-10 w-10 text-fg-5 mb-3" />
+          <p className="text-[13px] font-medium text-fg-3">등록된 공급처가 없습니다</p>
+          <p className="text-[13px] text-fg-5 mt-1">공급처 추가 버튼을 눌러 시작하세요</p>
         </div>
       ) : (
         <div className="grid gap-3">
           {suppliers.map((s) => (
-            <div key={s.id} className="bg-white rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
+            <div key={s.id} className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#F2F4F6] flex items-center justify-center shrink-0">
-                    <Building2 className="h-5 w-5 text-[#6B7684]" />
+                  <div className="w-10 h-10 rounded-xl bg-app flex items-center justify-center shrink-0">
+                    <Building2 className="h-5 w-5 text-fg-3" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-[15px] font-bold text-[#191F28]">{s.name}</h3>
+                      <h3 className="text-[15px] font-bold text-fg">{s.name}</h3>
                       {s.country && (
-                        <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F2F4F6] text-[#6B7684] rounded-full">{s.country}</span>
+                        <span className="text-[11px] font-medium px-2 py-0.5 bg-app text-fg-3 rounded-full">{s.country}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
                       {s.contact_person && (
-                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                          <span className="text-[#B0B8C1]">담당자</span> {s.contact_person}
+                        <span className="flex items-center gap-1 text-[12px] text-fg-3">
+                          <span className="text-fg-5">담당자</span> {s.contact_person}
                         </span>
                       )}
                       {s.phone && (
-                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                          <Phone className="h-3.5 w-3.5 text-[#B0B8C1]" />
+                        <span className="flex items-center gap-1 text-[12px] text-fg-3">
+                          <Phone className="h-3.5 w-3.5 text-fg-5" />
                           {s.phone_country_code && `${s.phone_country_code} `}{s.phone}
                         </span>
                       )}
                       {s.email && (
-                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                          <Mail className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.email}
+                        <span className="flex items-center gap-1 text-[12px] text-fg-3">
+                          <Mail className="h-3.5 w-3.5 text-fg-5" /> {s.email}
                         </span>
                       )}
-                      <span className="flex items-center gap-1 text-[12px] font-medium text-[#3182F6]">
+                      <span className="flex items-center gap-1 text-[12px] font-medium text-brand">
                         <Clock className="h-3.5 w-3.5" /> 리드타임 {s.lead_time_days}일
                       </span>
                       {s.main_products && (
-                        <span className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                          <Package className="h-3.5 w-3.5 text-[#B0B8C1]" /> {s.main_products}
+                        <span className="flex items-center gap-1 text-[12px] text-fg-3">
+                          <Package className="h-3.5 w-3.5 text-fg-5" /> {s.main_products}
                         </span>
                       )}
                     </div>
                     {(s.addresses ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-1.5">
                         {s.addresses.map((addr, i) => (
-                          <span key={i} className="flex items-center gap-1 text-[12px] text-[#6B7684]">
-                            <MapPin className="h-3 w-3 text-[#B0B8C1]" />
-                            <span className="text-[#B0B8C1] font-medium">{addr.label}</span> {addr.address}
+                          <span key={i} className="flex items-center gap-1 text-[12px] text-fg-3">
+                            <MapPin className="h-3 w-3 text-fg-5" />
+                            <span className="text-fg-5 font-medium">{addr.label}</span> {addr.address}
                           </span>
                         ))}
                       </div>
                     )}
                     {s.note && (
-                      <p className="text-[12px] text-[#B0B8C1] mt-1.5 line-clamp-1">{s.note}</p>
+                      <p className="text-[12px] text-fg-5 mt-1.5 line-clamp-1">{s.note}</p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => setEditTarget(s)}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[#F2F4F6] text-[#B0B8C1] hover:text-[#6B7684] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-app text-fg-5 hover:text-fg-3 transition-colors"
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setDeleteId(s.id)}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-[#B0B8C1] hover:text-red-500 transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-red-50 text-fg-5 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -437,11 +439,11 @@ export default function SuppliersPage() {
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteId(null)} />
-          <div className="relative bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
-            <h3 className="text-[15px] font-bold text-[#191F28] mb-2">공급처 삭제</h3>
-            <p className="text-[13px] text-[#6B7684]">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
+          <div className="relative bg-card rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-sm mx-4 p-6">
+            <h3 className="text-[15px] font-bold text-fg mb-2">공급처 삭제</h3>
+            <p className="text-[13px] text-fg-3">삭제 후 복구할 수 없습니다. 이 공급처를 사용하는 SKU와의 연결도 해제됩니다.</p>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-[#E5E8EB] text-[13px] font-medium text-[#6B7684] hover:bg-[#F2F4F6] transition-colors">
+              <button onClick={() => setDeleteId(null)} className="flex-1 h-11 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors">
                 취소
               </button>
               <button onClick={() => handleDelete(deleteId)} className="flex-1 h-11 rounded-xl bg-red-500 text-white text-[13px] font-semibold hover:bg-red-600 transition-colors">
