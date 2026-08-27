@@ -9,6 +9,10 @@ import CsvImportDialog from '@/components/CsvImportDialog';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs, useTabParam } from '@/components/ui/tabs';
+
+import { useToast } from '@/components/ui/toast';
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Warehouse { id: string; name: string; }
@@ -98,7 +102,7 @@ function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: str
   const [dirty, setDirty] = useState(false);
   const [q, setQ] = useState('');
   const [importOpen, setImportOpen] = useState(false);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
 
   async function load() {
     setLoading(true);
@@ -136,7 +140,7 @@ function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: str
     });
     setSaving(false);
     setDirty(false);
-    setToast('저장 완료'); setTimeout(() => setToast(''), 2000);
+    toast.success('저장 완료'); setTimeout(() => toast.success(''), 2000);
   }
 
   const filtered = q
@@ -247,11 +251,6 @@ function GradeDiscountTab({ skuOptions }: { skuOptions: { id: string; label: str
         description="SKU코드는 필수입니다. 할인율은 신상품 판매가 대비 비율(%)로 입력합니다."
       />
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </div>
   );
 }
@@ -640,7 +639,7 @@ function SuppliersTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function MasterPage() {
-  const [tab, setTab] = useState<'master' | 'discount' | 'supplier'>('master');
+  const [tab, setTab] = useTabParam('tab', ['master', 'discount', 'supplier'] as const, 'master');
   const [rows, setRows] = useState<UnifiedRow[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -1140,14 +1139,12 @@ export default function MasterPage() {
             <PageHeader title="마스터 시트" />
             <p className="mt-1 text-[13px] text-fg-3">원가·재고·플랫폼 상품명을 한 화면에서 관리하세요</p>
           </div>
-          <div className="flex items-center gap-1 bg-app p-1 rounded-xl shrink-0">
-            {([['master', 'SKU 마스터'], ['discount', '반품 할인율'], ['supplier', '공급처']] as const).map(([t, label]) => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`h-8 px-4 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:bg-white/60'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            className="border-b-0 shrink-0"
+            items={[{ value: 'master', label: 'SKU 마스터' }, { value: 'discount', label: '반품 할인율' }, { value: 'supplier', label: '공급처' }]}
+            value={tab}
+            onChange={setTab}
+          />
         </div>
         {tab === 'master' && (
           <div className="flex items-center gap-2 flex-wrap">

@@ -7,6 +7,10 @@ import { ArrowLeft, RefreshCw, ExternalLink, Trash2 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 type Batch = {
   id: string;
   source_url: string;
@@ -52,6 +56,8 @@ const STATUS_COLOR: Record<Item['status'], string> = {
 };
 
 export default function BatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const { id } = use(params);
   const [batch, setBatch] = useState<Batch | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -80,7 +86,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
   }, [load, batch?.status]);
 
   async function removeBatch() {
-    if (!confirm(`배치 전체와 ${items.length}개 분석 결과를 모두 삭제합니다. 계속?`)) return;
+    if (!(await confirmDialog(`배치 전체와 ${items.length}개 분석 결과를 모두 삭제합니다. 계속?`))) return;
     const r = await fetch(`/api/sourcing/batches/${id}`, { method: 'DELETE' });
     if (r.ok) window.location.href = '/sourcing';
   }

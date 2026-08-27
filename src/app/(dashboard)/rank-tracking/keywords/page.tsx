@@ -7,6 +7,10 @@ import { Search, ExternalLink, Clock, LayoutGrid, TableProperties, ArrowUpRight,
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 type Progress = {
   phase?: string;
   page?: number;
@@ -90,6 +94,8 @@ function formatChecked(iso: string) {
 }
 
 export default function KeywordSearchPage() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const [savedKeywords, setSavedKeywords] = useState<Keyword[]>([]);
   const [input, setInput] = useState('');
   const [topN, setTopN] = useState('40');
@@ -179,7 +185,7 @@ export default function KeywordSearchPage() {
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({ error: 'unknown' }));
-      alert('실행 실패: ' + (err.error || r.status));
+      toast.error('실행 실패: ' + (err.error || r.status));
       setRunning(false);
       return;
     }
@@ -209,7 +215,7 @@ export default function KeywordSearchPage() {
   }
 
   async function removeSaved(id: string) {
-    if (!confirm('삭제하시겠습니까? (모든 스냅샷 이력 포함)')) return;
+    if (!(await confirmDialog('삭제하시겠습니까? (모든 스냅샷 이력 포함)'))) return;
     await fetch('/api/keyword-snapshots/' + id, { method: 'DELETE' });
     if (currentKw?.id === id) {
       setCurrentKw(null);

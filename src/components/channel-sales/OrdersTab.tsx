@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils';
+import { useToast } from '@/components/ui/toast';
+
 import {
   Upload, X, Download, AlertCircle, CheckCircle2, Loader2,
   MapPin, SlidersHorizontal, Search, Trash2, PackageX,
@@ -455,7 +457,7 @@ export default function OrdersTab() {
   });
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
   // 교환 처리
   const [exchangeOrder, setExchangeOrder] = useState<ChannelOrder | null>(null);
   const [exchangeSkuId, setExchangeSkuId] = useState('');
@@ -476,7 +478,6 @@ export default function OrdersTab() {
   const resizingCol = useRef<{ key: ColKey; startX: number; startWidth: number } | null>(null);
   const colPanelRef = useRef<HTMLDivElement>(null);
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
   function handleResizeStart(e: React.MouseEvent, key: ColKey) {
     e.preventDefault();
@@ -542,12 +543,12 @@ export default function OrdersTab() {
         try { localStorage.setItem('exchange_processed', JSON.stringify([...next])); } catch {}
         return next;
       });
-      setToast(`교환 처리 완료: ${exchangeOrder.product_name} → 재고 복구, 교환품 차감`);
+      toast.success(`교환 처리 완료: ${exchangeOrder.product_name} → 재고 복구, 교환품 차감`);
       setExchangeOrder(null);
       setExchangeSkuId('');
       setExchangeSearch('');
     } catch (err: any) {
-      setToast(`교환 처리 실패: ${err.message}`);
+      toast.error(`교환 처리 실패: ${err.message}`);
     }
     setExchangeLoading(false);
   }
@@ -645,7 +646,7 @@ export default function OrdersTab() {
       const res = await fetch(`/api/channel-orders${params}`, { method: 'DELETE' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
-      showToast(`${channelLabel} 주문 데이터 삭제 완료`);
+      toast.success(`${channelLabel} 주문 데이터 삭제 완료`);
       load();
     } catch (err: any) {
       alert('삭제 실패: ' + err.message);
@@ -1000,7 +1001,7 @@ export default function OrdersTab() {
       <OrderUploadDialog
         open={uploadOpen} channel={channel === 'all' ? 'smartstore' : channel}
         onClose={() => setUploadOpen(false)}
-        onUploaded={(n) => { load(); showToast(`${n}건 업로드 완료`); }}
+        onUploaded={(n) => { load(); toast.success(`${n}건 업로드 완료`); }}
       />
 
       {/* 플로팅 합계 바 */}
@@ -1055,11 +1056,6 @@ export default function OrdersTab() {
         </div>
       )}
 
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </div>
   );
 }

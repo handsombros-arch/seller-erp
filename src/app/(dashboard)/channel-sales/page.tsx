@@ -13,6 +13,10 @@ import DummyShipmentsTab from '@/components/channel-sales/DummyShipmentsTab';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs, useTabParam } from '@/components/ui/tabs';
+
+import { useToast } from '@/components/ui/toast';
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CHANNELS = [
@@ -1286,7 +1290,7 @@ function ReturnsTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ChannelSalesPage() {
-  const [viewMode, setViewMode] = useState<'orders' | 'chart' | 'returns' | 'dummy'>('orders');
+  const [viewMode, setViewMode] = useTabParam('tab', ['orders', 'chart', 'returns', 'dummy'] as const, 'orders');
   const [sales, setSales] = useState<ChannelSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState('all');
@@ -1298,13 +1302,8 @@ export default function ChannelSalesPage() {
   const [naverOpen, setNaverOpen]     = useState(false);
   const [tossOpen, setTossOpen]       = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
   const [syncAllLoading, setSyncAllLoading] = useState(false);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1351,9 +1350,9 @@ export default function ChannelSalesPage() {
                     if (d.smartstore?.synced) parts.push(`네이버 ${d.smartstore.synced}건`);
                     if (d.toss?.synced) parts.push(`토스 ${d.toss.synced}건`);
                     const errors = [d.coupang_rg, d.coupang, d.smartstore, d.toss].filter(c => c?.error).map(c => c.error);
-                    showToast(parts.length > 0 ? `전체 동기화: ${parts.join(' · ')}` : errors.length > 0 ? `오류: ${errors[0]}` : '변경사항 없음');
+                    toast.success(parts.length > 0 ? `전체 동기화: ${parts.join(' · ')}` : errors.length > 0 ? `오류: ${errors[0]}` : '변경사항 없음');
                     load();
-                  } catch (err: any) { showToast(`동기화 실패: ${err.message}`); }
+                  } catch (err: any) { toast.success(`동기화 실패: ${err.message}`); }
                   setSyncAllLoading(false);
                 }}
                 disabled={syncAllLoading}
@@ -1385,14 +1384,11 @@ export default function ChannelSalesPage() {
       </div>
 
       {/* ── 탭바 ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-app rounded-xl p-1 overflow-x-auto">
-        {([['orders', '주문 내역'], ['chart', '주문 분석'], ['returns', '반품'], ['dummy', '가배송']] as const).map(([mode, label]) => (
-          <button key={mode} onClick={() => setViewMode(mode)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${viewMode === mode ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[{ value: 'orders', label: '주문 내역' }, { value: 'chart', label: '주문 분석' }, { value: 'returns', label: '반품' }, { value: 'dummy', label: '가배송' }]}
+        value={viewMode}
+        onChange={setViewMode}
+      />
 
       {/* ── 콘텐츠 ───────────────────────────────────────────────────────── */}
       {viewMode === 'orders' && <OrdersTab />}
@@ -1401,15 +1397,10 @@ export default function ChannelSalesPage() {
       {viewMode === 'dummy' && <DummyShipmentsTab />}
 
       {/* Dialogs */}
-      <NaverSyncDialog open={naverOpen} onClose={() => setNaverOpen(false)} onDone={(msg) => { showToast(msg); setNaverOpen(false); load(); }} />
-      <TossSyncDialog open={tossOpen} onClose={() => setTossOpen(false)} onDone={(msg) => { showToast(msg); setTossOpen(false); }} />
-      <CoupangSyncDialog open={syncOpen} onClose={() => setSyncOpen(false)} onDone={(msg) => { showToast(msg); setSyncOpen(false); load(); }} />
+      <NaverSyncDialog open={naverOpen} onClose={() => setNaverOpen(false)} onDone={(msg) => { toast.success(msg); setNaverOpen(false); load(); }} />
+      <TossSyncDialog open={tossOpen} onClose={() => setTossOpen(false)} onDone={(msg) => { toast.success(msg); setTossOpen(false); }} />
+      <CoupangSyncDialog open={syncOpen} onClose={() => setSyncOpen(false)} onDone={(msg) => { toast.success(msg); setSyncOpen(false); load(); }} />
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </div>
   );
 }

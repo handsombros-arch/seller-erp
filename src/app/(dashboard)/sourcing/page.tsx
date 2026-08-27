@@ -8,6 +8,10 @@ import { Plus, RefreshCw, Trash2, ExternalLink, GitCompareArrows, FolderOpen, Ch
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 type BatchStats = { total: number; done: number; failed: number; pending: number; crawling: number; analyzing: number };
 type Batch = {
   id: string;
@@ -62,6 +66,8 @@ const STATUS_PERCENT: Record<Item['status'], number> = {
 };
 
 export default function SourcingListPage() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -89,7 +95,7 @@ export default function SourcingListPage() {
     });
   }
   function compare() {
-    if (selected.size < 2) { alert('비교할 상품 2개 이상 선택하세요.'); return; }
+    if (selected.size < 2) { toast.warning('비교할 상품 2개 이상 선택하세요.'); return; }
     router.push('/sourcing/compare?ids=' + Array.from(selected).join(','));
   }
 
@@ -134,16 +140,16 @@ export default function SourcingListPage() {
       setUrls('');
       load();
       if (data.batches?.length) {
-        alert(`카테고리 URL ${data.batches.length}개 감지. expand_category 워커가 상품 ${expandLimit}개씩 추출합니다.`);
+        toast.info(`카테고리 URL ${data.batches.length}개 감지. expand_category 워커가 상품 ${expandLimit}개씩 추출합니다.`);
       }
     } else {
-      alert('추가 실패: ' + (await r.text()));
+      toast.error('추가 실패: ' + (await r.text()));
     }
     setSubmitting(false);
   }
 
   async function remove(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!(await confirmDialog('삭제하시겠습니까?'))) return;
     await fetch('/api/sourcing/' + id, { method: 'DELETE' });
     load();
   }

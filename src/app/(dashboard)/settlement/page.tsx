@@ -6,6 +6,12 @@ import { BarChart, Bar, Line, ComposedChart, ReferenceLine, XAxis, YAxis, Cartes
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs } from '@/components/ui/tabs';
+
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 // ───────────────── Interactive Chart ─────────────────
 const METRIC_COLORS: Record<string, string> = {
   '실매출': '#10b981', '매입원가': '#f97316', '광고비': '#8b5cf6', '고정비': '#64748b',
@@ -113,6 +119,7 @@ function detectLeafCategory(label: string): CostCategory {
 interface Snapshot { year_month: string; cost_id: string; amount: number; cost: { label: string; parent_id: string | null; vat_applicable: boolean } | null; }
 
 function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { reloadKey?: number; selectedYm: string; onSelectedYmChange: (ym: string) => void }) {
+  const confirmDialog = useConfirm();
   const [items, setItems] = useState<MCost[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -123,7 +130,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
   const [tab, setTab] = useState<'edit' | 'history' | 'analysis'>('edit');
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [snapLoading, setSnapLoading] = useState(false);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
   const [sortKey, setSortKey] = useState<'label' | 'amount' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -142,9 +149,9 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
   const setSelectedYmRaw = onSelectedYmChange;
 
   // dirty 상태에서 이동 시도 시 confirm — 사용자가 정산시트 변경 후 저장 안 한 상태 보호
-  const confirmIfDirty = (next: () => void) => {
+  const confirmIfDirty = async (next: () => void) => {
     if (dirty) {
-      const ok = window.confirm('저장하지 않은 변경사항이 있습니다.\n무시하고 이동하시겠어요?');
+      const ok = await confirmDialog({ title: '저장하지 않은 변경사항이 있습니다', description: '무시하고 이동하시겠어요?', confirmText: '이동' });
       if (!ok) return;
     }
     next();
@@ -260,7 +267,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
     setSaving(false);
     setSaveProgress(0);
     const ymLabel = selectedYm.replace('-', '년 ') + '월';
-    setToast(`${ymLabel} 저장 완료`); setTimeout(() => setToast(''), 2000);
+    toast.success(`${ymLabel} 저장 완료`); setTimeout(() => toast.success(''), 2000);
   }
 
   async function handleAdd(parentId?: string) {
@@ -311,12 +318,12 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
       });
     });
     setDirty(true);
-    setToast(`${ym} 금액 붙여넣기 완료 (잠금 항목 제외)`); setTimeout(() => setToast(''), 2000);
+    toast.success(`${ym} 금액 붙여넣기 완료 (잠금 항목 제외)`); setTimeout(() => toast.success(''), 2000);
   }
 
   async function handleReset() {
     const ymLabel = selectedYm.replace('-', '년 ') + '월';
-    if (!confirm(`${ymLabel} 금액을 초기화하시겠습니까?\n(잠금 항목 제외, 해당 월만)`)) return;
+    if (!(await confirmDialog(`${ymLabel} 금액을 초기화하시겠습니까?\n(잠금 항목 제외, 해당 월만)`))) return;
 
     // 잠금된 항목 ID 수집 (부모 잠금이면 자식도)
     const lockedIds = new Set<string>();
@@ -342,7 +349,7 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
     });
 
     await load(selectedYm);
-    setToast(`${ymLabel} 초기화 완료 (잠금 항목 제외)`); setTimeout(() => setToast(''), 2000);
+    toast.success(`${ymLabel} 초기화 완료 (잠금 항목 제외)`); setTimeout(() => toast.success(''), 2000);
   }
 
   function handleDrop(targetId: string) {
@@ -539,20 +546,13 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2 md:mt-0">
-          <div className="flex bg-app rounded-lg p-0.5">
-            <button onClick={() => safeSetTab('edit')}
-              className={`px-2.5 md:px-3 py-1.5 rounded-md text-[11px] md:text-[12px] font-medium transition-all ${tab === 'edit' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-              편집
-            </button>
-            <button onClick={() => safeSetTab('history')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'history' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-              월별 추이
-            </button>
-            <button onClick={() => safeSetTab('analysis')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${tab === 'analysis' ? 'bg-card text-fg shadow-sm' : 'text-fg-3'}`}>
-              분석
-            </button>
-          </div>
+          <Tabs
+            size="sm"
+            className="border-b-0"
+            items={[{ value: 'edit', label: '편집' }, { value: 'history', label: '월별 추이' }, { value: 'analysis', label: '분석' }]}
+            value={tab}
+            onChange={safeSetTab}
+          />
         </div>
       </div>
 
@@ -1315,11 +1315,6 @@ function MonthlyCostsSection({ reloadKey, selectedYm, onSelectedYmChange }: { re
         </div>
       )}
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </section>
   );
 }
@@ -1341,7 +1336,7 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
   const [platform, setPlatform] = useState(PLATFORMS[0].id);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<CostResult | null>(null);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
   const [vatIncluded, setVatIncluded] = useState(false);
   const [applied, setApplied] = useState(false);
 
@@ -1366,10 +1361,10 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
       setResult(data);
       // 엑셀 날짜와 선택월 불일치 시 알럿 (쿠팡 인사이트는 날짜 없어 detectedYm 비어있음 — skip)
       if (data.detectedYm && data.detectedYm !== selectedYm) {
-        window.alert(`⚠️ 엑셀의 월(${data.detectedYm})과 선택된 월(${selectedYm})이 다릅니다.\n\n그대로 "정산시트에 적용" 시 ${selectedYm} 데이터로 저장됩니다.\n월을 바꾸시려면 정산 시트 위쪽 월 선택기에서 ${data.detectedYm} 선택하세요.`);
+        toast.warning(`엑셀의 월(${data.detectedYm})과 선택된 월(${selectedYm})이 다릅니다.\n\n그대로 "정산시트에 적용" 시 ${selectedYm} 데이터로 저장됩니다.\n월을 바꾸시려면 정산 시트 위쪽 월 선택기에서 ${data.detectedYm} 선택하세요.`);
       }
     }
-    else { setToast(data?.error || '파일 처리 실패'); setTimeout(() => setToast(''), 2000); }
+    else { toast.success(data?.error || '파일 처리 실패'); setTimeout(() => toast.success(''), 2000); }
   }
 
   function updateProductUnitCost(idx: number, unitCost: number) {
@@ -1446,7 +1441,7 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'snapshot_items', year_month: targetYm, amounts: [{ id: target.id, amount }] }),
       });
-      setToast(`${target.label} 매입원가 → ${fmt(total)}원 적용 완료`);
+      toast.success(`${target.label} 매입원가 → ${fmt(total)}원 적용 완료`);
     } else {
       // 새로 생성 (항상 top-level cogs)
       const res = await fetch('/api/monthly-costs', {
@@ -1463,11 +1458,11 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
           body: JSON.stringify({ action: 'snapshot_items', year_month: targetYm, amounts: [{ id: created.id, amount }] }),
         });
       }
-      setToast(`${pLabel} 매입원가 → ${fmt(total)}원 항목 생성 완료`);
+      toast.success(`${pLabel} 매입원가 → ${fmt(total)}원 항목 생성 완료`);
     }
     setApplied(true);
     onApply?.();
-    setTimeout(() => setToast(''), 2500);
+    setTimeout(() => toast.success(''), 2500);
   }
 
   const curPlatform = PLATFORMS.find(p => p.id === platform)!;
@@ -1595,11 +1590,6 @@ function PlatformCostSection({ selectedYm, onApply }: { selectedYm: string; onAp
         )}
       </div>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </section>
   );
 }
@@ -1875,7 +1865,7 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
   const [platform, setPlatform] = useState('coupang');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<AdResult | null>(null);
-  const [toast, setToast] = useState('');
+  const toast = useToast();
   const [saved, setSaved] = useState(false);
 
   const fmt = (n: number) => n.toLocaleString('ko-KR');
@@ -1897,10 +1887,10 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
     if (data?.products) {
       setResult(data);
       if (data.yearMonth && data.yearMonth !== selectedYm) {
-        window.alert(`⚠️ 광고 raw 엑셀의 월(${data.yearMonth})과 선택된 월(${selectedYm})이 다릅니다.\n\n저장 시 ${data.yearMonth} 데이터로 저장됩니다 (엑셀 날짜 우선).\n선택월을 바꾸시려면 정산시트 위쪽 월 선택기를 이동하세요.`);
+        toast.warning(`광고 raw 엑셀의 월(${data.yearMonth})과 선택된 월(${selectedYm})이 다릅니다.\n\n저장 시 ${data.yearMonth} 데이터로 저장됩니다 (엑셀 날짜 우선).\n선택월을 바꾸시려면 정산시트 위쪽 월 선택기를 이동하세요.`);
       }
     }
-    else { setToast(data?.error || '파일 처리 실패'); setTimeout(() => setToast(''), 2500); }
+    else { toast.success(data?.error || '파일 처리 실패'); setTimeout(() => toast.success(''), 2500); }
   }
 
   async function saveToDb() {
@@ -1918,11 +1908,11 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
     const data = await res.json();
     if (data?.ok) {
       setSaved(true);
-      setToast(`${result.yearMonth} ${result.platform} ${AD_TYPE_LABEL[result.adType]} → ${data.saved}건 저장`);
+      toast.success(`${result.yearMonth} ${result.platform} ${AD_TYPE_LABEL[result.adType]} → ${data.saved}건 저장`);
     } else {
-      setToast(data?.error || '저장 실패');
+      toast.success(data?.error || '저장 실패');
     }
-    setTimeout(() => setToast(''), 2500);
+    setTimeout(() => toast.success(''), 2500);
   }
 
   return (
@@ -2043,11 +2033,6 @@ function PlatformAdSection({ selectedYm }: { selectedYm: string }) {
         )}
       </div>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-fg text-white text-[13px] font-medium px-5 py-3 rounded-2xl shadow-lg z-50 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-green-400" /> {toast}
-        </div>
-      )}
     </section>
   );
 }

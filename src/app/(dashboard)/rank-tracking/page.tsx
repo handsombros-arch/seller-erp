@@ -7,6 +7,10 @@ import { Plus, RefreshCw, Trash2, Play, ExternalLink } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 function TabNav() {
   return (
     <div className="flex gap-1 border-b">
@@ -82,6 +86,8 @@ function Sparkline({ points }: { points: HistoryPoint[] }) {
 }
 
 export default function RankTrackingPage() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const [items, setItems] = useState<Keyword[]>([]);
   const [historyMap, setHistoryMap] = useState<Record<string, HistoryPoint[]>>({});
   const [loading, setLoading] = useState(true);
@@ -128,7 +134,7 @@ export default function RankTrackingPage() {
       load();
     } else {
       const err = await r.json().catch(() => ({ error: 'unknown' }));
-      alert('추가 실패: ' + (err.error || r.status));
+      toast.error('추가 실패: ' + (err.error || r.status));
     }
     setSubmitting(false);
   }
@@ -143,7 +149,7 @@ export default function RankTrackingPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!(await confirmDialog('삭제하시겠습니까?'))) return;
     await fetch('/api/rank-tracking/' + id, { method: 'DELETE' });
     load();
   }

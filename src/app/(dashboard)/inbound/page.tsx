@@ -13,6 +13,10 @@ import dynamic from 'next/dynamic';
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs, useTabParam } from '@/components/ui/tabs';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 const OutboundTab = dynamic(() => import('@/components/logistics/OutboundTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 const CalendarTab = dynamic(() => import('@/components/logistics/CalendarTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 
@@ -505,6 +509,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   onInboundSave: (poId: string) => void;
   onDelete: (poId: string) => void;
 }) {
+  const confirmDialog = useConfirm();
   const [expanded, setExpanded] = useState(false);
   const [inboundItem, setInboundItem] = useState<PORow['items'][0] | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -539,7 +544,7 @@ function POCard({ po, warehouses, onStatusChange, onInboundSave, onDelete }: {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`발주서 ${po.po_number}를 삭제하시겠습니까?\n품목 데이터도 함께 삭제됩니다.`)) return;
+    if (!(await confirmDialog(`발주서 ${po.po_number}를 삭제하시겠습니까?\n품목 데이터도 함께 삭제됩니다.`))) return;
     setDeleteLoading(true);
     try {
       const res = await fetch(`/api/purchase-orders/${po.id}`, { method: 'DELETE' });
@@ -972,19 +977,16 @@ function InboundRecordsTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const TABS: Array<{ id: string; label: string; icon: any }> = [
-  { id: 'po', label: '발주 관리', icon: Truck },
-  { id: 'inbound', label: '입고 기록', icon: PackageCheck },
-  { id: 'outbound', label: '출고 관리', icon: PackageMinus },
-  { id: 'calendar', label: '캘린더', icon: CalendarDays },
-];
+const TAB_VALUES = ['po', 'inbound', 'outbound', 'calendar'] as const;
+const TABS = [
+  { value: 'po', label: '발주 관리', icon: Truck },
+  { value: 'inbound', label: '입고 기록', icon: PackageCheck },
+  { value: 'outbound', label: '출고 관리', icon: PackageMinus },
+  { value: 'calendar', label: '캘린더', icon: CalendarDays },
+] as const;
 
 export default function InboundPage() {
-  const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState(() => {
-    const t = searchParams.get('tab');
-    return (t === 'inbound' || t === 'outbound' || t === 'calendar') ? t : 'po';
-  });
+  const [activeTab, setActiveTab] = useTabParam('tab', TAB_VALUES, 'po');
 
   return (
     <div className="space-y-5">
@@ -995,24 +997,7 @@ export default function InboundPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-app p-1 rounded-xl overflow-x-auto">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-card text-fg shadow-sm'
-                  : 'text-fg-3 hover:text-fg'
-              }`}
-            >
-              <Icon className="h-4 w-4" /> {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs items={TABS} value={activeTab} onChange={setActiveTab} />
 
       {/* Tab Content */}
       {activeTab === 'po' ? <POManagementTab />

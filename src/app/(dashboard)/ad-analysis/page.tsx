@@ -4,6 +4,10 @@ import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'rea
 import { formatNumber } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 import {
   Megaphone, Upload, Loader2, TrendingUp, TrendingDown,
   MousePointerClick, Eye, DollarSign, Target, ArrowUpDown,
@@ -365,6 +369,7 @@ interface PendingMatch {
 }
 
 export default function AdAnalysisPage() {
+  const confirmDialog = useConfirm();
   const [data, setData] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -372,7 +377,7 @@ export default function AdAnalysisPage() {
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [pendingRaw, setPendingRaw] = useState<any[] | null>(null); // 확인 대기 중인 raw 데이터
-  const [tab, setTab] = useState<'daily' | 'keywords' | 'placements' | 'products' | 'momwow'>('daily');
+  const [tab, setTab] = useTabParam('tab', ['daily', 'keywords', 'placements', 'products', 'momwow'] as const, 'daily');
   const [pivotAxis, setPivotAxis] = useState<'kw-date' | 'date-kw'>('kw-date');
   const [pivotMetric, setPivotMetric] = useState<'cost' | 'impressions' | 'clicks' | 'orders14d' | 'revenue14d' | 'ctr' | 'cvr' | 'roas' | 'cpc' | 'keywordCount' | 'clickKeywordCount'>('cost');
   const [pivotTopN, setPivotTopN] = useState(50);
@@ -1646,7 +1651,7 @@ export default function AdAnalysisPage() {
           </button>
           {data && (
             <button
-              onClick={() => { if (confirm('모든 광고 데이터를 삭제하시겠습니까?')) { setData(null); } }}
+              onClick={async () => { if (await confirmDialog('모든 광고 데이터를 삭제하시겠습니까?')) setData(null); }}
               className="flex items-center gap-2 h-10 px-4 rounded-xl border border-black/[0.08] text-fg-3 text-[13px] font-medium hover:bg-[#FBFBFD] transition-colors"
             >
               초기화
@@ -2127,19 +2132,7 @@ export default function AdAnalysisPage() {
           })()}
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-app rounded-xl p-1 w-fit">
-            {tabs.map((tb) => (
-              <button
-                key={tb.key}
-                onClick={() => setTab(tb.key)}
-                className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  tab === tb.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
-                }`}
-              >
-                {tb.label}
-              </button>
-            ))}
-          </div>
+          <Tabs items={tabs.map((t) => ({ value: t.key, label: t.label }))} value={tab} onChange={setTab} />
 
           {/* ─── Tab: Daily / Trend ───────────────────────────────────── */}
           {tab === 'daily' && (
@@ -2149,32 +2142,13 @@ export default function AdAnalysisPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-[13px] font-bold text-fg">기간별 추이</h3>
                   {/* Granularity toggle */}
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {granOptions.map((g) => (
-                      <button
-                        key={g.key}
-                        onClick={() => setGran(g.key)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-                          gran === g.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
-                        }`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl items={granOptions.map((g) => ({ value: g.key, label: g.label }))} value={gran} onChange={setGran} />
                 </div>
 
                 {/* 쿠팡 검색/비검색 지면 필터 */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] text-fg-4">지면</span>
-                  <div className="flex gap-1 bg-app rounded-lg p-0.5">
-                    {([['all', '전체'], ['search', '검색지면'], ['nonsearch', '비검색지면']] as const).map(([k, l]) => (
-                      <button key={k} onClick={() => setPlaceTypeFilter(k)}
-                        className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${placeTypeFilter === k ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedControl items={[{ value: 'all', label: '전체' }, { value: 'search', label: '검색지면' }, { value: 'nonsearch', label: '비검색지면' }]} value={placeTypeFilter} onChange={setPlaceTypeFilter} />
                   {placeTypeFilter === 'search' && <span className="text-[11px] text-[#C7C7CC]">키워드 있는 행(검색) · 차트/표/엑셀 적용</span>}
                   {placeTypeFilter === 'nonsearch' && <span className="text-[11px] text-[#C7C7CC]">키워드 &lsquo;-&rsquo; 행(비검색) · 월 고정비는 비검색에 귀속</span>}
                 </div>

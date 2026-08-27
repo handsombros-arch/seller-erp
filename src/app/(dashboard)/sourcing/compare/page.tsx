@@ -9,6 +9,10 @@ import { getCategoryDimensions, matchDimension } from '@/lib/sourcing-dimensions
 
 import { PageHeader } from '@/components/ui/page-header';
 
+import { useToast } from '@/components/ui/toast';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 interface CustomRow {
   id: string;
   label: string;
@@ -183,6 +187,8 @@ function findSpec(specs: any, aliases: string[]): any {
 }
 
 export default function ComparePage() {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const params = useSearchParams();
   const ids = (params?.get('ids') || '').split(',').filter(Boolean);
   const [items, setItems] = useState<Item[]>([]);
@@ -245,7 +251,7 @@ export default function ComparePage() {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
       }
-      if (!res.ok) { alert('저장 실패: ' + (await res.text()).slice(0, 200)); return; }
+      if (!res.ok) { toast.error('저장 실패: ' + (await res.text()).slice(0, 200)); return; }
       const saved = await res.json();
       setCurrentSnapshotId(saved.id);
       setCurrentSnapshotDate(saved.created_at);
@@ -257,20 +263,20 @@ export default function ComparePage() {
 
   const loadSnapshot = async (snapshotId: string) => {
     const res = await fetch(`/api/sourcing/comparisons/${snapshotId}`);
-    if (!res.ok) { alert('로드 실패'); return; }
+    if (!res.ok) { toast.error('로드 실패'); return; }
     const snap = await res.json();
     setCurrentSnapshotId(snap.id);
     setCurrentSnapshotDate(snap.created_at);
     setCustomRows(snap.custom_rows || []);
     // 항목이 다르면 URL 갱신 안내
     if (JSON.stringify(snap.item_ids.sort()) !== JSON.stringify([...ids].sort())) {
-      const go = confirm(`이 스냅샷은 ${snap.item_ids.length}개 상품 조합입니다. 해당 조합으로 이동할까요?`);
+      const go = await confirmDialog(`이 스냅샷은 ${snap.item_ids.length}개 상품 조합입니다. 해당 조합으로 이동할까요?`);
       if (go) window.location.href = `/sourcing/compare?ids=${snap.item_ids.join(',')}`;
     }
   };
 
   const deleteSnapshot = async (snapshotId: string) => {
-    if (!confirm('이 스냅샷을 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog('이 스냅샷을 삭제하시겠습니까?'))) return;
     await fetch(`/api/sourcing/comparisons/${snapshotId}`, { method: 'DELETE' });
     setSnapshots((prev) => prev.filter((s) => s.id !== snapshotId));
     if (currentSnapshotId === snapshotId) {

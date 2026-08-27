@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { formatNumber, formatCurrency, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
 import type { InventoryItem, Warehouse } from '@/types';
@@ -15,6 +14,8 @@ import { SearchSelect } from '@/components/ui/search-select';
 import dynamic from 'next/dynamic';
 
 import { PageHeader } from '@/components/ui/page-header';
+
+import { Tabs, useTabParam } from '@/components/ui/tabs';
 
 const TrendsTab = dynamic(() => import('@/components/inventory/TrendsTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
 const ForecastTab = dynamic(() => import('@/components/inventory/ForecastTab'), { loading: () => <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> });
@@ -1410,15 +1411,12 @@ function RgInventoryTab() {
   return (
     <div className="space-y-4">
       {/* 서브탭 */}
-      <div className="flex items-center gap-1 border-b border-line">
-        {([['new', '신상품', newItems.length], ['return', '반품재판매', returnItems.length]] as const).map(([v, label, cnt]) => (
-          <button key={v} onClick={() => { setSubTab(v); setChecked(new Set()); setReturnChecked(new Set()); lastCheckedIdx.current = null; }}
-            className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${subTab === v ? 'border-brand text-brand' : 'border-transparent text-fg-3 hover:text-fg'}`}>
-            {label}
-            <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full ${subTab === v ? 'bg-[#EBF3FF] text-brand' : 'bg-app text-fg-5'}`}>{cnt}</span>
-          </button>
-        ))}
-      </div>
+      <Tabs
+        size="sm"
+        items={[{ value: 'new', label: '신상품', count: newItems.length }, { value: 'return', label: '반품재판매', count: returnItems.length }]}
+        value={subTab}
+        onChange={(v) => { setSubTab(v); setChecked(new Set()); setReturnChecked(new Set()); lastCheckedIdx.current = null; }}
+      />
 
       {/* 신상품 일괄 분류 액션바 */}
       {subTab === 'new' && checked.size > 0 && (
@@ -1641,11 +1639,7 @@ const WH_LABELS: Record<WhCol, string> = {
 
 export default function InventoryPage() {
   const { vatOn, vatMult } = useVat();
-  const searchParams = useSearchParams();
-  const [tab, setTab] = useState<'summary' | 'warehouse' | 'rg' | 'trends' | 'forecast'>(() => {
-    const t = searchParams.get('tab');
-    return (t === 'warehouse' || t === 'rg' || t === 'trends' || t === 'forecast') ? t : 'summary';
-  });
+  const [tab, setTab] = useTabParam('tab', ['summary', 'warehouse', 'rg', 'trends', 'forecast'] as const, 'summary');
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
@@ -1917,14 +1911,17 @@ export default function InventoryPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-app rounded-xl p-1 overflow-x-auto">
-        {([['summary', '종합 현황', LayoutGrid], ['warehouse', '창고별 상세', List], ['rg', '쿠팡그로스', Package], ['trends', '추이', BarChart3], ['forecast', '예측', TrendingUp]] as const).map(([value, label, Icon]) => (
-          <button key={value} onClick={() => setTab(value)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-[10px] text-[13px] font-medium transition-all whitespace-nowrap ${tab === value ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'}`}>
-            <Icon className="h-4 w-4" /> {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[
+          { value: 'summary', label: '종합 현황', icon: LayoutGrid },
+          { value: 'warehouse', label: '창고별 상세', icon: List },
+          { value: 'rg', label: '쿠팡그로스', icon: Package },
+          { value: 'trends', label: '추이', icon: BarChart3 },
+          { value: 'forecast', label: '예측', icon: TrendingUp },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* Summary Cards (창고별 탭에서만) */}
       {tab === 'warehouse' && (

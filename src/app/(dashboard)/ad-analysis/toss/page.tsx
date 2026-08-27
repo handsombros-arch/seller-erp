@@ -5,6 +5,10 @@ import { formatNumber } from '@/lib/utils';
 import { Upload, Loader2, Trash2, Download, Megaphone, TrendingUp, TrendingDown, Search, ArrowUpDown, ChevronRight, ChevronDown, Eye, MousePointerClick, DollarSign, ShoppingCart, Radio } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 
+import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
+
+import { useConfirm } from '@/components/ui/confirm-dialog';
+
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -157,6 +161,7 @@ function aggregateDaily(rows: TossRow[], gran: Gran): DailyRow[] {
 }
 
 export default function TossAdAnalysisPage() {
+  const confirmDialog = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<TossRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,7 +181,7 @@ export default function TossAdAnalysisPage() {
   });
 
   // 탭
-  const [tab, setTab] = useState<TabKey>('trend');
+  const [tab, setTab] = useTabParam<TabKey>('tab', ['trend', 'campaign', 'adSet', 'product'], 'trend');
   const [gran, setGran] = useState<Gran>('daily');
   const [memos, setMemos] = useState<Record<string, string>>({});
 
@@ -255,7 +260,7 @@ export default function TossAdAnalysisPage() {
   };
 
   async function deleteAll() {
-    if (!confirm('모든 토스 광고 데이터를 삭제하시겠습니까?')) return;
+    if (!(await confirmDialog('모든 토스 광고 데이터를 삭제하시겠습니까?'))) return;
     await fetch('/api/ad-analysis/toss', { method: 'DELETE' });
     setRows([]);
   }
@@ -505,17 +510,7 @@ export default function TossAdAnalysisPage() {
           </div>
 
           {/* 탭 바 (쿠팡과 동일) */}
-          <div className="flex gap-1 bg-app rounded-xl p-1 w-fit">
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  tab === t.key ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
-                }`}
-              >{t.label}</button>
-            ))}
-          </div>
+          <Tabs items={tabs.map((t) => ({ value: t.key, label: t.label }))} value={tab} onChange={setTab} />
 
           {/* 기간 선택 bar (쿠팡과 동일 위치: 탭 아래) */}
           <div className="flex flex-wrap items-center gap-2 bg-card rounded-xl border border-line-2 px-4 py-2.5">
@@ -951,18 +946,7 @@ function ProductCombobox({ value, onChange, options }: { value: string; onChange
 }
 
 function GranToggle({ gran, onChange }: { gran: Gran; onChange: (g: Gran) => void }) {
-  return (
-    <div className="flex gap-1 bg-app rounded-lg p-0.5">
-      {(['daily', 'weekly', 'monthly'] as const).map((g) => (
-        <button key={g} onClick={() => onChange(g)}
-          className={`px-3 py-1.5 text-[12px] rounded-md font-medium transition-colors ${
-            gran === g ? 'bg-card text-fg shadow-sm' : 'text-fg-3 hover:text-fg'
-          }`}>
-          {g === 'daily' ? '일별' : g === 'weekly' ? '주별' : '월별'}
-        </button>
-      ))}
-    </div>
-  );
+  return <SegmentedControl items={[{ value: 'daily', label: '일별' }, { value: 'weekly', label: '주별' }, { value: 'monthly', label: '월별' }]} value={gran} onChange={onChange} />;
 }
 
 function SortTh({ k, label, cur, dir, onClick }: { k: SortKey; label: string; cur: SortKey; dir: 'asc' | 'desc'; onClick: (k: SortKey) => void }) {
