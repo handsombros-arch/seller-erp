@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { formatNumber, formatCurrency, formatDate, skuOptionLabel } from '@/lib/utils';
 import { useVat } from '@/components/layout/vat-provider';
 import type { PurchaseOrder, PurchaseOrderItem, InboundRecord, Sku, Warehouse, Supplier } from '@/types';
