@@ -7,7 +7,7 @@
  * - 시트 실적은 모두 수기. 여기서는 계산만 한다.
  */
 
-export type Market = 'coupang' | 'toss' | 'smartstore' | 'esm' | 'talkdeal' | 'common';
+export type Market = 'coupang' | 'toss' | 'smartstore' | 'esm' | 'talkdeal' | 'b2b' | 'common';
 export type PlLine = 'revenue' | 'coupon' | 'cogs' | 'market_fee' | 'logistics' | 'ad' | 'marketing' | 'fixed' | 'other' | 'info';
 /** 과세 유형: simplified = 간이과세(부가세가 실비용, 공급대가 기준) · general = 일반과세(부가세 통과, 공급가액 기준) */
 export type Regime = 'simplified' | 'general';
@@ -61,9 +61,10 @@ export const MARKETS: { id: Market; label: string; short: string }[] = [
   { id: 'smartstore', label: '스마트스토어', short: '스스' },
   { id: 'esm', label: 'ESM', short: 'ESM' },
   { id: 'talkdeal', label: '톡딜', short: '톡딜' },
+  { id: 'b2b', label: 'B2B 직거래', short: 'B2B' },
   { id: 'common', label: '공통', short: '공통' },
 ];
-export const SALES_MARKETS: Market[] = ['coupang', 'toss', 'smartstore', 'esm', 'talkdeal'];
+export const SALES_MARKETS: Market[] = ['coupang', 'toss', 'smartstore', 'esm', 'talkdeal', 'b2b'];
 
 export const PL_LINES: { id: PlLine; label: string; group: 'revenue' | 'variable' | 'fixed'; hint: string }[] = [
   { id: 'revenue', label: '매출', group: 'revenue', hint: '마켓이 정산해 준 판매 금액' },
@@ -97,6 +98,7 @@ export function inferMarket(label: string, parentLabel?: string): Market {
     if (/스스|스마트|네이버/.test(s)) return 'smartstore';
     if (/esm|지마켓|옥션|g마켓/i.test(s)) return 'esm';
     if (/톡딜/.test(s)) return 'talkdeal';
+    if (/b2b|도매|직거래|기업/i.test(s)) return 'b2b';
     if (/파스토/.test(s)) return 'toss'; // 파스토 풀필먼트는 토스 전용
     if (/반출비/.test(s)) return 'coupang'; // 반출은 쿠팡 전용
     return null;
@@ -368,6 +370,7 @@ export const MARKET_POLICY: Record<Market, { feeRate: number; feeSource: string;
   smartstore: { feeRate: 0.045, feeSource: '기본 4.5% (7월 시트 실적)', shipPerUnit: 2650, shipNote: '택배 2,650 /건' },
   esm: { feeRate: 0.045, feeSource: '기본 4.5% (7월 시트 실적)', shipPerUnit: 2650, shipNote: '택배 2,650 /건' },
   talkdeal: { feeRate: 0.1, feeSource: '기본 10%', shipPerUnit: 2650, shipNote: '택배 2,650 /건' },
+  b2b: { feeRate: 0, feeSource: '수수료 없음 (세금계산서 직거래)', shipPerUnit: 0, shipNote: '운임은 시트 택배비에' },
   common: { feeRate: 0, feeSource: '-', shipPerUnit: 0, shipNote: '-' },
 };
 
