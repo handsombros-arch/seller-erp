@@ -14,6 +14,7 @@ import { useOrderCounts, useSettlementData } from './_lib/useSettlementData';
 import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
 import { AdCoverageCard } from './_components/AdCoverageCard';
+import { UnregisteredCard } from './_components/UnregisteredCard';
 import { TrendPL } from './_components/TrendPL';
 import { AnalysisView } from './_components/AnalysisView';
 import { ProductProfit } from './_components/ProductProfit';
@@ -109,6 +110,7 @@ function SettlementInner() {
       {tab === 'input' && (
         <div className="space-y-4">
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={dataKey} />
+          <UnregisteredCard selectedYm={selectedYm} onRegistered={() => setDataKey(k => k + 1)} />
           <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />
           <AdCoverageCard selectedYm={selectedYm} onSaved={() => setDataKey(k => k + 1)} />
           <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} closed={closedMonths[selectedYm] ?? null} onToggleClosed={(c) => toggleClosed(selectedYm, c)} />

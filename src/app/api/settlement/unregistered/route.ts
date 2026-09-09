@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+
+/**
+ * GET /api/settlement/unregistered?year_month=YYYY-MM
+ * 마스터(platform_skus)에 없는 쿠팡 옵션ID 를 세 출처에서 모아 "등록 필요" 큐로 돌려준다.
+ *  - RG API 동기화(rg_inventory_snapshots): 새 옵션이 생기면 바로 잡힘
+ *  - 광고 raw 월 집계(monthly_product_ads): sku 매칭 안 된 옵션 + 광고비
+ *  - 매출 파일(monthly_product_sales): sku 매칭 안 된 행 (옵션ID 없는 토스/스스는 이름만)
+ */
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  const ym = request.nextUrl.searchParams.get('year_month') ?? '';
+  const admin = await createAdminClient();
+
+  const [chRes, psRes, rgRes, adsRes, salesRes, skusRes] = await Promise.all([
+    admin.from('channels').select('id, name, type'),
+    admin.from('platform_skus').select('platform_sku_id, sku_id, channel:channels(type)'),
+    admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id'),
+    ym ? admin.from('monthly_product_ads').select('vendor_item_id, name, cost, sku_id').eq('user_id', user.id).eq('year_month', ym).eq('platform', 'coupang') : Promise.resolve({ data: [] as any[] }),
+    ym ? admin.from('monthly_product_sales').select('platform, display_name, qty, revenue, sku_id').eq('user_id', user.id).eq('year_month', ym).is('sku_id', null) : Promise.resolve({ data: [] as any[] }),
+    admin.from('skus').select('id, sku_code, option_values, cost_price, product:products(id, name)').order('sku_code'),
+  ]);
+
+  const coupangChannel = (chRes.data ?? []).find((c: any) => c.type === 'coupang');
+  const known = new Set<string>();
+  for (const p of psRes.data ?? []) if (p.platform_sku_id && ((p as any).channel?.type ?? 'coupang') === 'coupang') known.add(String(p.platform_sku_id));
+
+  type Item = { vendorItemId: string; name: string; sources: string[]; adCost: number; suggestedSkuId: string | null };
+  const items = new Map<string, Item>();
+  const get = (vid: string) => { let it = items.get(vid); if (!it) { it = { vendorItemId: vid, name: '', sources: [], adCost: 0, suggestedSkuId: null }; items.set(vid, it); } return it; };
+
+  for (const r of (rgRes.data ?? []) as any[]) {
+    const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
+    const it = get(vid); if (!it.sources.includes('RG API')) it.sources.push('RG API'); if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id;
+  }
+  for (const r of (adsRes.data ?? []) as any[]) {
+    const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
+    const it = get(vid); if (!it.sources.includes('광고 raw')) it.sources.push('광고 raw'); it.adCost += Number(r.cost) || 0; if (!it.name && r.name) it.name = r.name; if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id;
+  }
+  const nameOnly = (salesRes.data ?? []).map((r: any) => ({ platform: r.platform, name: r.display_name, qty: Number(r.qty) || 0, revenue: Number(r.revenue) || 0 }));
+
+  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null }));
+
+  return NextResponse.json({
+    yearMonth: ym,
+    coupangChannelId: coupangChannel?.id ?? null,
+    items: [...items.values()].sort((a, b) => b.adCost - a.adCost),
+    nameOnly,
+    skus,
+  });
+}

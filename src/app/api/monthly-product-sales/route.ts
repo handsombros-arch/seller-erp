@@ -49,6 +49,7 @@ export async function PUT(request: NextRequest) {
     revenue: p.revenue,
     unit_cost: p.unitCost,
     total_cost: p.cost,
+    empty_qty: Number((p as any).emptyQty) || 0,   // 빈박스(리뷰) 수량 — 원가 제외
     match_method: p.method,
     updated_at: new Date().toISOString(),
   }));

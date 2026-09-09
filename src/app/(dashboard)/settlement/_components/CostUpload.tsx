@@ -6,8 +6,8 @@ import { useToast } from '@/components/ui/toast';
 
 // ───────────────── Platform Cost Calculator ─────────────────
 
-interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; }
-interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; }
+interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; emptyQty?: number; skuId?: string | null; }
+interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; revenueMissingRows?: number; revenueEstimated?: number; }
 
 const PLATFORMS = [
   { id: 'coupang', label: '쿠팡 그로스', accept: '.xlsx,.xls', hint: '셀러 인사이트 엑셀' },
@@ -206,6 +206,12 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
               </div>
             </div>
 
+            {!!result.revenueMissingRows && (
+              <p className="text-[11px] text-warn rounded-lg bg-warn/10 px-3 py-2">
+                이 파일에는 금액 컬럼이 없습니다 ({result.revenueMissingRows}행). 마스터 판매가로 {result.revenueEstimated}행을 추정했고 나머지는 0 입니다.
+                정확한 매출은 스마트스토어센터 주문조회 &gt; 엑셀 다운로드에서 양식을 "금액 포함"으로 바꿔 받아 주세요.
+              </p>
+            )}
             <div className="max-h-80 overflow-y-auto border border-line rounded-xl">
               <table className="w-full text-[11px]">
                 <thead className="sticky top-0 z-10 bg-card-2"><tr className="text-fg-3 border-b border-line">
@@ -214,6 +220,7 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
                   <th className="text-right py-2 px-2 w-24">매출</th>
                   <th className="text-right py-2 px-2 w-24">단가</th>
                   <th className="text-right py-2 px-2 w-28">매입원가</th>
+                  <th className="text-right py-2 px-2 w-16" title="리뷰용 빈박스 발송 수량 — 원가에서 제외 (매출·택배비는 그대로)">빈박스</th>
                   <th className="text-center py-2 px-2 w-12">상태</th>
                 </tr></thead>
                 <tbody>
@@ -229,6 +236,11 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
                           className={`w-full h-7 px-2 text-right text-[11px] tabular-nums font-medium rounded border transition-colors focus:outline-none focus:border-brand focus:bg-card ${!p.matched ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-transparent hover:border-line bg-transparent text-fg'}`} />
                       </td>
                       <td className="py-1.5 px-2 text-right tabular-nums text-fg-3">{p.cost ? fmt(p.cost) : '-'}</td>
+                      <td className="py-0.5 px-1">
+                        <input type="text" inputMode="numeric" value={p.emptyQty || ''} placeholder="0"
+                          onChange={(e) => { const v = Math.min(p.qty, Number(e.target.value.replace(/[^0-9]/g, '')) || 0); setResult(prev => prev ? { ...prev, products: prev.products.map((x, j) => j === i ? { ...x, emptyQty: v, cost: x.unitCost * (x.qty - v) } : x) } : prev); }}
+                          className={`w-full h-7 px-2 text-right text-[11px] tabular-nums rounded border border-transparent hover:border-line focus:outline-none focus:border-brand focus:bg-card ${p.emptyQty ? 'text-warn font-semibold' : 'text-fg-5'}`} />
+                      </td>
                       <td className="py-1.5 px-2 text-center">
                         {p.method === 'saved'
                           ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">누적</span>
@@ -244,6 +256,7 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
                     <td className="py-2 px-2 text-right tabular-nums">{fmt(result.totalRevenue)}</td>
                     <td className="py-2 px-2" />
                     <td className="py-2 px-2 text-right tabular-nums text-warn">{fmt(total)}</td>
+                    <td className="py-2 px-2 text-right tabular-nums text-fg-4">{result.products.reduce((s, p) => s + (p.emptyQty || 0), 0) || ''}</td>
                     <td />
                   </tr>
                 </tbody>
