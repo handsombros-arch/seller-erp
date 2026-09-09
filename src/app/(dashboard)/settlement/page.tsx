@@ -10,6 +10,7 @@ import { inputClassName } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Market } from './_lib/settlement';
 import { TaxCheckCard } from './_components/TaxCheckCard';
+import { TaxEstimateCard } from './_components/TaxEstimateCard';
 import { useOrderCounts, useSettlementData } from './_lib/useSettlementData';
 import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
@@ -122,7 +123,10 @@ function SettlementInner() {
       {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} currentYm={currentYm()} loading={data.loading} />}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
-          : <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} regime={regime} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
+          : <>
+              <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} regime={regime} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
+              <div className="mt-4"><TaxEstimateCard items={data.items} snapshots={data.snapshots} switchYm={switchYm} ym={selectedYm} /></div>
+            </>
       )}
       {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} />}
     </div>

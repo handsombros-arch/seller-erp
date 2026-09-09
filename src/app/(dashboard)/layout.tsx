@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/header';
 import { VatProvider } from '@/components/layout/vat-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
+import { TaxAlert } from '@/components/layout/tax-alert';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="md:pl-[220px]">
           <Header email={user?.email} deployedSha={deployedSha} />
           <main className="p-4 md:p-6 max-w-[1200px] mx-auto">{children}</main>
+          <TaxAlert />
         </div>
       </div>
     </ConfirmProvider>
