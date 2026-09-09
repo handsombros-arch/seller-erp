@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/tabs';
+import { ProductTrend } from './ProductTrend';
 import { cn } from '@/lib/utils';
 import { MARKETS, MARKET_POLICY, SALES_MARKETS, fmtNum, fmtPct, isOversize, type Market, type MarketPL } from '../_lib/settlement';
 
@@ -31,6 +32,7 @@ const won = (n: number) => fmtNum(n);
 /** 상품별 순이익 — 마켓별 · 통합. 매출/원가는 업로드 실적, 수수료·물류는 상품 정책값, 광고비는 광고분석 raw 집계. */
 export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?: MarketPL[] }) {
   const [view, setView] = useState<'all' | Market>('all');
+  const [period, setPeriod] = useState<'month' | 'trend'>('month'); // 이 달 표 vs 상품 × 월 추이
   const [sales, setSales] = useState<SalesRow[]>([]);
   const [ads, setAds] = useState<AdResp | null>(null);
   const [tossAds, setTossAds] = useState<AdResp | null>(null);
@@ -145,11 +147,14 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
             <h3 className="text-[15px] font-bold text-fg">상품별 순이익 <span className="text-[11px] font-medium text-fg-4">{ym.replace('-', '.')} · VAT 포함 실거래가</span></h3>
             <p className="text-[11px] text-fg-4 mt-0.5">매출·원가는 업로드한 파일 실적, 수수료·물류비는 상품 정책값, 광고비는 광고분석 raw 집계입니다.</p>
           </div>
+          <SegmentedControl items={[{ value: 'month', label: '이 달' }, { value: 'trend', label: '월별 추이' }] as const} value={period} onChange={setPeriod} />
           <SegmentedControl items={viewItems} value={view} onChange={setView} />
           <label className="flex items-center gap-1.5 text-[12px] text-fg-3 cursor-pointer select-none"><input type="checkbox" className="accent-brand" checked={detail} onChange={e => setDetail(e.target.checked)} /> 상세 열</label>
         </div>
 
-        {loading ? (
+        {period === 'trend' ? (
+          <div className="px-4 md:px-5 py-4"><ProductTrend ym={ym} market={view} /></div>
+        ) : loading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
         ) : rows.length === 0 ? (
           <p className="px-5 py-8 text-[13px] text-fg-4 text-center">
@@ -214,7 +219,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
           </div>
         )}
 
-        {!loading && rows.length > 0 && (
+        {period === 'month' && !loading && rows.length > 0 && (
           <div className="px-4 md:px-5 py-3 border-t border-line-2 text-[11px] text-fg-4 space-y-1">
             {view !== 'all' && <p>수수료 정책: {MARKET_POLICY[view].feeSource} → 마스터 시트의 상품별 수수료율이 있으면 그 값을 씁니다. 물류: {MARKET_POLICY[view].shipNote}.</p>}
             {sheet && (
