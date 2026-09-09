@@ -11,7 +11,7 @@ import { fmtNum } from '../_lib/settlement';
 
 interface Item { vendorItemId: string; name: string; sources: string[]; adCost: number; suggestedSkuId: string | null }
 interface NameOnly { platform: string; name: string; qty: number; revenue: number }
-interface Sku { id: string; code: string; name: string; productId: string | null }
+interface Sku { id: string; code: string; name: string; productId: string | null; costPrice?: number | null }
 interface Ignored { key: string; label: string | null; created_at: string }
 
 /**
@@ -21,7 +21,7 @@ interface Ignored { key: string; label: string | null; created_at: string }
 export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: string; onRegistered?: () => void }) {
   const [data, setData] = useState<{ coupangChannelId: string | null; items: Item[]; nameOnly: NameOnly[]; skus: Sku[]; ignored?: Ignored[]; ignoreSupported?: boolean } | null>(null);
   const [showIgnored, setShowIgnored] = useState(false);
-  const [form, setForm] = useState<Record<string, { skuId: string; price: string; rate: string }>>({});
+  const [form, setForm] = useState<Record<string, { skuId: string; price: string; rate: string; cost: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
   const toast = useToast();
@@ -29,8 +29,9 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
   const load = useCallback(() => {
     fetch(`/api/settlement/unregistered?year_month=${selectedYm}`).then(r => r.json()).then(j => {
       setData(j);
-      const f: Record<string, { skuId: string; price: string; rate: string }> = {};
-      for (const it of j.items ?? []) f[it.vendorItemId] = { skuId: it.suggestedSkuId ?? '', price: '', rate: '' };
+      const f: Record<string, { skuId: string; price: string; rate: string; cost: string }> = {};
+      const costOf = (id: string) => { const c = (j.skus ?? []).find((s: Sku) => s.id === id)?.costPrice; return c ? String(c) : ''; };
+      for (const it of j.items ?? []) f[it.vendorItemId] = { skuId: it.suggestedSkuId ?? '', price: '', rate: '', cost: costOf(it.suggestedSkuId ?? '') };
       setForm(f);
     }).catch(() => setData(null));
   }, [selectedYm]);
@@ -56,6 +57,13 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
       const r = await fetch('/api/platform-skus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { toast.error(`등록 실패: ${j.error ?? r.status}`); return; }
+      // 원가: SKU 에 붙는 값. 비어 있거나 바뀌었으면 SKU 원가를 갱신 (매입원가 계산·상품별 순이익에 쓰임)
+      const cost = Number((f.cost ?? '').replace(/[^0-9]/g, '')) || 0;
+      const sku = data.skus.find(s => s.id === f.skuId);
+      if (cost > 0 && cost !== (sku?.costPrice ?? 0)) {
+        const cr = await fetch(`/api/skus/${f.skuId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cost_price: cost }) });
+        if (!cr.ok) toast.warning('옵션ID 는 등록됐지만 원가 저장은 실패했습니다');
+      }
       toast.success(`${it.vendorItemId} 등록 — 다음 집계부터 자동 매칭됩니다`);
       load(); onRegistered?.();
     } finally { setBusy(null); }
@@ -79,18 +87,20 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
       {open && (
         <div className="mt-3 space-y-2">
           {[...active, ...(showRgOnly ? rgOnly : [])].map(it => {
-            const f = form[it.vendorItemId] ?? { skuId: '', price: '', rate: '' };
+            const f = form[it.vendorItemId] ?? { skuId: '', price: '', rate: '', cost: '' };
             const set = (p: Partial<typeof f>) => setForm(prev => ({ ...prev, [it.vendorItemId]: { ...f, ...p } }));
+            const skuCost = data.skus.find(s => s.id === f.skuId)?.costPrice ?? null;
             return (
               <div key={it.vendorItemId} className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2 border border-line">
                 <code className="text-[11px] bg-app px-1.5 py-0.5 rounded border border-line">{it.vendorItemId}</code>
                 <span className="text-[12px] text-fg truncate max-w-[260px]" title={it.name}>{it.name || '(상품명 없음)'}</span>
                 <span className="text-[10px] text-fg-4">{it.sources.join(' · ')}{it.adCost ? ` · 광고비 ${fmtNum(it.adCost)}원` : ''}</span>
                 <div className="ml-auto flex items-center gap-1.5">
-                  <select value={f.skuId} onChange={e => set({ skuId: e.target.value })} className={cn(inputClassName, 'h-7 w-56 text-[12px]')}>
+                  <select value={f.skuId} onChange={e => { const id = e.target.value; const c = data.skus.find(s => s.id === id)?.costPrice; set({ skuId: id, cost: c ? String(c) : '' }); }} className={cn(inputClassName, 'h-7 w-56 text-[12px]')}>
                     <option value="">SKU 연결…</option>
-                    {data.skus.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
+                    {data.skus.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}{s.costPrice ? ` · 원가 ${fmtNum(s.costPrice)}` : ' · 원가 없음'}</option>)}
                   </select>
+                  <input value={f.cost} onChange={e => set({ cost: e.target.value })} placeholder="원가" inputMode="numeric" title={skuCost ? `SKU 현재 원가 ${fmtNum(skuCost)}원 — 바꾸면 SKU 원가가 갱신됩니다` : 'SKU 원가가 비어 있습니다. 여기서 넣으면 SKU 에 저장됩니다'} className={cn(inputClassName, 'h-7 w-24 text-[12px] text-right', !skuCost && f.skuId && 'border-warn')} />
                   <input value={f.price} onChange={e => set({ price: e.target.value })} placeholder="판매가" inputMode="numeric" className={cn(inputClassName, 'h-7 w-24 text-[12px] text-right')} />
                   <input value={f.rate} onChange={e => set({ rate: e.target.value })} placeholder="수수료%" inputMode="decimal" className={cn(inputClassName, 'h-7 w-20 text-[12px] text-right')} />
                   <Button size="sm" onClick={() => register(it)} disabled={busy === it.vendorItemId}>{busy === it.vendorItemId ? <Loader2 className="animate-spin" /> : '등록'}</Button>

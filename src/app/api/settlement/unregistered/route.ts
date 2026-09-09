@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     .filter((r: any) => !ignored.has(`name:${r.platform}:${r.name}`));
   const visibleItems = [...items.values()].filter(it => !ignored.has(`vid:${it.vendorItemId}`));
 
-  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null }));
+  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null, costPrice: s.cost_price == null ? null : Number(s.cost_price) }));
 
   return NextResponse.json({
     yearMonth: ym,
