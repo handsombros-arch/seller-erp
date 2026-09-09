@@ -30,7 +30,7 @@ interface Agg extends Omit<Line, 'market'> {
 const won = (n: number) => fmtNum(n);
 
 /** 상품별 순이익 — 마켓별 · 통합. 매출/원가는 업로드 실적, 수수료·물류는 상품 정책값, 광고비는 광고분석 raw 집계. */
-export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?: MarketPL[] }) {
+export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketingByMonth }: { ym: string; sheetMarkets?: MarketPL[]; sheetMarketing?: Partial<Record<Market, number>>; sheetMarketingByMonth?: (ym: string) => Partial<Record<Market, number>> }) {
   const [view, setView] = useState<'all' | Market>('all');
   const [period, setPeriod] = useState<'month' | 'trend'>('month'); // 이 달 표 vs 상품 × 월 추이
   const [sales, setSales] = useState<SalesRow[]>([]);
@@ -114,8 +114,15 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
     for (const a of tossAds?.products ?? []) {
       if (a.productId) get('toss', a.productId, a.productName ?? a.name, null).ad += a.cost;
     }
+    // 시트 마케팅비(트래픽·가구매 등) 매출 비례 배분 — 상품 귀속 자료가 없어 추정
+    if (sheetMarketing) {
+      const groups = new Map<string, Line[]>();
+      for (const l of lines) { const g = groups.get(l.market) ?? []; g.push(l); groups.set(l.market, g); }
+      const spread = (target: Line[], amount: number) => { const tot = target.reduce((s, l) => s + Math.max(0, l.revenue), 0); if (!tot || !amount) return; for (const l of target) l.marketing += amount * (Math.max(0, l.revenue) / tot); };
+      for (const [mk, amt] of Object.entries(sheetMarketing) as [Market, number][]) { if (mk === 'common') spread(lines, amt); else spread(groups.get(mk) ?? [], amt); }
+    }
     return { lines, unmatchedAds };
-  }, [sales, ads, tossAds, psMap]);
+  }, [sales, ads, tossAds, psMap, sheetMarketing]);
 
   const rows = useMemo<Agg[]>(() => {
     const filtered = view === 'all' ? lines : lines.filter(l => l.market === view);
@@ -153,7 +160,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
         </div>
 
         {period === 'trend' ? (
-          <div className="px-4 md:px-5 py-4"><ProductTrend ym={ym} market={view} /></div>
+          <div className="px-4 md:px-5 py-4"><ProductTrend ym={ym} market={view} sheetMarketingByMonth={sheetMarketingByMonth} /></div>
         ) : loading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div>
         ) : rows.length === 0 ? (
@@ -173,7 +180,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
                   {detail && <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>}
-                  <th className="text-right px-2 whitespace-nowrap" title="쿠팡 PA 광고비 × 1.1 (VAT 포함) · 토스 집행 광고비 · 빈박스 환불(수량 × 판매가) 포함">광고·마케팅{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
+                  <th className="text-right px-2 whitespace-nowrap" title="쿠팡 PA 광고비 × 1.1 (VAT 포함) · 토스 집행 광고비 · 빈박스 환불(수량 × 판매가) · 시트의 트래픽·가구매 등은 마켓 매출 비례 배분">광고·마케팅{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
                   {detail && <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>}
                   <th className="text-right px-2" title="실제 ROAS. 빨강 = 손익분기 ROAS 미달">ROAS</th>
                   {detail && <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>}
@@ -294,7 +301,7 @@ function Cells({ r, detail }: { r: Agg; detail: boolean }) {
       <td className={cn(td, 'text-warn')}>{won(r.cogs)}</td>
       <td className={cn(td, r.feeDefault ? 'text-fg-5' : 'text-fg-3')} title={`수수료율 ${(r.feeRate * 100).toFixed(1)}%${r.feeDefault ? ' (기본값)' : ''}`}>{won(r.fee)}<span className="block text-[10px] text-fg-5">{fmtPct(r.feeRate * 100)}</span></td>
       {detail && <td className={cn(td, 'text-fg-3')}>{won(r.logistics)}</td>}
-      <td className={cn(td, 'text-info')} title={r.marketing ? `광고 ${won(r.ad)} + 빈박스 환불 ${won(r.marketing)}` : ''}>{r.ad + r.marketing ? won(r.ad + r.marketing) : <span className="text-fg-5">-</span>}{r.marketing ? <span className="block text-[10px] text-fg-5">빈박스 {won(r.marketing)}</span> : null}</td>
+      <td className={cn(td, 'text-info')} title={r.marketing ? `광고 ${won(r.ad)} + 마케팅 ${won(r.marketing)} (빈박스 환불 + 시트 트래픽·가구매 매출 비례 배분)` : ''}>{r.ad + r.marketing ? won(r.ad + r.marketing) : <span className="text-fg-5">-</span>}{r.marketing ? <span className="block text-[10px] text-fg-5">마케팅 {won(r.marketing)}</span> : null}</td>
       {detail && <td className={cn(td, r.preAdRate != null && r.preAdRate < 0 ? 'text-danger' : 'text-fg-2')}>{fmtPct(r.preAdRate)}</td>}
       <td className={cn(td, 'font-semibold', adBad ? 'text-danger' : r.roas != null ? 'text-success' : 'text-fg-5')} title={r.beRoas != null ? `손익분기 ${r.beRoas.toFixed(0)}%` : ''}>{r.roas == null ? '-' : `${r.roas.toFixed(0)}%`}{!detail && r.beRoas != null && <span className="block text-[10px] font-normal text-fg-5">기준 {r.beRoas.toFixed(0)}%</span>}</td>
       {detail && <td className={cn(td, 'text-fg-3')}>{r.beRoas == null ? '-' : `${r.beRoas.toFixed(0)}%`}</td>}

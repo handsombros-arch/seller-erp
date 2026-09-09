@@ -349,6 +349,16 @@ export function buildSeries(items: MCost[], snapshots: Snapshot[], months: strin
   });
 }
 
+/** 시트의 마케팅비(트래픽·가구매·사은품 등, 빈박스 제외)를 마켓별로 — 상품별 순이익에 매출 비례로 배분하기 위해. VAT 포함 기준 */
+export function sheetMarketingByMarket(items: MCost[], amountOf: (item: MCost) => number, vatOf?: (item: MCost) => VatMode | null | undefined): Partial<Record<Market, number>> {
+  const out: Partial<Record<Market, number>> = {};
+  for (const l of collectLeaves(items, amountOf, 'incl', vatOf)) {
+    if (l.tags.pl_line !== 'marketing' || /빈박스/.test(l.item.label) || l.value === 0) continue;
+    out[l.tags.market] = (out[l.tags.market] ?? 0) + l.value;
+  }
+  return out;
+}
+
 export const PL_ROWS: { key: keyof PL; label: string; kind: 'plus' | 'minus' | 'subtotal' | 'result'; indent?: boolean }[] = [
   { key: 'revenue', label: '매출', kind: 'plus' },
   { key: 'coupon', label: '매출 차감 (쿠폰)', kind: 'minus', indent: true },

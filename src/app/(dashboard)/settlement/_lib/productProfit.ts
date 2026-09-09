@@ -18,6 +18,23 @@ export function buildPsMap(pskus: PlatformSkuLite[]) {
 }
 
 /** 매출 파일 행 + 광고 집계(쿠팡 ×1.1, 토스 그대로) → 마켓 × 상품 라인 */
+/** 시트 마케팅비(마켓별, common 은 전체)를 각 라인의 매출 비례로 배분해 marketing 에 더한다 */
+export function allocateSheetMarketing(lines: ProductLine[], sheet: Partial<Record<Market, number>> | undefined) {
+  if (!sheet) return;
+  const groups = new Map<string, ProductLine[]>();
+  for (const l of lines) { const g = groups.get(l.market) ?? []; g.push(l); groups.set(l.market, g); }
+  const spread = (target: ProductLine[], amount: number) => { const tot = target.reduce((s, l) => s + Math.max(0, l.revenue), 0); if (!tot || !amount) return; for (const l of target) l.marketing += amount * (Math.max(0, l.revenue) / tot); };
+  for (const [mk, amt] of Object.entries(sheet) as [Market, number][]) {
+    if (mk === 'common') spread(lines, amt); else spread(groups.get(mk) ?? [], amt);
+  }
+  for (const l of lines) {
+    const preAd = l.revenue - l.cogs - l.fee - l.logistics;
+    l.contribution = preAd - l.ad - l.marketing;
+    l.margin = l.revenue > 0 ? (l.contribution / l.revenue) * 100 : null;
+    l.roas = l.ad + l.marketing > 0 ? (l.revenue / (l.ad + l.marketing)) * 100 : null;
+  }
+}
+
 export function computeProductLines(sales: SalesRowLite[], coupangAds: AdRowLite[] | null | undefined, tossAds: AdRowLite[] | null | undefined, psMap: Map<string, PlatformSkuLite>): ProductLine[] {
   const byKey = new Map<string, ProductLine>();
   const get = (market: Market, productId: string | null, name: string, tier: string | null) => {

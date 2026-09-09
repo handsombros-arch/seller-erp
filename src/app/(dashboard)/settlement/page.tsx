@@ -8,7 +8,7 @@ import { Tabs, useTabParam } from '@/components/ui/tabs';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { inputClassName } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Basis, type Market } from './_lib/settlement';
+import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, sheetMarketingByMarket, vatViewFor, ymLabel, type Basis, type Market } from './_lib/settlement';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { TaxCheckCard } from './_components/TaxCheckCard';
 import { TaxEstimateCard } from './_components/TaxEstimateCard';
@@ -90,6 +90,9 @@ function SettlementInner() {
   const prevYm = useMemo(() => { const [y, m] = selectedYm.split('-').map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }, [selectedYm]);
   const prevAmounts = useMemo(() => { const m = data.amountsFor(prevYm); return m.size ? m : null; }, [data, prevYm]);
   const sheetMarkets = useMemo(() => amounts.size ? buildPL(data.items, (it) => amounts.get(it.id) ?? 0, { vat: 'incl', vatOf: (it) => vats.get(it.id) }).markets : [], [data.items, amounts, vats]);
+  // 시트 마케팅비(트래픽·가구매 등) → 상품별 순이익 배분용
+  const sheetMarketing = useMemo(() => amounts.size ? sheetMarketingByMarket(data.items, (it) => amounts.get(it.id) ?? 0, (it) => vats.get(it.id)) : undefined, [data.items, amounts, vats]);
+  const sheetMarketingByMonth = useCallback((m: string) => { const a = data.amountsFor(m); const v = data.vatsFor(m); return a.size ? sheetMarketingByMarket(data.items, (it) => a.get(it.id) ?? 0, (it) => v.get(it.id)) : {}; }, [data]);
 
   const tabItems = [
     { value: 'summary' as Tab, label: '요약' },
@@ -147,7 +150,7 @@ function SettlementInner() {
               <div className="mt-4"><TaxEstimateCard items={data.items} snapshots={data.snapshots} switchYm={switchYm} ym={selectedYm} /></div>
             </>
       )}
-      {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} />}
+      {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} sheetMarketing={sheetMarketing} sheetMarketingByMonth={sheetMarketingByMonth} />}
     </div>
   );
 }

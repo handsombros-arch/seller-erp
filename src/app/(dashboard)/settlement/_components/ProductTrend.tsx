@@ -5,13 +5,13 @@ import { Loader2 } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { fmtNum, fmtPct, lastMonths, type Market } from '../_lib/settlement';
-import { buildPsMap, computeProductLines, type AdRowLite, type PlatformSkuLite, type ProductLine, type SalesRowLite } from '../_lib/productProfit';
+import { allocateSheetMarketing, buildPsMap, computeProductLines, type AdRowLite, type PlatformSkuLite, type ProductLine, type SalesRowLite } from '../_lib/productProfit';
 
 type Metric = 'contribution' | 'revenue' | 'ad' | 'margin' | 'roas';
 const METRICS = [{ value: 'contribution', label: '공헌이익' }, { value: 'revenue', label: '매출' }, { value: 'ad', label: '광고·마케팅' }, { value: 'margin', label: '마진율' }, { value: 'roas', label: 'ROAS' }] as const;
 
 /** 상품 × 월 매트릭스 — 상품별 순이익 탭의 "월별 추이" 보기 */
-export function ProductTrend({ ym, market }: { ym: string; market: 'all' | Market }) {
+export function ProductTrend({ ym, market, sheetMarketingByMonth }: { ym: string; market: 'all' | Market; sheetMarketingByMonth?: (ym: string) => Partial<Record<Market, number>> }) {
   const months = useMemo(() => { const [y, m] = ym.split('-').map(Number); return lastMonths(12, new Date(y, m - 1, 1)).reverse(); }, [ym]);
   const [metric, setMetric] = useState<Metric>('contribution');
   const [loading, setLoading] = useState(true);
@@ -36,11 +36,11 @@ export function ProductTrend({ ym, market }: { ym: string; market: 'all' | Marke
       }));
       if (cancelled) return;
       const out = new Map<string, ProductLine[]>();
-      for (const [m, c, t] of ads) { const s = salesBy.get(m) ?? []; if (!s.length && !c.length && !t.length) continue; out.set(m, computeProductLines(s, c, t, psMap)); }
+      for (const [m, c, t] of ads) { const s = salesBy.get(m) ?? []; if (!s.length && !c.length && !t.length) continue; const lines = computeProductLines(s, c, t, psMap); allocateSheetMarketing(lines, sheetMarketingByMonth?.(m)); out.set(m, lines); }
       setByMonth(out); setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [months]);
+  }, [months, sheetMarketingByMonth]);
 
   const rows = useMemo(() => {
     const prod = new Map<string, { name: string; cells: Map<string, ProductLine[]>; total: number }>();
