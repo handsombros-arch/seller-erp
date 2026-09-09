@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const ym = request.nextUrl.searchParams.get('history');
   if (ym === 'all') {
     // note 컬럼(00059)이 없는 DB 에서는 note 없이 재시도
-    let res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });
+    let res: { data: any[] | null; error: any } = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });
     if (res.error) res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount').order('year_month', { ascending: false });
     return NextResponse.json(res.data ?? []);
   }
