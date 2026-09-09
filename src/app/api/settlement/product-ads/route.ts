@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
   if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return NextResponse.json({ error: 'year_month=YYYY-MM 필요' }, { status: 400 });
   const prefix = ym.replace('-', '');
 
-  const { data: rows, error } = await admin.rpc('settlement_ad_by_option', { p_user: user.id, p_prefix: prefix });
+  const { data: rowsRaw, error } = await admin.rpc('settlement_ad_by_option', { p_user: user.id, p_prefix: prefix });
+  const rows = (rowsRaw ?? []) as any[];
   if (error) return NextResponse.json({ needsMigration: isMissing(error), error: error.message, products: [] });
 
   // 옵션ID → sku 매핑: platform_skus(쿠팡 채널) 우선, rg_inventory_snapshots 보조
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
     const cost = Number(r.cost) || 0;
     total += cost;
     const p = skuByVendor.get(vid);
-    const sku = p?.sku ?? (rgMap.has(vid) ? skuInfo.get(rgMap.get(vid)) : null);
+    const sku = p?.sku ?? (rgMap.has(vid) ? skuInfo.get(rgMap.get(vid) ?? '') : null);
     const matched = !!sku?.product?.id;
     if (matched) matchedCost += cost;
     return {
