@@ -51,8 +51,12 @@ export async function readLocalAdRows(): Promise<Record<string, unknown>[]> {
 /** rows → { 'YYYY-MM': LocalAdAgg[] } */
 export function aggregateLocalAdRows(rows: Record<string, unknown>[]): Record<string, LocalAdAgg[]> {
   const byMonth = new Map<string, Map<string, LocalAdAgg>>();
+  // 키워드 보고서('-')와 일별 보고서('')가 같은 지출을 두 번 담고 있을 수 있어 정규화 키로 중복 제거
+  const seen = new Set<string>();
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
+    const kw = String(r['키워드'] ?? '').trim(); const key = `${r['날짜']}|${kw === '-' ? '' : kw}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
+    if (seen.has(key)) continue; seen.add(key);
     const d = String(r['날짜'] ?? '').replace(/\D/g, '');
     if (d.length < 6) continue;
     const ym = `${d.slice(0, 4)}-${d.slice(4, 6)}`;

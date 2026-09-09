@@ -33,6 +33,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
   const [view, setView] = useState<'all' | Market>('all');
   const [sales, setSales] = useState<SalesRow[]>([]);
   const [ads, setAds] = useState<AdResp | null>(null);
+  const [tossAds, setTossAds] = useState<AdResp | null>(null);
   const [pskus, setPskus] = useState<PlatformSku[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -60,6 +61,8 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
     setAds(null); setAdsLoading(true);
     fetch(`/api/settlement/product-ads?year_month=${ym}`).then(r => r.json()).catch(() => ({ error: '광고 집계 실패', products: [] }))
       .then(a => { if (!cancelled) { setAds(a); setAdsLoading(false); } });
+    fetch(`/api/settlement/product-ads?year_month=${ym}&platform=toss`).then(r => r.json()).catch(() => null)
+      .then(a => { if (!cancelled) setTossAds(a); });
     return () => { cancelled = true; };
   }, [ym]);
 
@@ -101,11 +104,15 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
     for (const l of lines) l.feeRate = l.revenue > 0 ? l.fee / l.revenue : 0;
     const unmatchedAds: AdRow[] = [];
     for (const a of ads?.products ?? []) {
-      if (a.productId) get('coupang', a.productId, a.productName ?? a.name, null).ad += a.cost;
-      else if (a.cost > 0) unmatchedAds.push(a);
+      // 쿠팡 PA 보고서 광고비는 VAT 별도 → 매출·원가(VAT 포함)와 맞추기 위해 ×1.1
+      if (a.productId) get('coupang', a.productId, a.productName ?? a.name, null).ad += a.cost * 1.1;
+      else if (a.cost > 0) unmatchedAds.push({ ...a, cost: a.cost * 1.1 });
+    }
+    for (const a of tossAds?.products ?? []) {
+      if (a.productId) get('toss', a.productId, a.productName ?? a.name, null).ad += a.cost;
     }
     return { lines, unmatchedAds };
-  }, [sales, ads, psMap]);
+  }, [sales, ads, tossAds, psMap]);
 
   const rows = useMemo<Agg[]>(() => {
     const filtered = view === 'all' ? lines : lines.filter(l => l.market === view);
@@ -160,7 +167,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
                   {detail && <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>}
-                  <th className="text-right px-2 whitespace-nowrap">광고비{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
+                  <th className="text-right px-2 whitespace-nowrap" title="쿠팡 PA 보고서 광고비 × 1.1 (VAT 포함 환산) · 토스는 집행 광고비">광고비{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
                   {detail && <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>}
                   <th className="text-right px-2" title="실제 ROAS. 빨강 = 손익분기 ROAS 미달">ROAS</th>
                   {detail && <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>}
@@ -233,7 +240,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
           <p className="text-[12px] text-fg-4">{ym.replace('-', '.')} 광고 집계가 없습니다. <Link href="/settlement?tab=input" className="text-brand font-semibold hover:underline">입력 탭</Link>의 광고비 raw 카드에서 "이 PC 광고 raw → 월 집계 저장"을 누르면 채워집니다. (raw 는 <Link href="/ad-analysis" className="text-brand hover:underline">광고 분석</Link>에 올린 것을 씁니다)</p>
         ) : (
           <div className="text-[12px] text-fg-2 space-y-2">
-            <p>광고비 {won(ads.totalCost)}원 중 상품 매칭 {won(ads.matchedCost)}원 ({ads.totalCost ? ((ads.matchedCost / ads.totalCost) * 100).toFixed(0) : 0}%)</p>
+            <p>광고비 {won(ads.totalCost)}원(VAT 별도) 중 상품 매칭 {won(ads.matchedCost)}원 ({ads.totalCost ? ((ads.matchedCost / ads.totalCost) * 100).toFixed(0) : 0}%){tossAds?.totalCost ? ` · 토스 광고비 ${won(tossAds.totalCost)}원 (매칭 ${tossAds.totalCost ? ((tossAds.matchedCost / tossAds.totalCost) * 100).toFixed(0) : 0}%)` : ''}</p>
             {unmatchedAds.length > 0 && (
               <div className="rounded-xl border border-warn/30 bg-warn/5 px-3 py-2.5">
                 <p className="font-semibold text-fg mb-1.5">마스터에 없는 옵션ID {unmatchedAds.length}개 — 미매칭 광고비 {won(ads.unmatchedCost)}원</p>

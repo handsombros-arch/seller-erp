@@ -59,7 +59,37 @@ export async function PUT(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, saved: rows.length });
+  // 빈박스(리뷰) 수량 → 재고 되돌리기. 주문 동기화가 이미 차감했지만 실제로 나가지 않은 수량.
+  // 같은 (월, 플랫폼) 재적용 시 이전 되돌림을 먼저 취소하고 다시 적용 (멱등).
+  const EMPTY_PREFIX = `emptybox:${body.yearMonth}:${body.platform}:`;
+  let restored = 0;
+  try {
+    const { data: prev } = await admin.from('inventory_adjustments').select('id, sku_id, warehouse_id, reason').like('reason', `${EMPTY_PREFIX}%`);
+    for (const a of prev ?? []) {
+      const m = /:\+(\d+)$/.exec(String(a.reason)); const q = m ? Number(m[1]) : 0;
+      if (q > 0) {
+        const { data: inv } = await admin.from('inventory').select('quantity').eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id).maybeSingle();
+        const before = Number(inv?.quantity ?? 0);
+        await admin.from('inventory').update({ quantity: before - q, updated_at: new Date().toISOString() }).eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id);
+      }
+      await admin.from('inventory_adjustments').delete().eq('id', a.id);
+    }
+    for (const r of rows) {
+      const q = Number(r.empty_qty) || 0;
+      if (q <= 0 || !r.sku_id) continue;
+      const { data: invs } = await admin.from('inventory').select('warehouse_id, quantity').eq('sku_id', r.sku_id).order('quantity', { ascending: false }).limit(1);
+      const inv = invs?.[0];
+      if (!inv) continue;
+      const before = Number(inv.quantity ?? 0);
+      await admin.from('inventory').update({ quantity: before + q, updated_at: new Date().toISOString() }).eq('sku_id', r.sku_id).eq('warehouse_id', inv.warehouse_id);
+      await admin.from('inventory_adjustments').insert({ sku_id: r.sku_id, warehouse_id: inv.warehouse_id, before_quantity: before, after_quantity: before + q, reason: `${EMPTY_PREFIX}${r.sku_id}:+${q}`, adjusted_by: user.id });
+      restored += q;
+    }
+  } catch (e: any) {
+    return NextResponse.json({ ok: true, saved: rows.length, restoreError: e?.message ?? String(e) });
+  }
+
+  return NextResponse.json({ ok: true, saved: rows.length, restored });
 }
 
 // ──────────────────────────────────────────────────────────

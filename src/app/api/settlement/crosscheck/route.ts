@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     put(`cogs_file:${platform}`, s.cost, '파일', `매출 파일 수량 × 적용 원가`);
   }
   const adCoupang = (adsRes.data ?? []).filter((r: any) => r.platform === 'coupang').reduce((s: number, r: any) => s + (Number(r.cost) || 0), 0);
-  put('ad:coupang', adCoupang, '파일', '광고 raw 월 집계 (PA)');
+  put('ad:coupang', adCoupang * 1.1, '파일', `광고 raw 월 집계 ${Math.round(adCoupang).toLocaleString('ko-KR')} × 1.1 (보고서는 VAT 별도)`);
 
   // 설정
   if ((credRes.data as any)?.rg_saver_enabled) put('saver:coupang', Math.round(99000 * 1.1), '설정', '그로스 세이버 99,000 × 1.1');

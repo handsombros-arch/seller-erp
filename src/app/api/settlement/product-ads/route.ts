@@ -34,6 +34,42 @@ export async function GET(request: NextRequest) {
   if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return NextResponse.json({ error: 'year_month=YYYY-MM 필요' }, { status: 400 });
   const prefix = ym.replace('-', '');
 
+  // 토스 광고 raw (toss_ad_rows JSONB) → 월 × 옵션 ID 집계. 매칭: platform_skus(토스 채널) 옵션 ID → 상품 ID → 상품명
+  if (sp.get('platform') === 'toss') {
+    const rows: any[] = [];
+    for (let i = 0; i < 200; i++) {
+      const { data, error } = await admin.from('toss_ad_rows').select('data').eq('user_id', user.id).range(i * 1000, i * 1000 + 999);
+      if (error || !data?.length) break;
+      for (const r of data) rows.push(r.data);
+      if (data.length < 1000) break;
+    }
+    const toYm = (v: any) => { if (typeof v === 'number' && v > 25569) { const d = new Date((v - 25569) * 86400000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; } const s = String(v ?? '').replace(/\D/g, ''); return s.length >= 6 ? `${s.slice(0, 4)}-${s.slice(4, 6)}` : ''; };
+    const num = (v: any) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+    const [{ data: ps }, { data: prods }] = await Promise.all([
+      admin.from('platform_skus').select('platform_sku_id, platform_product_id, sku_id, channel:channels(type), sku:skus(id, sku_code, product:products(id, name, logistics_tier))'),
+      admin.from('products').select('id, name, logistics_tier'),
+    ]);
+    const byOpt = new Map<string, any>(), byProd = new Map<string, any>();
+    for (const p of (ps ?? []) as any[]) { if ((p.channel?.type ?? '') !== 'toss') continue; if (p.platform_sku_id) byOpt.set(String(p.platform_sku_id), p); if (p.platform_product_id) byProd.set(String(p.platform_product_id), p); }
+    const byName = new Map((prods ?? []).map((p: any) => [String(p.name).trim(), p]));
+    const agg = new Map<string, any>();
+    for (const r of rows) {
+      if (toYm(r['일자']) !== ym) continue;
+      const opt = String(r['옵션 ID'] ?? ''); const pid = String(r['상품 ID'] ?? ''); const key = opt || pid || String(r['광고'] ?? '');
+      let a = agg.get(key);
+      if (!a) {
+        const p = byOpt.get(opt) ?? byProd.get(pid);
+        const prod = p?.sku?.product ?? byName.get(String(r['상품'] ?? '').trim()) ?? null;
+        a = { vendorItemId: opt, name: String(r['광고'] ?? r['상품'] ?? ''), cost: 0, impressions: 0, clicks: 0, convQty14d: 0, convRev14d: 0, rows: 0, skuId: p?.sku?.id ?? null, skuCode: p?.sku?.sku_code ?? null, productId: prod?.id ?? null, productName: prod?.name ?? null, logisticsTier: prod?.logistics_tier ?? null, matched: !!prod?.id };
+        agg.set(key, a);
+      }
+      a.cost += num(r['집행 광고비']); a.impressions += num(r['노출수']); a.clicks += num(r['클릭수']); a.convQty14d += num(r['총 전환 판매수량']); a.convRev14d += num(r['총 전환 거래액']); a.rows += 1;
+    }
+    const products = [...agg.values()].sort((a, b) => b.cost - a.cost);
+    let total = 0, matchedCost = 0; for (const p of products) { total += p.cost; if (p.matched) matchedCost += p.cost; }
+    return NextResponse.json({ yearMonth: ym, platform: 'toss', source: 'toss_ad_rows', totalCost: total, matchedCost, unmatchedCost: total - matchedCost, items: products.length, matchedItems: products.filter(p => p.matched).length, products });
+  }
+
   // 1순위: 월 집계 테이블 (정산 페이지 "이 PC 광고 raw → 월 집계 저장" 또는 예전 업로드)
   const { data: agg } = await admin.from('monthly_product_ads')
     .select('vendor_item_id, name, cost, impressions, clicks, conv_qty_14d, conv_rev_14d, sku_id, sku:skus(id, sku_code, product:products(id, name, logistics_tier))')

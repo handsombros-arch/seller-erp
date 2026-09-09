@@ -802,7 +802,10 @@ export default function AdAnalysisPage() {
   }, []);
 
   // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
-  const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+  // 키워드 '-'(키워드 보고서의 비검색 행) 와 ''(일별 보고서) 는 같은 지출 — 두 양식을 같이 올리면 비검색 영역이 2배로 잡히던 버그
+  const normKw = (v: any) => { const s = String(v ?? '').trim(); return s === '-' ? '' : s; };
+  const dedupKey = (r: any) => `${r['날짜']}|${normKw(r['키워드'])}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
+  const dedupeRows = (rows: any[]) => { const seen = new Set<string>(); const out: any[] = []; for (let i = 0; i < rows.length; i++) { const k = dedupKey(rows[i]); if (!seen.has(k)) { seen.add(k); out.push(rows[i]); } } return out; };
 
   const toast = useToast();
   const toastRef = useRef(toast); toastRef.current = toast;
@@ -1009,7 +1012,7 @@ export default function AdAnalysisPage() {
       return new Promise((resolve) => {
         const tx = db.transaction(idbStore, 'readonly');
         const req = tx.objectStore(idbStore).get('data');
-        req.onsuccess = () => { db.close(); resolve(req.result ?? null); };
+        req.onsuccess = () => { db.close(); const v = req.result ?? null; resolve(Array.isArray(v) ? dedupeRows(v) : v); };
         req.onerror = () => { db.close(); resolve(null); };
       });
     } catch { return null; }

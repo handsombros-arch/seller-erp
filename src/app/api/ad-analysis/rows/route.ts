@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '데이터 필요' }, { status: 400 });
   }
 
+  const normKw = (v: unknown) => { const s = String(v ?? '').trim(); return s === '-' ? '' : s; };
   const dedupKey = (r: Record<string, unknown>) =>
-    `${r['날짜']}|${r['키워드'] ?? ''}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
+    `${r['날짜']}|${normKw(r['키워드'])}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
 
   const upsertRows = rows.map((r) => ({
     user_id: user.id,
