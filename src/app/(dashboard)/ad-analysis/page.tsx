@@ -1662,7 +1662,7 @@ export default function AdAnalysisPage() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             데이터 추가
           </button>
-          <BackupRestore disabled={loading} onRestore={(files) => handleUpload(files, true)} />
+          <BackupRestore disabled={loading} onRestore={(files) => handleUpload(files, true)} localRows={data?._rawRows ?? null} />
           {data && (
             <button
               onClick={async () => { if (await confirmDialog('모든 광고 데이터를 삭제하시겠습니까?')) setData(null); }}
