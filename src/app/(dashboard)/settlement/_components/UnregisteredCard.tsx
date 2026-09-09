@@ -51,21 +51,24 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
     } finally { setBusy(null); }
   }
 
+  const [showRgOnly, setShowRgOnly] = useState(false);
   if (!data) return null;
-  const n = data.items.length + data.nameOnly.length;
-  if (n === 0) return null;
+  const active = data.items.filter(it => it.sources.some(s => s !== 'RG API'));   // 이번 달 광고·매출에 실제로 나온 옵션
+  const rgOnly = data.items.filter(it => !it.sources.some(s => s !== 'RG API'));   // RG 재고에만 있는 옵션 (신규 입고 등)
+  const n = active.length + data.nameOnly.length;
+  if (n === 0 && rgOnly.length === 0) return null;
 
   return (
     <section className="rounded-2xl border border-warn/40 bg-warn/5 px-4 md:px-5 py-3">
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-2 text-left">
         <AlertTriangle className="h-4 w-4 text-warn shrink-0" />
         <span className="text-[13px] font-bold text-fg">등록 필요 {n}건</span>
-        <span className="text-[12px] text-fg-3">마스터에 없는 옵션ID {data.items.length} · 이름 매칭 실패 {data.nameOnly.length}. 등록하지 않으면 상품별 순이익에서 빠집니다.</span>
+        <span className="text-[12px] text-fg-3">이번 달 광고·매출에 나온 미등록 옵션ID {active.length} · 이름 매칭 실패 {data.nameOnly.length}{rgOnly.length ? ` · RG 재고에만 있는 옵션 ${rgOnly.length}` : ''}. 등록하지 않으면 상품별 순이익에서 빠집니다.</span>
         <span className="ml-auto text-[11px] text-fg-4">{open ? '접기' : '펼치기'}</span>
       </button>
       {open && (
         <div className="mt-3 space-y-2">
-          {data.items.map(it => {
+          {[...active, ...(showRgOnly ? rgOnly : [])].map(it => {
             const f = form[it.vendorItemId] ?? { skuId: '', price: '', rate: '' };
             const set = (p: Partial<typeof f>) => setForm(prev => ({ ...prev, [it.vendorItemId]: { ...f, ...p } }));
             return (
@@ -85,6 +88,9 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
               </div>
             );
           })}
+          {rgOnly.length > 0 && (
+            <button onClick={() => setShowRgOnly(v => !v)} className="text-[11px] text-fg-4 hover:text-brand">{showRgOnly ? 'RG 재고 전용 옵션 접기' : `RG 재고에만 있는 옵션 ${rgOnly.length}개 보기 (새로 입고됐거나 판매 중단된 옵션)`}</button>
+          )}
           {data.nameOnly.length > 0 && (
             <div className="rounded-xl bg-card px-3 py-2 border border-line text-[12px] text-fg-2">
               <div className="font-semibold text-fg mb-1">매출 파일에서 상품을 못 찾은 행 {data.nameOnly.length}</div>

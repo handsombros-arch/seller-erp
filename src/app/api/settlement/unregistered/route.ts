@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
   const [chRes, psRes, rgRes, adsRes, salesRes, skusRes] = await Promise.all([
     admin.from('channels').select('id, name, type'),
     admin.from('platform_skus').select('platform_sku_id, sku_id, channel:channels(type)'),
-    admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id'),
+    // 최신 스냅샷·재고 있는 옵션만 (컬럼이 없는 DB 면 전체)
+    admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id, item_name, snapshot_date, quantity').order('snapshot_date', { ascending: false }).limit(2000)
+      .then(r => r.error ? admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id, item_name') : r),
     ym ? admin.from('monthly_product_ads').select('vendor_item_id, name, cost, sku_id').eq('user_id', user.id).eq('year_month', ym).eq('platform', 'coupang') : Promise.resolve({ data: [] as any[] }),
     ym ? admin.from('monthly_product_sales').select('platform, display_name, qty, revenue, sku_id').eq('user_id', user.id).eq('year_month', ym).is('sku_id', null) : Promise.resolve({ data: [] as any[] }),
     admin.from('skus').select('id, sku_code, option_values, cost_price, product:products(id, name)').order('sku_code'),
@@ -32,9 +34,13 @@ export async function GET(request: NextRequest) {
   const items = new Map<string, Item>();
   const get = (vid: string) => { let it = items.get(vid); if (!it) { it = { vendorItemId: vid, name: '', sources: [], adCost: 0, suggestedSkuId: null }; items.set(vid, it); } return it; };
 
-  for (const r of (rgRes.data ?? []) as any[]) {
+  const rgRows = ((rgRes as any).data ?? []) as any[];
+  const latestDate = rgRows.find(r => r.snapshot_date)?.snapshot_date ?? null;
+  for (const r of rgRows) {
+    if (latestDate && r.snapshot_date !== latestDate) continue;
+    if (r.quantity !== undefined && r.quantity !== null && Number(r.quantity) <= 0) continue;
     const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
-    const it = get(vid); if (!it.sources.includes('RG API')) it.sources.push('RG API'); if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id;
+    const it = get(vid); if (!it.sources.includes('RG API')) it.sources.push('RG API'); if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id; if (!it.name && r.item_name) it.name = r.item_name;
   }
   for (const r of (adsRes.data ?? []) as any[]) {
     const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
