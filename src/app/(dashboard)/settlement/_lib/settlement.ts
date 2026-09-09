@@ -28,7 +28,7 @@ export interface MCost {
   carry_forward?: boolean | null;
 }
 
-export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null }
+export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null }
 
 export const MARKETS: { id: Market; label: string; short: string }[] = [
   { id: 'coupang', label: '쿠팡 그로스', short: '쿠팡' },

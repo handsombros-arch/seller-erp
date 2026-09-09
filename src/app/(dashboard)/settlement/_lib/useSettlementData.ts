@@ -18,7 +18,7 @@ export function useSettlementData(reloadKey = 0) {
       const it: MCost[] = await a.json();
       const snaps: any[] = await b.json();
       setItems(it);
-      setSnapshots(snaps.map(s => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null })));
+      setSnapshots(snaps.map(s => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null })));
       setError(null);
     } catch (e: any) {
       setError(e?.message ?? '오류');

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ClipboardPaste, Loader2, Plus, ScanSearch, Settings2, Trash2, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/tabs';
 import { inputClassName } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -91,6 +92,9 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const toast = useToast();
   const confirmDialog = useConfirm();
   const [mode, setMode] = useState<'input' | 'structure'>('input');
+  const [view, setView] = useState<'input' | 'compare'>('input');
+  /** 기준값을 복사해 넣기 전의 수기 값 — 저장 전까지 되돌릴 수 있다 */
+  const [undo, setUndo] = useState<Map<string, number>>(new Map());
   const [local, setLocal] = useState<MCost[]>([]);
   const [amounts, setAmounts] = useState<Map<string, number>>(new Map());
   const [notes, setNotes] = useState<Map<string, string>>(new Map()); // 월별 비고 (monthly_cost_snapshots.note)
@@ -181,12 +185,21 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const patch = (id: string, p: Partial<MCost>) => { setLocal(prev => prev.map(i => i.id === id ? { ...i, ...p } : i)); setDirty(true); };
   const setAmount = (id: string, v: number) => { setAmounts(prev => { const n = new Map(prev); n.set(id, v); return n; }); setCarried(prev => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n; }); setDirty(true); };
 
-  const fillFrom = (ym: string, ids?: string[]) => {
+  /** 다른 달 값 가져오기 — 기본은 빈칸만. 이미 적은 수기 값은 overwrite=true + 확인 없이는 절대 건드리지 않는다 */
+  const fillFrom = async (ym: string, ids?: string[], overwrite = false) => {
     const src = snapFor(ym);
     if (!src.size) { toast.warning(`${ymLabel(ym)} 저장된 값이 없습니다`); return; }
-    setAmounts(prev => { const n = new Map(prev); for (const it of local) { if (ids && !ids.includes(it.id)) continue; if (src.has(it.id)) n.set(it.id, src.get(it.id)!); } return n; });
+    const targets = local.filter(it => (!ids || ids.includes(it.id)) && src.has(it.id) && (src.get(it.id) ?? 0) !== 0);
+    const empty = targets.filter(it => !(amounts.get(it.id) ?? 0));
+    const filled = targets.length - empty.length;
+    if (overwrite) {
+      if (!(await confirmDialog(`${ymLabel(ym)} 값으로 ${targets.length}칸을 덮어쓸까요?\n이미 적은 ${filled}칸이 바뀝니다. 저장 전까지는 DB 에 반영되지 않습니다.`))) return;
+    }
+    const apply = overwrite ? targets : empty;
+    if (!apply.length) { toast.info(filled ? `빈칸이 없어 가져올 값이 없습니다 (적힌 ${filled}칸은 그대로)` : '가져올 값이 없습니다'); setFillOpen(false); return; }
+    setAmounts(prev => { const n = new Map(prev); for (const it of apply) n.set(it.id, src.get(it.id)!); return n; });
     setDirty(true); setFillOpen(false);
-    toast.success(`${ymLabel(ym)} 값을 가져왔습니다${ids ? '' : ' (전체)'}`);
+    toast.success(`${ymLabel(ym)} 값 ${apply.length}칸 가져옴${!overwrite && filled ? ` · 이미 적힌 ${filled}칸은 그대로` : ''}`);
   };
   const clearAll = async () => {
     if (!(await confirmDialog(`${ymLabel(selectedYm)} 입력값을 모두 지울까요?\n저장 전까지는 DB 에 반영되지 않습니다.`))) return;
@@ -199,12 +212,15 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       const put = await fetch('/api/monthly-costs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: local }) });
       const pj = await put.json().catch(() => ({}));
       if (!put.ok) { toast.error(`저장 실패: ${pj.error ?? put.status}`); return; }
-      const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => ({ id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null })) }) });
+      const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => {
+        const v = check ? verdictOf(i) : null;
+        return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
+      }) }) });
       const sj = await post.json().catch(() => ({}));
       if (!post.ok) { toast.error(`금액 저장 실패: ${sj.error ?? post.status}`); return; }
-      setDirty(false); setCarried(new Set());
-      const warn = [pj.needsMigration ? '분류 태그' : null, sj.notesSaved === false ? '월별 비고' : null].filter(Boolean);
-      toast.success(`${ymLabel(selectedYm)} 저장 완료${warn.length ? ` (${warn.join('·')}는 마이그레이션 00057/00059 적용 후 저장됩니다)` : ''}`);
+      setDirty(false); setCarried(new Set()); setUndo(new Map());
+      const warn = [pj.needsMigration ? '분류 태그' : null, sj.notesSaved === false ? '월별 비고' : null, sj.refsSaved === false ? '기준값' : null].filter(Boolean);
+      toast.success(`${ymLabel(selectedYm)} 저장 완료${warn.length ? ` (${warn.join('·')}는 마이그레이션 00057/00059/00060 적용 후 저장됩니다)` : ''}`);
       onSaved?.();
     } finally { setSaving(false); }
   }
@@ -272,7 +288,13 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           {fillOpen && (
             <div className="absolute right-0 top-full mt-1 z-40 w-48 rounded-xl border border-line bg-card shadow-lg py-1">
               {savedMonths.length === 0 ? <p className="px-3 py-2 text-[12px] text-fg-4">저장된 달이 없습니다</p> :
-                savedMonths.map(ym => <button key={ym} onClick={() => fillFrom(ym)} className="w-full text-left px-3 py-2 text-[12px] text-fg hover:bg-app">{ymLabel(ym)}{ym === prevYm && <span className="text-fg-4"> · 전월</span>}</button>)}
+                savedMonths.map(ym => (
+                  <div key={ym} className="flex items-center hover:bg-app">
+                    <button onClick={() => fillFrom(ym)} className="flex-1 text-left px-3 py-2 text-[12px] text-fg">{ymLabel(ym)}{ym === prevYm && <span className="text-fg-4"> · 전월</span>}</button>
+                    <button onClick={() => fillFrom(ym, undefined, true)} className="px-2 py-2 text-[10px] text-fg-4 hover:text-danger" title="이미 적은 값까지 덮어쓰기 (확인창)">덮어쓰기</button>
+                  </div>
+                ))}
+              <p className="px-3 py-1 text-[10px] text-fg-5">월 이름을 누르면 빈칸만 채웁니다</p>
               <div className="border-t border-line-2 mt-1 pt-1">
                 <button onClick={() => { setFillOpen(false); clearAll(); }} className="w-full text-left px-3 py-2 text-[12px] text-danger hover:bg-app">이 달 값 모두 지우기</button>
               </div>
@@ -289,10 +311,17 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             {checking ? <Loader2 className="animate-spin" /> : <ScanSearch />} {checking ? '대조 중' : check ? '다시 대조' : 'API 대조'}
           </Button>
         )}
-        <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => setMode(m => m === 'input' ? 'structure' : 'input')}>
+        <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => { setMode(m => m === 'input' ? 'structure' : 'input'); setView('input'); }}>
           <Settings2 /> {mode === 'structure' ? '입력으로 돌아가기' : '항목 구조 편집'}
         </Button>
       </div>
+      {mode === 'input' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl items={[{ value: 'input', label: '입력' }, { value: 'compare', label: '수기 vs API 비교' }] as const} value={view} onChange={setView} />
+          {view === 'compare' && <span className="text-[11px] text-fg-4">수기 값은 여기서 바꿀 수 없습니다. 기준값은 참고용이며 시트에 자동 반영되지 않습니다.</span>}
+          {undo.size > 0 && <span className="text-[11px] text-warn">기준값을 복사한 칸 {undo.size}개 — 저장 전까지 각 칸에서 되돌릴 수 있습니다</span>}
+        </div>
+      )}
 
       {mode === 'structure' && (
         <div className="rounded-xl border border-brand/30 bg-brand-soft px-4 py-2.5 text-[12px] text-fg-2">
@@ -310,7 +339,9 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
         </div>
       )}
 
-      {sections.map(sec => (
+      {view === 'compare' && mode === 'input' ? (
+        <CompareView sections={sections} leavesOf={leavesOf} amounts={amounts} verdictOf={verdictOf} checking={checking} hasCheck={!!check} onRun={() => runCheck(true)} />
+      ) : sections.map(sec => (
         <section key={sec.key}>
           <div className="flex items-baseline gap-2 mb-2 px-1">
             <h4 className="text-[13px] font-bold text-fg">{sec.label}</h4>
@@ -322,6 +353,12 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote}
                 tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
+                undo={undo} applyRef={async (id, refValue, vatApplicable) => {
+                  const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
+                  if (cur && !(await confirmDialog(`수기 입력 ${fmtNum(cur)}원을 기준값 ${fmtNum(next)}원으로 바꿀까요?\n저장 전까지 이 칸에서 되돌릴 수 있습니다.`))) return;
+                  setUndo(prev => { const n = new Map(prev); if (!n.has(id)) n.set(id, cur); return n; });
+                  setAmount(id, next);
+                }} revertRef={(id) => { const v = undo.get(id); if (v === undefined) return; setUndo(prev => { const n = new Map(prev); n.delete(id); return n; }); setAmount(id, v); }}
                 onFillPrev={() => fillFrom(prevYm, leavesOf(g).map(l => l.id))} prevYm={prevYm}
                 newLabel={newLabel} setNewLabel={setNewLabel} addItem={addItem} />
             ))}
@@ -366,10 +403,11 @@ interface CardProps {
   notes: Map<string, string>; setNote: (id: string, v: string) => void;
   setAmount: (id: string, v: number) => void; patch: (id: string, p: Partial<MCost>) => void; move: (id: string, d: -1 | 1) => void; removeItem: (id: string) => void;
   onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
+  undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -448,7 +486,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <>
                     <span className={cn('font-semibold', v.kind === 'match' ? 'text-success' : 'text-danger')}>{v.kind === 'match' ? '일치' : `차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
                     <span className="text-fg-3">기준 {fmtNum(v.ref!.value)}원 · <span className="rounded bg-app px-1 text-[10px] text-fg-4">{v.ref!.source}</span> {v.ref!.detail}</span>
-                    {v.kind === 'diff' && <button onClick={() => setAmount(leaf.id, leaf.vat_applicable ? Math.round(v.ref!.value / 1.1) : v.ref!.value)} className="text-brand hover:underline">기준값으로</button>}
+                    {undo.has(leaf.id) ? (
+                      <button onClick={() => revertRef(leaf.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(leaf.id)!)}원으로 되돌리기</button>
+                    ) : v.kind === 'diff' ? (
+                      <button onClick={() => applyRef(leaf.id, v.ref!.value, !!leaf.vat_applicable)} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
+                    ) : null}
                   </>
                 )}
               </div>
@@ -466,6 +508,69 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
           ) : <button onClick={() => setNewLabel({ parent: group.id, value: '' })} className="px-2 py-1.5 text-[11px] text-brand hover:underline flex items-center gap-1"><Plus className="h-3 w-3" /> 세부항목</button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ───────────────────────── 수기 vs API 비교 뷰 (읽기 전용) ─────────────────────────
+function CompareView({ sections, leavesOf, amounts, verdictOf, checking, hasCheck, onRun }: {
+  sections: { key: SectionKey; label: string; groups: MCost[] }[];
+  leavesOf: (p: MCost) => MCost[];
+  amounts: Map<string, number>;
+  verdictOf: (l: MCost) => Verdict;
+  checking: boolean; hasCheck: boolean; onRun: () => void;
+}) {
+  if (!hasCheck) {
+    return (
+      <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">
+        {checking ? '기준값을 계산하는 중입니다…' : <>아직 대조하지 않았습니다. <button onClick={onRun} className="text-brand font-semibold hover:underline">지금 대조</button></>}
+      </div>
+    );
+  }
+  const th = 'h-9 px-3 text-[11px] font-semibold text-fg-4 whitespace-nowrap';
+  const mine = (leaf: MCost) => { const a = amounts.get(leaf.id) ?? 0; return leaf.vat_applicable ? Math.round(a * 1.1) : a; };
+  return (
+    <div className="space-y-4">
+      {sections.map(sec => {
+        const rows = sec.groups.flatMap(g => leavesOf(g).map(l => ({ g, l, v: verdictOf(l) })));
+        const sumMine = rows.reduce((s, r) => s + mine(r.l) * (r.l.is_income ? -1 : 1), 0);
+        const sumRef = rows.reduce((s, r) => s + (r.v.ref ? r.v.ref.value * (r.l.is_income ? -1 : 1) : 0), 0);
+        const refCount = rows.filter(r => r.v.ref).length;
+        return (
+          <section key={sec.key} className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-2.5 border-b border-line-2">
+              <h4 className="text-[13px] font-bold text-fg mr-auto">{sec.label}</h4>
+              <span className="text-[11px] text-fg-4">수기 합 <b className="text-fg tabular-nums">{fmtNum(Math.abs(sumMine))}</b> · 기준 합 <b className="text-fg tabular-nums">{fmtNum(Math.abs(sumRef))}</b> ({refCount}/{rows.length}칸 대조)</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px] border-collapse min-w-[720px]">
+                <thead><tr className="border-b border-line">
+                  <th className={cn(th, 'text-left')}>항목</th>
+                  <th className={cn(th, 'text-right')} title="시트에 적은 값 (VAT 포함 환산)">수기 입력</th>
+                  <th className={cn(th, 'text-right')} title="API·파일·설정으로 계산한 값">기준값</th>
+                  <th className={cn(th, 'text-right')}>차이</th>
+                  <th className={cn(th, 'text-left')}>출처</th>
+                </tr></thead>
+                <tbody>
+                  {rows.map(({ g, l, v }) => {
+                    const m = mine(l);
+                    const cls = v.kind === 'match' ? 'text-success' : v.kind === 'diff' ? 'text-danger' : 'text-fg-5';
+                    return (
+                      <tr key={l.id} className={cn('border-b border-line-2 h-10', v.kind === 'diff' && 'bg-danger/5', v.kind === 'none' && 'bg-warn/5')}>
+                        <td className="px-3 text-fg whitespace-nowrap">{g.id !== l.id && <span className="text-fg-4">{g.label} · </span>}{l.label}{l.vat_applicable && <span className="ml-1 text-[10px] text-fg-5">VAT별도→포함</span>}</td>
+                        <td className="px-3 text-right tabular-nums font-semibold text-fg">{m ? fmtNum(m) : <span className="text-fg-5">-</span>}</td>
+                        <td className="px-3 text-right tabular-nums text-fg-2">{v.ref ? fmtNum(v.ref.value) : <span className="text-warn">대조 불가</span>}</td>
+                        <td className={cn('px-3 text-right tabular-nums font-semibold', cls)}>{v.ref ? `${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)` : '-'}</td>
+                        <td className="px-3 text-[11px] text-fg-4 whitespace-nowrap">{v.ref ? <><span className="rounded bg-app px-1 text-[10px] text-fg-3 mr-1">{v.ref.source}</span>{v.ref.detail}</> : '계산서로 직접 확인'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

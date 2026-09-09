@@ -12,7 +12,9 @@ export async function GET(request: NextRequest) {
   const ym = request.nextUrl.searchParams.get('history');
   if (ym === 'all') {
     // note 컬럼(00059)이 없는 DB 에서는 note 없이 재시도
-    let res: { data: any[] | null; error: any } = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });
+    // 00059 note / 00060 ref_* 컬럼이 없는 DB 에서는 단계적으로 좁혀 재시도
+    let res: { data: any[] | null; error: any } = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail').order('year_month', { ascending: false });
+    if (res.error) res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });
     if (res.error) res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount').order('year_month', { ascending: false });
     return NextResponse.json(res.data ?? []);
   }
@@ -98,24 +100,31 @@ export async function POST(request: NextRequest) {
 
   // 월별 금액 스냅샷 저장 (프론트에서 금액 직접 전달)
   if (body.action === 'snapshot_items') {
-    const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number; note?: string | null }[] };
+    const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null }[] };
     const withNote = (amounts ?? []).some((a: any) => a.note !== undefined);
+    const withRef = (amounts ?? []).some((a: any) => a.ref_amount !== undefined);
     const rows = (amounts ?? []).map((a: any) => ({
       year_month,
       cost_id: a.id,
-      amount: a.amount ?? 0,
+      amount: a.amount ?? 0,     // 수기 입력 — 기준값으로 덮어쓰지 않는다
       ...(withNote ? { note: a.note ?? null } : {}),
+      ...(withRef ? { ref_amount: a.ref_amount ?? null, ref_source: a.ref_source ?? null, ref_detail: a.ref_detail ?? null } : {}),
     }));
-    let notesSaved = withNote;
+    let notesSaved = withNote, refsSaved = withRef;
     if (rows.length) {
+      const isColErr = (e: any) => /schema cache|PGRST204|column/i.test(`${e?.code} ${e?.message}`);
       let { error } = await admin.from('monthly_cost_snapshots').upsert(rows, { onConflict: 'year_month,cost_id' });
-      if (error && withNote && /note|schema cache|PGRST204/i.test(`${error.code} ${error.message}`)) {
+      if (error && withRef && isColErr(error)) {
+        refsSaved = false;
+        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ ref_amount: _a, ref_source: _s, ref_detail: _d, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
+      }
+      if (error && withNote && isColErr(error)) {
         notesSaved = false;
-        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ note: _n, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
+        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ note: _n, ref_amount: _a, ref_source: _s, ref_detail: _d, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
       }
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, saved: rows.length, notesSaved });
+    return NextResponse.json({ ok: true, saved: rows.length, notesSaved, refsSaved });
   }
 
   if (body.id) {
