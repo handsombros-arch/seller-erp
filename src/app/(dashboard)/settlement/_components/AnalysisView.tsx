@@ -14,14 +14,16 @@ interface Props {
   orderCounts: Partial<Record<Market, number>> | null;
   /** 비교용 전월 금액 */
   prevAmounts?: Map<string, number> | null;
+  vats?: Map<string, boolean>;
+  prevVats?: Map<string, boolean>;
 }
 
 const won = (n: number) => `${fmtNum(n)}원`;
 
 /** 현재월 분석 — KPI, 손익 구조, 마켓별 공헌이익·ROAS */
-export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts }: Props) {
-  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, orderCounts: orderCounts ?? undefined }), [items, amounts, vat, orderCounts]);
-  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, orderCounts: undefined }) : null, [items, prevAmounts, vat]);
+export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts, vats, prevVats }: Props) {
+  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, orderCounts: orderCounts ?? undefined, vatOf: (it) => vats?.get(it.id) }), [items, amounts, vat, orderCounts, vats]);
+  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, orderCounts: undefined, vatOf: (it) => prevVats?.get(it.id) }) : null, [items, prevAmounts, vat, prevVats]);
   const t = res.total;
   const inferredCount = res.leaves.filter(l => l.tags.inferred && l.value !== 0).length;
 

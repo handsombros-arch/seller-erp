@@ -29,7 +29,7 @@ export interface MCost {
   unit_price?: number | null;   // 건당 단가 — 있으면 수량 × 단가로 금액 계산
 }
 
-export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null; qty?: number | null }
+export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null; qty?: number | null; vat_applicable?: boolean | null }
 
 export const MARKETS: { id: Market; label: string; short: string }[] = [
   { id: 'coupang', label: '쿠팡 그로스', short: '쿠팡' },
@@ -182,6 +182,8 @@ function addLine(p: PL, line: PlLine, v: number) {
 
 export interface BuildOptions {
   vat: 'ex' | 'incl';
+  /** 달별 VAT 구분 (monthly_cost_snapshots.vat_applicable). 없으면 항목 기본값 */
+  vatOf?: (item: MCost) => boolean | null | undefined;
   /** 마켓별 출고 건수 (건수 비례 배분용). 없으면 by_orders 는 매출 비례로 대체 */
   orderCounts?: Partial<Record<Market, number>>;
 }
@@ -197,7 +199,7 @@ export interface PLResult {
 }
 
 /** 말단 항목 목록 (자식 있는 부모는 제외) + 태그 + 부호 적용 값 */
-export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number, vat: 'ex' | 'incl'): LeafRow[] {
+export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number, vat: 'ex' | 'incl', vatOf?: (item: MCost) => boolean | null | undefined): LeafRow[] {
   const byId = new Map(items.map(i => [i.id, i]));
   const hasChildren = new Set(items.filter(i => i.parent_id).map(i => i.parent_id as string));
   const rows: LeafRow[] = [];
@@ -205,7 +207,8 @@ export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number,
     if (hasChildren.has(item.id)) continue;
     const parent = item.parent_id ? byId.get(item.parent_id) ?? null : null;
     const tags = effectiveTags(item, parent);
-    const split = vatSplit(amountOf(item), !!item.vat_applicable);
+    const ov = vatOf?.(item);
+    const split = vatSplit(amountOf(item), ov == null ? !!item.vat_applicable : ov);   // 달별 VAT 구분이 있으면 그 값
     const amt = vat === 'ex' ? split.ex : split.incl;
     let value: number;
     if (tags.pl_line === 'revenue') value = item.is_income ? amt : -amt;
@@ -217,7 +220,7 @@ export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number,
 }
 
 export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts: BuildOptions): PLResult {
-  const leaves = collectLeaves(items, amountOf, opts.vat);
+  const leaves = collectLeaves(items, amountOf, opts.vat, opts.vatOf);
   const total = emptyPL();
   const common = emptyPL();
   const byMarket = new Map<Market, PL>();
@@ -280,13 +283,16 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
 /** 월 목록의 스냅샷으로 월별 손익 시계열 생성 */
 export function buildSeries(items: MCost[], snapshots: Snapshot[], months: string[], opts: BuildOptions & { orderCountsByMonth?: Record<string, Partial<Record<Market, number>>> }) {
   const byMonth = new Map<string, Map<string, number>>();
+  const vatByMonth = new Map<string, Map<string, boolean>>();
   for (const s of snapshots) {
     let m = byMonth.get(s.year_month); if (!m) { m = new Map(); byMonth.set(s.year_month, m); }
     m.set(s.cost_id, Number(s.amount) || 0);
+    if (s.vat_applicable != null) { let v = vatByMonth.get(s.year_month); if (!v) { v = new Map(); vatByMonth.set(s.year_month, v); } v.set(s.cost_id, !!s.vat_applicable); }
   }
   return months.map(ym => {
     const amounts = byMonth.get(ym);
-    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vat, orderCounts: opts.orderCountsByMonth?.[ym] });
+    const vats = vatByMonth.get(ym);
+    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vat, orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => vats?.get(it.id) });
     return { ym, ...res };
   });
 }

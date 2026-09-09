@@ -75,9 +75,10 @@ function SettlementInner() {
   }, [data.months, selectedYm]);
 
   const amounts = useMemo(() => data.amountsFor(selectedYm), [data, selectedYm]);
+  const vats = useMemo(() => data.vatsFor(selectedYm), [data, selectedYm]);
   const prevYm = useMemo(() => { const [y, m] = selectedYm.split('-').map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }, [selectedYm]);
   const prevAmounts = useMemo(() => { const m = data.amountsFor(prevYm); return m.size ? m : null; }, [data, prevYm]);
-  const sheetMarkets = useMemo(() => amounts.size ? buildPL(data.items, (it) => amounts.get(it.id) ?? 0, { vat: 'incl' }).markets : [], [data.items, amounts]);
+  const sheetMarkets = useMemo(() => amounts.size ? buildPL(data.items, (it) => amounts.get(it.id) ?? 0, { vat: 'incl', vatOf: (it) => vats.get(it.id) }).markets : [], [data.items, amounts, vats]);
 
   const tabItems = [
     { value: 'input' as Tab, label: '입력' },
@@ -116,7 +117,7 @@ function SettlementInner() {
       {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} loading={data.loading} />}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
-          : <AnalysisView items={data.items} amounts={amounts} ym={selectedYm} vat={vat} orderCounts={orderCounts} prevAmounts={prevAmounts} />
+          : <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
       )}
       {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} />}
     </div>

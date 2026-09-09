@@ -25,7 +25,7 @@ export function useSettlementData(reloadKey = 0, ym?: string) {
       if (!r.ok) throw new Error(`불러오기 실패 (${r.status})`);
       const j = await r.json();
       setItems(j.items ?? []);
-      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null, qty: s.qty == null ? null : Number(s.qty) })));
+      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null, qty: s.qty == null ? null : Number(s.qty), vat_applicable: s.vat_applicable == null ? null : !!s.vat_applicable })));
       const cm: Record<string, ClosedMonth> = {};
       for (const c of j.closed ?? []) cm[c.year_month] = { closed_at: c.closed_at, note: c.note };
       setClosed(cm);
@@ -49,8 +49,14 @@ export function useSettlementData(reloadKey = 0, ym?: string) {
     for (const s of snapshots) if (s.year_month === ym) m.set(s.cost_id, s.amount);
     return m;
   }, [snapshots]);
+  /** 그 달의 VAT 구분 오버라이드 (없는 항목은 기본값) */
+  const vatsFor = useCallback((ym: string) => {
+    const m = new Map<string, boolean>();
+    for (const s of snapshots) if (s.year_month === ym && s.vat_applicable != null) m.set(s.cost_id, !!s.vat_applicable);
+    return m;
+  }, [snapshots]);
 
-  return { items, snapshots, months, loading, error, reload, amountsFor, closed, closedSupported, salesPlatforms, adMonths };
+  return { items, snapshots, months, loading, error, reload, amountsFor, vatsFor, closed, closedSupported, salesPlatforms, adMonths };
 }
 
 /** 월별 마켓 출고 건수 (공통 물류비 건수 비례 배분용). channel_orders 기준. */

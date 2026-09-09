@@ -105,11 +105,13 @@ export async function POST(request: NextRequest) {
     const withNote = (amounts ?? []).some((a: any) => a.note !== undefined);
     const withRef = (amounts ?? []).some((a: any) => a.ref_amount !== undefined);
     const withQty = (amounts ?? []).some((a: any) => a.qty !== undefined);
+    const withVat = (amounts ?? []).some((a: any) => a.vat_applicable !== undefined);
     const rows = (amounts ?? []).map((a: any) => ({
       year_month,
       cost_id: a.id,
       amount: a.amount ?? 0,     // 수기 입력 — 기준값으로 덮어쓰지 않는다
       ...(withQty ? { qty: a.qty == null ? null : Number(a.qty) } : {}),
+      ...(withVat ? { vat_applicable: a.vat_applicable == null ? null : !!a.vat_applicable } : {}),
       ...(withNote ? { note: a.note ?? null } : {}),
       ...(withRef ? { ref_amount: a.ref_amount ?? null, ref_source: a.ref_source ?? null, ref_detail: a.ref_detail ?? null } : {}),
     }));
@@ -117,6 +119,9 @@ export async function POST(request: NextRequest) {
     if (rows.length) {
       const isColErr = (e: any) => /schema cache|PGRST204|column/i.test(`${e?.code} ${e?.message}`);
       let { error } = await admin.from('monthly_cost_snapshots').upsert(rows, { onConflict: 'year_month,cost_id' });
+      if (error && withVat && isColErr(error) && /vat_applicable/.test(error.message)) {
+        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ vat_applicable: _v, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
+      }
       if (error && withQty && isColErr(error) && /qty/.test(error.message)) {
         ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ qty: _q, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
       }
@@ -148,6 +153,7 @@ export async function POST(request: NextRequest) {
     if (body.alloc_rule !== undefined) update.alloc_rule = body.alloc_rule;
     if (body.carry_forward !== undefined) update.carry_forward = !!body.carry_forward;
     if (body.unit_price !== undefined) update.unit_price = body.unit_price == null ? null : Number(body.unit_price);
+    if (body.parent_id !== undefined) update.parent_id = body.parent_id || null;   // 항목 이동 (이력은 항목에 붙어 있어 모든 달에 적용)
     const { error: upErr } = await admin.from('monthly_costs').update(update).eq('id', body.id);
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
     return NextResponse.json({ ok: true });
