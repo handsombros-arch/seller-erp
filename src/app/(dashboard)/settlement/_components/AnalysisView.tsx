@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type MCost, type Market, type MarketPL, type PL, type VatMode } from '../_lib/settlement';
+import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type MCost, type Market, type MarketPL, type PL, type Regime, type VatMode } from '../_lib/settlement';
 
 interface Props {
   items: MCost[];
@@ -16,14 +16,15 @@ interface Props {
   prevAmounts?: Map<string, number> | null;
   vats?: Map<string, VatMode>;
   prevVats?: Map<string, VatMode>;
+  regime?: Regime;
 }
 
 const won = (n: number) => `${fmtNum(n)}원`;
 
 /** 현재월 분석 — KPI, 손익 구조, 마켓별 공헌이익·ROAS */
-export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts, vats, prevVats }: Props) {
-  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, orderCounts: orderCounts ?? undefined, vatOf: (it) => vats?.get(it.id) }), [items, amounts, vat, orderCounts, vats]);
-  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, orderCounts: undefined, vatOf: (it) => prevVats?.get(it.id) }) : null, [items, prevAmounts, vat, prevVats]);
+export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts, vats, prevVats, regime }: Props) {
+  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, regime, orderCounts: orderCounts ?? undefined, vatOf: (it) => vats?.get(it.id) }), [items, amounts, vat, regime, orderCounts, vats]);
+  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, regime, orderCounts: undefined, vatOf: (it) => prevVats?.get(it.id) }) : null, [items, prevAmounts, vat, regime, prevVats]);
   const t = res.total;
   const inferredCount = res.leaves.filter(l => l.tags.inferred && l.value !== 0).length;
 
@@ -43,7 +44,7 @@ export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts
     { label: '실매출', value: t.netRevenue, key: 'netRevenue', sub: t.coupon ? `총매출 ${won(t.revenue)} − 쿠폰 ${won(t.coupon)}` : `총매출 ${won(t.revenue)}`, hint: '쿠팡 판매자 할인쿠폰은 마켓 매출에 잡히지만 실제 입금되지 않는 금액이라 차감합니다.' },
     { label: '매출총이익', value: t.grossProfit, key: 'grossProfit', sub: `원가율 ${fmtPct(pct(t.cogs))}` },
     { label: '공헌이익', value: t.contribution, key: 'contribution', sub: `공헌이익률 ${fmtPct(pct(t.contribution))}` },
-    { label: '영업이익', value: t.operatingProfit, key: 'operatingProfit', sub: `영업이익률 ${fmtPct(pct(t.operatingProfit))}` },
+    { label: '영업이익', value: t.operatingProfit, key: 'operatingProfit', sub: `영업이익률 ${fmtPct(pct(t.operatingProfit))}${t.taxEstimate ? ` · 간이 부가세 추정 ${won(t.taxEstimate)} 반영` : ''}`, hint: regime === 'simplified' ? '간이과세: 공급대가(VAT 포함) 기준. 부가세 추정 = 매출 × 1% − 세금계산서 매입 × 0.5%' : '일반과세: 공급가액(VAT 별도) 기준. 부가세는 통과 항목' },
   ];
 
   return (
@@ -126,6 +127,7 @@ export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts
           {[
             { label: '고정비', v: t.fixed },
             { label: '기타', v: t.other },
+            { label: '부가세 (간이 추정)', v: t.taxEstimate },
             { label: '공통 물류 (배분 안 함)', v: res.common.logistics },
             { label: '공통 광고·마케팅', v: res.common.ad + res.common.marketing },
           ].map(x => (

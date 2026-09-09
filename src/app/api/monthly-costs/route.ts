@@ -53,9 +53,10 @@ export async function PUT(request: NextRequest) {
     carry_forward: !!item.carry_forward,
     unit_price: item.unit_price == null || item.unit_price === '' ? null : Number(item.unit_price),
     vat_none: !!item.vat_none,
+    vat_confirmed: !!item.vat_confirmed,
   }));
 
-  const TAG_COLS = ['pl_line', 'market', 'alloc_rule', 'carry_forward', 'unit_price', 'vat_none'];
+  const TAG_COLS = ['pl_line', 'market', 'alloc_rule', 'carry_forward', 'unit_price', 'vat_none', 'vat_confirmed'];
   const run = async (stripTags: boolean) => {
     const results = await Promise.all(updates.map((u: any) => {
       const { id, ...fields } = u;
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest) {
     if (body.unit_price !== undefined) update.unit_price = body.unit_price == null ? null : Number(body.unit_price);
     if (body.parent_id !== undefined) update.parent_id = body.parent_id || null;   // 항목 이동 (이력은 항목에 붙어 있어 모든 달에 적용)
     if (body.vat_none !== undefined) update.vat_none = !!body.vat_none;
+    if (body.vat_confirmed !== undefined) update.vat_confirmed = !!body.vat_confirmed;
     const { error: upErr } = await admin.from('monthly_costs').update(update).eq('id', body.id);
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
     return NextResponse.json({ ok: true });

@@ -8,7 +8,11 @@
  */
 
 export type Market = 'coupang' | 'toss' | 'smartstore' | 'esm' | 'talkdeal' | 'common';
-export type PlLine = 'revenue' | 'coupon' | 'cogs' | 'market_fee' | 'logistics' | 'ad' | 'marketing' | 'fixed' | 'other';
+export type PlLine = 'revenue' | 'coupon' | 'cogs' | 'market_fee' | 'logistics' | 'ad' | 'marketing' | 'fixed' | 'other' | 'info';
+/** 과세 유형: simplified = 간이과세(부가세가 실비용, 공급대가 기준) · general = 일반과세(부가세 통과, 공급가액 기준) */
+export type Regime = 'simplified' | 'general';
+export const regimeFor = (ym: string, switchYm: string): Regime => (ym >= switchYm ? 'general' : 'simplified');
+export const vatViewFor = (r: Regime): 'ex' | 'incl' => (r === 'general' ? 'ex' : 'incl');
 export type AllocRule = 'direct' | 'by_orders' | 'by_revenue' | 'none';
 
 export interface MCost {
@@ -17,6 +21,7 @@ export interface MCost {
   amount: number;
   vat_applicable: boolean;
   vat_none?: boolean | null;     // 부가세 없음(급여·개인거래·부가세 납부액) — 별도/포함 어느 보기에서도 금액 그대로
+  vat_confirmed?: boolean | null; // VAT 구분을 사용자가 확인함
   parent_id: string | null;
   sort_order: number;
   note?: string;
@@ -70,6 +75,7 @@ export const PL_LINES: { id: PlLine; label: string; group: 'revenue' | 'variable
   { id: 'marketing', label: '마케팅', group: 'variable', hint: '가구매·트래픽·리뷰·사은품 등' },
   { id: 'fixed', label: '고정비', group: 'fixed', hint: '인건비·창고·SW 등 판매량과 무관' },
   { id: 'other', label: '기타', group: 'fixed', hint: '부자재·샘플 등' },
+  { id: 'info', label: '정보용 (손익 제외)', group: 'fixed', hint: '정산서의 부가세 표시줄처럼 참고만 하고 손익에는 넣지 않는 항목' },
 ];
 
 export const ALLOC_RULES: { id: AllocRule; label: string; hint: string }[] = [
@@ -155,7 +161,8 @@ export interface PL {
   marketFee: number; logistics: number; ad: number; marketing: number;
   contribution: number;          // 공헌이익 = 매출총이익 − 마켓비용 − 광고 − 마케팅
   fixed: number; other: number;
-  operatingProfit: number;       // 영업이익 = 공헌이익 − 고정비 − 기타
+  taxEstimate: number;           // 간이과세 부가세 추정 (일반과세는 0)
+  operatingProfit: number;       // 영업이익 = 공헌이익 − 고정비 − 기타 − 부가세(간이)
 }
 
 export interface MarketPL extends PL {
@@ -175,13 +182,13 @@ export interface LeafRow {
   value: number;
 }
 
-const emptyPL = (): PL => ({ revenue: 0, coupon: 0, netRevenue: 0, cogs: 0, grossProfit: 0, marketFee: 0, logistics: 0, ad: 0, marketing: 0, contribution: 0, fixed: 0, other: 0, operatingProfit: 0 });
+const emptyPL = (): PL => ({ revenue: 0, coupon: 0, netRevenue: 0, cogs: 0, grossProfit: 0, marketFee: 0, logistics: 0, ad: 0, marketing: 0, contribution: 0, fixed: 0, other: 0, taxEstimate: 0, operatingProfit: 0 });
 
 function finalize(p: PL): PL {
   p.netRevenue = p.revenue - p.coupon;
   p.grossProfit = p.netRevenue - p.cogs;
   p.contribution = p.grossProfit - p.marketFee - p.logistics - p.ad - p.marketing;
-  p.operatingProfit = p.contribution - p.fixed - p.other;
+  p.operatingProfit = p.contribution - p.fixed - p.other - p.taxEstimate;
   return p;
 }
 
@@ -196,6 +203,7 @@ function addLine(p: PL, line: PlLine, v: number) {
     case 'marketing': p.marketing += v; break;
     case 'fixed': p.fixed += v; break;
     case 'other': p.other += v; break;
+    case 'info': break;   // 손익 제외
   }
 }
 
@@ -203,6 +211,8 @@ export interface BuildOptions {
   vat: 'ex' | 'incl';
   /** 달별 VAT 구분 (유효 VatMode). 없으면 항목 기본값 */
   vatOf?: (item: MCost) => VatMode | null | undefined;
+  /** 간이과세면 부가세 추정을 영업이익에 반영 (시트에 '부가세 납부' 실적이 있으면 추정 생략) */
+  regime?: Regime;
   /** 마켓별 출고 건수 (건수 비례 배분용). 없으면 by_orders 는 매출 비례로 대체 */
   orderCounts?: Partial<Record<Market, number>>;
 }
@@ -276,6 +286,20 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
     }
   }
 
+  // 간이과세 부가세 추정: 매출세액 = 공급대가 × 10%(소매 부가가치율) × 10%, 매입세액공제 = 세금계산서 매입(원가·수수료·물류·광고) 공급대가 × 0.5%
+  if (opts.regime === 'simplified') {
+    const manualVat = leaves.some(l => /부가세 납부|부가가치세 납부/.test(l.item.label) && l.value !== 0);
+    if (!manualVat) {
+      const incl = (l: LeafRow) => vatSplitMode(amountOf(l.item), (opts.vatOf?.(l.item) ?? itemVatMode(l.item))).incl * (l.item.is_income ? -1 : 1);
+      let rev = 0, buy = 0;
+      for (const l of leaves) {
+        if (l.tags.pl_line === 'revenue') rev += incl(l);
+        else if (l.tags.pl_line === 'coupon') rev -= incl(l);
+        else if (['cogs', 'market_fee', 'logistics', 'ad', 'marketing'].includes(l.tags.pl_line) && (opts.vatOf?.(l.item) ?? itemVatMode(l.item)) !== 'none') buy += incl(l);
+      }
+      total.taxEstimate = Math.max(0, Math.round(rev * 0.01 - buy * 0.005));
+    }
+  }
   finalize(total);
   finalize(common);
 
@@ -299,7 +323,7 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
 }
 
 /** 월 목록의 스냅샷으로 월별 손익 시계열 생성 */
-export function buildSeries(items: MCost[], snapshots: Snapshot[], months: string[], opts: BuildOptions & { orderCountsByMonth?: Record<string, Partial<Record<Market, number>>> }) {
+export function buildSeries(items: MCost[], snapshots: Snapshot[], months: string[], opts: BuildOptions & { orderCountsByMonth?: Record<string, Partial<Record<Market, number>>>; vatFor?: (ym: string) => 'ex' | 'incl'; regimeOf?: (ym: string) => Regime }) {
   const byMonth = new Map<string, Map<string, number>>();
   const vatByMonth = new Map<string, Map<string, { vat: boolean | null; none: boolean | null }>>();
   for (const s of snapshots) {
@@ -310,7 +334,7 @@ export function buildSeries(items: MCost[], snapshots: Snapshot[], months: strin
   return months.map(ym => {
     const amounts = byMonth.get(ym);
     const vats = vatByMonth.get(ym);
-    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vat, orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => { const o = vats?.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : null; } });
+    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vatFor?.(ym) ?? opts.vat, regime: opts.regimeOf?.(ym), orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => { const o = vats?.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : null; } });
     return { ym, ...res };
   });
 }
@@ -328,6 +352,7 @@ export const PL_ROWS: { key: keyof PL; label: string; kind: 'plus' | 'minus' | '
   { key: 'contribution', label: '공헌이익', kind: 'subtotal' },
   { key: 'fixed', label: '고정비', kind: 'minus', indent: true },
   { key: 'other', label: '기타', kind: 'minus', indent: true },
+  { key: 'taxEstimate', label: '부가세 (간이 추정)', kind: 'minus', indent: true },
   { key: 'operatingProfit', label: '영업이익', kind: 'result' },
 ];
 

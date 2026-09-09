@@ -1,15 +1,15 @@
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Circle, HelpCircle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, useTabParam } from '@/components/ui/tabs';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { inputClassName } from '@/components/ui/input';
-import { useVat } from '@/components/layout/vat-provider';
 import { cn } from '@/lib/utils';
-import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, ymLabel, type Market } from './_lib/settlement';
+import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Market } from './_lib/settlement';
+import { TaxCheckCard } from './_components/TaxCheckCard';
 import { useOrderCounts, useSettlementData } from './_lib/useSettlementData';
 import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
@@ -48,8 +48,12 @@ function SettlementInner() {
   const [dirty, setDirty] = useState(false);
   const [dataKey, setDataKey] = useState(0);
   const confirmDialog = useConfirm();
-  const { vatOn } = useVat();
-  const vat = vatOn ? 'incl' : 'ex';
+  // 과세 유형: 일반 전환월 전 = 간이(공급대가·VAT 포함 보기), 이후 = 일반(공급가액·VAT 별도 보기). 헤더의 VAT 토글은 정산에서 쓰지 않는다.
+  const [switchYm, setSwitchYm] = useState('2027-01');
+  useEffect(() => { fetch('/api/settlement/settings').then(r => r.json()).then(j => { if (j.settings?.tax_switch_ym) setSwitchYm(j.settings.tax_switch_ym); }).catch(() => {}); }, []);
+  const saveSwitchYm = useCallback((ym: string) => { setSwitchYm(ym); fetch('/api/settlement/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'tax_switch_ym', value: ym }) }).catch(() => {}); }, []);
+  const regime = regimeFor(selectedYm, switchYm);
+  const vat = vatViewFor(regime);
 
   const data = useSettlementData(dataKey, selectedYm);
   const closedMonths = data.closed;
@@ -95,7 +99,7 @@ function SettlementInner() {
       <div className="fixed right-4 md:right-6 top-[68px] z-40">
         <label className={cn('flex items-center gap-2 rounded-full pl-3 pr-2 h-10 shadow-[0_4px_16px_rgba(0,0,0,0.14)] border cursor-pointer transition-colors',
           closedMonths[selectedYm] ? 'bg-card border-fg/20' : dirty ? 'bg-warn text-white border-warn' : 'bg-brand text-white border-brand')}>
-          <span className="text-[11px] font-medium opacity-90 hidden sm:inline">{closedMonths[selectedYm] ? '🔒 마감된 달' : dirty ? '수정 중 · 저장 전' : '정산 월'}</span>
+          <span className="text-[11px] font-medium opacity-90 hidden sm:inline">{closedMonths[selectedYm] ? '🔒 마감된 달' : dirty ? '수정 중 · 저장 전' : regime === 'general' ? '일반과세 · VAT별도' : '간이과세 · VAT포함'}</span>
           <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)}
             className={cn('h-7 rounded-full px-2 text-[13px] font-bold cursor-pointer focus:outline-none', closedMonths[selectedYm] ? 'bg-app text-fg' : 'bg-white/15 text-white [&>option]:text-fg')}>
             {monthOptions.map(ym => <option key={ym} value={ym}>{ymLabel(ym)}{closedMonths[ym] ? ' · 🔒 마감' : data.months.includes(ym) ? ' · 저장됨' : ''}</option>)}
@@ -112,12 +116,13 @@ function SettlementInner() {
           <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />
           <AdCoverageCard selectedYm={selectedYm} months={data.adMonths} onSaved={() => setDataKey(k => k + 1)} />
           <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} closed={closedMonths[selectedYm] ?? null} onToggleClosed={(c) => toggleClosed(selectedYm, c)} />
+          {!data.loading && <TaxCheckCard items={data.items} amounts={amounts} vats={vats} ym={selectedYm} regime={regime} switchYm={switchYm} onSwitchYmChange={saveSwitchYm} onItemsChanged={() => setDataKey(k => k + 1)} />}
         </div>
       )}
-      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} loading={data.loading} />}
+      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} currentYm={currentYm()} loading={data.loading} />}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
-          : <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
+          : <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} regime={regime} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
       )}
       {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} />}
     </div>
