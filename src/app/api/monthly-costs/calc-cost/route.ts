@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
   }
 
   let matchCount = 0;
-  const details: { name: string; qty: number; unitCost: number; lineCost: number; revenue: number; method: string; skuId: string | null }[] = [];
+  const details: { name: string; qty: number; unitCost: number; lineCost: number; revenue: number; method: string; skuId: string | null; vendorId: string | null }[] = [];
 
   for (const row of soldRows) {
     // 1차: vendorItemId 직접 매칭 (쿠팡)
@@ -292,20 +292,21 @@ export async function POST(request: NextRequest) {
 
     if (cost) {
       matchCount++;
-      details.push({ name: displayName, qty: row.qty, unitCost: cost, lineCost: cost * row.qty, revenue: row.revenue, method: method!, skuId: skuId ?? null });
+      details.push({ name: displayName, qty: row.qty, unitCost: cost, lineCost: cost * row.qty, revenue: row.revenue, method: method!, skuId: skuId ?? null, vendorId: row.vendorId || null });
     } else {
-      details.push({ name: displayName, qty: row.qty, unitCost: 0, lineCost: 0, revenue: row.revenue, method: 'unmatched', skuId: skuId ?? null });
+      details.push({ name: displayName, qty: row.qty, unitCost: 0, lineCost: 0, revenue: row.revenue, method: 'unmatched', skuId: skuId ?? null, vendorId: row.vendorId || null });
     }
   }
 
   // 옵션별 집계 (같은 표시명끼리만 합침)
-  const grouped = new Map<string, { qty: number; cost: number; revenue: number; unitCost: number; matched: boolean; method: string; skuId: string | null }>();
+  const grouped = new Map<string, { qty: number; cost: number; revenue: number; unitCost: number; matched: boolean; method: string; skuId: string | null; vendorId: string | null }>();
   for (const d of details) {
-    const prev = grouped.get(d.name) || { qty: 0, cost: 0, revenue: 0, unitCost: d.unitCost, matched: d.method !== 'unmatched', method: d.method, skuId: d.skuId };
+    const prev = grouped.get(d.name) || { qty: 0, cost: 0, revenue: 0, unitCost: d.unitCost, matched: d.method !== 'unmatched', method: d.method, skuId: d.skuId, vendorId: d.vendorId };
     prev.qty += d.qty;
     prev.cost += d.lineCost;
     prev.revenue += d.revenue;
     if (!prev.skuId && d.skuId) prev.skuId = d.skuId;
+    if (!prev.vendorId && d.vendorId) prev.vendorId = d.vendorId;
     grouped.set(d.name, prev);
   }
 

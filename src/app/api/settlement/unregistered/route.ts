@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id, item_name, snapshot_date, quantity').order('snapshot_date', { ascending: false }).limit(2000)
       .then(r => r.error ? admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id, item_name') : r),
     ym ? admin.from('monthly_product_ads').select('vendor_item_id, name, cost, sku_id').eq('user_id', user.id).eq('year_month', ym).eq('platform', 'coupang') : Promise.resolve({ data: [] as any[] }),
-    ym ? admin.from('monthly_product_sales').select('platform, display_name, qty, revenue, sku_id').eq('user_id', user.id).eq('year_month', ym).is('sku_id', null) : Promise.resolve({ data: [] as any[] }),
+    ym ? admin.from('monthly_product_sales').select('platform, display_name, qty, revenue, sku_id, vendor_item_id').eq('user_id', user.id).eq('year_month', ym).is('sku_id', null)
+      .then(r => r.error ? admin.from('monthly_product_sales').select('platform, display_name, qty, revenue, sku_id').eq('user_id', user.id).eq('year_month', ym).is('sku_id', null) : r) : Promise.resolve({ data: [] as any[] }),
     admin.from('skus').select('id, sku_code, option_values, cost_price, product:products(id, name)').order('sku_code'),
   ]);
 
@@ -49,7 +50,13 @@ export async function GET(request: NextRequest) {
     const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
     const it = get(vid); if (!it.sources.includes('광고 raw')) it.sources.push('광고 raw'); it.adCost += Number(r.cost) || 0; if (!it.name && r.name) it.name = r.name; if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id;
   }
-  const nameOnly = (salesRes.data ?? []).map((r: any) => ({ platform: r.platform, name: r.display_name, qty: Number(r.qty) || 0, revenue: Number(r.revenue) || 0 }))
+  const salesRows = ((salesRes as any).data ?? []) as any[];
+  for (const r of salesRows) {
+    if (r.platform !== 'coupang' || !r.vendor_item_id) continue;
+    const vid = String(r.vendor_item_id); if (known.has(vid)) continue;
+    const it = get(vid); if (!it.sources.includes('매출 파일')) it.sources.push('매출 파일'); if (!it.name && r.display_name) it.name = r.display_name;
+  }
+  const nameOnly = salesRows.filter((r: any) => !(r.platform === 'coupang' && r.vendor_item_id)).map((r: any) => ({ platform: r.platform, name: r.display_name, qty: Number(r.qty) || 0, revenue: Number(r.revenue) || 0 }))
     .filter((r: any) => !ignored.has(`name:${r.platform}:${r.name}`));
   const visibleItems = [...items.values()].filter(it => !ignored.has(`vid:${it.vendorItemId}`));
 

@@ -10,6 +10,7 @@ interface SalesRow {
   matched: boolean;
   method: string;
   skuId: string | null;
+  vendorId?: string | null;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -50,12 +51,16 @@ export async function PUT(request: NextRequest) {
     unit_cost: p.unitCost,
     total_cost: p.cost,
     empty_qty: Number((p as any).emptyQty) || 0,   // 빈박스(리뷰) 수량 — 원가 제외
+    vendor_item_id: p.vendorId || null,              // 옵션ID (등록 필요 큐용, 00064)
     match_method: p.method,
     updated_at: new Date().toISOString(),
   }));
 
   if (rows.length > 0) {
-    const { error } = await admin.from('monthly_product_sales').insert(rows);
+    let { error } = await admin.from('monthly_product_sales').insert(rows);
+    if (error && /vendor_item_id|schema cache/i.test(error.message)) {
+      ({ error } = await admin.from('monthly_product_sales').insert(rows.map(({ vendor_item_id: _v, ...r }: any) => r)));
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

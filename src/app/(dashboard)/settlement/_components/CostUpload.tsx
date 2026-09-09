@@ -6,7 +6,8 @@ import { useToast } from '@/components/ui/toast';
 
 // ───────────────── Platform Cost Calculator ─────────────────
 
-interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; emptyQty?: number; skuId?: string | null; }
+interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; emptyQty?: number; skuId?: string | null; vendorId?: string | null; }
+interface SkuOpt { id: string; code: string; name: string; costPrice?: number | null }
 interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; revenueMissingRows?: number; revenueEstimated?: number; }
 
 const PLATFORMS = [
@@ -24,6 +25,24 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
   const toast = useToast();
   const [vatIncluded, setVatIncluded] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [skus, setSkus] = useState<SkuOpt[]>([]);
+  const [coupangChannelId, setCoupangChannelId] = useState<string | null>(null);
+  // 미매칭 줄에서 SKU 를 바로 연결하기 위한 목록 (등록 필요 큐와 같은 소스)
+  async function ensureSkus() {
+    if (skus.length) return;
+    const j = await fetch('/api/settlement/unregistered').then(r => r.json()).catch(() => null);
+    if (j) { setSkus(j.skus ?? []); setCoupangChannelId(j.coupangChannelId ?? null); }
+  }
+  function linkSku(idx: number, skuId: string) {
+    if (!result) return;
+    const sku = skus.find(s => s.id === skuId);
+    const products = [...result.products];
+    const p = products[idx];
+    const unitCost = sku?.costPrice && sku.costPrice > 0 ? sku.costPrice : p.unitCost;
+    products[idx] = { ...p, skuId: skuId || null, matched: !!skuId, method: skuId ? 'link' : p.method, unitCost, cost: unitCost * (p.qty - (p.emptyQty || 0)) };
+    setResult({ ...result, products });
+    setApplied(false);
+  }
 
   const fmt = (n: number) => n.toLocaleString('ko-KR');
   const totalExVat = result ? result.products.reduce((s, p) => s + p.cost, 0) : 0;
@@ -76,6 +95,13 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform, mappings }),
       });
+    }
+
+    // 미리보기에서 SKU 를 연결한 쿠팡 옵션ID 는 마스터(platform_skus)에 등록 → 다음 달부터 자동 매칭
+    if (platform === 'coupang' && coupangChannelId) {
+      for (const p of result.products.filter(x => x.method === 'link' && x.skuId && x.vendorId)) {
+        await fetch('/api/platform-skus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sku_id: p.skuId, channel_id: coupangChannelId, platform_sku_id: p.vendorId, platform_product_name: p.name, is_active: true }) }).catch(() => {});
+      }
     }
 
     // 상품별 매출 영속화 (monthly_product_sales) — 분석용
@@ -241,12 +267,21 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
                           onChange={(e) => { const v = Math.min(p.qty, Number(e.target.value.replace(/[^0-9]/g, '')) || 0); setResult(prev => prev ? { ...prev, products: prev.products.map((x, j) => j === i ? { ...x, emptyQty: v, cost: x.unitCost * (x.qty - v) } : x) } : prev); }}
                           className={`w-full h-7 px-2 text-right text-[11px] tabular-nums rounded border border-transparent hover:border-line focus:outline-none focus:border-brand focus:bg-card ${p.emptyQty ? 'text-warn font-semibold' : 'text-fg-5'}`} />
                       </td>
-                      <td className="py-1.5 px-2 text-center">
-                        {p.method === 'saved'
+                      <td className="py-1.5 px-2 text-center whitespace-nowrap">
+                        {p.method === 'link'
+                          ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">연결</span>
+                          : p.method === 'saved'
                           ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">누적</span>
                           : p.matched
                           ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">자동</span>
-                          : <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">수기</span>}
+                          : (
+                            <select value={p.skuId ?? ''} onFocus={ensureSkus} onClick={ensureSkus} onChange={(e) => linkSku(i, e.target.value)}
+                              title="SKU 를 연결하면 원가가 SKU 에서 오고, 쿠팡 옵션ID 는 적용 시 마스터에 등록됩니다"
+                              className="h-6 max-w-[150px] rounded border border-warn/40 bg-warn/10 px-1 text-[10px] text-fg focus:outline-none">
+                              <option value="">SKU 연결…</option>
+                              {skus.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}{s.costPrice ? ` · ${fmt(s.costPrice)}` : ''}</option>)}
+                            </select>
+                          )}
                       </td>
                     </tr>
                   ))}
