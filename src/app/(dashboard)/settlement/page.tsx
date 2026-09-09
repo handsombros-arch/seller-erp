@@ -55,6 +55,7 @@ function SettlementInner() {
 
   const guard = useCallback(async (next: () => void) => {
     if (dirty && !(await confirmDialog('저장하지 않은 변경사항이 있습니다\n무시하고 이동할까요? 입력한 금액이 사라집니다.'))) return;
+    setDirty(false); // 확인했으면 변경을 버린다 — 이동 후 다시 묻지 않도록
     next();
   }, [dirty, confirmDialog]);
   const setTab = (t: Tab) => guard(() => setTabRaw(t));

@@ -68,6 +68,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   dirtyRef.current = dirty;
 
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]); // 언마운트 시 페이지 가드 해제
   useEffect(() => {
     if (!dirty) return;
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
