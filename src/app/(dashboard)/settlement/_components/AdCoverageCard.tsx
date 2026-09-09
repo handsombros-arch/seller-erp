@@ -98,7 +98,7 @@ export function AdCoverageCard({ selectedYm, months: monthsProp, onSaved }: { se
         })}
         <span className="text-[11px] text-fg-4 ml-1">✓ DB 저장됨 · PC 이 브라우저에만 있음</span>
       </div>
-      {months && !cur ? (
+      {months && months.length > 0 && !cur ? (
         <p className="mt-2 text-[11px] text-warn">{selectedYm.replace('-', '.')} 광고 집계가 DB 에 없습니다.{localHasCur ? ' 이 PC 에 raw 가 있으니 위 버튼을 누르면 저장됩니다.' : ' 광고 분석에 해당 월 보고서를 먼저 올려 주세요.'}</p>
       ) : cur ? (
         <p className="mt-2 text-[11px] text-fg-4">{selectedYm.replace('-', '.')} 광고비 합계 {fmtNum(cur.cost)}원 · 옵션 {fmtNum(cur.rows_count)}개. 시트의 광고비 칸과 비교해 라이브·메시지 등 raw 에 없는 광고가 있는지 확인하세요.</p>
