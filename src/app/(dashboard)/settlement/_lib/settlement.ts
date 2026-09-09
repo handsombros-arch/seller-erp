@@ -26,9 +26,10 @@ export interface MCost {
   market?: Market | null;
   alloc_rule?: AllocRule | null;
   carry_forward?: boolean | null;
+  unit_price?: number | null;   // 건당 단가 — 있으면 수량 × 단가로 금액 계산
 }
 
-export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null }
+export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null; qty?: number | null }
 
 export const MARKETS: { id: Market; label: string; short: string }[] = [
   { id: 'coupang', label: '쿠팡 그로스', short: '쿠팡' },

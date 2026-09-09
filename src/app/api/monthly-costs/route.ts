@@ -51,9 +51,10 @@ export async function PUT(request: NextRequest) {
     market: item.market ?? null,
     alloc_rule: item.alloc_rule ?? null,
     carry_forward: !!item.carry_forward,
+    unit_price: item.unit_price == null || item.unit_price === '' ? null : Number(item.unit_price),
   }));
 
-  const TAG_COLS = ['pl_line', 'market', 'alloc_rule', 'carry_forward'];
+  const TAG_COLS = ['pl_line', 'market', 'alloc_rule', 'carry_forward', 'unit_price'];
   const run = async (stripTags: boolean) => {
     const results = await Promise.all(updates.map((u: any) => {
       const { id, ...fields } = u;
@@ -103,10 +104,12 @@ export async function POST(request: NextRequest) {
     const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null }[] };
     const withNote = (amounts ?? []).some((a: any) => a.note !== undefined);
     const withRef = (amounts ?? []).some((a: any) => a.ref_amount !== undefined);
+    const withQty = (amounts ?? []).some((a: any) => a.qty !== undefined);
     const rows = (amounts ?? []).map((a: any) => ({
       year_month,
       cost_id: a.id,
       amount: a.amount ?? 0,     // 수기 입력 — 기준값으로 덮어쓰지 않는다
+      ...(withQty ? { qty: a.qty == null ? null : Number(a.qty) } : {}),
       ...(withNote ? { note: a.note ?? null } : {}),
       ...(withRef ? { ref_amount: a.ref_amount ?? null, ref_source: a.ref_source ?? null, ref_detail: a.ref_detail ?? null } : {}),
     }));
@@ -114,6 +117,9 @@ export async function POST(request: NextRequest) {
     if (rows.length) {
       const isColErr = (e: any) => /schema cache|PGRST204|column/i.test(`${e?.code} ${e?.message}`);
       let { error } = await admin.from('monthly_cost_snapshots').upsert(rows, { onConflict: 'year_month,cost_id' });
+      if (error && withQty && isColErr(error) && /qty/.test(error.message)) {
+        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ qty: _q, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
+      }
       if (error && withRef && isColErr(error)) {
         refsSaved = false;
         ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ ref_amount: _a, ref_source: _s, ref_detail: _d, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest) {
     if (body.market !== undefined) update.market = body.market;
     if (body.alloc_rule !== undefined) update.alloc_rule = body.alloc_rule;
     if (body.carry_forward !== undefined) update.carry_forward = !!body.carry_forward;
+    if (body.unit_price !== undefined) update.unit_price = body.unit_price == null ? null : Number(body.unit_price);
     const { error: upErr } = await admin.from('monthly_costs').update(update).eq('id', body.id);
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
     return NextResponse.json({ ok: true });

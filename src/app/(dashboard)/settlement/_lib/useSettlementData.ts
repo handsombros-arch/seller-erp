@@ -25,7 +25,7 @@ export function useSettlementData(reloadKey = 0, ym?: string) {
       if (!r.ok) throw new Error(`불러오기 실패 (${r.status})`);
       const j = await r.json();
       setItems(j.items ?? []);
-      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null })));
+      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null, qty: s.qty == null ? null : Number(s.qty) })));
       const cm: Record<string, ClosedMonth> = {};
       for (const c of j.closed ?? []) cm[c.year_month] = { closed_at: c.closed_at, note: c.note };
       setClosed(cm);

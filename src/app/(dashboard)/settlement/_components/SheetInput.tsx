@@ -57,7 +57,8 @@ const sourceHint = (label: string) => SOURCE_HINTS.find(([re]) => re.test(label)
 // ── 대조(cross-check) ──
 interface Ref { value: number; source: 'API' | '파일' | '설정'; detail: string }
 type CheckState = { refs: Record<string, Ref>; orders: Record<string, { orders: number; qty: number }> } | null;
-type Verdict = { kind: 'match' | 'diff' | 'none'; ref?: Ref; key?: string; diff?: number; pct?: number };
+type Verdict = { kind: 'match' | 'diff' | 'soft' | 'none'; ref?: Ref; key?: string; diff?: number; pct?: number };
+// 기준 통일: 시트·매출 파일·광고 raw·설정 = 마켓 확정 기준(구매확정/정산). API 주문 집계 = 주문일 기준 → 이월·확정 시차가 있어 "참고"로만
 
 /** 말단 항목 → 기준값 키. 태그(손익 라인·마켓) + 라벨로 결정. */
 function refKeyFor(leaf: MCost, tags: Tags, parentLabel: string): string[] {
@@ -86,7 +87,7 @@ function verdictFor(amount: number, vatApplicable: boolean, keys: string[], refs
   const diff = mine - ref.value;
   const pct = ref.value ? (diff / ref.value) * 100 : 0;
   const ok = Math.abs(diff) <= 10000 || Math.abs(pct) <= 3;
-  return { kind: ok ? 'match' : 'diff', ref, key, diff, pct };
+  return { kind: ok ? 'match' : ref.source === 'API' ? 'soft' : 'diff', ref, key, diff, pct };
 }
 
 const prevOf = (ym: string) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -102,6 +103,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [local, setLocal] = useState<MCost[]>([]);
   const [amounts, setAmounts] = useState<Map<string, number>>(new Map());
   const [notes, setNotes] = useState<Map<string, string>>(new Map()); // 월별 비고 (monthly_cost_snapshots.note)
+  const [qtys, setQtys] = useState<Map<string, number>>(new Map());    // 단가 항목의 월 수량 (monthly_cost_snapshots.qty)
   const [carried, setCarried] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -155,6 +157,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const prevYm = prevOf(selectedYm);
   const snapFor = useCallback((ym: string) => { const m = new Map<string, number>(); for (const s of snapshots) if (s.year_month === ym) m.set(s.cost_id, Number(s.amount) || 0); return m; }, [snapshots]);
   const notesFor = useCallback((ym: string) => { const m = new Map<string, string>(); for (const s of snapshots) if (s.year_month === ym && s.note) m.set(s.cost_id, s.note); return m; }, [snapshots]);
+  const qtysFor = useCallback((ym: string) => { const m = new Map<string, number>(); for (const s of snapshots) if (s.year_month === ym && s.qty != null) m.set(s.cost_id, Number(s.qty)); return m; }, [snapshots]);
   const prevAmounts = useMemo(() => snapFor(prevYm), [snapFor, prevYm]);
   const savedMonths = useMemo(() => [...new Set(snapshots.map(s => s.year_month))].filter(m => m !== selectedYm).sort().reverse(), [snapshots, selectedYm]);
   const hasSnapshot = useMemo(() => snapshots.some(s => s.year_month === selectedYm), [snapshots, selectedYm]);
@@ -173,9 +176,17 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     }
     setAmounts(next);
     setNotes(notesFor(selectedYm));
+    setQtys(qtysFor(selectedYm));
     setCarried(auto);
     if (auto.size > 0) setDirty(true);
-  }, [items, loading, selectedYm, snapFor, notesFor, hasSnapshot, prevAmounts]);
+  }, [items, loading, selectedYm, snapFor, notesFor, qtysFor, hasSnapshot, prevAmounts]);
+  /** 단가 항목: 수량 입력 → 금액 = 수량 × 단가 */
+  const setQty = (id: string, q: number) => {
+    const it = byId.get(id); const unit = Number(it?.unit_price) || 0;
+    setQtys(prev => { const n = new Map(prev); if (q > 0) n.set(id, q); else n.delete(id); return n; });
+    if (unit > 0) setAmount(id, Math.round(q * unit));
+    setDirty(true);
+  };
   const setNote = (id: string, v: string) => { setNotes(prev => { const n = new Map(prev); if (v) n.set(id, v); else n.delete(id); return n; }); setDirty(true); };
 
   // 쿠팡 광고 raw 월 집계 (광고비 칸 옆 참고값)
@@ -222,7 +233,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     setAmounts(new Map(local.map(i => [i.id, 0]))); setDirty(true);
   };
 
-  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '']).sort());
+  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '', i.unit_price ?? null]).sort());
   async function save() {
     setSaving(true);
     try {
@@ -235,7 +246,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       }
       const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => {
         const v = check ? verdictOf(i) : null;
-        return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
+        return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, qty: qtys.get(i.id) ?? null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
       }) }) });
       const sj = await post.json().catch(() => ({}));
       if (!post.ok) { toast.error(`금액 저장 실패: ${sj.error ?? post.status}`); return; }
@@ -291,7 +302,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     const parent = leaf.parent_id ? byId.get(leaf.parent_id) : null;
     return verdictFor(amounts.get(leaf.id) ?? 0, !!leaf.vat_applicable, refKeyFor(leaf, tagsOf(leaf), parent?.label ?? ''), check.refs);
   };
-  const checkStats = check ? allLeaves.reduce((s, l) => { const v = verdictOf(l); s[v.kind] += 1; return s; }, { match: 0, diff: 0, none: 0 }) : null;
+  const checkStats = check ? allLeaves.reduce((s, l) => { const v = verdictOf(l); s[v.kind] += 1; return s; }, { match: 0, diff: 0, soft: 0, none: 0 }) : null;
 
   return (
     <div className="space-y-4 pb-20">
@@ -362,8 +373,9 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           <span className="font-semibold text-fg">대조 결과</span>
           <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-success/70" /> 일치 {checkStats.match}</span>
           <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-danger/70" /> 차이 {checkStats.diff}</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-fg-4/60" /> API 참고 차이 {checkStats.soft}</span>
           <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-warn/70" /> 대조 불가 · 수기 확인 {checkStats.none}</span>
-          <span className="text-fg-4">기준: 채널 주문 동기화(API) × 마스터 단가·수수료·건당 요금, 매출 파일, 광고 raw, 세이버 설정. 3% 또는 1만 원 이내면 일치.</span>
+          <span className="text-fg-4">기준 = 매출 파일·광고 raw·설정(마켓 확정 기준). API 주문 집계는 주문일 기준이라 이월·구매확정 시차가 있어 참고로만 표시. 3% 또는 1만 원 이내면 일치.</span>
         </div>
       )}
 
@@ -379,7 +391,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           <div className="grid gap-3">
             {sec.groups.map(g => (
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
-                amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote}
+                amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote} qtys={qtys} setQty={setQty}
                 tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
                 readOnly={readOnly} undo={undo} applyRef={async (id, refValue, vatApplicable) => {
                   const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
@@ -438,6 +450,7 @@ interface CardProps {
   amounts: Map<string, number>; prevAmounts: Map<string, number>; carried: Set<string>; adRaw?: number;
   tagsOf: (l: MCost) => ReturnType<typeof effectiveTags>; leafValue: (l: MCost) => number;
   notes: Map<string, string>; setNote: (id: string, v: string) => void;
+  qtys: Map<string, number>; setQty: (id: string, q: number) => void;
   setAmount: (id: string, v: number) => void; patch: (id: string, p: Partial<MCost>) => void; move: (id: string, d: -1 | 1) => void; removeItem: (id: string) => void;
   onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
   undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
@@ -445,7 +458,7 @@ interface CardProps {
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, readOnly, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, qtys, setQty, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, readOnly, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -479,7 +492,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
           const prev = prevAmounts.get(leaf.id);
           const incl = vatSplit(amt, !!leaf.vat_applicable).incl;
           const v = verdictOf?.(leaf);
-          const blockCls = !v ? '' : v.kind === 'match' ? 'border-l-[3px] border-success bg-success/[0.04]' : v.kind === 'diff' ? 'border-l-[3px] border-danger bg-danger/[0.06]' : 'border-l-[3px] border-warn bg-warn/[0.07]';
+          const blockCls = !v ? '' : v.kind === 'match' ? 'border-l-[3px] border-success bg-success/[0.04]' : v.kind === 'diff' ? 'border-l-[3px] border-danger bg-danger/[0.06]' : v.kind === 'soft' ? 'border-l-[3px] border-fg-5 bg-card-2' : 'border-l-[3px] border-warn bg-warn/[0.07]';
           return (
             <div key={leaf.id} className={cn('rounded-lg', blockCls)}>
             <div className={cn('flex items-center gap-2 px-2 py-1.5 rounded-lg', carried.has(leaf.id) && !v && 'bg-brand-soft')}>
@@ -490,6 +503,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <Chip on={!!leaf.is_income} onClick={() => patch(leaf.id, { is_income: !leaf.is_income })} title="+ 수입(차감) / − 비용">{leaf.is_income ? '+ 수입' : '− 비용'}</Chip>
                   <Chip on={!!leaf.vat_applicable} onClick={() => patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값이 VAT 별도이면 켜기">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
                   <Chip on={!!leaf.carry_forward} onClick={() => patch(leaf.id, { carry_forward: !leaf.carry_forward })} title="새 달을 열면 전월 값 자동 입력">매월 이월</Chip>
+                  <input value={leaf.unit_price ?? ''} onChange={e => patch(leaf.id, { unit_price: e.target.value === '' ? null : Number(e.target.value.replace(/[^0-9.]/g, '')) })} placeholder="건당 단가" inputMode="numeric" title="건당 단가를 넣으면 입력 화면에서 수량만 적어 금액이 계산됩니다" className={cn(inputClassName, 'h-7 w-24 text-[11px] text-right')} />
                   <input lang="ko" value={leaf.note ?? ''} onChange={e => patch(leaf.id, { note: e.target.value })} placeholder="공통 메모 (모든 달)" className={cn(inputClassName, 'h-7 w-32 text-[11px]')} />
                   <span className="ml-auto"><TagPicker item={leaf} parent={isSingle ? null : group} onChange={p => patch(leaf.id, p)} /></span>
                   {!isSingle && <button onClick={() => removeItem(leaf.id)} className="text-fg-5 hover:text-danger" title="삭제"><Trash2 className="h-3.5 w-3.5" /></button>}
@@ -511,6 +525,14 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   {!amt && prev && !readOnly ? (
                     <button onClick={() => setAmount(leaf.id, prev)} className="text-[10px] text-fg-4 hover:text-brand whitespace-nowrap flex items-center gap-0.5" title={`${ymLabel(prevYm)} 값 가져오기`}><Undo2 className="h-3 w-3" />{fmtNum(prev)}</button>
                   ) : carried.has(leaf.id) ? <span className="text-[10px] text-brand whitespace-nowrap">이월</span> : null}
+                  {Number(leaf.unit_price) > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] text-fg-4 whitespace-nowrap">
+                      <input type="text" inputMode="numeric" value={qtys.get(leaf.id) ?? ''} placeholder="수량" disabled={readOnly}
+                        onChange={e => setQty(leaf.id, Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                        className={cn(inputClassName, 'h-9 w-16 text-right text-[13px] tabular-nums')} />
+                      × {fmtNum(Number(leaf.unit_price))}
+                    </span>
+                  )}
                   <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} disabled={readOnly} />
                   {v?.kind === 'match' && <span className="text-success text-[11px] font-semibold" title={`기준 ${fmtNum(v.ref!.value)}원 · ${v.ref!.source} ${v.ref!.detail}`}>✓</span>}
                   <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
@@ -523,11 +545,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <span className="text-warn/90">대조 불가 · 계산서로 확인</span>
                 ) : (
                   <>
-                    <span className="font-semibold text-danger">{`차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
+                    <span className={cn('font-semibold', v.kind === 'soft' ? 'text-fg-4' : 'text-danger')}>{v.kind === 'soft' ? 'API 참고 ' : ''}{`차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}{v.kind === 'soft' ? ' · 주문일 기준이라 시차 있음' : ''}</span>
                     <span className="text-fg-3">기준 {fmtNum(v.ref!.value)}원 · <span className="rounded bg-app px-1 text-[10px] text-fg-4">{v.ref!.source}</span> {v.ref!.detail}</span>
                     {undo.has(leaf.id) ? (
                       <button onClick={() => revertRef(leaf.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(leaf.id)!)}원으로 되돌리기</button>
-                    ) : v.kind === 'diff' && !readOnly ? (
+                    ) : (v.kind === 'diff' || v.kind === 'soft') && !readOnly ? (
                       <button onClick={() => applyRef(leaf.id, v.ref!.value, !!leaf.vat_applicable)} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
                     ) : null}
                   </>
