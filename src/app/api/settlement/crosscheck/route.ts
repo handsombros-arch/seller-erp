@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     fetchAll((f, t) => admin.from('channel_orders').select('channel, quantity, shipping_cost, order_status, claim_type, sku_id, is_dummy').gte('order_date', from).lte('order_date', to).range(f, t)),
     admin.from('platform_skus').select('sku_id, price, coupon_discount, commission_rate, rg_fee_inout, rg_fee_shipping, rg_fee_return, rg_fee_restock, rg_fee_send, rg_fee_packing, channel:channels(type)'),
     admin.from('skus').select('id, cost_price'),
-    admin.from('monthly_product_sales').select('platform, qty, revenue, total_cost').eq('user_id', user.id).eq('year_month', ym),
+    admin.from('monthly_product_sales').select('platform, qty, revenue, total_cost, empty_qty').eq('user_id', user.id).eq('year_month', ym),
     admin.from('monthly_product_ads').select('platform, cost').eq('user_id', user.id).eq('year_month', ym),
     admin.from('coupang_credentials').select('rg_saver_enabled').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
@@ -85,11 +85,18 @@ export async function GET(request: NextRequest) {
   put('shipping_small', small, 'API', `자사 출고 ${smallOrders}건 × 운임(2,650 + 도서산간 3,000)`);
 
   // 파일 기반
-  const sales = new Map<string, { qty: number; revenue: number; cost: number }>();
-  for (const r of (salesRes.data ?? []) as any[]) { const s = sales.get(r.platform) ?? { qty: 0, revenue: 0, cost: 0 }; s.qty += Number(r.qty) || 0; s.revenue += Number(r.revenue) || 0; s.cost += Number(r.total_cost) || 0; sales.set(r.platform, s); }
+  const sales = new Map<string, { qty: number; revenue: number; cost: number; emptyQty: number; emptyRefund: number }>();
+  for (const r of (salesRes.data ?? []) as any[]) {
+    const s = sales.get(r.platform) ?? { qty: 0, revenue: 0, cost: 0, emptyQty: 0, emptyRefund: 0 };
+    const qty = Number(r.qty) || 0, rev = Number(r.revenue) || 0, eq = Number(r.empty_qty) || 0;
+    s.qty += qty; s.revenue += rev; s.cost += Number(r.total_cost) || 0;
+    if (eq > 0 && qty > 0) { s.emptyQty += eq; s.emptyRefund += (rev / qty) * eq; }
+    sales.set(r.platform, s);
+  }
   for (const [platform, s] of sales) {
     put(`revenue_file:${platform}`, s.revenue, '파일', `매출 파일 ${s.qty}개 실거래 금액`);
     put(`cogs_file:${platform}`, s.cost, '파일', `매출 파일 수량 × 적용 원가`);
+    put(`emptybox:${platform}`, s.emptyRefund, '파일', `빈박스 ${s.emptyQty}개 × 판매가 (환불 추정)`);
   }
   const adCoupang = (adsRes.data ?? []).filter((r: any) => r.platform === 'coupang').reduce((s: number, r: any) => s + (Number(r.cost) || 0), 0);
   put('ad:coupang', adCoupang * 1.1, '파일', `광고 raw 월 집계 ${Math.round(adCoupang).toLocaleString('ko-KR')} × 1.1 (보고서는 VAT 별도)`);

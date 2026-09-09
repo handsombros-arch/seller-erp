@@ -19,7 +19,7 @@ interface PlatformSku { sku_id: string; platform_sku_id: string | null; price: n
 interface Line {
   market: Market; productId: string | null; productName: string; tier: string | null;
   qty: number; revenue: number; cogs: number; fee: number; feeRate: number; feeDefault: boolean;
-  logistics: number; ad: number; masterPriceQty: number; masterPriceSum: number;
+  logistics: number; ad: number; marketing: number; masterPriceQty: number; masterPriceSum: number;
 }
 interface Agg extends Omit<Line, 'market'> {
   key: string; markets: Market[]; lines: Line[];
@@ -78,7 +78,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
     const get = (market: Market, productId: string | null, name: string, tier: string | null) => {
       const key = `${market}|${productId ?? '__' + name}`;
       let l = byKey.get(key);
-      if (!l) { l = { market, productId, productName: name, tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, masterPriceQty: 0, masterPriceSum: 0 }; byKey.set(key, l); lines.push(l); }
+      if (!l) { l = { market, productId, productName: name, tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0 }; byKey.set(key, l); lines.push(l); }
       return l;
     };
     for (const s of sales) {
@@ -92,6 +92,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
       l.qty += qty;
       l.revenue += rev;
       l.cogs += empty > 0 && qty > 0 ? Number(s.total_cost) * ((qty - empty) / qty) : Number(s.total_cost) || 0;
+      if (empty > 0 && qty > 0) l.marketing += (rev / qty) * empty;   // 빈박스 환불 = 마케팅비
       const policy = MARKET_POLICY[market];
       const ps = s.sku_id ? psMap.get(`${market}|${s.sku_id}`) : undefined;
       const rate = ps?.commission_rate != null && Number(ps.commission_rate) > 0 ? Number(ps.commission_rate) / 100 : policy.feeRate;
@@ -120,9 +121,9 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
     for (const l of filtered) {
       const key = l.productId ?? `__${l.productName}`;
       let a = byProduct.get(key);
-      if (!a) { a = { key, markets: [], lines: [], productId: l.productId, productName: l.productName, tier: l.tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null }; byProduct.set(key, a); }
+      if (!a) { a = { key, markets: [], lines: [], productId: l.productId, productName: l.productName, tier: l.tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null }; byProduct.set(key, a); }
       a.lines.push(l); if (!a.markets.includes(l.market)) a.markets.push(l.market);
-      a.qty += l.qty; a.revenue += l.revenue; a.cogs += l.cogs; a.fee += l.fee; a.logistics += l.logistics; a.ad += l.ad;
+      a.qty += l.qty; a.revenue += l.revenue; a.cogs += l.cogs; a.fee += l.fee; a.logistics += l.logistics; a.ad += l.ad; a.marketing += l.marketing;
       a.masterPriceQty += l.masterPriceQty; a.masterPriceSum += l.masterPriceSum; a.feeDefault = a.feeDefault || l.feeDefault;
     }
     const out = [...byProduct.values()].map(a => finish(a));
@@ -130,7 +131,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
   }, [lines, view]);
 
   const totals = useMemo(() => finish({ key: 'total', markets: [], lines: [], productId: null, productName: '합계', tier: null, feeRate: 0, feeDefault: false, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null,
-    qty: rows.reduce((s, r) => s + r.qty, 0), revenue: rows.reduce((s, r) => s + r.revenue, 0), cogs: rows.reduce((s, r) => s + r.cogs, 0), fee: rows.reduce((s, r) => s + r.fee, 0), logistics: rows.reduce((s, r) => s + r.logistics, 0), ad: rows.reduce((s, r) => s + r.ad, 0) }), [rows]);
+    qty: rows.reduce((s, r) => s + r.qty, 0), revenue: rows.reduce((s, r) => s + r.revenue, 0), cogs: rows.reduce((s, r) => s + r.cogs, 0), fee: rows.reduce((s, r) => s + r.fee, 0), logistics: rows.reduce((s, r) => s + r.logistics, 0), ad: rows.reduce((s, r) => s + r.ad, 0), marketing: rows.reduce((s, r) => s + r.marketing, 0) }), [rows]);
 
   const marketsWithData = SALES_MARKETS.filter(m => lines.some(l => l.market === m));
   const viewItems = [{ value: 'all' as const, label: '통합' }, ...SALES_MARKETS.filter(m => m !== 'talkdeal').map(m => ({ value: m, label: MARKETS.find(x => x.id === m)!.short, disabled: !marketsWithData.includes(m) }))];
@@ -167,7 +168,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
                   {detail && <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>}
-                  <th className="text-right px-2 whitespace-nowrap" title="쿠팡 PA 보고서 광고비 × 1.1 (VAT 포함 환산) · 토스는 집행 광고비">광고비{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
+                  <th className="text-right px-2 whitespace-nowrap" title="쿠팡 PA 광고비 × 1.1 (VAT 포함) · 토스 집행 광고비 · 빈박스 환불(수량 × 판매가) 포함">광고·마케팅{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
                   {detail && <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>}
                   <th className="text-right px-2" title="실제 ROAS. 빨강 = 손익분기 ROAS 미달">ROAS</th>
                   {detail && <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>}
@@ -265,10 +266,10 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
 
 function finish(a: Agg): Agg {
   const preAd = a.revenue - a.cogs - a.fee - a.logistics;
-  a.contribution = preAd - a.ad;
+  a.contribution = preAd - a.ad - a.marketing;   // 광고비 + 마케팅(빈박스 환불)
   a.margin = a.revenue > 0 ? (a.contribution / a.revenue) * 100 : null;
   a.preAdRate = a.revenue > 0 ? (preAd / a.revenue) * 100 : null;
-  a.roas = a.ad > 0 ? (a.revenue / a.ad) * 100 : null;
+  a.roas = a.ad + a.marketing > 0 ? (a.revenue / (a.ad + a.marketing)) * 100 : null;
   a.beRoas = preAd > 0 && a.revenue > 0 ? (a.revenue / preAd) * 100 : null;
   a.feeRate = a.revenue > 0 ? a.fee / a.revenue : 0;
   return a;
@@ -288,7 +289,7 @@ function Cells({ r, detail }: { r: Agg; detail: boolean }) {
       <td className={cn(td, 'text-warn')}>{won(r.cogs)}</td>
       <td className={cn(td, r.feeDefault ? 'text-fg-5' : 'text-fg-3')} title={`수수료율 ${(r.feeRate * 100).toFixed(1)}%${r.feeDefault ? ' (기본값)' : ''}`}>{won(r.fee)}<span className="block text-[10px] text-fg-5">{fmtPct(r.feeRate * 100)}</span></td>
       {detail && <td className={cn(td, 'text-fg-3')}>{won(r.logistics)}</td>}
-      <td className={cn(td, 'text-info')}>{r.ad ? won(r.ad) : <span className="text-fg-5">-</span>}</td>
+      <td className={cn(td, 'text-info')} title={r.marketing ? `광고 ${won(r.ad)} + 빈박스 환불 ${won(r.marketing)}` : ''}>{r.ad + r.marketing ? won(r.ad + r.marketing) : <span className="text-fg-5">-</span>}{r.marketing ? <span className="block text-[10px] text-fg-5">빈박스 {won(r.marketing)}</span> : null}</td>
       {detail && <td className={cn(td, r.preAdRate != null && r.preAdRate < 0 ? 'text-danger' : 'text-fg-2')}>{fmtPct(r.preAdRate)}</td>}
       <td className={cn(td, 'font-semibold', adBad ? 'text-danger' : r.roas != null ? 'text-success' : 'text-fg-5')} title={r.beRoas != null ? `손익분기 ${r.beRoas.toFixed(0)}%` : ''}>{r.roas == null ? '-' : `${r.roas.toFixed(0)}%`}{!detail && r.beRoas != null && <span className="block text-[10px] font-normal text-fg-5">기준 {r.beRoas.toFixed(0)}%</span>}</td>
       {detail && <td className={cn(td, 'text-fg-3')}>{r.beRoas == null ? '-' : `${r.beRoas.toFixed(0)}%`}</td>}

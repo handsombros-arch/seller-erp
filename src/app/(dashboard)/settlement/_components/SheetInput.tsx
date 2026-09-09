@@ -67,6 +67,7 @@ function refKeyFor(leaf: MCost, tags: Tags, parentLabel: string): string[] {
   if (tags.pl_line === 'coupon') return [`coupon:${m}`];
   if (tags.pl_line === 'cogs') return [`cogs_file:${m}`, `cogs:${m}`];
   if (tags.pl_line === 'ad' && m === 'coupang') return ['ad:coupang'];
+  if (/빈박스/.test(L) && m !== 'common') return [`emptybox:${m}`];
   if (/세이버/.test(L)) return ['saver:coupang'];
   if (/판매수수료|^수수료$/.test(L) && m !== 'common') return [`commission:${m}`];
   if (/로켓 ?그로스/.test(P) || m === 'coupang') {
