@@ -11,7 +11,7 @@ import { useVat } from '@/components/layout/vat-provider';
 import { cn } from '@/lib/utils';
 import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, ymLabel, type Market } from './_lib/settlement';
 import { useOrderCounts, useSettlementData } from './_lib/useSettlementData';
-import { CostEditor } from './_components/CostEditor';
+import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
 import { AdCoverageCard } from './_components/AdCoverageCard';
 import { TrendPL } from './_components/TrendPL';
@@ -46,7 +46,6 @@ function SettlementInner() {
   }, [router, pathname, searchParams]);
   const [dirty, setDirty] = useState(false);
   const [dataKey, setDataKey] = useState(0);
-  const [costReloadKey, setCostReloadKey] = useState(0);
   const confirmDialog = useConfirm();
   const { vatOn } = useVat();
   const vat = vatOn ? 'incl' : 'ex';
@@ -93,10 +92,10 @@ function SettlementInner() {
 
       {tab === 'input' && (
         <div className="space-y-4">
-          <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={costReloadKey} />
-          <CostUpload selectedYm={selectedYm} onApply={() => setCostReloadKey(k => k + 1)} />
-          <AdCoverageCard selectedYm={selectedYm} onSaved={() => setCostReloadKey(k => k + 1)} />
-          <CostEditor reloadKey={costReloadKey} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} />
+          <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={dataKey} />
+          <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} />
+          <AdCoverageCard selectedYm={selectedYm} onSaved={() => setDataKey(k => k + 1)} />
+          <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} />
         </div>
       )}
       {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} loading={data.loading} />}

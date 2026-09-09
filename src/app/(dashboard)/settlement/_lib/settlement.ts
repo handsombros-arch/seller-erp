@@ -25,6 +25,7 @@ export interface MCost {
   pl_line?: PlLine | null;
   market?: Market | null;
   alloc_rule?: AllocRule | null;
+  carry_forward?: boolean | null;
 }
 
 export interface Snapshot { year_month: string; cost_id: string; amount: number }

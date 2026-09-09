@@ -49,9 +49,10 @@ export async function PUT(request: NextRequest) {
     pl_line: item.pl_line ?? null,
     market: item.market ?? null,
     alloc_rule: item.alloc_rule ?? null,
+    carry_forward: !!item.carry_forward,
   }));
 
-  const TAG_COLS = ['pl_line', 'market', 'alloc_rule'];
+  const TAG_COLS = ['pl_line', 'market', 'alloc_rule', 'carry_forward'];
   const run = async (stripTags: boolean) => {
     const results = await Promise.all(updates.map((u: any) => {
       const { id, ...fields } = u;
@@ -124,6 +125,7 @@ export async function POST(request: NextRequest) {
     if (body.pl_line !== undefined) update.pl_line = body.pl_line;
     if (body.market !== undefined) update.market = body.market;
     if (body.alloc_rule !== undefined) update.alloc_rule = body.alloc_rule;
+    if (body.carry_forward !== undefined) update.carry_forward = !!body.carry_forward;
     const { error: upErr } = await admin.from('monthly_costs').update(update).eq('id', body.id);
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
     return NextResponse.json({ ok: true });
