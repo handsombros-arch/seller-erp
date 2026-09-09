@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, EyeOff, Loader2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { inputClassName } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
@@ -12,13 +12,15 @@ import { fmtNum } from '../_lib/settlement';
 interface Item { vendorItemId: string; name: string; sources: string[]; adCost: number; suggestedSkuId: string | null }
 interface NameOnly { platform: string; name: string; qty: number; revenue: number }
 interface Sku { id: string; code: string; name: string; productId: string | null }
+interface Ignored { key: string; label: string | null; created_at: string }
 
 /**
  * 등록 필요 큐 — RG API·광고 raw·매출 파일에 나타났지만 마스터에 없는 쿠팡 옵션ID.
  * 여기서 SKU 연결·판매가·수수료율만 넣으면 platform_skus 에 등록되고 다음 집계부터 자동 매칭된다.
  */
 export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: string; onRegistered?: () => void }) {
-  const [data, setData] = useState<{ coupangChannelId: string | null; items: Item[]; nameOnly: NameOnly[]; skus: Sku[] } | null>(null);
+  const [data, setData] = useState<{ coupangChannelId: string | null; items: Item[]; nameOnly: NameOnly[]; skus: Sku[]; ignored?: Ignored[]; ignoreSupported?: boolean } | null>(null);
+  const [showIgnored, setShowIgnored] = useState(false);
   const [form, setForm] = useState<Record<string, { skuId: string; price: string; rate: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
@@ -33,6 +35,14 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
     }).catch(() => setData(null));
   }, [selectedYm]);
   useEffect(() => { load(); }, [load]);
+
+  async function setIgnore(key: string, label: string, ignore: boolean) {
+    const r = await fetch('/api/settlement/unregistered', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, label, ignore }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast.error(j.error ?? '처리 실패'); return; }
+    toast.success(ignore ? `숨김 — 다시 보려면 "숨긴 항목"에서 복원` : '복원했습니다');
+    load();
+  }
 
   async function register(it: Item) {
     const f = form[it.vendorItemId];
@@ -84,6 +94,7 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
                   <input value={f.price} onChange={e => set({ price: e.target.value })} placeholder="판매가" inputMode="numeric" className={cn(inputClassName, 'h-7 w-24 text-[12px] text-right')} />
                   <input value={f.rate} onChange={e => set({ rate: e.target.value })} placeholder="수수료%" inputMode="decimal" className={cn(inputClassName, 'h-7 w-20 text-[12px] text-right')} />
                   <Button size="sm" onClick={() => register(it)} disabled={busy === it.vendorItemId}>{busy === it.vendorItemId ? <Loader2 className="animate-spin" /> : '등록'}</Button>
+                  <button onClick={() => setIgnore(`vid:${it.vendorItemId}`, it.name, true)} className="text-fg-5 hover:text-fg p-1" title="이 옵션은 관리하지 않음 — 큐에서 숨기기 (복원 가능)"><EyeOff className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             );
@@ -91,11 +102,28 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
           {rgOnly.length > 0 && (
             <button onClick={() => setShowRgOnly(v => !v)} className="text-[11px] text-fg-4 hover:text-brand">{showRgOnly ? 'RG 재고 전용 옵션 접기' : `RG 재고에만 있는 옵션 ${rgOnly.length}개 보기 (새로 입고됐거나 판매 중단된 옵션)`}</button>
           )}
+          {!!data.ignored?.length && (
+            <div className="text-[11px] text-fg-4">
+              <button onClick={() => setShowIgnored(v => !v)} className="hover:text-brand">{showIgnored ? '숨긴 항목 접기' : `숨긴 항목 ${data.ignored.length}개 보기`}</button>
+              {showIgnored && (
+                <ul className="mt-1 space-y-0.5">
+                  {data.ignored.map(g => (
+                    <li key={g.key} className="flex items-center gap-2 rounded-lg bg-card border border-line px-2 py-1">
+                      <code className="text-[10px] text-fg-4">{g.key.replace(/^(vid|name):/, '')}</code>
+                      <span className="truncate text-fg-3">{g.label}</span>
+                      <button onClick={() => setIgnore(g.key, g.label ?? '', false)} className="ml-auto shrink-0 text-brand hover:underline flex items-center gap-0.5"><Undo2 className="h-3 w-3" /> 복원</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {data.ignoreSupported === false && <p className="text-[11px] text-warn">숨기기를 저장하려면 마이그레이션 00062 를 적용해 주세요.</p>}
           {data.nameOnly.length > 0 && (
             <div className="rounded-xl bg-card px-3 py-2 border border-line text-[12px] text-fg-2">
               <div className="font-semibold text-fg mb-1">매출 파일에서 상품을 못 찾은 행 {data.nameOnly.length}</div>
               <ul className="space-y-0.5">
-                {data.nameOnly.slice(0, 8).map((r, i) => <li key={i} className="flex gap-2 tabular-nums"><span className="text-fg-4 w-14 shrink-0">{r.platform}</span><span className="truncate" title={r.name}>{r.name}</span><span className="ml-auto shrink-0 text-fg-3">{r.qty}개 · {fmtNum(r.revenue)}원</span></li>)}
+                {data.nameOnly.slice(0, 8).map((r, i) => <li key={i} className="flex items-center gap-2 tabular-nums"><span className="text-fg-4 w-14 shrink-0">{r.platform}</span><span className="truncate" title={r.name}>{r.name}</span><span className="ml-auto shrink-0 text-fg-3">{r.qty}개 · {fmtNum(r.revenue)}원</span><button onClick={() => setIgnore(`name:${r.platform}:${r.name}`, r.name, true)} className="text-fg-5 hover:text-fg p-0.5 shrink-0" title="숨기기 (복원 가능)"><EyeOff className="h-3 w-3" /></button></li>)}
               </ul>
               <p className="mt-1.5 text-[11px] text-fg-4">토스·스스는 옵션ID 가 없어 이름으로 찾습니다. <Link href="/master" className="text-brand hover:underline">마스터 시트</Link>에서 해당 채널 상품명·상품번호를 넣거나, 매입원가 업로드에서 단가를 한 번 적어 두면 다음부터 잡힙니다.</p>
             </div>

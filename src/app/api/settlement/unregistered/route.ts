@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
   const ym = request.nextUrl.searchParams.get('year_month') ?? '';
   const admin = await createAdminClient();
 
+  const ignRes = await admin.from('settlement_ignored').select('key, label, created_at');
+  const ignored = new Map<string, { label: string | null; created_at: string }>();
+  if (!ignRes.error) for (const r of ignRes.data ?? []) ignored.set(r.key, { label: r.label, created_at: r.created_at });
   const [chRes, psRes, rgRes, adsRes, salesRes, skusRes] = await Promise.all([
     admin.from('channels').select('id, name, type'),
     admin.from('platform_skus').select('platform_sku_id, sku_id, channel:channels(type)'),
@@ -46,15 +49,38 @@ export async function GET(request: NextRequest) {
     const vid = String(r.vendor_item_id ?? ''); if (!vid || known.has(vid)) continue;
     const it = get(vid); if (!it.sources.includes('광고 raw')) it.sources.push('광고 raw'); it.adCost += Number(r.cost) || 0; if (!it.name && r.name) it.name = r.name; if (r.sku_id && !it.suggestedSkuId) it.suggestedSkuId = r.sku_id;
   }
-  const nameOnly = (salesRes.data ?? []).map((r: any) => ({ platform: r.platform, name: r.display_name, qty: Number(r.qty) || 0, revenue: Number(r.revenue) || 0 }));
+  const nameOnly = (salesRes.data ?? []).map((r: any) => ({ platform: r.platform, name: r.display_name, qty: Number(r.qty) || 0, revenue: Number(r.revenue) || 0 }))
+    .filter((r: any) => !ignored.has(`name:${r.platform}:${r.name}`));
+  const visibleItems = [...items.values()].filter(it => !ignored.has(`vid:${it.vendorItemId}`));
 
   const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null }));
 
   return NextResponse.json({
     yearMonth: ym,
     coupangChannelId: coupangChannel?.id ?? null,
-    items: [...items.values()].sort((a, b) => b.adCost - a.adCost),
+    items: visibleItems.sort((a, b) => b.adCost - a.adCost),
     nameOnly,
     skus,
+    ignored: [...ignored.entries()].map(([key, v]) => ({ key, label: v.label, created_at: v.created_at })),
+    ignoreSupported: !ignRes.error,
   });
+}
+
+/** POST { key, label?, ignore: true|false } — 숨기기 / 복원 */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  const body = await request.json().catch(() => ({}));
+  const key = String(body.key ?? '');
+  if (!/^(vid|name):/.test(key)) return NextResponse.json({ error: 'key 필요' }, { status: 400 });
+  const admin = await createAdminClient();
+  if (body.ignore === false) {
+    const { error } = await admin.from('settlement_ignored').delete().eq('key', key);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true, ignored: false });
+  }
+  const { error } = await admin.from('settlement_ignored').upsert({ key, label: body.label ?? null, reason: body.reason ?? null, created_by: user.id }, { onConflict: 'key' });
+  if (error) return NextResponse.json({ error: /does not exist|schema cache/i.test(error.message) ? '마이그레이션 00062 를 적용해야 숨기기가 저장됩니다' : error.message }, { status: 400 });
+  return NextResponse.json({ ok: true, ignored: true });
 }
