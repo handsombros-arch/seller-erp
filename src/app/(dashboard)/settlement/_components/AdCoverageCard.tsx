@@ -28,17 +28,11 @@ export function AdCoverageCard({ selectedYm, onSaved }: { selectedYm: string; on
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  // 이 PC 브라우저의 raw 보유 현황 (가볍게 개수만)
+  // 이 PC 브라우저의 raw 보유 현황 — IndexedDB 전체(수십만 행)를 읽으면 화면이 수 초 멈추므로
+  // 마지막 집계 때 남긴 요약(localStorage)만 읽는다. 실제 raw 는 버튼을 눌렀을 때만 읽는다.
+  const LOCAL_INFO_KEY = 'lv-erp-settlement-ad-local-info';
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const rows = await readLocalAdRows();
-      if (cancelled) return;
-      const ms = new Set<string>();
-      for (let i = 0; i < rows.length; i++) { const d = String(rows[i]['날짜'] ?? '').replace(/\D/g, ''); if (d.length >= 6) ms.add(`${d.slice(0, 4)}-${d.slice(4, 6)}`); }
-      setLocalInfo({ rows: rows.length, months: [...ms].sort() });
-    })();
-    return () => { cancelled = true; };
+    try { const j = localStorage.getItem(LOCAL_INFO_KEY); if (j) setLocalInfo(JSON.parse(j)); } catch {}
   }, []);
 
   async function saveFromLocal() {
@@ -48,6 +42,9 @@ export function AdCoverageCard({ selectedYm, onSaved }: { selectedYm: string; on
       if (!rows.length) { toast.warning('이 PC 브라우저에 광고 raw 가 없습니다. 광고 분석 페이지에서 보고서를 먼저 올려 주세요.'); return; }
       const agg = aggregateLocalAdRows(rows);
       const yms = Object.keys(agg).sort();
+      const info = { rows: rows.length, months: yms };
+      setLocalInfo(info);
+      try { localStorage.setItem(LOCAL_INFO_KEY, JSON.stringify(info)); } catch {}
       let saved = 0;
       for (const ym of yms) {
         setBusy(`${ym} 저장 중 (${saved + 1}/${yms.length})`);
@@ -80,7 +77,7 @@ export function AdCoverageCard({ selectedYm, onSaved }: { selectedYm: string; on
             쿠팡 PA 보고서는 <Link href="/ad-analysis" className="text-brand font-semibold hover:underline">광고 분석</Link>에 올리면 이 PC 브라우저에 쌓입니다. 아래 버튼이 그 raw 를 월·옵션ID 요약으로 줄여 DB 에 저장합니다. raw 전체 동기화는 필요 없습니다.
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={saveFromLocal} disabled={!!busy || !localInfo?.rows} title={localInfo ? `이 PC raw ${fmtNum(localInfo.rows)}행 · ${localInfo.months[0] ?? ''}~${localInfo.months[localInfo.months.length - 1] ?? ''}` : ''}>
+        <Button size="sm" variant="outline" onClick={saveFromLocal} disabled={!!busy} title={localInfo ? `지난 집계 기준 이 PC raw ${fmtNum(localInfo.rows)}행 · ${localInfo.months[0] ?? ''}~${localInfo.months[localInfo.months.length - 1] ?? ''}` : '이 PC 브라우저의 광고 raw 를 읽어 월별로 집계합니다 (몇 초 걸림)'}>
           {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} {busy ?? '이 PC 광고 raw → 월 집계 저장'}
         </Button>
       </div>

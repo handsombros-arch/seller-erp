@@ -227,7 +227,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           <div className="flex items-baseline gap-2 mb-2 px-1">
             <h4 className="text-[13px] font-bold text-fg">{sec.label}</h4>
             <span className="text-[11px] text-fg-4">{sec.hint}</span>
-            <span className="ml-auto text-[12px] tabular-nums font-semibold text-fg-2">{fmtNum(sec.groups.reduce((s, g) => s + leavesOf(g).reduce((t, l) => t + leafValue(l), 0), 0))}원</span>
+            {(() => { const v = sec.groups.reduce((s, g) => s + leavesOf(g).reduce((t, l) => t + leafValue(l), 0), 0); return <span className={cn('ml-auto text-[12px] tabular-nums font-semibold', v < 0 ? 'text-success' : 'text-fg-2')}>{v < 0 ? '+' : ''}{fmtNum(Math.abs(v))}원</span>; })()}
           </div>
           <div className="grid md:grid-cols-2 gap-3">
             {sec.groups.map(g => (
