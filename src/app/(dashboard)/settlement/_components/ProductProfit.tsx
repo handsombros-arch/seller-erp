@@ -36,6 +36,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
   const [pskus, setPskus] = useState<PlatformSku[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState(false); // 상세 열(수량·평균단가·물류·광고 전·손익분기) 표시
 
   const [adsLoading, setAdsLoading] = useState(true);
   useEffect(() => {
@@ -137,6 +138,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
             <p className="text-[11px] text-fg-4 mt-0.5">매출·원가는 업로드한 파일 실적, 수수료·물류비는 상품 정책값, 광고비는 광고분석 raw 집계입니다.</p>
           </div>
           <SegmentedControl items={viewItems} value={view} onChange={setView} />
+          <label className="flex items-center gap-1.5 text-[12px] text-fg-3 cursor-pointer select-none"><input type="checkbox" className="accent-brand" checked={detail} onChange={e => setDetail(e.target.checked)} /> 상세 열</label>
         </div>
 
         {loading ? (
@@ -147,21 +149,21 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse min-w-[1180px]">
+            <table className={cn('w-full text-[12px] border-collapse', detail ? 'min-w-[1180px]' : 'min-w-[760px]')}>
               <thead>
                 <tr className="h-9 border-b border-line text-[11px] font-semibold text-fg-4">
                   <th className="text-left px-4 min-w-[200px]">상품</th>
                   {view === 'all' && <th className="text-left px-2">마켓</th>}
-                  <th className="text-right px-2">수량</th>
+                  {detail && <th className="text-right px-2">수량</th>}
                   <th className="text-right px-2">매출</th>
-                  <th className="text-right px-2" title="실현 평균단가 · 괄호는 마스터 판매가 대비">평균단가</th>
+                  {detail && <th className="text-right px-2" title="실현 평균단가 · 괄호는 마스터 판매가 대비">평균단가</th>}
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
-                  <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>
+                  {detail && <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>}
                   <th className="text-right px-2 whitespace-nowrap">광고비{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
-                  <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>
-                  <th className="text-right px-2">ROAS</th>
-                  <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>
+                  {detail && <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>}
+                  <th className="text-right px-2" title="실제 ROAS. 빨강 = 손익분기 ROAS 미달">ROAS</th>
+                  {detail && <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>}
                   <th className="text-right px-2">공헌이익</th>
                   <th className="text-right px-3">마진</th>
                 </tr>
@@ -180,7 +182,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                         </div>
                       </td>
                       {view === 'all' && <td className="px-2 text-fg-3 whitespace-nowrap">{r.markets.map(m => MARKETS.find(x => x.id === m)?.short).join(' · ')}</td>}
-                      <Cells r={r} />
+                      <Cells r={r} detail={detail} />
                     </tr>,
                     ...(expandable && isOpen ? r.lines.map(l => {
                       const la = finish({ ...l, key: `${r.key}|${l.market}`, markets: [l.market], lines: [], contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null });
@@ -188,7 +190,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                         <tr key={la.key} className="border-b border-line-2 h-10 bg-card-2/60 text-[11px]">
                           <td className="px-4 pl-10 text-fg-3">└ {MARKETS.find(x => x.id === l.market)?.label}</td>
                           <td className="px-2 text-fg-4">{MARKET_POLICY[l.market].feeSource}</td>
-                          <Cells r={la} />
+                          <Cells r={la} detail={detail} />
                         </tr>
                       );
                     }) : []),
@@ -197,7 +199,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                 <tr className="bg-card-2 font-semibold h-11 border-t border-line">
                   <td className="px-4 text-fg">합계</td>
                   {view === 'all' && <td />}
-                  <Cells r={totals} />
+                  <Cells r={totals} detail={detail} />
                 </tr>
               </tbody>
             </table>
@@ -265,7 +267,7 @@ function finish(a: Agg): Agg {
   return a;
 }
 
-function Cells({ r }: { r: Agg }) {
+function Cells({ r, detail }: { r: Agg; detail: boolean }) {
   const td = 'px-2 text-right tabular-nums';
   const avg = r.qty > 0 ? r.revenue / r.qty : 0;
   const master = r.masterPriceQty > 0 ? r.masterPriceSum / r.masterPriceQty : null;
@@ -273,16 +275,16 @@ function Cells({ r }: { r: Agg }) {
   const adBad = r.roas != null && r.beRoas != null && r.roas < r.beRoas;
   return (
     <>
-      <td className={cn(td, 'text-fg-3')}>{r.qty || '-'}</td>
+      {detail && <td className={cn(td, 'text-fg-3')}>{r.qty || '-'}</td>}
       <td className={cn(td, 'text-fg')}>{won(r.revenue)}</td>
-      <td className={cn(td, 'text-fg-3 whitespace-nowrap')}>{avg ? won(avg) : '-'}{diff != null && Math.abs(diff) >= 1 && <span className={cn('block text-[10px]', diff < 0 ? 'text-danger' : 'text-success')}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}% vs 정가</span>}</td>
+      {detail && <td className={cn(td, 'text-fg-3 whitespace-nowrap')}>{avg ? won(avg) : '-'}{diff != null && Math.abs(diff) >= 1 && <span className={cn('block text-[10px]', diff < 0 ? 'text-danger' : 'text-success')}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}% vs 정가</span>}</td>}
       <td className={cn(td, 'text-warn')}>{won(r.cogs)}</td>
       <td className={cn(td, r.feeDefault ? 'text-fg-5' : 'text-fg-3')} title={`수수료율 ${(r.feeRate * 100).toFixed(1)}%${r.feeDefault ? ' (기본값)' : ''}`}>{won(r.fee)}<span className="block text-[10px] text-fg-5">{fmtPct(r.feeRate * 100)}</span></td>
-      <td className={cn(td, 'text-fg-3')}>{won(r.logistics)}</td>
+      {detail && <td className={cn(td, 'text-fg-3')}>{won(r.logistics)}</td>}
       <td className={cn(td, 'text-info')}>{r.ad ? won(r.ad) : <span className="text-fg-5">-</span>}</td>
-      <td className={cn(td, r.preAdRate != null && r.preAdRate < 0 ? 'text-danger' : 'text-fg-2')}>{fmtPct(r.preAdRate)}</td>
-      <td className={cn(td, 'font-semibold', adBad ? 'text-danger' : r.roas != null ? 'text-success' : 'text-fg-5')}>{r.roas == null ? '-' : `${r.roas.toFixed(0)}%`}</td>
-      <td className={cn(td, 'text-fg-3')}>{r.beRoas == null ? '-' : `${r.beRoas.toFixed(0)}%`}</td>
+      {detail && <td className={cn(td, r.preAdRate != null && r.preAdRate < 0 ? 'text-danger' : 'text-fg-2')}>{fmtPct(r.preAdRate)}</td>}
+      <td className={cn(td, 'font-semibold', adBad ? 'text-danger' : r.roas != null ? 'text-success' : 'text-fg-5')} title={r.beRoas != null ? `손익분기 ${r.beRoas.toFixed(0)}%` : ''}>{r.roas == null ? '-' : `${r.roas.toFixed(0)}%`}{!detail && r.beRoas != null && <span className="block text-[10px] font-normal text-fg-5">기준 {r.beRoas.toFixed(0)}%</span>}</td>
+      {detail && <td className={cn(td, 'text-fg-3')}>{r.beRoas == null ? '-' : `${r.beRoas.toFixed(0)}%`}</td>}
       <td className={cn(td, 'font-semibold', r.contribution < 0 ? 'text-danger' : 'text-fg')}>{won(r.contribution)}</td>
       <td className={cn('px-3 text-right tabular-nums font-semibold', r.margin == null ? 'text-fg-5' : r.margin < 0 ? 'text-danger' : r.margin < 10 ? 'text-warn' : 'text-success')}>{fmtPct(r.margin)}</td>
     </>

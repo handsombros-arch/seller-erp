@@ -218,12 +218,17 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     setAmounts(new Map(local.map(i => [i.id, 0]))); setDirty(true);
   };
 
+  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '']).sort());
   async function save() {
     setSaving(true);
     try {
-      const put = await fetch('/api/monthly-costs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: local }) });
-      const pj = await put.json().catch(() => ({}));
-      if (!put.ok) { toast.error(`저장 실패: ${pj.error ?? put.status}`); return; }
+      let pj: any = {};
+      // 구조(이름·순서·태그 등)가 바뀐 경우에만 PUT — 금액만 바뀌면 건너뛰어 1초 안쪽
+      if (structKey(local) !== structKey(items)) {
+        const put = await fetch('/api/monthly-costs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: local }) });
+        pj = await put.json().catch(() => ({}));
+        if (!put.ok) { toast.error(`저장 실패: ${pj.error ?? put.status}`); return; }
+      }
       const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => {
         const v = check ? verdictOf(i) : null;
         return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
@@ -360,7 +365,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             <span className="text-[11px] text-fg-4">{sec.hint}</span>
             {(() => { const v = sec.groups.reduce((s, g) => s + leavesOf(g).reduce((t, l) => t + leafValue(l), 0), 0); return <span className={cn('ml-auto text-[12px] tabular-nums font-semibold', v < 0 ? 'text-success' : 'text-fg-2')}>{v < 0 ? '+' : ''}{fmtNum(Math.abs(v))}원</span>; })()}
           </div>
-          <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid gap-3">
             {sec.groups.map(g => (
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote}
@@ -453,7 +458,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
           const prev = prevAmounts.get(leaf.id);
           const incl = vatSplit(amt, !!leaf.vat_applicable).incl;
           const v = verdictOf?.(leaf);
-          const blockCls = !v ? '' : v.kind === 'match' ? 'bg-success/10 border-l-4 border-success' : v.kind === 'diff' ? 'bg-danger/10 border-l-4 border-danger' : 'bg-warn/15 border-l-4 border-warn';
+          const blockCls = !v ? '' : v.kind === 'match' ? 'border-l-[3px] border-success bg-success/[0.04]' : v.kind === 'diff' ? 'border-l-[3px] border-danger bg-danger/[0.06]' : 'border-l-[3px] border-warn bg-warn/[0.07]';
           return (
             <div key={leaf.id} className={cn('rounded-lg', blockCls)}>
             <div className={cn('flex items-center gap-2 px-2 py-1.5 rounded-lg', carried.has(leaf.id) && !v && 'bg-brand-soft')}>
@@ -470,7 +475,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                 </>
               ) : (
                 <>
-                  <div className="w-36 shrink-0 min-w-0">
+                  <div className="w-52 shrink-0 min-w-0">
                     <div className="text-[13px] text-fg truncate" title={leaf.label}>{leaf.label}</div>
                     <div className="text-[10px] text-fg-5 truncate">
                       {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}
@@ -486,14 +491,15 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                     <button onClick={() => setAmount(leaf.id, prev)} className="text-[10px] text-fg-4 hover:text-brand whitespace-nowrap flex items-center gap-0.5" title={`${ymLabel(prevYm)} 값 가져오기`}><Undo2 className="h-3 w-3" />{fmtNum(prev)}</button>
                   ) : carried.has(leaf.id) ? <span className="text-[10px] text-brand whitespace-nowrap">이월</span> : null}
                   <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} />
+                  {v?.kind === 'match' && <span className="text-success text-[11px] font-semibold" title={`기준 ${fmtNum(v.ref!.value)}원 · ${v.ref!.source} ${v.ref!.detail}`}>✓</span>}
                   <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
               )}
             </div>
-            {v && mode === 'input' && (
+            {v && mode === 'input' && v.kind !== 'match' && (
               <div className="px-3 pb-1.5 -mt-0.5 text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 {v.kind === 'none' ? (
-                  <span className="text-warn font-semibold">대조 불가 · 계산서로 직접 확인</span>
+                  <span className="text-warn/90">대조 불가 · 계산서로 확인</span>
                 ) : (
                   <>
                     <span className={cn('font-semibold', v.kind === 'match' ? 'text-success' : 'text-danger')}>{v.kind === 'match' ? '일치' : `차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
@@ -608,6 +614,6 @@ function MoneyInput({ value, onChange, income }: { value: number; onChange: (v: 
           const i = all.indexOf(e.currentTarget); all[i + 1]?.focus();
         }
       }}
-      className={cn(inputClassName, 'w-32 text-right tabular-nums font-semibold', income ? 'text-success' : 'text-fg', !value && 'font-normal')} />
+      className={cn(inputClassName, 'w-40 h-9 text-right text-[14px] tabular-nums font-semibold', income ? 'text-success' : 'text-fg', !value && 'font-normal')} />
   );
 }
