@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ClipboardPaste, Loader2, Plus, Settings2, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardPaste, Loader2, Plus, ScanSearch, Settings2, Trash2, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { inputClassName } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import { effectiveTags, fmtNum, vatSplit, ymLabel, type MCost, type PlLine, type Snapshot } from '../_lib/settlement';
+import { effectiveTags, fmtNum, vatSplit, ymLabel, type MCost, type PlLine, type Snapshot, type Tags } from '../_lib/settlement';
 import { TagPicker } from './TagPicker';
 
 /**
@@ -50,6 +50,41 @@ const SOURCE_HINTS: [RegExp, string][] = [
 ];
 const sourceHint = (label: string) => SOURCE_HINTS.find(([re]) => re.test(label))?.[1];
 
+// ── 대조(cross-check) ──
+interface Ref { value: number; source: 'API' | '파일' | '설정'; detail: string }
+type CheckState = { refs: Record<string, Ref>; orders: Record<string, { orders: number; qty: number }> } | null;
+type Verdict = { kind: 'match' | 'diff' | 'none'; ref?: Ref; key?: string; diff?: number; pct?: number };
+
+/** 말단 항목 → 기준값 키. 태그(손익 라인·마켓) + 라벨로 결정. */
+function refKeyFor(leaf: MCost, tags: Tags, parentLabel: string): string[] {
+  const L = leaf.label, P = parentLabel, m = tags.market;
+  if (tags.pl_line === 'revenue') return [`revenue_file:${m}`, `revenue:${m}`];
+  if (tags.pl_line === 'coupon') return [`coupon:${m}`];
+  if (tags.pl_line === 'cogs') return [`cogs_file:${m}`, `cogs:${m}`];
+  if (tags.pl_line === 'ad' && m === 'coupang') return ['ad:coupang'];
+  if (/세이버/.test(L)) return ['saver:coupang'];
+  if (/판매수수료|^수수료$/.test(L) && m !== 'common') return [`commission:${m}`];
+  if (/로켓 ?그로스/.test(P) || m === 'coupang') {
+    if (/입출고/.test(L)) return ['rg_inout:coupang'];
+    if (/^배송비/.test(L)) return ['rg_shipping:coupang'];
+    if (/반출 배송|발송/.test(L)) return ['rg_send:coupang'];
+    if (/바코드|포장/.test(L)) return ['rg_packing:coupang'];
+  }
+  if (tags.pl_line === 'logistics' && /택배비/.test(L) && !/대형/.test(L) && m !== 'coupang') return ['shipping_small'];
+  return [];
+}
+function verdictFor(amount: number, vatApplicable: boolean, keys: string[], refs: Record<string, Ref>): Verdict {
+  const key = keys.find(k => refs[k]);
+  if (!key) return { kind: 'none' };
+  const ref = refs[key];
+  // 기준값은 대부분 VAT 포함 실거래가 → 입력이 VAT 별도면 포함가로 환산해 비교
+  const mine = vatApplicable ? Math.round(amount * 1.1) : amount;
+  const diff = mine - ref.value;
+  const pct = ref.value ? (diff / ref.value) * 100 : 0;
+  const ok = Math.abs(diff) <= 10000 || Math.abs(pct) <= 3;
+  return { kind: ok ? 'match' : 'diff', ref, key, diff, pct };
+}
+
 const prevOf = (ym: string) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
 export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChange, onSaved }: Props) {
@@ -64,6 +99,19 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [fillOpen, setFillOpen] = useState(false);
   const [adRaw, setAdRaw] = useState<Map<string, number>>(new Map());
   const [newLabel, setNewLabel] = useState<{ parent: string | null; value: string } | null>(null);
+  const [check, setCheck] = useState<CheckState>(null);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => { setCheck(null); }, [selectedYm]);
+  async function runCheck() {
+    setChecking(true);
+    try {
+      const r = await fetch(`/api/settlement/crosscheck?year_month=${selectedYm}`);
+      const j = await r.json();
+      if (!r.ok) { toast.error(j.error ?? '대조 실패'); return; }
+      setCheck({ refs: j.refs ?? {}, orders: j.orders ?? {} });
+      setMode('input');
+    } finally { setChecking(false); }
+  }
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -188,6 +236,12 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   if (loading && local.length === 0) return <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>;
 
   const sections = SECTIONS.map(sec => ({ ...sec, groups: parents.filter(p => groupSection(p) === sec.key) })).filter(s => s.groups.length);
+  const verdictOf = (leaf: MCost): Verdict => {
+    if (!check) return { kind: 'none' };
+    const parent = leaf.parent_id ? byId.get(leaf.parent_id) : null;
+    return verdictFor(amounts.get(leaf.id) ?? 0, !!leaf.vat_applicable, refKeyFor(leaf, tagsOf(leaf), parent?.label ?? ''), check.refs);
+  };
+  const checkStats = check ? allLeaves.reduce((s, l) => { const v = verdictOf(l); s[v.kind] += 1; return s; }, { match: 0, diff: 0, none: 0 }) : null;
 
   return (
     <div className="space-y-4 pb-20">
@@ -212,6 +266,13 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             </div>
           )}
         </div>
+        {check ? (
+          <Button variant="outline" size="sm" onClick={() => setCheck(null)} className="border-brand/40 text-brand"><X /> 대조 끄기</Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={runCheck} disabled={checking} title="주문 동기화(API)·매출 파일·광고 raw·설정으로 계산한 기준값과 비교합니다">
+            {checking ? <Loader2 className="animate-spin" /> : <ScanSearch />} API 대조
+          </Button>
+        )}
         <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => setMode(m => m === 'input' ? 'structure' : 'input')}>
           <Settings2 /> {mode === 'structure' ? '입력으로 돌아가기' : '항목 구조 편집'}
         </Button>
@@ -220,6 +281,16 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       {mode === 'structure' && (
         <div className="rounded-xl border border-brand/30 bg-brand-soft px-4 py-2.5 text-[12px] text-fg-2">
           구조 편집: 항목 이름·순서·부호(+ 수입 / − 비용)·VAT·매월 이월·분류/마켓을 바꿉니다. 여기서 바꾼 이름과 분류는 모든 달에 적용됩니다. 저장을 눌러야 반영됩니다.
+        </div>
+      )}
+
+      {check && checkStats && (
+        <div className="rounded-xl border border-line bg-card px-4 py-2.5 text-[12px] text-fg-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="font-semibold text-fg">대조 결과</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-success/70" /> 일치 {checkStats.match}</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-danger/70" /> 차이 {checkStats.diff}</span>
+          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-warn/70" /> 대조 불가 · 수기 확인 {checkStats.none}</span>
+          <span className="text-fg-4">기준: 채널 주문 동기화(API) × 마스터 단가·수수료·건당 요금, 매출 파일, 광고 raw, 세이버 설정. 3% 또는 1만 원 이내면 일치.</span>
         </div>
       )}
 
@@ -234,7 +305,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             {sec.groups.map(g => (
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)}
-                tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem}
+                tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
                 onFillPrev={() => fillFrom(prevYm, leavesOf(g).map(l => l.id))} prevYm={prevYm}
                 newLabel={newLabel} setNewLabel={setNewLabel} addItem={addItem} />
             ))}
@@ -277,11 +348,11 @@ interface CardProps {
   amounts: Map<string, number>; prevAmounts: Map<string, number>; carried: Set<string>; adRaw?: number;
   tagsOf: (l: MCost) => ReturnType<typeof effectiveTags>; leafValue: (l: MCost) => number;
   setAmount: (id: string, v: number) => void; patch: (id: string, p: Partial<MCost>) => void; move: (id: string, d: -1 | 1) => void; removeItem: (id: string) => void;
-  onFillPrev: () => void; prevYm: string;
+  onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -314,8 +385,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
           const amt = amounts.get(leaf.id) ?? 0;
           const prev = prevAmounts.get(leaf.id);
           const incl = vatSplit(amt, !!leaf.vat_applicable).incl;
+          const v = verdictOf?.(leaf);
+          const blockCls = !v ? '' : v.kind === 'match' ? 'bg-success/10 border-l-4 border-success' : v.kind === 'diff' ? 'bg-danger/10 border-l-4 border-danger' : 'bg-warn/15 border-l-4 border-warn';
           return (
-            <div key={leaf.id} className={cn('flex items-center gap-2 px-2 py-1.5 rounded-lg', carried.has(leaf.id) && 'bg-brand-soft')}>
+            <div key={leaf.id} className={cn('rounded-lg', blockCls)}>
+            <div className={cn('flex items-center gap-2 px-2 py-1.5 rounded-lg', carried.has(leaf.id) && !v && 'bg-brand-soft')}>
               {mode === 'structure' ? (
                 <>
                   {!isSingle && <span className="flex flex-col"><button onClick={() => move(leaf.id, -1)} className="text-fg-5 hover:text-fg"><ArrowUp className="h-3 w-3" /></button><button onClick={() => move(leaf.id, 1)} className="text-fg-5 hover:text-fg"><ArrowDown className="h-3 w-3" /></button></span>}
@@ -346,6 +420,20 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
               )}
+            </div>
+            {v && mode === 'input' && (
+              <div className="px-3 pb-1.5 -mt-0.5 text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                {v.kind === 'none' ? (
+                  <span className="text-warn font-semibold">대조 불가 · 계산서로 직접 확인</span>
+                ) : (
+                  <>
+                    <span className={cn('font-semibold', v.kind === 'match' ? 'text-success' : 'text-danger')}>{v.kind === 'match' ? '일치' : `차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
+                    <span className="text-fg-3">기준 {fmtNum(v.ref!.value)}원 · <span className="rounded bg-app px-1 text-[10px] text-fg-4">{v.ref!.source}</span> {v.ref!.detail}</span>
+                    {v.kind === 'diff' && <button onClick={() => setAmount(leaf.id, leaf.vat_applicable ? Math.round(v.ref!.value / 1.1) : v.ref!.value)} className="text-brand hover:underline">기준값으로</button>}
+                  </>
+                )}
+              </div>
+            )}
             </div>
           );
         })}
