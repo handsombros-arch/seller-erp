@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Circle, HelpCircle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, useTabParam } from '@/components/ui/tabs';
@@ -30,7 +31,19 @@ export default function SettlementPage() {
 
 function SettlementInner() {
   const [tab, setTabRaw] = useTabParam<Tab>('tab', TABS, 'input');
-  const [selectedYm, setSelectedYmRaw] = useState(currentYm());
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const ymParam = searchParams.get('ym');
+  const [selectedYm, setSelectedYmState] = useState(() => (ymParam && /^\d{4}-\d{2}$/.test(ymParam) ? ymParam : currentYm()));
+  // 월을 URL(?ym=)에도 기록 — 새로고침·링크 공유 시 유지
+  const setSelectedYmRaw = useCallback((ym: string) => {
+    setSelectedYmState(ym);
+    const params = new URLSearchParams(searchParams.toString());
+    if (ym === currentYm()) params.delete('ym'); else params.set('ym', ym);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, searchParams]);
   const [dirty, setDirty] = useState(false);
   const [dataKey, setDataKey] = useState(0);
   const [costReloadKey, setCostReloadKey] = useState(0);

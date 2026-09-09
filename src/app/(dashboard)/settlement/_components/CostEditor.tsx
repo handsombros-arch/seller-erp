@@ -65,6 +65,7 @@ export function CostEditor({ reloadKey, selectedYm, onDirtyChange, onSaved }: Co
   const [pasteLoading, setPasteLoading] = useState(false);
 
   const [needsMigration, setNeedsMigration] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(true);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   // 브라우저 탭 닫기 / 페이지 이동 시 경고
@@ -89,17 +90,20 @@ export function CostEditor({ reloadKey, selectedYm, onDirtyChange, onSaved }: Co
     const allSnaps: Snapshot[] = snapRes.ok ? await snapRes.json() : [];
     const monthSnaps = allSnaps.filter(s => s.year_month === targetYm);
     const snapMap = new Map(monthSnaps.map(s => [s.cost_id, Number(s.amount ?? 0)]));
+    // 저장된 스냅샷이 없는 달은 0 에서 시작 (예전엔 구조 테이블의 옛 금액이 그대로 보여 혼동됨).
+    // 전월 값이 필요하면 "이전 월 붙여넣기".
     const merged = structure.map(item => ({
       ...item,
-      amount: snapMap.has(item.id) ? snapMap.get(item.id)! : (monthSnaps.length > 0 ? 0 : Number(item.amount ?? 0)),
+      amount: snapMap.has(item.id) ? snapMap.get(item.id)! : 0,
     }));
+    setHasSnapshot(monthSnaps.length > 0);
     setItems(merged);
     setLoading(false);
     setDirty(markDirty);
   }
 
   useEffect(() => { load(selectedYm); }, []);
-  useEffect(() => { if (reloadKey) load(selectedYm, true); }, [reloadKey]);
+  useEffect(() => { if (reloadKey) load(selectedYm, false); }, [reloadKey]);
   useEffect(() => { load(selectedYm); }, [selectedYm]);
   useEffect(() => {
     if (!pasteOpen) return;
@@ -450,6 +454,9 @@ export function CostEditor({ reloadKey, selectedYm, onDirtyChange, onSaved }: Co
             )}
           </div>
         </div>
+        {!loading && !hasSnapshot && (
+          <p className="mt-2 text-[11px] text-fg-3">이 달은 아직 저장된 값이 없습니다. 오른쪽 "이전 월 붙여넣기"로 전월 값을 가져온 뒤 바뀐 것만 고치면 빠릅니다.</p>
+        )}
         {needsMigration && (
           <p className="mt-2 text-[11px] text-warn">분류·마켓 태그는 DB 마이그레이션(00057) 적용 전이라 저장되지 않았습니다. 금액은 정상 저장됐습니다.</p>
         )}
