@@ -102,17 +102,24 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [newLabel, setNewLabel] = useState<{ parent: string | null; value: string } | null>(null);
   const [check, setCheck] = useState<CheckState>(null);
   const [checking, setChecking] = useState(false);
+  const AUTO_KEY = 'lv-erp-settlement-autocheck';
+  const [autoCheck, setAutoCheck] = useState(true);
+  useEffect(() => { try { setAutoCheck(localStorage.getItem(AUTO_KEY) !== 'off'); } catch {} }, []);
+  const toggleAuto = (v: boolean) => { setAutoCheck(v); try { localStorage.setItem(AUTO_KEY, v ? 'on' : 'off'); } catch {} if (!v) setCheck(null); };
   useEffect(() => { setCheck(null); }, [selectedYm]);
-  async function runCheck() {
+  const runCheck = useCallback(async (manual = false) => {
     setChecking(true);
     try {
       const r = await fetch(`/api/settlement/crosscheck?year_month=${selectedYm}`);
       const j = await r.json();
-      if (!r.ok) { toast.error(j.error ?? '대조 실패'); return; }
+      if (!r.ok) { if (manual) toast.error(j.error ?? '대조 실패'); return; }
       setCheck({ refs: j.refs ?? {}, orders: j.orders ?? {} });
-      setMode('input');
-    } finally { setChecking(false); }
-  }
+      if (manual) setMode('input');
+    } catch { if (manual) toast.error('대조 실패'); }
+    finally { setChecking(false); }
+  }, [selectedYm, toast]);
+  // 자동 대조: 시트가 로드될 때(저장 후 재조회 포함) 백그라운드로 2~3초 뒤 색 블록이 붙는다
+  useEffect(() => { if (autoCheck && !loading && items.length) runCheck(false); }, [autoCheck, loading, items, selectedYm, runCheck]);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -272,11 +279,14 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             </div>
           )}
         </div>
-        {check ? (
+        <label className="flex items-center gap-1.5 text-[12px] text-fg-3 cursor-pointer select-none mr-1" title="켜 두면 시트를 열거나 저장할 때마다 자동으로 대조합니다 (약 2~3초, 화면을 막지 않음)">
+          <input type="checkbox" className="accent-brand" checked={autoCheck} onChange={e => toggleAuto(e.target.checked)} /> 자동 대조
+        </label>
+        {check && !autoCheck ? (
           <Button variant="outline" size="sm" onClick={() => setCheck(null)} className="border-brand/40 text-brand"><X /> 대조 끄기</Button>
         ) : (
-          <Button variant="outline" size="sm" onClick={runCheck} disabled={checking} title="주문 동기화(API)·매출 파일·광고 raw·설정으로 계산한 기준값과 비교합니다">
-            {checking ? <Loader2 className="animate-spin" /> : <ScanSearch />} API 대조
+          <Button variant="outline" size="sm" onClick={() => runCheck(true)} disabled={checking} title="주문 동기화(API)·매출 파일·광고 raw·설정으로 계산한 기준값과 비교합니다">
+            {checking ? <Loader2 className="animate-spin" /> : <ScanSearch />} {checking ? '대조 중' : check ? '다시 대조' : 'API 대조'}
           </Button>
         )}
         <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => setMode(m => m === 'input' ? 'structure' : 'input')}>
