@@ -4,19 +4,23 @@ import { useMemo, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { PL_ROWS, buildSeries, fmtNum, type Basis, type MCost, type PL, type Regime, type Snapshot } from '../_lib/settlement';
+import { PL_ROWS, buildSeries, fmtNum, vatViewFor, type Basis, type MCost, type PL, type Regime, type Snapshot } from '../_lib/settlement';
 import { useThemeColors } from '../_lib/useThemeColors';
 
 interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string; loading?: boolean; vatFor?: (ym: string) => 'ex' | 'incl'; regimeOf?: (ym: string) => Regime; basis?: Basis }
 
 const RANGE = [{ value: '6', label: '6개월' }, { value: '12', label: '12개월' }, { value: 'all', label: '전체' }] as const;
 const MODE = [{ value: 'amount', label: '금액' }, { value: 'ratio', label: '매출 대비 %' }] as const;
+const REGIME = [{ value: 'auto', label: '자동(전환월)' }, { value: 'simplified', label: '전부 간이' }, { value: 'general', label: '전부 일반' }] as const;
 
 /** 월별 추이 — 손익계산서 형식. 열 = 월, 행 = 손익 라인. */
 export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vatFor, regimeOf, basis }: Props) {
   const [range, setRange] = useState<'6' | '12' | 'all'>('12');
   const [mode, setMode] = useState<'amount' | 'ratio'>('amount');
   const [includeCurrent, setIncludeCurrent] = useState(false);
+  const [regimeMode, setRegimeMode] = useState<'auto' | 'simplified' | 'general'>('auto');
+  const regimeOfEff = regimeMode === 'auto' ? regimeOf : (() => regimeMode as Regime);
+  const vatForEff = regimeMode === 'auto' ? vatFor : (() => vatViewFor(regimeMode as Regime));
   const c = useThemeColors();
 
   const cols = useMemo(() => {
@@ -25,7 +29,7 @@ export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vat
     return range === 'all' ? filtered : filtered.slice(-Number(range));
   }, [months, range, includeCurrent, currentYm]);
 
-  const series = useMemo(() => buildSeries(items, snapshots, cols, { vat, vatFor, regimeOf, basis }), [items, snapshots, cols, vat, vatFor, regimeOf, basis]);
+  const series = useMemo(() => buildSeries(items, snapshots, cols, { vat, vatFor: vatForEff, regimeOf: regimeOfEff, basis }), [items, snapshots, cols, vat, vatForEff, regimeOfEff, basis]);
 
   const cell = (p: PL, key: keyof PL) => {
     const v = p[key];
@@ -82,7 +86,8 @@ export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vat
 
       <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="flex items-center gap-2 px-4 md:px-5 py-3 border-b border-line-2">
-          <h3 className="text-[15px] font-bold text-fg mr-auto">손익계산서 <span className="text-[11px] font-medium text-fg-4 ml-1">간이 달은 VAT 포함(공급대가) · 일반 달은 VAT 별도(공급가액) · 원</span></h3>
+          <h3 className="text-[15px] font-bold text-fg mr-auto">손익계산서 <span className="text-[11px] font-medium text-fg-4 ml-1">간이 = VAT 포함(공급대가)+부가세 추정 · 일반 = VAT 별도(공급가액) · 원</span></h3>
+          <SegmentedControl items={REGIME} value={regimeMode} onChange={setRegimeMode} />
           <SegmentedControl items={MODE} value={mode} onChange={setMode} />
         </div>
         <div className="overflow-x-auto">
@@ -90,7 +95,7 @@ export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vat
             <thead>
               <tr className="h-9 text-[11px] font-semibold text-fg-4 border-b border-line">
                 <th className="text-left px-4 sticky left-0 bg-card">항목</th>
-                {series.map(s => <th key={s.ym} className={cn('text-right px-3 tabular-nums whitespace-nowrap', s.ym === currentYm && 'text-brand')} title={regimeOf ? (regimeOf(s.ym) === 'general' ? '일반과세 · VAT 별도' : '간이과세 · VAT 포함') : ''}>{s.ym.replace('-', '.')}{regimeOf && <span className="block text-[9px] font-normal text-fg-5">{regimeOf(s.ym) === 'general' ? '일반' : '간이'}</span>}{s.ym === currentYm && ' (진행)'}</th>)}
+                {series.map(s => <th key={s.ym} className={cn('text-right px-3 tabular-nums whitespace-nowrap', s.ym === currentYm && 'text-brand')} title={regimeOfEff ? (regimeOfEff(s.ym) === 'general' ? '일반과세 · VAT 별도' : '간이과세 · VAT 포함') : ''}>{s.ym.replace('-', '.')}{regimeOfEff && <span className="block text-[9px] font-normal text-fg-5">{regimeOfEff(s.ym) === 'general' ? '일반' : '간이'}</span>}{s.ym === currentYm && ' (진행)'}</th>)}
                 <th className="text-right px-3 whitespace-nowrap">전월비</th>
               </tr>
             </thead>
