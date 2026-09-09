@@ -670,7 +670,7 @@ export function CostEditor({ reloadKey, selectedYm, onDirtyChange, onSaved }: Co
               {/* 하단 액션 */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-line-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  {newParent === '' && newParent !== '__root__' ? (
+                  {newParent === '' ? (
                     <button onClick={() => { setNewParent('__root__'); setNewLabel(''); }}
                       className="h-9 px-3.5 rounded-lg border border-line text-[12px] font-medium text-fg-3 hover:bg-app flex items-center gap-1.5">
                       <Plus className="h-3.5 w-3.5" /> 항목 추가
