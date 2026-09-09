@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Circle, HelpCircle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
@@ -51,22 +51,14 @@ function SettlementInner() {
   const { vatOn } = useVat();
   const vat = vatOn ? 'incl' : 'ex';
 
-  const data = useSettlementData(dataKey);
-  const [closedMonths, setClosedMonths] = useState<Record<string, { closed_at: string; note?: string | null }>>({});
-  const loadClosed = useCallback(() => {
-    fetch('/api/settlement/months').then(r => r.json()).then(j => {
-      const m: Record<string, { closed_at: string; note?: string | null }> = {};
-      for (const c of j.closed ?? []) m[c.year_month] = { closed_at: c.closed_at, note: c.note };
-      setClosedMonths(m);
-    }).catch(() => {});
-  }, []);
-  useEffect(() => { loadClosed(); }, [loadClosed]);
+  const data = useSettlementData(dataKey, selectedYm);
+  const closedMonths = data.closed;
   const toggleClosed = useCallback(async (ym: string, closed: boolean) => {
     const r = await fetch('/api/settlement/months', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year_month: ym, closed }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(j.error ?? '마감 처리 실패 (마이그레이션 00061 확인)'); return; }
-    loadClosed();
-  }, [loadClosed]);
+    setDataKey(k => k + 1);
+  }, []);
   const orderCounts = useOrderCounts(tab === 'analysis' ? selectedYm : null);
 
   const guard = useCallback(async (next: () => void) => {
@@ -114,10 +106,10 @@ function SettlementInner() {
 
       {tab === 'input' && (
         <div className="space-y-4">
-          <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={dataKey} />
-          <UnregisteredCard selectedYm={selectedYm} onRegistered={() => setDataKey(k => k + 1)} />
+          <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} salesPlatforms={data.salesPlatforms as Market[]} adReady={data.adMonths.some(m => m.year_month === selectedYm)} />
+          {!data.loading && <UnregisteredCard selectedYm={selectedYm} onRegistered={() => setDataKey(k => k + 1)} />}
           <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />
-          <AdCoverageCard selectedYm={selectedYm} onSaved={() => setDataKey(k => k + 1)} />
+          <AdCoverageCard selectedYm={selectedYm} months={data.adMonths} onSaved={() => setDataKey(k => k + 1)} />
           <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} closed={closedMonths[selectedYm] ?? null} onToggleClosed={(c) => toggleClosed(selectedYm, c)} />
         </div>
       )}
@@ -132,28 +124,20 @@ function SettlementInner() {
 }
 
 /** 월 마감 순서 안내 + 진행 상태. 누가 해도 같은 순서로 가도록. */
-function StepGuide({ selectedYm, saved, reloadKey }: { selectedYm: string; saved: boolean; reloadKey: number }) {
-  const [salesMarkets, setSalesMarkets] = useState<Market[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/monthly-product-sales?year_month=${selectedYm}`).then(r => r.ok ? r.json() : []).then((rows: any[]) => {
-      if (cancelled) return;
-      setSalesMarkets([...new Set(rows.map(r => r.platform as Market))].filter(m => SALES_MARKETS.includes(m)));
-    }).catch(() => { if (!cancelled) setSalesMarkets([]); });
-    return () => { cancelled = true; };
-  }, [selectedYm, reloadKey]);
+function StepGuide({ selectedYm, saved, salesPlatforms, adReady }: { selectedYm: string; saved: boolean; salesPlatforms: Market[]; adReady: boolean }) {
+  const salesMarkets = salesPlatforms.filter(m => SALES_MARKETS.includes(m));
 
   const steps: { title: string; done: boolean; desc: string; help: string }[] = [
     {
       title: '마켓 매출 파일 올리기',
       done: (salesMarkets?.length ?? 0) > 0,
-      desc: salesMarkets?.length ? `올린 마켓: ${salesMarkets.map(m => MARKETS.find(x => x.id === m)?.short).join(' · ')}` : '쿠팡 · 토스 · 스스 · ESM 순서로 하나씩',
+      desc: salesMarkets.length ? `올린 마켓: ${salesMarkets.map(m => MARKETS.find(x => x.id === m)?.short).join(' · ')}` : '쿠팡 · 토스 · 스스 · ESM 순서로 하나씩',
       help: '쿠팡: 셀러 인사이트 > 상품별 판매 > 월 선택 > 엑셀 다운로드\n토스: 판매자센터 > 주문 > 전체주문조회 > 기간 선택 > 엑셀 (구매확정만 집계)\n스스: 스마트스토어센터 > 판매관리 > 주문조회 > 엑셀 다운로드 (양식은 금액 컬럼 포함으로, 비밀번호 123123)\nESM: ESM PLUS > 주문통합검색 > 결제일 기간 > 엑셀 (구매결정완료만 집계)',
     },
     {
       title: '광고 raw 확인',
-      done: false,
-      desc: '광고 분석에 올린 PA 보고서를 그대로 사용',
+      done: adReady,
+      desc: adReady ? '이 달 광고 집계가 저장돼 있습니다' : '광고 분석에 올린 PA 보고서를 그대로 사용',
       help: '쿠팡 광고센터 > 보고서 > 상품광고 일별 키워드 보고서 (해당 월 전체) 다운로드 → 광고 분석 페이지 "데이터 추가" → 배너가 뜨면 "지금 DB 로 동기화". 아래 광고비 raw 카드에 ✓ 가 보이면 완료.',
     },
     {

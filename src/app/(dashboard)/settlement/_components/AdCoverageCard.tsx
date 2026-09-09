@@ -15,8 +15,9 @@ interface MonthRow { year_month: string; rows_count: number; cost: number }
  * 광고비 raw 현황 + "이 PC 광고 raw → 월 집계 저장".
  * 광고 분석에 올린 raw 는 브라우저에만 있어도 되고, 여기서 월·옵션ID 요약만 DB(monthly_product_ads)에 저장한다.
  */
-export function AdCoverageCard({ selectedYm, onSaved }: { selectedYm: string; onSaved?: () => void }) {
-  const [months, setMonths] = useState<MonthRow[] | null>(null);
+export function AdCoverageCard({ selectedYm, months: monthsProp, onSaved }: { selectedYm: string; months?: MonthRow[]; onSaved?: () => void }) {
+  const [months, setMonths] = useState<MonthRow[] | null>(monthsProp ?? null);
+  useEffect(() => { if (monthsProp) setMonths(monthsProp); }, [monthsProp]);
   const [busy, setBusy] = useState<string | null>(null);
   const [localInfo, setLocalInfo] = useState<{ rows: number; months: string[] } | null>(null);
   const toast = useToast();
@@ -26,7 +27,7 @@ export function AdCoverageCard({ selectedYm, onSaved }: { selectedYm: string; on
       setMonths(Array.isArray(j.months) ? j.months : []);
     }).catch(() => setMonths([]));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!monthsProp) load(); }, [load, monthsProp]);
 
   // 이 PC 브라우저의 raw 보유 현황 — IndexedDB 전체(수십만 행)를 읽으면 화면이 수 초 멈추므로
   // 마지막 집계 때 남긴 요약(localStorage)만 읽는다. 실제 raw 는 버튼을 눌렀을 때만 읽는다.
