@@ -45,15 +45,30 @@ export async function PUT(request: NextRequest) {
     sort_order: item.sort_order ?? 0,
     note: item.note ?? '',
     category: item.category ?? 'variable',
+    // 00057 태그 — 컬럼이 없는 DB 에서는 아래에서 제거하고 재시도
+    pl_line: item.pl_line ?? null,
+    market: item.market ?? null,
+    alloc_rule: item.alloc_rule ?? null,
   }));
 
-  // 병렬 업데이트
-  await Promise.all(updates.map((u: any) => {
-    const { id, ...fields } = u;
-    return admin.from('monthly_costs').update(fields).eq('id', id);
-  }));
+  const TAG_COLS = ['pl_line', 'market', 'alloc_rule'];
+  const run = async (stripTags: boolean) => {
+    const results = await Promise.all(updates.map((u: any) => {
+      const { id, ...fields } = u;
+      if (stripTags) for (const c of TAG_COLS) delete fields[c];
+      return admin.from('monthly_costs').update(fields).eq('id', id);
+    }));
+    return results.find(r => r.error)?.error ?? null;
+  };
+  let err = await run(false);
+  let tagsSaved = true;
+  if (err && /PGRST204|column .* does not exist|schema cache/i.test(`${err.code} ${err.message}`)) {
+    tagsSaved = false;
+    err = await run(true);
+  }
+  if (err) return NextResponse.json({ error: err.message }, { status: 400 });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, tagsSaved, needsMigration: !tagsSaved });
 }
 
 // 개별 추가/수정
@@ -106,7 +121,11 @@ export async function POST(request: NextRequest) {
     if (body.is_locked !== undefined) update.is_locked = body.is_locked;
     if (body.sort_order !== undefined) update.sort_order = body.sort_order;
     if (body.category !== undefined) update.category = body.category;
-    await admin.from('monthly_costs').update(update).eq('id', body.id);
+    if (body.pl_line !== undefined) update.pl_line = body.pl_line;
+    if (body.market !== undefined) update.market = body.market;
+    if (body.alloc_rule !== undefined) update.alloc_rule = body.alloc_rule;
+    const { error: upErr } = await admin.from('monthly_costs').update(update).eq('id', body.id);
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
     return NextResponse.json({ ok: true });
   }
 
@@ -148,6 +167,14 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id 필요' }, { status: 400 });
 
   const admin = await createAdminClient();
-  await admin.from('monthly_costs').delete().eq('id', id);
-  return NextResponse.json({ ok: true });
+  // 삭제는 스냅샷(전월 이력)까지 CASCADE 로 사라진다 → 이력 개수를 알려주고 confirm=1 없으면 거부
+  const { data: kids } = await admin.from('monthly_costs').select('id').eq('parent_id', id);
+  const ids = [id, ...(kids ?? []).map((k: any) => k.id)];
+  const { count } = await admin.from('monthly_cost_snapshots').select('*', { count: 'exact', head: true }).in('cost_id', ids);
+  if (request.nextUrl.searchParams.get('confirm') !== '1') {
+    return NextResponse.json({ requiresConfirm: true, snapshotCount: count ?? 0, childCount: (kids ?? []).length }, { status: 409 });
+  }
+  const { error } = await admin.from('monthly_costs').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true, deletedSnapshots: count ?? 0 });
 }
