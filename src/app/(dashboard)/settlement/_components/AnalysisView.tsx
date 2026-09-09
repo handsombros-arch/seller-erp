@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type MCost, type Market, type MarketPL, type PL, type Regime, type VatMode } from '../_lib/settlement';
+import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type Basis, type MCost, type Market, type MarketPL, type PL, type Regime, type VatMode } from '../_lib/settlement';
 
 interface Props {
   items: MCost[];
@@ -17,14 +17,15 @@ interface Props {
   vats?: Map<string, VatMode>;
   prevVats?: Map<string, VatMode>;
   regime?: Regime;
+  basis?: Basis;
 }
 
 const won = (n: number) => `${fmtNum(n)}원`;
 
 /** 현재월 분석 — KPI, 손익 구조, 마켓별 공헌이익·ROAS */
-export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts, vats, prevVats, regime }: Props) {
-  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, regime, orderCounts: orderCounts ?? undefined, vatOf: (it) => vats?.get(it.id) }), [items, amounts, vat, regime, orderCounts, vats]);
-  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, regime, orderCounts: undefined, vatOf: (it) => prevVats?.get(it.id) }) : null, [items, prevAmounts, vat, regime, prevVats]);
+export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts, vats, prevVats, regime, basis }: Props) {
+  const res = useMemo(() => buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat, regime, basis, orderCounts: orderCounts ?? undefined, vatOf: (it) => vats?.get(it.id) }), [items, amounts, vat, regime, basis, orderCounts, vats]);
+  const prev = useMemo(() => prevAmounts ? buildPL(items, (it) => prevAmounts.get(it.id) ?? 0, { vat, regime, basis, orderCounts: undefined, vatOf: (it) => prevVats?.get(it.id) }) : null, [items, prevAmounts, vat, regime, basis, prevVats]);
   const t = res.total;
   const inferredCount = res.leaves.filter(l => l.tags.inferred && l.value !== 0).length;
 

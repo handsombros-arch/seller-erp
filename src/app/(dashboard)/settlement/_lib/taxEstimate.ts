@@ -2,7 +2,7 @@
  * 예상 세금 — 부가가치세(간이/일반)와 종합소득세.
  * 시트 스냅샷(월별 손익)을 과세 유형에 맞춰 집계한 추정치. 세무사 확인용 참고값이며 공제·기장 방식에 따라 달라진다.
  */
-import { buildPL, effectiveVatMode, itemVatMode, regimeFor, vatSplitMode, type MCost, type Regime, type Snapshot } from './settlement';
+import { buildPL, effectiveVatMode, isDeductible, itemVatMode, regimeFor, vatSplitMode, type MCost, type Regime, type Snapshot } from './settlement';
 
 export interface VatPeriod {
   key: string;
@@ -42,14 +42,15 @@ function monthFigures(items: MCost[], snapshots: Snapshot[], ym: string, regime:
   if (amounts.size === 0) return null;
   const modeOf = (it: MCost) => { const o = vats.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : itemVatMode(it); };
   const view = regime === 'general' ? 'ex' : 'incl';
-  const res = buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat: view, regime, vatOf: modeOf });
+  // 세금 계산은 회계 기준(경비 인정 항목만)
+  const res = buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat: view, regime, vatOf: modeOf, basis: 'accounting' });
   // 부가세 계산용: 매출(공급대가/공급가액), 세금계산서 매입(부가세 없는 항목 제외)
   let salesIncl = 0, salesEx = 0, buyIncl = 0, buyEx = 0, b2bEx = 0;
   for (const l of res.leaves) {
     const mode = modeOf(l.item); const a = amounts.get(l.item.id) ?? 0; const sp = vatSplitMode(a, mode); const sign = l.item.is_income ? -1 : 1;
     if (l.tags.pl_line === 'revenue') { salesIncl += sp.incl * (l.item.is_income ? 1 : -1); salesEx += sp.ex * (l.item.is_income ? 1 : -1); if (l.tags.market === 'b2b') b2bEx += sp.ex * (l.item.is_income ? 1 : -1); }
     else if (l.tags.pl_line === 'coupon') { salesIncl -= sp.incl * sign; salesEx -= sp.ex * sign; }
-    else if (['cogs', 'market_fee', 'logistics', 'ad', 'marketing', 'fixed', 'other'].includes(l.tags.pl_line) && mode !== 'none') { buyIncl += sp.incl * sign; buyEx += sp.ex * sign; }
+    else if (['cogs', 'market_fee', 'logistics', 'ad', 'marketing', 'fixed', 'other'].includes(l.tags.pl_line) && mode !== 'none' && isDeductible(l.item)) { buyIncl += sp.incl * sign; buyEx += sp.ex * sign; }
   }
   return { operatingProfit: res.total.operatingProfit, salesIncl, salesEx, buyIncl, buyEx, b2bEx };
 }

@@ -8,7 +8,8 @@ import { Tabs, useTabParam } from '@/components/ui/tabs';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { inputClassName } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Market } from './_lib/settlement';
+import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Basis, type Market } from './_lib/settlement';
+import { SegmentedControl } from '@/components/ui/tabs';
 import { TaxCheckCard } from './_components/TaxCheckCard';
 import { TaxEstimateCard } from './_components/TaxEstimateCard';
 import { SummaryView } from './_components/SummaryView';
@@ -56,6 +57,10 @@ function SettlementInner() {
   const saveSwitchYm = useCallback((ym: string) => { setSwitchYm(ym); fetch('/api/settlement/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'tax_switch_ym', value: ym }) }).catch(() => {}); }, []);
   const regime = regimeFor(selectedYm, switchYm);
   const vat = vatViewFor(regime);
+  // 손익 기준: 실제(체감) vs 회계(세무 인정 경비만). 대출·신고는 회계 기준.
+  const [basis, setBasisState] = useState<Basis>('actual');
+  useEffect(() => { try { const b = localStorage.getItem('lv-erp-settlement-basis'); if (b === 'accounting' || b === 'actual') setBasisState(b); } catch {} }, []);
+  const setBasis = (b: Basis) => { setBasisState(b); try { localStorage.setItem('lv-erp-settlement-basis', b); } catch {} };
 
   const data = useSettlementData(dataKey, selectedYm);
   const closedMonths = data.closed;
@@ -110,11 +115,19 @@ function SettlementInner() {
         </label>
       </div>
 
-      <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden" />
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden flex-1" />
+        {tab !== 'input' && tab !== 'products' && (
+          <SegmentedControl items={[{ value: 'actual', label: '실제 손익' }, { value: 'accounting', label: '회계 손익' }] as const} value={basis} onChange={setBasis} />
+        )}
+      </div>
+      {tab !== 'input' && tab !== 'products' && basis === 'accounting' && (
+        <p className="text-[11px] text-fg-4 -mt-2">회계 손익: 구조 편집에서 "경비 인정"을 끈 항목(생활비·미신고 인건비·개인 가구매 등)을 뺀 값. 세무 신고와 대출 심사에서 보는 숫자입니다.</p>
+      )}
 
       {tab === 'summary' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
-          : <SummaryView items={data.items} snapshots={data.snapshots} months={data.months} switchYm={switchYm} ym={selectedYm} onGo={(t) => setTab(t)} />
+          : <SummaryView items={data.items} snapshots={data.snapshots} months={data.months} switchYm={switchYm} ym={selectedYm} basis={basis} onGo={(t) => setTab(t)} />
       )}
       {tab === 'input' && (
         <div className="space-y-4">
@@ -126,11 +139,11 @@ function SettlementInner() {
           {!data.loading && <TaxCheckCard items={data.items} amounts={amounts} vats={vats} ym={selectedYm} regime={regime} switchYm={switchYm} onSwitchYmChange={saveSwitchYm} onItemsChanged={() => setDataKey(k => k + 1)} />}
         </div>
       )}
-      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} currentYm={currentYm()} loading={data.loading} />}
+      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} basis={basis} currentYm={currentYm()} loading={data.loading} />}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
           : <>
-              <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} regime={regime} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
+              <AnalysisView items={data.items} amounts={amounts} vats={vats} ym={selectedYm} vat={vat} regime={regime} basis={basis} orderCounts={orderCounts} prevAmounts={prevAmounts} prevVats={data.vatsFor(prevYm)} />
               <div className="mt-4"><TaxEstimateCard items={data.items} snapshots={data.snapshots} switchYm={switchYm} ym={selectedYm} /></div>
             </>
       )}

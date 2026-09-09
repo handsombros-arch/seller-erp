@@ -3,16 +3,18 @@
 import { useMemo } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { cn } from '@/lib/utils';
-import { MARKETS, buildSeries, fmtNum, fmtPct, regimeFor, vatViewFor, type MCost, type Snapshot } from '../_lib/settlement';
+import { MARKETS, buildSeries, fmtNum, fmtPct, regimeFor, vatViewFor, type Basis, type MCost, type Snapshot } from '../_lib/settlement';
 import { estimateIncomeTax, estimateVat } from '../_lib/taxEstimate';
 import { useThemeColors } from '../_lib/useThemeColors';
 
 /** 첫 화면 요약 — 올해 누적 매출·이익, 월별 흐름, 마켓 비중, 예상 세금을 한눈에 */
-export function SummaryView({ items, snapshots, months, switchYm, ym, onGo }: { items: MCost[]; snapshots: Snapshot[]; months: string[]; switchYm: string; ym: string; onGo: (tab: 'input' | 'trend' | 'analysis' | 'products') => void }) {
+export function SummaryView({ items, snapshots, months, switchYm, ym, basis = 'actual', onGo }: { items: MCost[]; snapshots: Snapshot[]; months: string[]; switchYm: string; ym: string; basis?: Basis; onGo: (tab: 'input' | 'trend' | 'analysis' | 'products') => void }) {
   const c = useThemeColors();
   const year = ym.slice(0, 4);
   const yearMonths = useMemo(() => months.filter(m => m.startsWith(year)).sort(), [months, year]);
-  const series = useMemo(() => buildSeries(items, snapshots, yearMonths, { vat: 'incl', vatFor: (m) => vatViewFor(regimeFor(m, switchYm)), regimeOf: (m) => regimeFor(m, switchYm) }), [items, snapshots, yearMonths, switchYm]);
+  const series = useMemo(() => buildSeries(items, snapshots, yearMonths, { vat: 'incl', vatFor: (m) => vatViewFor(regimeFor(m, switchYm)), regimeOf: (m) => regimeFor(m, switchYm), basis }), [items, snapshots, yearMonths, switchYm, basis]);
+  const otherSeries = useMemo(() => buildSeries(items, snapshots, yearMonths, { vat: 'incl', vatFor: (m) => vatViewFor(regimeFor(m, switchYm)), regimeOf: (m) => regimeFor(m, switchYm), basis: basis === 'actual' ? 'accounting' : 'actual' }), [items, snapshots, yearMonths, switchYm, basis]);
+  const otherProfit = otherSeries.reduce((s, x) => s + x.total.operatingProfit, 0);
   const seriesEx = useMemo(() => buildSeries(items, snapshots, yearMonths, { vat: 'ex' }), [items, snapshots, yearMonths]);
   const seriesIncl = useMemo(() => buildSeries(items, snapshots, yearMonths, { vat: 'incl' }), [items, snapshots, yearMonths]);
 
@@ -50,7 +52,7 @@ export function SummaryView({ items, snapshots, months, switchYm, ym, onGo }: { 
       {/* 상단 KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label={`${year}년 누적 실매출`} value={won(ytd.netRevenue)} sub={`${yearMonths.length}개월 · 총매출 ${won(ytd.revenue)}`} />
-        <Kpi label="누적 영업이익" value={won(ytd.operatingProfit)} sub={`영업이익률 ${fmtPct(ytd.netRevenue ? (ytd.operatingProfit / ytd.netRevenue) * 100 : null)} · 공헌이익 ${won(ytd.contribution)}`} tone={ytd.operatingProfit < 0 ? 'bad' : 'good'} />
+        <Kpi label={`누적 영업이익 (${basis === 'accounting' ? '회계' : '실제'})`} value={won(ytd.operatingProfit)} sub={`${basis === 'accounting' ? '실제' : '회계'} 기준 ${won(otherProfit)} · 영업이익률 ${fmtPct(ytd.netRevenue ? (ytd.operatingProfit / ytd.netRevenue) * 100 : null)}`} tone={ytd.operatingProfit < 0 ? 'bad' : 'good'} />
         <Kpi label={`${last?.ym.replace('-', '.')} 실매출`} value={last ? won(last.total.netRevenue) : '-'} sub={mom('netRevenue') != null ? `전월 대비 ${mom('netRevenue')! >= 0 ? '+' : ''}${mom('netRevenue')!.toFixed(0)}%` : '전월 없음'} delta={mom('netRevenue')} />
         <Kpi label={`${last?.ym.replace('-', '.')} 영업이익`} value={last ? won(last.total.operatingProfit) : '-'} sub={mom('operatingProfit') != null ? `전월 대비 ${mom('operatingProfit')! >= 0 ? '+' : ''}${mom('operatingProfit')!.toFixed(0)}%` : '전월 없음'} delta={mom('operatingProfit')} tone={last && last.total.operatingProfit < 0 ? 'bad' : undefined} />
       </div>

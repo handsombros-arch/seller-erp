@@ -4,16 +4,16 @@ import { useMemo, useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { PL_ROWS, buildSeries, fmtNum, type MCost, type PL, type Regime, type Snapshot } from '../_lib/settlement';
+import { PL_ROWS, buildSeries, fmtNum, type Basis, type MCost, type PL, type Regime, type Snapshot } from '../_lib/settlement';
 import { useThemeColors } from '../_lib/useThemeColors';
 
-interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string; loading?: boolean; vatFor?: (ym: string) => 'ex' | 'incl'; regimeOf?: (ym: string) => Regime }
+interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string; loading?: boolean; vatFor?: (ym: string) => 'ex' | 'incl'; regimeOf?: (ym: string) => Regime; basis?: Basis }
 
 const RANGE = [{ value: '6', label: '6개월' }, { value: '12', label: '12개월' }, { value: 'all', label: '전체' }] as const;
 const MODE = [{ value: 'amount', label: '금액' }, { value: 'ratio', label: '매출 대비 %' }] as const;
 
 /** 월별 추이 — 손익계산서 형식. 열 = 월, 행 = 손익 라인. */
-export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vatFor, regimeOf }: Props) {
+export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vatFor, regimeOf, basis }: Props) {
   const [range, setRange] = useState<'6' | '12' | 'all'>('12');
   const [mode, setMode] = useState<'amount' | 'ratio'>('amount');
   const [includeCurrent, setIncludeCurrent] = useState(false);
@@ -25,7 +25,7 @@ export function TrendPL({ items, snapshots, months, vat, currentYm, loading, vat
     return range === 'all' ? filtered : filtered.slice(-Number(range));
   }, [months, range, includeCurrent, currentYm]);
 
-  const series = useMemo(() => buildSeries(items, snapshots, cols, { vat, vatFor, regimeOf }), [items, snapshots, cols, vat, vatFor, regimeOf]);
+  const series = useMemo(() => buildSeries(items, snapshots, cols, { vat, vatFor, regimeOf, basis }), [items, snapshots, cols, vat, vatFor, regimeOf, basis]);
 
   const cell = (p: PL, key: keyof PL) => {
     const v = p[key];

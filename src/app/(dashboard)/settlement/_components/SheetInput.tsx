@@ -245,7 +245,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     setAmounts(new Map(local.map(i => [i.id, 0]))); setDirty(true);
   };
 
-  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '', i.unit_price ?? null, !!i.vat_none]).sort());
+  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '', i.unit_price ?? null, !!i.vat_none, i.tax_deductible !== false]).sort());
   async function save() {
     setSaving(true);
     try {
@@ -528,6 +528,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <Chip on={!!leaf.is_income} onClick={() => patch(leaf.id, { is_income: !leaf.is_income })} title="+ 수입(차감) / − 비용">{leaf.is_income ? '+ 수입' : '− 비용'}</Chip>
                   <Chip on={itemVatMode(leaf) !== 'incl'} onClick={() => { const n = nextVatMode(itemVatMode(leaf)); patch(leaf.id, { vat_applicable: n === 'ex', vat_none: n === 'none' }); }} title="새 달 기본값. 포함 → 별도 → 없음 순으로 바뀝니다. VAT없음 = 급여·개인거래처럼 부가세가 없는 금액">{VAT_MODE_LABEL[itemVatMode(leaf)]}</Chip>
                   <Chip on={!!leaf.carry_forward} onClick={() => patch(leaf.id, { carry_forward: !leaf.carry_forward })} title="새 달을 열면 전월 값 자동 입력">매월 이월</Chip>
+                  <Chip on={leaf.tax_deductible !== false} onClick={() => patch(leaf.id, { tax_deductible: leaf.tax_deductible === false })} title="세무상 경비 인정 여부. 끄면 실제 손익에는 들어가고 회계 손익·종소세 계산에서는 빠집니다 (생활비, 원천징수 안 한 인건비, 개인 가구매 등)">{leaf.tax_deductible !== false ? '경비 인정' : '경비 제외'}</Chip>
                   <input value={leaf.unit_price ?? ''} onChange={e => patch(leaf.id, { unit_price: e.target.value === '' ? null : Number(e.target.value.replace(/[^0-9.]/g, '')) })} placeholder="건당 단가" inputMode="numeric" title="건당 단가를 넣으면 입력 화면에서 수량만 적어 금액이 계산됩니다" className={cn(inputClassName, 'h-7 w-24 text-[11px] text-right')} />
                   <input lang="ko" value={leaf.note ?? ''} onChange={e => patch(leaf.id, { note: e.target.value })} placeholder="공통 메모 (모든 달)" className={cn(inputClassName, 'h-7 w-32 text-[11px]')} />
                   <span className="ml-auto"><TagPicker item={leaf} parent={isSingle ? null : group} onChange={p => patch(leaf.id, p)} /></span>
@@ -538,7 +539,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <div className="w-52 shrink-0 min-w-0">
                     <div className="text-[13px] text-fg truncate" title={leaf.label}>{leaf.label}</div>
                     <div className="text-[10px] text-fg-5 truncate" title={leaf.note ? `공통 메모: ${leaf.note}` : ''}>
-                      {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}{leaf.note ? ` · ${leaf.note}` : ''}
+                      {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}{leaf.tax_deductible === false ? ' · 회계 제외' : ''}{leaf.note ? ` · ${leaf.note}` : ''}
                     </div>
                   </div>
                   <Chip on={vatEff(leaf) !== 'incl'} onClick={() => !readOnly && setVatMonth(leaf.id, nextVatMode(vatEff(leaf)))} title={`이 달의 입력값 기준: VAT포함 = 세후 / VAT별도 = 세전 / VAT없음 = 부가세 없는 금액. 이 달에만 적용됩니다${vatOvMark(leaf, vatEff) ? ' (항목 기본값과 다름)' : ''}`}>{VAT_MODE_LABEL[vatEff(leaf)]}{vatOvMark(leaf, vatEff) ? '*' : ''}</Chip>

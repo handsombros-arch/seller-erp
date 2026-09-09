@@ -11,6 +11,9 @@ export type Market = 'coupang' | 'toss' | 'smartstore' | 'esm' | 'talkdeal' | 'b
 export type PlLine = 'revenue' | 'coupon' | 'cogs' | 'market_fee' | 'logistics' | 'ad' | 'marketing' | 'fixed' | 'other' | 'info';
 /** 과세 유형: simplified = 간이과세(부가세가 실비용, 공급대가 기준) · general = 일반과세(부가세 통과, 공급가액 기준) */
 export type Regime = 'simplified' | 'general';
+/** 손익 기준: actual = 실제(체감, 모든 지출) · accounting = 회계(세무 인정 경비만, 대출·신고용) */
+export type Basis = 'actual' | 'accounting';
+export const isDeductible = (item: MCost) => item.tax_deductible !== false;
 export const regimeFor = (ym: string, switchYm: string): Regime => (ym >= switchYm ? 'general' : 'simplified');
 export const vatViewFor = (r: Regime): 'ex' | 'incl' => (r === 'general' ? 'ex' : 'incl');
 export type AllocRule = 'direct' | 'by_orders' | 'by_revenue' | 'none';
@@ -22,6 +25,7 @@ export interface MCost {
   vat_applicable: boolean;
   vat_none?: boolean | null;     // 부가세 없음(급여·개인거래·부가세 납부액) — 별도/포함 어느 보기에서도 금액 그대로
   vat_confirmed?: boolean | null; // VAT 구분을 사용자가 확인함
+  tax_deductible?: boolean | null; // 세무상 경비 인정 (false = 실제 손익에만 포함, 회계 손익·종소세에서는 제외)
   parent_id: string | null;
   sort_order: number;
   note?: string;
@@ -215,6 +219,8 @@ export interface BuildOptions {
   vatOf?: (item: MCost) => VatMode | null | undefined;
   /** 간이과세면 부가세 추정을 영업이익에 반영 (시트에 '부가세 납부' 실적이 있으면 추정 생략) */
   regime?: Regime;
+  /** accounting 이면 경비 불인정 항목을 0 으로 (매출은 그대로) */
+  basis?: Basis;
   /** 마켓별 출고 건수 (건수 비례 배분용). 없으면 by_orders 는 매출 비례로 대체 */
   orderCounts?: Partial<Record<Market, number>>;
 }
@@ -250,7 +256,8 @@ export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number,
 }
 
 export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts: BuildOptions): PLResult {
-  const leaves = collectLeaves(items, amountOf, opts.vat, opts.vatOf);
+  const amountOfBasis = opts.basis === 'accounting' ? (it: MCost) => (isDeductible(it) ? amountOf(it) : 0) : amountOf;
+  const leaves = collectLeaves(items, amountOfBasis, opts.vat, opts.vatOf);
   const total = emptyPL();
   const common = emptyPL();
   const byMarket = new Map<Market, PL>();
@@ -292,7 +299,7 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
   if (opts.regime === 'simplified') {
     const manualVat = leaves.some(l => /부가세 납부|부가가치세 납부/.test(l.item.label) && l.value !== 0);
     if (!manualVat) {
-      const incl = (l: LeafRow) => vatSplitMode(amountOf(l.item), (opts.vatOf?.(l.item) ?? itemVatMode(l.item))).incl * (l.item.is_income ? -1 : 1);
+      const incl = (l: LeafRow) => vatSplitMode(amountOfBasis(l.item), (opts.vatOf?.(l.item) ?? itemVatMode(l.item))).incl * (l.item.is_income ? -1 : 1);
       let rev = 0, buy = 0;
       for (const l of leaves) {
         if (l.tags.pl_line === 'revenue') rev += incl(l);
@@ -326,6 +333,7 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
 
 /** 월 목록의 스냅샷으로 월별 손익 시계열 생성 */
 export function buildSeries(items: MCost[], snapshots: Snapshot[], months: string[], opts: BuildOptions & { orderCountsByMonth?: Record<string, Partial<Record<Market, number>>>; vatFor?: (ym: string) => 'ex' | 'incl'; regimeOf?: (ym: string) => Regime }) {
+  // basis 는 buildPL 에 그대로 전달
   const byMonth = new Map<string, Map<string, number>>();
   const vatByMonth = new Map<string, Map<string, { vat: boolean | null; none: boolean | null }>>();
   for (const s of snapshots) {
@@ -336,7 +344,7 @@ export function buildSeries(items: MCost[], snapshots: Snapshot[], months: strin
   return months.map(ym => {
     const amounts = byMonth.get(ym);
     const vats = vatByMonth.get(ym);
-    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vatFor?.(ym) ?? opts.vat, regime: opts.regimeOf?.(ym), orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => { const o = vats?.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : null; } });
+    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vatFor?.(ym) ?? opts.vat, regime: opts.regimeOf?.(ym), basis: opts.basis, orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => { const o = vats?.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : null; } });
     return { ym, ...res };
   });
 }
