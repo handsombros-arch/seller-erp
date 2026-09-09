@@ -111,19 +111,31 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   useEffect(() => { try { setAutoCheck(localStorage.getItem(AUTO_KEY) !== 'off'); } catch {} }, []);
   const toggleAuto = (v: boolean) => { setAutoCheck(v); try { localStorage.setItem(AUTO_KEY, v ? 'on' : 'off'); } catch {} if (!v) setCheck(null); };
   useEffect(() => { setCheck(null); }, [selectedYm]);
+  const toastRef = useRef(toast); toastRef.current = toast;
+  const ymRef = useRef(selectedYm); ymRef.current = selectedYm;
+  const checkSeq = useRef(0);
+  // 의존성 없는 안정 함수 — 효과가 렌더마다 다시 도는 것을 막는다
   const runCheck = useCallback(async (manual = false) => {
+    const ym = ymRef.current; const seq = ++checkSeq.current;
     setChecking(true);
     try {
-      const r = await fetch(`/api/settlement/crosscheck?year_month=${selectedYm}`);
+      const r = await fetch(`/api/settlement/crosscheck?year_month=${ym}`);
       const j = await r.json();
-      if (!r.ok) { if (manual) toast.error(j.error ?? '대조 실패'); return; }
+      if (seq !== checkSeq.current) return; // 그 사이 월이 바뀜
+      if (!r.ok) { if (manual) toastRef.current.error(j.error ?? '대조 실패'); return; }
       setCheck({ refs: j.refs ?? {}, orders: j.orders ?? {} });
       if (manual) setMode('input');
-    } catch { if (manual) toast.error('대조 실패'); }
-    finally { setChecking(false); }
-  }, [selectedYm, toast]);
-  // 자동 대조: 시트가 로드될 때(저장 후 재조회 포함) 백그라운드로 2~3초 뒤 색 블록이 붙는다
-  useEffect(() => { if (autoCheck && !loading && items.length) runCheck(false); }, [autoCheck, loading, items, selectedYm, runCheck]);
+    } catch { if (manual) toastRef.current.error('대조 실패'); }
+    finally { if (seq === checkSeq.current) setChecking(false); }
+  }, []);
+  // 자동 대조: 시트 로드 완료(저장 후 재조회 포함)마다 한 번만
+  const autoRef = useRef<{ items: MCost[] | null; ym: string }>({ items: null, ym: '' });
+  useEffect(() => {
+    if (!autoCheck || loading || !items.length) return;
+    if (autoRef.current.items === items && autoRef.current.ym === selectedYm) return; // 같은 데이터면 다시 돌지 않음
+    autoRef.current = { items, ym: selectedYm };
+    runCheck(false);
+  }, [autoCheck, loading, items, selectedYm, runCheck]);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
