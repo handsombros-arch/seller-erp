@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { MARKETS, SALES_MARKETS, buildPL, currentYm, lastMonths, regimeFor, vatViewFor, ymLabel, type Market } from './_lib/settlement';
 import { TaxCheckCard } from './_components/TaxCheckCard';
 import { TaxEstimateCard } from './_components/TaxEstimateCard';
+import { SummaryView } from './_components/SummaryView';
 import { useOrderCounts, useSettlementData } from './_lib/useSettlementData';
 import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
@@ -20,7 +21,7 @@ import { TrendPL } from './_components/TrendPL';
 import { AnalysisView } from './_components/AnalysisView';
 import { ProductProfit } from './_components/ProductProfit';
 
-const TABS = ['input', 'trend', 'analysis', 'products'] as const;
+const TABS = ['summary', 'input', 'trend', 'analysis', 'products'] as const;
 type Tab = typeof TABS[number];
 
 export default function SettlementPage() {
@@ -32,7 +33,7 @@ export default function SettlementPage() {
 }
 
 function SettlementInner() {
-  const [tab, setTabRaw] = useTabParam<Tab>('tab', TABS, 'input');
+  const [tab, setTabRaw] = useTabParam<Tab>('tab', TABS, 'summary');
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -86,6 +87,7 @@ function SettlementInner() {
   const sheetMarkets = useMemo(() => amounts.size ? buildPL(data.items, (it) => amounts.get(it.id) ?? 0, { vat: 'incl', vatOf: (it) => vats.get(it.id) }).markets : [], [data.items, amounts, vats]);
 
   const tabItems = [
+    { value: 'summary' as Tab, label: '요약' },
     { value: 'input' as Tab, label: '입력' },
     { value: 'trend' as Tab, label: '월별 추이', count: data.months.length || undefined },
     { value: 'analysis' as Tab, label: '분석' },
@@ -110,6 +112,10 @@ function SettlementInner() {
 
       <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden" />
 
+      {tab === 'summary' && (
+        data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
+          : <SummaryView items={data.items} snapshots={data.snapshots} months={data.months} switchYm={switchYm} ym={selectedYm} onGo={(t) => setTab(t)} />
+      )}
       {tab === 'input' && (
         <div className="space-y-4">
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} salesPlatforms={data.salesPlatforms as Market[]} adReady={data.adMonths.some(m => m.year_month === selectedYm)} />
