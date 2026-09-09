@@ -16,6 +16,7 @@ export interface MCost {
   label: string;
   amount: number;
   vat_applicable: boolean;
+  vat_none?: boolean | null;     // 부가세 없음(급여·개인거래·부가세 납부액) — 별도/포함 어느 보기에서도 금액 그대로
   parent_id: string | null;
   sort_order: number;
   note?: string;
@@ -29,7 +30,25 @@ export interface MCost {
   unit_price?: number | null;   // 건당 단가 — 있으면 수량 × 단가로 금액 계산
 }
 
-export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null; qty?: number | null; vat_applicable?: boolean | null }
+export interface Snapshot { year_month: string; cost_id: string; amount: number; note?: string | null; ref_amount?: number | null; ref_source?: string | null; ref_detail?: string | null; qty?: number | null; vat_applicable?: boolean | null; vat_none?: boolean | null }
+
+/** VAT 구분: incl = 입력값이 VAT 포함, ex = VAT 별도(세전), none = 부가세 없음 */
+export type VatMode = 'incl' | 'ex' | 'none';
+export const VAT_MODE_LABEL: Record<VatMode, string> = { incl: 'VAT포함', ex: 'VAT별도', none: 'VAT없음' };
+export const nextVatMode = (m: VatMode): VatMode => m === 'incl' ? 'ex' : m === 'ex' ? 'none' : 'incl';
+export const itemVatMode = (item: MCost): VatMode => item.vat_none ? 'none' : item.vat_applicable ? 'ex' : 'incl';
+/** 달별 오버라이드(스냅샷 vat_none/vat_applicable) 를 반영한 유효 VAT 구분 */
+export function effectiveVatMode(item: MCost, snapVat?: boolean | null, snapNone?: boolean | null): VatMode {
+  if (snapNone === true) return 'none';
+  if (snapVat != null) return snapVat ? 'ex' : 'incl';
+  if (snapNone === false && item.vat_none) return item.vat_applicable ? 'ex' : 'incl';
+  return itemVatMode(item);
+}
+export function vatSplitMode(amount: number, mode: VatMode) {
+  const a = Number(amount) || 0;
+  if (mode === 'none') return { ex: a, incl: a };
+  return mode === 'ex' ? { ex: a, incl: Math.round(a * 1.1) } : { ex: Math.round(a / 1.1), incl: a };
+}
 
 export const MARKETS: { id: Market; label: string; short: string }[] = [
   { id: 'coupang', label: '쿠팡 그로스', short: '쿠팡' },
@@ -182,8 +201,8 @@ function addLine(p: PL, line: PlLine, v: number) {
 
 export interface BuildOptions {
   vat: 'ex' | 'incl';
-  /** 달별 VAT 구분 (monthly_cost_snapshots.vat_applicable). 없으면 항목 기본값 */
-  vatOf?: (item: MCost) => boolean | null | undefined;
+  /** 달별 VAT 구분 (유효 VatMode). 없으면 항목 기본값 */
+  vatOf?: (item: MCost) => VatMode | null | undefined;
   /** 마켓별 출고 건수 (건수 비례 배분용). 없으면 by_orders 는 매출 비례로 대체 */
   orderCounts?: Partial<Record<Market, number>>;
 }
@@ -199,7 +218,7 @@ export interface PLResult {
 }
 
 /** 말단 항목 목록 (자식 있는 부모는 제외) + 태그 + 부호 적용 값 */
-export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number, vat: 'ex' | 'incl', vatOf?: (item: MCost) => boolean | null | undefined): LeafRow[] {
+export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number, vat: 'ex' | 'incl', vatOf?: (item: MCost) => VatMode | null | undefined): LeafRow[] {
   const byId = new Map(items.map(i => [i.id, i]));
   const hasChildren = new Set(items.filter(i => i.parent_id).map(i => i.parent_id as string));
   const rows: LeafRow[] = [];
@@ -207,8 +226,7 @@ export function collectLeaves(items: MCost[], amountOf: (item: MCost) => number,
     if (hasChildren.has(item.id)) continue;
     const parent = item.parent_id ? byId.get(item.parent_id) ?? null : null;
     const tags = effectiveTags(item, parent);
-    const ov = vatOf?.(item);
-    const split = vatSplit(amountOf(item), ov == null ? !!item.vat_applicable : ov);   // 달별 VAT 구분이 있으면 그 값
+    const split = vatSplitMode(amountOf(item), vatOf?.(item) ?? itemVatMode(item));   // 달별 VAT 구분이 있으면 그 값
     const amt = vat === 'ex' ? split.ex : split.incl;
     let value: number;
     if (tags.pl_line === 'revenue') value = item.is_income ? amt : -amt;
@@ -283,16 +301,16 @@ export function buildPL(items: MCost[], amountOf: (item: MCost) => number, opts:
 /** 월 목록의 스냅샷으로 월별 손익 시계열 생성 */
 export function buildSeries(items: MCost[], snapshots: Snapshot[], months: string[], opts: BuildOptions & { orderCountsByMonth?: Record<string, Partial<Record<Market, number>>> }) {
   const byMonth = new Map<string, Map<string, number>>();
-  const vatByMonth = new Map<string, Map<string, boolean>>();
+  const vatByMonth = new Map<string, Map<string, { vat: boolean | null; none: boolean | null }>>();
   for (const s of snapshots) {
     let m = byMonth.get(s.year_month); if (!m) { m = new Map(); byMonth.set(s.year_month, m); }
     m.set(s.cost_id, Number(s.amount) || 0);
-    if (s.vat_applicable != null) { let v = vatByMonth.get(s.year_month); if (!v) { v = new Map(); vatByMonth.set(s.year_month, v); } v.set(s.cost_id, !!s.vat_applicable); }
+    if (s.vat_applicable != null || s.vat_none != null) { let v = vatByMonth.get(s.year_month); if (!v) { v = new Map(); vatByMonth.set(s.year_month, v); } v.set(s.cost_id, { vat: s.vat_applicable ?? null, none: s.vat_none ?? null }); }
   }
   return months.map(ym => {
     const amounts = byMonth.get(ym);
     const vats = vatByMonth.get(ym);
-    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vat, orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => vats?.get(it.id) });
+    const res = buildPL(items, (it) => amounts?.get(it.id) ?? 0, { vat: opts.vat, orderCounts: opts.orderCountsByMonth?.[ym], vatOf: (it) => { const o = vats?.get(it.id); return o ? effectiveVatMode(it, o.vat, o.none) : null; } });
     return { ym, ...res };
   });
 }

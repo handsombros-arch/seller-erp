@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
   const admin = await createAdminClient();
 
   const snapQ = async () => {
-    let r: any = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail, qty, vat_applicable').order('year_month', { ascending: false });
+    let r: any = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail, qty, vat_applicable, vat_none').order('year_month', { ascending: false });
+    if (r.error) r = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail, qty, vat_applicable').order('year_month', { ascending: false });
     if (r.error) r = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail, qty').order('year_month', { ascending: false });
     if (r.error) r = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note, ref_amount, ref_source, ref_detail').order('year_month', { ascending: false });
     if (r.error) r = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });

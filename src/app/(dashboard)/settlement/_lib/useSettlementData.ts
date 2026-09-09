@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { MCost, Market, Snapshot } from './settlement';
+import { effectiveVatMode, type MCost, type Market, type Snapshot, type VatMode } from './settlement';
 
 /** 정산 항목 구조 + 전체 월 스냅샷. 분석·추이 화면 공용. */
 export interface ClosedMonth { closed_at: string; note?: string | null }
@@ -25,7 +25,7 @@ export function useSettlementData(reloadKey = 0, ym?: string) {
       if (!r.ok) throw new Error(`불러오기 실패 (${r.status})`);
       const j = await r.json();
       setItems(j.items ?? []);
-      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null, qty: s.qty == null ? null : Number(s.qty), vat_applicable: s.vat_applicable == null ? null : !!s.vat_applicable })));
+      setSnapshots((j.snapshots ?? []).map((s: any) => ({ year_month: s.year_month, cost_id: s.cost_id, amount: Number(s.amount) || 0, note: s.note ?? null, ref_amount: s.ref_amount == null ? null : Number(s.ref_amount), ref_source: s.ref_source ?? null, ref_detail: s.ref_detail ?? null, qty: s.qty == null ? null : Number(s.qty), vat_applicable: s.vat_applicable == null ? null : !!s.vat_applicable, vat_none: s.vat_none == null ? null : !!s.vat_none })));
       const cm: Record<string, ClosedMonth> = {};
       for (const c of j.closed ?? []) cm[c.year_month] = { closed_at: c.closed_at, note: c.note };
       setClosed(cm);
@@ -49,12 +49,13 @@ export function useSettlementData(reloadKey = 0, ym?: string) {
     for (const s of snapshots) if (s.year_month === ym) m.set(s.cost_id, s.amount);
     return m;
   }, [snapshots]);
-  /** 그 달의 VAT 구분 오버라이드 (없는 항목은 기본값) */
+  /** 그 달의 유효 VAT 구분 (오버라이드가 있는 항목만) */
   const vatsFor = useCallback((ym: string) => {
-    const m = new Map<string, boolean>();
-    for (const s of snapshots) if (s.year_month === ym && s.vat_applicable != null) m.set(s.cost_id, !!s.vat_applicable);
+    const m = new Map<string, VatMode>();
+    const byId = new Map(items.map(i => [i.id, i]));
+    for (const s of snapshots) if (s.year_month === ym && (s.vat_applicable != null || s.vat_none != null)) { const it = byId.get(s.cost_id); if (it) m.set(s.cost_id, effectiveVatMode(it, s.vat_applicable, s.vat_none)); }
     return m;
-  }, [snapshots]);
+  }, [snapshots, items]);
 
   return { items, snapshots, months, loading, error, reload, amountsFor, vatsFor, closed, closedSupported, salesPlatforms, adMonths };
 }

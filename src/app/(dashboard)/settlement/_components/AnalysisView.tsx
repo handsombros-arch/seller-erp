@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type MCost, type Market, type MarketPL, type PL } from '../_lib/settlement';
+import { MARKETS, PL_ROWS, buildPL, fmtNum, fmtPct, type MCost, type Market, type MarketPL, type PL, type VatMode } from '../_lib/settlement';
 
 interface Props {
   items: MCost[];
@@ -14,8 +14,8 @@ interface Props {
   orderCounts: Partial<Record<Market, number>> | null;
   /** 비교용 전월 금액 */
   prevAmounts?: Map<string, number> | null;
-  vats?: Map<string, boolean>;
-  prevVats?: Map<string, boolean>;
+  vats?: Map<string, VatMode>;
+  prevVats?: Map<string, VatMode>;
 }
 
 const won = (n: number) => `${fmtNum(n)}원`;

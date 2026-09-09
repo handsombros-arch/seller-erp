@@ -8,7 +8,7 @@ import { inputClassName } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import { effectiveTags, fmtNum, vatSplit, ymLabel, type MCost, type PlLine, type Snapshot, type Tags } from '../_lib/settlement';
+import { effectiveTags, effectiveVatMode, fmtNum, itemVatMode, nextVatMode, vatSplitMode, VAT_MODE_LABEL, ymLabel, type MCost, type PlLine, type Snapshot, type Tags, type VatMode } from '../_lib/settlement';
 import { TagPicker } from './TagPicker';
 
 /**
@@ -79,12 +79,12 @@ function refKeyFor(leaf: MCost, tags: Tags, parentLabel: string): string[] {
   if (tags.pl_line === 'logistics' && /택배비/.test(L) && !/대형/.test(L) && m !== 'coupang') return ['shipping_small'];
   return [];
 }
-function verdictFor(amount: number, vatApplicable: boolean, keys: string[], refs: Record<string, Ref>): Verdict {
+function verdictFor(amount: number, vatMode: VatMode, keys: string[], refs: Record<string, Ref>): Verdict {
   const key = keys.find(k => refs[k]);
   if (!key) return { kind: 'none' };
   const ref = refs[key];
   // 기준값은 대부분 VAT 포함 실거래가 → 입력이 VAT 별도면 포함가로 환산해 비교
-  const mine = vatApplicable ? Math.round(amount * 1.1) : amount;
+  const mine = vatMode === 'ex' ? Math.round(amount * 1.1) : amount;
   const diff = mine - ref.value;
   const pct = ref.value ? (diff / ref.value) * 100 : 0;
   const ok = Math.abs(diff) <= 10000 || Math.abs(pct) <= 3;
@@ -105,7 +105,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [amounts, setAmounts] = useState<Map<string, number>>(new Map());
   const [notes, setNotes] = useState<Map<string, string>>(new Map()); // 월별 비고 (monthly_cost_snapshots.note)
   const [qtys, setQtys] = useState<Map<string, number>>(new Map());    // 단가 항목의 월 수량 (monthly_cost_snapshots.qty)
-  const [vatOv, setVatOv] = useState<Map<string, boolean>>(new Map()); // 이 달의 VAT 구분 (항목 기본값과 다를 때만)
+  const [vatOv, setVatOv] = useState<Map<string, VatMode>>(new Map()); // 이 달의 VAT 구분 (항목 기본값과 다를 때만)
   const COLLAPSE_KEY = 'lv-erp-settlement-collapsed';
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   useEffect(() => { try { const j = localStorage.getItem(COLLAPSE_KEY); if (j) setCollapsed(new Set(JSON.parse(j))); } catch {} }, []);
@@ -164,9 +164,9 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const snapFor = useCallback((ym: string) => { const m = new Map<string, number>(); for (const s of snapshots) if (s.year_month === ym) m.set(s.cost_id, Number(s.amount) || 0); return m; }, [snapshots]);
   const notesFor = useCallback((ym: string) => { const m = new Map<string, string>(); for (const s of snapshots) if (s.year_month === ym && s.note) m.set(s.cost_id, s.note); return m; }, [snapshots]);
   const qtysFor = useCallback((ym: string) => { const m = new Map<string, number>(); for (const s of snapshots) if (s.year_month === ym && s.qty != null) m.set(s.cost_id, Number(s.qty)); return m; }, [snapshots]);
-  const vatsFor = useCallback((ym: string) => { const m = new Map<string, boolean>(); for (const s of snapshots) if (s.year_month === ym && s.vat_applicable != null) m.set(s.cost_id, !!s.vat_applicable); return m; }, [snapshots]);
+  const vatsFor = useCallback((ym: string) => { const m = new Map<string, VatMode>(); const byId = new Map(items.map(i => [i.id, i])); for (const s of snapshots) if (s.year_month === ym && (s.vat_applicable != null || s.vat_none != null)) { const it = byId.get(s.cost_id); if (it) m.set(s.cost_id, effectiveVatMode(it, s.vat_applicable, s.vat_none)); } return m; }, [snapshots, items]);
   /** 이 달에 적용되는 VAT 구분: 달별 값 → 없으면 항목 기본값 */
-  const vatEff = (leaf: MCost) => vatOv.has(leaf.id) ? vatOv.get(leaf.id)! : !!leaf.vat_applicable;
+  const vatEff = (leaf: MCost): VatMode => vatOv.has(leaf.id) ? vatOv.get(leaf.id)! : itemVatMode(leaf);
   const prevAmounts = useMemo(() => snapFor(prevYm), [snapFor, prevYm]);
   const savedMonths = useMemo(() => [...new Set(snapshots.map(s => s.year_month))].filter(m => m !== selectedYm).sort().reverse(), [snapshots, selectedYm]);
   const hasSnapshot = useMemo(() => snapshots.some(s => s.year_month === selectedYm), [snapshots, selectedYm]);
@@ -191,7 +191,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     if (auto.size > 0) setDirty(true);
   }, [items, loading, selectedYm, snapFor, notesFor, qtysFor, vatsFor, hasSnapshot, prevAmounts]);
   /** 입력 화면 VAT 칩: 이 달에만 적용 (구조 편집의 VAT 는 새 달 기본값) */
-  const setVatMonth = (id: string, v: boolean) => { setVatOv(prev => { const n = new Map(prev); n.set(id, v); return n; }); setDirty(true); };
+  const setVatMonth = (id: string, v: VatMode) => { setVatOv(prev => { const n = new Map(prev); n.set(id, v); return n; }); setDirty(true); };
   /** 단가 항목: 수량 입력 → 금액 = 수량 × 단가 */
   const setQty = (id: string, q: number) => {
     const it = byId.get(id); const unit = Number(it?.unit_price) || 0;
@@ -219,7 +219,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     for (const l of leavesOf(p)) { const s = sectionOf(tagsOf(l).pl_line); cnt[s] = (cnt[s] ?? 0) + 1; }
     return (Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]?.[0] as SectionKey) ?? 'fixed';
   };
-  const leafValue = (leaf: MCost) => vatSplit(amounts.get(leaf.id) ?? 0, vatEff(leaf)).ex * (leaf.is_income ? -1 : 1);
+  const leafValue = (leaf: MCost) => vatSplitMode(amounts.get(leaf.id) ?? 0, vatEff(leaf)).ex * (leaf.is_income ? -1 : 1);
 
   const patch = (id: string, p: Partial<MCost>) => { setLocal(prev => prev.map(i => i.id === id ? { ...i, ...p } : i)); setDirty(true); };
   const setAmount = (id: string, v: number) => { setAmounts(prev => { const n = new Map(prev); n.set(id, v); return n; }); setCarried(prev => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n; }); setDirty(true); };
@@ -245,7 +245,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     setAmounts(new Map(local.map(i => [i.id, 0]))); setDirty(true);
   };
 
-  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '', i.unit_price ?? null]).sort());
+  const structKey = (list: MCost[]) => JSON.stringify(list.map(i => [i.id, i.label, i.parent_id, i.sort_order, !!i.vat_applicable, !!i.is_income, !!i.carry_forward, i.pl_line ?? null, i.market ?? null, i.alloc_rule ?? null, i.note ?? '', i.unit_price ?? null, !!i.vat_none]).sort());
   async function save() {
     setSaving(true);
     try {
@@ -258,7 +258,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       }
       const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => {
         const v = check ? verdictOf(i) : null;
-        return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, qty: qtys.get(i.id) ?? null, vat_applicable: vatOv.has(i.id) ? vatOv.get(i.id) : null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
+        return { id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null, qty: qtys.get(i.id) ?? null, vat_applicable: vatOv.has(i.id) ? vatOv.get(i.id) === 'ex' : null, vat_none: vatOv.has(i.id) ? vatOv.get(i.id) === 'none' : null, ...(check ? { ref_amount: v?.ref?.value ?? null, ref_source: v?.ref?.source ?? null, ref_detail: v?.ref?.detail ?? null } : {}) };
       }) }) });
       const sj = await post.json().catch(() => ({}));
       if (!post.ok) { toast.error(`금액 저장 실패: ${sj.error ?? post.status}`); return; }
@@ -414,7 +414,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote} qtys={qtys} setQty={setQty}
                 tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
                 readOnly={readOnly} undo={undo} applyRef={async (id, refValue, vatApplicable) => {
-                  const cur = amounts.get(id) ?? 0; const next = (vatOv.has(id) ? vatOv.get(id)! : vatApplicable) ? Math.round(refValue / 1.1) : refValue;
+                  const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
                   if (cur && !(await confirmDialog(`수기 입력 ${fmtNum(cur)}원을 기준값 ${fmtNum(next)}원으로 바꿀까요?\n저장 전까지 이 칸에서 되돌릴 수 있습니다.`))) return;
                   setUndo(prev => { const n = new Map(prev); if (!n.has(id)) n.set(id, cur); return n; });
                   setAmount(id, next);
@@ -476,7 +476,7 @@ interface CardProps {
   undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
   readOnly: boolean;
   collapsed: boolean; onToggle: () => void;
-  vatEff: (l: MCost) => boolean; setVatMonth: (id: string, v: boolean) => void;
+  vatEff: (l: MCost) => VatMode; setVatMonth: (id: string, v: VatMode) => void;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
@@ -515,7 +515,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
           const isAdCoupang = tags.pl_line === 'ad' && tags.market === 'coupang';
           const amt = amounts.get(leaf.id) ?? 0;
           const prev = prevAmounts.get(leaf.id);
-          const incl = vatSplit(amt, vatEff(leaf)).incl;
+          const incl = vatSplitMode(amt, vatEff(leaf)).incl;
           const v = verdictOf?.(leaf);
           const blockCls = !v ? '' : v.kind === 'match' ? 'border-l-[3px] border-success bg-success/[0.04]' : v.kind === 'diff' ? 'border-l-[3px] border-danger bg-danger/[0.06]' : v.kind === 'soft' ? 'border-l-[3px] border-fg-5 bg-card-2' : 'border-l-[3px] border-warn bg-warn/[0.07]';
           return (
@@ -526,7 +526,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   {!isSingle && <span className="flex flex-col"><button onClick={() => move(leaf.id, -1)} className="text-fg-5 hover:text-fg"><ArrowUp className="h-3 w-3" /></button><button onClick={() => move(leaf.id, 1)} className="text-fg-5 hover:text-fg"><ArrowDown className="h-3 w-3" /></button></span>}
                   <input lang="ko" value={leaf.label} onChange={e => patch(leaf.id, { label: e.target.value })} className={cn(inputClassName, 'h-7 w-36 text-[12px]')} />
                   <Chip on={!!leaf.is_income} onClick={() => patch(leaf.id, { is_income: !leaf.is_income })} title="+ 수입(차감) / − 비용">{leaf.is_income ? '+ 수입' : '− 비용'}</Chip>
-                  <Chip on={!!leaf.vat_applicable} onClick={() => patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값이 VAT 별도이면 켜기">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
+                  <Chip on={itemVatMode(leaf) !== 'incl'} onClick={() => { const n = nextVatMode(itemVatMode(leaf)); patch(leaf.id, { vat_applicable: n === 'ex', vat_none: n === 'none' }); }} title="새 달 기본값. 포함 → 별도 → 없음 순으로 바뀝니다. VAT없음 = 급여·개인거래처럼 부가세가 없는 금액">{VAT_MODE_LABEL[itemVatMode(leaf)]}</Chip>
                   <Chip on={!!leaf.carry_forward} onClick={() => patch(leaf.id, { carry_forward: !leaf.carry_forward })} title="새 달을 열면 전월 값 자동 입력">매월 이월</Chip>
                   <input value={leaf.unit_price ?? ''} onChange={e => patch(leaf.id, { unit_price: e.target.value === '' ? null : Number(e.target.value.replace(/[^0-9.]/g, '')) })} placeholder="건당 단가" inputMode="numeric" title="건당 단가를 넣으면 입력 화면에서 수량만 적어 금액이 계산됩니다" className={cn(inputClassName, 'h-7 w-24 text-[11px] text-right')} />
                   <input lang="ko" value={leaf.note ?? ''} onChange={e => patch(leaf.id, { note: e.target.value })} placeholder="공통 메모 (모든 달)" className={cn(inputClassName, 'h-7 w-32 text-[11px]')} />
@@ -541,7 +541,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                       {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}{leaf.note ? ` · ${leaf.note}` : ''}
                     </div>
                   </div>
-                  <Chip on={vatEff(leaf)} onClick={() => !readOnly && setVatMonth(leaf.id, !vatEff(leaf))} title={`이 달의 입력값 기준: VAT별도 = 세전 / VAT포함 = 세후. 이 달에만 적용됩니다${vatOvMark(leaf, vatEff) ? ' (항목 기본값과 다름)' : ''}`}>{vatEff(leaf) ? 'VAT별도' : 'VAT포함'}{vatOvMark(leaf, vatEff) ? '*' : ''}</Chip>
+                  <Chip on={vatEff(leaf) !== 'incl'} onClick={() => !readOnly && setVatMonth(leaf.id, nextVatMode(vatEff(leaf)))} title={`이 달의 입력값 기준: VAT포함 = 세후 / VAT별도 = 세전 / VAT없음 = 부가세 없는 금액. 이 달에만 적용됩니다${vatOvMark(leaf, vatEff) ? ' (항목 기본값과 다름)' : ''}`}>{VAT_MODE_LABEL[vatEff(leaf)]}{vatOvMark(leaf, vatEff) ? '*' : ''}</Chip>
                   <input lang="ko" readOnly={readOnly} value={notes.get(leaf.id) ?? ''} onChange={e => setNote(leaf.id, e.target.value)} placeholder="이 달 비고" title="이 달에만 남는 메모 (공통 메모는 항목명 아래)"
                     className="flex-1 min-w-0 h-7 px-2 rounded-md text-[11px] text-fg-3 bg-transparent border border-transparent hover:border-line focus:border-brand focus:bg-card focus:outline-none" />
                   {isAdCoupang && adRaw != null && (
@@ -560,7 +560,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   )}
                   <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} disabled={readOnly} />
                   {v && <VerdictBadge v={v} />}
-                  <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && vatEff(leaf) ? `≈${fmtNum(incl)}` : ''}</span>
+                  <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && vatEff(leaf) === 'ex' ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
               )}
             </div>
@@ -586,7 +586,7 @@ function CompareView({ sections, leavesOf, amounts, vatEff, verdictOf, checking,
   sections: { key: SectionKey; label: string; groups: MCost[] }[];
   leavesOf: (p: MCost) => MCost[];
   amounts: Map<string, number>;
-  vatEff: (l: MCost) => boolean;
+  vatEff: (l: MCost) => VatMode;
   verdictOf: (l: MCost) => Verdict;
   checking: boolean; hasCheck: boolean; onRun: () => void;
   readOnly: boolean; undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
@@ -599,7 +599,7 @@ function CompareView({ sections, leavesOf, amounts, vatEff, verdictOf, checking,
     );
   }
   const th = 'h-9 px-3 text-[11px] font-semibold text-fg-4 whitespace-nowrap';
-  const mine = (leaf: MCost) => { const a = amounts.get(leaf.id) ?? 0; return vatEff(leaf) ? Math.round(a * 1.1) : a; };
+  const mine = (leaf: MCost) => { const a = amounts.get(leaf.id) ?? 0; return vatEff(leaf) === 'ex' ? Math.round(a * 1.1) : a; };
   return (
     <div className="space-y-4">
       {sections.map(sec => {
@@ -629,7 +629,7 @@ function CompareView({ sections, leavesOf, amounts, vatEff, verdictOf, checking,
                     const cls = v.kind === 'match' ? 'text-success' : v.kind === 'diff' ? 'text-danger' : v.kind === 'soft' ? 'text-fg-3' : 'text-fg-5';
                     return (
                       <tr key={l.id} className={cn('border-b border-line-2 h-10', v.kind === 'diff' && 'bg-danger/5', v.kind === 'none' && 'bg-warn/5')}>
-                        <td className="px-3 text-fg whitespace-nowrap">{g.id !== l.id && <span className="text-fg-4">{g.label} · </span>}{l.label}{vatEff(l) && <span className="ml-1 text-[10px] text-fg-5">VAT별도→포함</span>}</td>
+                        <td className="px-3 text-fg whitespace-nowrap">{g.id !== l.id && <span className="text-fg-4">{g.label} · </span>}{l.label}{vatEff(l) === 'ex' && <span className="ml-1 text-[10px] text-fg-5">VAT별도→포함</span>}{vatEff(l) === 'none' && <span className="ml-1 text-[10px] text-fg-5">VAT없음</span>}</td>
                         <td className="px-3 text-right tabular-nums font-semibold text-fg">{m ? fmtNum(m) : <span className="text-fg-5">-</span>}</td>
                         <td className="px-3 text-right tabular-nums text-fg-2">{v.ref ? fmtNum(v.ref.value) : <span className="text-warn">대조 불가</span>}</td>
                         <td className={cn('px-3 text-right tabular-nums font-semibold', cls)}>{v.ref ? `${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)` : '-'}</td>
@@ -638,7 +638,7 @@ function CompareView({ sections, leavesOf, amounts, vatEff, verdictOf, checking,
                           {undo.has(l.id) ? (
                             <button onClick={() => revertRef(l.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(l.id)!)} 되돌리기</button>
                           ) : (v.kind === 'diff' || v.kind === 'soft') && !readOnly ? (
-                            <button onClick={() => applyRef(l.id, v.ref!.value, vatEff(l))} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
+                            <button onClick={() => applyRef(l.id, v.ref!.value, vatEff(l) === 'ex')} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
                           ) : null}
                         </td>
                       </tr>
@@ -662,7 +662,7 @@ function VerdictBadge({ v }: { v: Verdict }) {
   return <span className={cn('w-12 text-right text-[11px] font-semibold tabular-nums cursor-help', cls)} title={tip}>{text}</span>;
 }
 
-const vatOvMark = (leaf: MCost, eff: (l: MCost) => boolean) => eff(leaf) !== !!leaf.vat_applicable;
+const vatOvMark = (leaf: MCost, eff: (l: MCost) => VatMode) => eff(leaf) !== itemVatMode(leaf);
 
 function Chip({ on, onClick, title, children }: { on: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return <button type="button" onClick={onClick} title={title} className={cn('h-6 px-2 rounded-md text-[10px] font-semibold whitespace-nowrap transition-colors', on ? 'bg-brand text-white' : 'bg-app text-fg-3 hover:bg-line')}>{children}</button>;
