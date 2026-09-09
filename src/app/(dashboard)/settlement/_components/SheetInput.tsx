@@ -368,19 +368,25 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
         </div>
       )}
 
-      {check && checkStats && (
-        <div className="rounded-xl border border-line bg-card px-4 py-2.5 text-[12px] text-fg-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="font-semibold text-fg">대조 결과</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-success/70" /> 일치 {checkStats.match}</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-danger/70" /> 차이 {checkStats.diff}</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-fg-4/60" /> API 참고 차이 {checkStats.soft}</span>
-          <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-sm bg-warn/70" /> 대조 불가 · 수기 확인 {checkStats.none}</span>
-          <span className="text-fg-4">기준 = 매출 파일·광고 raw·설정(마켓 확정 기준). API 주문 집계는 주문일 기준이라 이월·구매확정 시차가 있어 참고로만 표시. 3% 또는 1만 원 이내면 일치.</span>
+      {check && checkStats && view === 'input' && (
+        <div className="text-[12px] text-fg-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
+          <span className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-success/70" /> 일치 {checkStats.match}</span>
+          <span className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-danger/70" /> 차이 {checkStats.diff}</span>
+          <span className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-fg-4/60" /> API 참고 {checkStats.soft}</span>
+          <span className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm bg-warn/70" /> 대조 불가 {checkStats.none}</span>
+          <button onClick={() => setView('compare')} className="text-brand hover:underline">자세히 · 수기 vs API 비교</button>
         </div>
       )}
 
       {view === 'compare' && mode === 'input' ? (
-        <CompareView sections={sections} leavesOf={leavesOf} amounts={amounts} verdictOf={verdictOf} checking={checking} hasCheck={!!check} onRun={() => runCheck(true)} />
+        <CompareView sections={sections} leavesOf={leavesOf} amounts={amounts} verdictOf={verdictOf} checking={checking} hasCheck={!!check} onRun={() => runCheck(true)} readOnly={readOnly} undo={undo}
+          applyRef={async (id, refValue, vatApplicable) => {
+            const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
+            if (cur && !(await confirmDialog(`수기 입력 ${fmtNum(cur)}원을 기준값 ${fmtNum(next)}원으로 바꿀까요?\n저장 전까지 되돌릴 수 있습니다.`))) return;
+            setUndo(prev => { const n = new Map(prev); if (!n.has(id)) n.set(id, cur); return n; });
+            setAmount(id, next);
+          }}
+          revertRef={(id) => { const v = undo.get(id); if (v === undefined) return; setUndo(prev => { const n = new Map(prev); n.delete(id); return n; }); setAmount(id, v); }} />
       ) : sections.map(sec => (
         <section key={sec.key}>
           <div className="flex items-baseline gap-2 mb-2 px-1">
@@ -534,28 +540,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                     </span>
                   )}
                   <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} disabled={readOnly} />
-                  {v?.kind === 'match' && <span className="text-success text-[11px] font-semibold" title={`기준 ${fmtNum(v.ref!.value)}원 · ${v.ref!.source} ${v.ref!.detail}`}>✓</span>}
+                  {v && <VerdictBadge v={v} />}
                   <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
               )}
             </div>
-            {v && mode === 'input' && v.kind !== 'match' && (
-              <div className="px-3 pb-1.5 -mt-0.5 text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                {v.kind === 'none' ? (
-                  <span className="text-warn/90">대조 불가 · 계산서로 확인</span>
-                ) : (
-                  <>
-                    <span className={cn('font-semibold', v.kind === 'soft' ? 'text-fg-4' : 'text-danger')}>{v.kind === 'soft' ? 'API 참고 ' : ''}{`차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}{v.kind === 'soft' ? ' · 주문일 기준이라 시차 있음' : ''}</span>
-                    <span className="text-fg-3">기준 {fmtNum(v.ref!.value)}원 · <span className="rounded bg-app px-1 text-[10px] text-fg-4">{v.ref!.source}</span> {v.ref!.detail}</span>
-                    {undo.has(leaf.id) ? (
-                      <button onClick={() => revertRef(leaf.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(leaf.id)!)}원으로 되돌리기</button>
-                    ) : (v.kind === 'diff' || v.kind === 'soft') && !readOnly ? (
-                      <button onClick={() => applyRef(leaf.id, v.ref!.value, !!leaf.vat_applicable)} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            )}
             </div>
           );
         })}
@@ -574,12 +563,13 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
 }
 
 // ───────────────────────── 수기 vs API 비교 뷰 (읽기 전용) ─────────────────────────
-function CompareView({ sections, leavesOf, amounts, verdictOf, checking, hasCheck, onRun }: {
+function CompareView({ sections, leavesOf, amounts, verdictOf, checking, hasCheck, onRun, readOnly, undo, applyRef, revertRef }: {
   sections: { key: SectionKey; label: string; groups: MCost[] }[];
   leavesOf: (p: MCost) => MCost[];
   amounts: Map<string, number>;
   verdictOf: (l: MCost) => Verdict;
   checking: boolean; hasCheck: boolean; onRun: () => void;
+  readOnly: boolean; undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
 }) {
   if (!hasCheck) {
     return (
@@ -611,18 +601,26 @@ function CompareView({ sections, leavesOf, amounts, verdictOf, checking, hasChec
                   <th className={cn(th, 'text-right')} title="API·파일·설정으로 계산한 값">기준값</th>
                   <th className={cn(th, 'text-right')}>차이</th>
                   <th className={cn(th, 'text-left')}>출처</th>
+                  <th className={cn(th, 'text-right')} />
                 </tr></thead>
                 <tbody>
                   {rows.map(({ g, l, v }) => {
                     const m = mine(l);
-                    const cls = v.kind === 'match' ? 'text-success' : v.kind === 'diff' ? 'text-danger' : 'text-fg-5';
+                    const cls = v.kind === 'match' ? 'text-success' : v.kind === 'diff' ? 'text-danger' : v.kind === 'soft' ? 'text-fg-3' : 'text-fg-5';
                     return (
                       <tr key={l.id} className={cn('border-b border-line-2 h-10', v.kind === 'diff' && 'bg-danger/5', v.kind === 'none' && 'bg-warn/5')}>
                         <td className="px-3 text-fg whitespace-nowrap">{g.id !== l.id && <span className="text-fg-4">{g.label} · </span>}{l.label}{l.vat_applicable && <span className="ml-1 text-[10px] text-fg-5">VAT별도→포함</span>}</td>
                         <td className="px-3 text-right tabular-nums font-semibold text-fg">{m ? fmtNum(m) : <span className="text-fg-5">-</span>}</td>
                         <td className="px-3 text-right tabular-nums text-fg-2">{v.ref ? fmtNum(v.ref.value) : <span className="text-warn">대조 불가</span>}</td>
                         <td className={cn('px-3 text-right tabular-nums font-semibold', cls)}>{v.ref ? `${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)` : '-'}</td>
-                        <td className="px-3 text-[11px] text-fg-4 whitespace-nowrap">{v.ref ? <><span className="rounded bg-app px-1 text-[10px] text-fg-3 mr-1">{v.ref.source}</span>{v.ref.detail}</> : '계산서로 직접 확인'}</td>
+                        <td className="px-3 text-[11px] text-fg-4 whitespace-nowrap">{v.ref ? <><span className={cn('rounded px-1 text-[10px] mr-1', v.ref.source === 'API' ? 'bg-app text-fg-4' : 'bg-brand-bg text-brand')}>{v.ref.source === 'API' ? 'API 참고' : v.ref.source}</span>{v.ref.detail}</> : '계산서로 직접 확인'}</td>
+                        <td className="px-3 text-right text-[11px] whitespace-nowrap">
+                          {undo.has(l.id) ? (
+                            <button onClick={() => revertRef(l.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(l.id)!)} 되돌리기</button>
+                          ) : (v.kind === 'diff' || v.kind === 'soft') && !readOnly ? (
+                            <button onClick={() => applyRef(l.id, v.ref!.value, !!l.vat_applicable)} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
+                          ) : null}
+                        </td>
                       </tr>
                     );
                   })}
@@ -634,6 +632,14 @@ function CompareView({ sections, leavesOf, amounts, verdictOf, checking, hasChec
       })}
     </div>
   );
+}
+
+/** 입력 화면용 작은 대조 배지 — 자세한 내용은 툴팁과 비교 뷰에 */
+function VerdictBadge({ v }: { v: Verdict }) {
+  const tip = v.ref ? `기준 ${fmtNum(v.ref.value)}원 · ${v.ref.source === 'API' ? 'API 참고(주문일 기준)' : v.ref.source} · ${v.ref.detail}${v.diff != null ? ` · 차이 ${v.diff > 0 ? '+' : ''}${fmtNum(v.diff)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)` : ''}` : '대조할 데이터가 없습니다 · 계산서로 확인';
+  const cls = v.kind === 'match' ? 'text-success' : v.kind === 'diff' ? 'text-danger' : v.kind === 'soft' ? 'text-fg-4' : 'text-warn';
+  const text = v.kind === 'match' ? '✓' : v.kind === 'none' ? '?' : `${v.pct! > 0 ? '▲' : '▼'}${Math.abs(v.pct!).toFixed(0)}%`;
+  return <span className={cn('w-12 text-right text-[11px] font-semibold tabular-nums cursor-help', cls)} title={tip}>{text}</span>;
 }
 
 function Chip({ on, onClick, title, children }: { on: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
