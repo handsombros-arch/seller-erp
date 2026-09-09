@@ -73,9 +73,24 @@ export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts
         })}
       </div>
 
-      <div className="grid lg:grid-cols-5 gap-4">
+        {/* 마켓별 */}
+      <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+          <div className="px-4 md:px-5 py-3 border-b border-line-2">
+            <h3 className="text-[15px] font-bold text-fg">마켓별 공헌이익 <span className="text-[11px] font-medium text-fg-4">시트 실적 기준</span></h3>
+            <p className="text-[11px] text-fg-4 mt-0.5">손익분기 ROAS = 광고 전 공헌이익률의 역수. 실제 ROAS가 이보다 낮으면 광고가 이익을 깎고 있는 마켓입니다.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <MarketTable markets={res.markets} total={t} />
+          </div>
+          {orderCounts && Object.keys(orderCounts).length > 0 && (
+            <p className="px-4 md:px-5 py-2 text-[11px] text-fg-4 border-t border-line-2">
+              공통 물류비 건수 비례 배분 기준 출고 건수: {MARKETS.filter(m => orderCounts[m.id]).map(m => `${m.short} ${orderCounts[m.id]}건`).join(' · ')} (쿠팡 제외)
+            </p>
+          )}
+        </section>
+      <div className="grid lg:grid-cols-2 gap-4">
         {/* 손익 구조 */}
-        <section className="lg:col-span-2 bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 md:p-5">
+        <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 md:p-5">
           <h3 className="text-[15px] font-bold text-fg mb-3">손익 구조 <span className="text-[11px] font-medium text-fg-4">실매출 대비</span></h3>
           <div className="space-y-2">
             {PL_ROWS.filter(r => r.kind === 'minus' && r.key !== 'coupon').map(r => {
@@ -102,27 +117,10 @@ export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts
           {res.unallocated !== 0 && <p className="mt-3 text-[11px] text-warn">공통 비용 {won(res.unallocated)} 은 배분 대상 마켓 매출이 없어 마켓별 표에 반영되지 않았습니다.</p>}
         </section>
 
-        {/* 마켓별 */}
-        <section className="lg:col-span-3 bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="px-4 md:px-5 py-3 border-b border-line-2">
-            <h3 className="text-[15px] font-bold text-fg">마켓별 공헌이익 <span className="text-[11px] font-medium text-fg-4">시트 실적 기준</span></h3>
-            <p className="text-[11px] text-fg-4 mt-0.5">손익분기 ROAS = 광고 전 공헌이익률의 역수. 실제 ROAS가 이보다 낮으면 광고가 이익을 깎고 있는 마켓입니다.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <MarketTable markets={res.markets} total={t} />
-          </div>
-          {orderCounts && Object.keys(orderCounts).length > 0 && (
-            <p className="px-4 md:px-5 py-2 text-[11px] text-fg-4 border-t border-line-2">
-              공통 물류비 건수 비례 배분 기준 출고 건수: {MARKETS.filter(m => orderCounts[m.id]).map(m => `${m.short} ${orderCounts[m.id]}건`).join(' · ')} (쿠팡 제외)
-            </p>
-          )}
-        </section>
-      </div>
-
-      {/* 공통·고정 */}
-      <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 md:p-5">
+        {/* 공통·고정 */}
+        <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 md:p-5">
         <h3 className="text-[15px] font-bold text-fg mb-2">마켓에 배분하지 않은 비용</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[12px]">
+        <div className="grid grid-cols-2 gap-3 text-[12px]">
           {[
             { label: '고정비', v: t.fixed },
             { label: '기타', v: t.other },
@@ -135,7 +133,8 @@ export function AnalysisView({ items, amounts, ym, vat, orderCounts, prevAmounts
             </div>
           ))}
         </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

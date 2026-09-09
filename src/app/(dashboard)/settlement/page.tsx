@@ -76,7 +76,7 @@ function SettlementInner() {
         </label>
       </PageHeader>
 
-      <Tabs items={tabItems} value={tab} onChange={setTab} />
+      <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden" />
 
       {tab === 'input' && (
         <div className="space-y-4">

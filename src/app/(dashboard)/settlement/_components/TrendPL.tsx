@@ -5,6 +5,7 @@ import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, T
 import { SegmentedControl } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { PL_ROWS, buildSeries, fmtNum, type MCost, type PL, type Snapshot } from '../_lib/settlement';
+import { useThemeColors } from '../_lib/useThemeColors';
 
 interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string }
 
@@ -16,6 +17,7 @@ export function TrendPL({ items, snapshots, months, vat, currentYm }: Props) {
   const [range, setRange] = useState<'6' | '12' | 'all'>('12');
   const [mode, setMode] = useState<'amount' | 'ratio'>('amount');
   const [includeCurrent, setIncludeCurrent] = useState(false);
+  const c = useThemeColors();
 
   const cols = useMemo(() => {
     const asc = [...months].sort();
@@ -61,15 +63,15 @@ export function TrendPL({ items, snapshots, months, vat, currentYm }: Props) {
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ left: 8, right: 8, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line-2)" vertical={false} />
-              <XAxis dataKey="ym" tick={{ fontSize: 11, fill: 'var(--color-fg-4)' }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={yTick} tick={{ fontSize: 10, fill: 'var(--color-fg-4)' }} axisLine={false} tickLine={false} width={44} />
-              <Tooltip formatter={((v: number) => `${fmtNum(v)}원`) as any} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--color-line)', background: 'var(--color-card)', color: 'var(--color-fg)' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.line2} vertical={false} />
+              <XAxis dataKey="ym" tick={{ fontSize: 11, fill: c.fg4 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={yTick} tick={{ fontSize: 10, fill: c.fg4 }} axisLine={false} tickLine={false} width={44} />
+              <Tooltip formatter={((v: number) => `${fmtNum(v)}원`) as any} contentStyle={{ fontSize: 12, borderRadius: 10, border: `1px solid ${c.line}`, background: c.card, color: c.fg }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="실매출" fill="var(--color-brand-bg)" stroke="var(--color-brand)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="광고비" fill="var(--color-info)" opacity={0.7} radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="공헌이익" stroke="var(--color-success)" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="영업이익" stroke="var(--color-fg)" strokeWidth={2} dot={{ r: 3 }} />
+              <Bar dataKey="실매출" fill={c.brand} fillOpacity={0.25} stroke={c.brand} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="광고비" fill={c.info} fillOpacity={0.7} radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="공헌이익" stroke={c.success} strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="영업이익" stroke={c.fg} strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

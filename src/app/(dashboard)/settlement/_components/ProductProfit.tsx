@@ -37,21 +37,28 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Set<string>>(new Set());
 
+  const [adsLoading, setAdsLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [s, a, p] = await Promise.all([
+      const [s, p] = await Promise.all([
         fetch(`/api/monthly-product-sales?year_month=${ym}`).then(r => r.ok ? r.json() : []),
-        fetch(`/api/settlement/product-ads?year_month=${ym}`).then(r => r.json()).catch(() => null),
         fetch('/api/platform-skus').then(r => r.ok ? r.json() : []),
       ]);
       if (cancelled) return;
       setSales(Array.isArray(s) ? s : []);
-      setAds(a);
       setPskus(Array.isArray(p) ? p : []);
       setLoading(false);
     })();
+    return () => { cancelled = true; };
+  }, [ym]);
+  // 광고 raw 집계는 느릴 수 있어(수십만 행) 별도로 — 표는 먼저 뜨고 광고비 열만 나중에 채워진다
+  useEffect(() => {
+    let cancelled = false;
+    setAds(null); setAdsLoading(true);
+    fetch(`/api/settlement/product-ads?year_month=${ym}`).then(r => r.json()).catch(() => ({ error: '광고 집계 실패', products: [] }))
+      .then(a => { if (!cancelled) { setAds(a); setAdsLoading(false); } });
     return () => { cancelled = true; };
   }, [ym]);
 
@@ -140,7 +147,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse min-w-[1040px]">
+            <table className="w-full text-[12px] border-collapse min-w-[1180px]">
               <thead>
                 <tr className="h-9 border-b border-line text-[11px] font-semibold text-fg-4">
                   <th className="text-left px-4 min-w-[200px]">상품</th>
@@ -151,7 +158,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
                   <th className="text-right px-2" title="쿠팡 일반 4,100 · 대형 4,850 / 타 마켓 2,650 (건당)">물류</th>
-                  <th className="text-right px-2">광고비</th>
+                  <th className="text-right px-2 whitespace-nowrap">광고비{adsLoading && <Loader2 className="inline h-3 w-3 ml-1 animate-spin" />}</th>
                   <th className="text-right px-2" title="광고 전 공헌이익률">광고 전</th>
                   <th className="text-right px-2">ROAS</th>
                   <th className="text-right px-2" title="손익분기 ROAS">손익분기</th>
@@ -214,8 +221,12 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
       {/* 광고 매칭 상태 */}
       <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-4 md:p-5">
         <h3 className="text-[15px] font-bold text-fg mb-1">쿠팡 광고비 매칭 <span className="text-[11px] font-medium text-fg-4">광고분석 raw 기준</span></h3>
-        {ads?.needsMigration ? (
+        {adsLoading ? (
+          <p className="text-[12px] text-fg-4 flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> 광고 raw 집계 중… (수십만 행이라 몇 초 걸립니다)</p>
+        ) : ads?.needsMigration ? (
           <p className="text-[12px] text-warn">DB 마이그레이션(00057) 적용 전이라 광고 raw 집계를 쓸 수 없습니다. 적용 후 새로고침하세요.</p>
+        ) : ads?.error && !ads.products?.length ? (
+          <p className="text-[12px] text-danger">광고 raw 집계 오류: {ads.error}. 마이그레이션 00058(인덱스·타임아웃) 적용이 필요할 수 있습니다.</p>
         ) : !ads || ads.totalCost === 0 ? (
           <p className="text-[12px] text-fg-4">{ym.replace('-', '.')} 광고 raw 가 DB 에 없습니다. <Link href="/ad-analysis" className="text-brand font-semibold hover:underline">광고 분석</Link>에서 해당 월 PA 보고서를 올리고, 로컬 데이터가 DB 보다 많다는 주황 배너가 보이면 "지금 DB 로 동기화"를 눌러 주세요.</p>
         ) : (
