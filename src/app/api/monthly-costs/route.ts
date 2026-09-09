@@ -11,11 +11,10 @@ export async function GET(request: NextRequest) {
   // 이력 조회
   const ym = request.nextUrl.searchParams.get('history');
   if (ym === 'all') {
-    const { data } = await admin
-      .from('monthly_cost_snapshots')
-      .select('year_month, cost_id, amount, cost:monthly_costs(label, parent_id, vat_applicable)')
-      .order('year_month', { ascending: false });
-    return NextResponse.json(data ?? []);
+    // note 컬럼(00059)이 없는 DB 에서는 note 없이 재시도
+    let res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount, note').order('year_month', { ascending: false });
+    if (res.error) res = await admin.from('monthly_cost_snapshots').select('year_month, cost_id, amount').order('year_month', { ascending: false });
+    return NextResponse.json(res.data ?? []);
   }
 
   const { data, error } = await admin
@@ -99,17 +98,24 @@ export async function POST(request: NextRequest) {
 
   // 월별 금액 스냅샷 저장 (프론트에서 금액 직접 전달)
   if (body.action === 'snapshot_items') {
-    const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number }[] };
+    const { year_month, amounts } = body as { year_month: string; amounts: { id: string; amount: number; note?: string | null }[] };
+    const withNote = (amounts ?? []).some((a: any) => a.note !== undefined);
     const rows = (amounts ?? []).map((a: any) => ({
       year_month,
       cost_id: a.id,
       amount: a.amount ?? 0,
+      ...(withNote ? { note: a.note ?? null } : {}),
     }));
+    let notesSaved = withNote;
     if (rows.length) {
-      await admin.from('monthly_cost_snapshots')
-        .upsert(rows, { onConflict: 'year_month,cost_id' });
+      let { error } = await admin.from('monthly_cost_snapshots').upsert(rows, { onConflict: 'year_month,cost_id' });
+      if (error && withNote && /note|schema cache|PGRST204/i.test(`${error.code} ${error.message}`)) {
+        notesSaved = false;
+        ({ error } = await admin.from('monthly_cost_snapshots').upsert(rows.map(({ note: _n, ...r }: any) => r), { onConflict: 'year_month,cost_id' }));
+      }
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, saved: rows.length });
+    return NextResponse.json({ ok: true, saved: rows.length, notesSaved });
   }
 
   if (body.id) {

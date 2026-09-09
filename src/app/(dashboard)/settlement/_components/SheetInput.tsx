@@ -93,6 +93,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [mode, setMode] = useState<'input' | 'structure'>('input');
   const [local, setLocal] = useState<MCost[]>([]);
   const [amounts, setAmounts] = useState<Map<string, number>>(new Map());
+  const [notes, setNotes] = useState<Map<string, string>>(new Map()); // 월별 비고 (monthly_cost_snapshots.note)
   const [carried, setCarried] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,6 +127,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
 
   const prevYm = prevOf(selectedYm);
   const snapFor = useCallback((ym: string) => { const m = new Map<string, number>(); for (const s of snapshots) if (s.year_month === ym) m.set(s.cost_id, Number(s.amount) || 0); return m; }, [snapshots]);
+  const notesFor = useCallback((ym: string) => { const m = new Map<string, string>(); for (const s of snapshots) if (s.year_month === ym && s.note) m.set(s.cost_id, s.note); return m; }, [snapshots]);
   const prevAmounts = useMemo(() => snapFor(prevYm), [snapFor, prevYm]);
   const savedMonths = useMemo(() => [...new Set(snapshots.map(s => s.year_month))].filter(m => m !== selectedYm).sort().reverse(), [snapshots, selectedYm]);
   const hasSnapshot = useMemo(() => snapshots.some(s => s.year_month === selectedYm), [snapshots, selectedYm]);
@@ -143,9 +145,11 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       else next.set(it.id, 0);
     }
     setAmounts(next);
+    setNotes(notesFor(selectedYm));
     setCarried(auto);
     if (auto.size > 0) setDirty(true);
-  }, [items, loading, selectedYm, snapFor, hasSnapshot, prevAmounts]);
+  }, [items, loading, selectedYm, snapFor, notesFor, hasSnapshot, prevAmounts]);
+  const setNote = (id: string, v: string) => { setNotes(prev => { const n = new Map(prev); if (v) n.set(id, v); else n.delete(id); return n; }); setDirty(true); };
 
   // 쿠팡 광고 raw 월 집계 (광고비 칸 옆 참고값)
   useEffect(() => {
@@ -188,10 +192,12 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       const put = await fetch('/api/monthly-costs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: local }) });
       const pj = await put.json().catch(() => ({}));
       if (!put.ok) { toast.error(`저장 실패: ${pj.error ?? put.status}`); return; }
-      const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => ({ id: i.id, amount: amounts.get(i.id) ?? 0 })) }) });
-      if (!post.ok) { toast.error('금액 저장 실패'); return; }
+      const post = await fetch('/api/monthly-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'snapshot_items', year_month: selectedYm, amounts: local.map(i => ({ id: i.id, amount: amounts.get(i.id) ?? 0, note: notes.get(i.id) ?? null })) }) });
+      const sj = await post.json().catch(() => ({}));
+      if (!post.ok) { toast.error(`금액 저장 실패: ${sj.error ?? post.status}`); return; }
       setDirty(false); setCarried(new Set());
-      toast.success(`${ymLabel(selectedYm)} 저장 완료${pj.needsMigration ? ' (분류 태그는 마이그레이션 후 저장됩니다)' : ''}`);
+      const warn = [pj.needsMigration ? '분류 태그' : null, sj.notesSaved === false ? '월별 비고' : null].filter(Boolean);
+      toast.success(`${ymLabel(selectedYm)} 저장 완료${warn.length ? ` (${warn.join('·')}는 마이그레이션 00057/00059 적용 후 저장됩니다)` : ''}`);
       onSaved?.();
     } finally { setSaving(false); }
   }
@@ -304,7 +310,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           <div className="grid md:grid-cols-2 gap-3">
             {sec.groups.map(g => (
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
-                amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)}
+                amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote}
                 tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
                 onFillPrev={() => fillFrom(prevYm, leavesOf(g).map(l => l.id))} prevYm={prevYm}
                 newLabel={newLabel} setNewLabel={setNewLabel} addItem={addItem} />
@@ -347,12 +353,13 @@ interface CardProps {
   group: MCost; leaves: MCost[]; isSingle: boolean; mode: 'input' | 'structure';
   amounts: Map<string, number>; prevAmounts: Map<string, number>; carried: Set<string>; adRaw?: number;
   tagsOf: (l: MCost) => ReturnType<typeof effectiveTags>; leafValue: (l: MCost) => number;
+  notes: Map<string, string>; setNote: (id: string, v: string) => void;
   setAmount: (id: string, v: number) => void; patch: (id: string, p: Partial<MCost>) => void; move: (id: string, d: -1 | 1) => void; removeItem: (id: string) => void;
   onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -397,6 +404,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <Chip on={!!leaf.is_income} onClick={() => patch(leaf.id, { is_income: !leaf.is_income })} title="+ 수입(차감) / − 비용">{leaf.is_income ? '+ 수입' : '− 비용'}</Chip>
                   <Chip on={!!leaf.vat_applicable} onClick={() => patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값이 VAT 별도이면 켜기">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
                   <Chip on={!!leaf.carry_forward} onClick={() => patch(leaf.id, { carry_forward: !leaf.carry_forward })} title="새 달을 열면 전월 값 자동 입력">매월 이월</Chip>
+                  <input lang="ko" value={leaf.note ?? ''} onChange={e => patch(leaf.id, { note: e.target.value })} placeholder="공통 메모 (모든 달)" className={cn(inputClassName, 'h-7 w-32 text-[11px]')} />
                   <span className="ml-auto"><TagPicker item={leaf} parent={isSingle ? null : group} onChange={p => patch(leaf.id, p)} /></span>
                   {!isSingle && <button onClick={() => removeItem(leaf.id)} className="text-fg-5 hover:text-danger" title="삭제"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </>
@@ -405,10 +413,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <div className="w-36 shrink-0 min-w-0">
                     <div className="text-[13px] text-fg truncate" title={leaf.label}>{leaf.label}</div>
                     <div className="text-[10px] text-fg-5 truncate">
-                      {leaf.is_income ? '수입 · ' : ''}{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}{leaf.carry_forward ? ' · 이월' : ''}
+                      {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}
                     </div>
                   </div>
-                  <input lang="ko" value={leaf.note ?? ''} onChange={e => patch(leaf.id, { note: e.target.value })} placeholder="비고"
+                  <Chip on={!!leaf.vat_applicable} onClick={() => patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값 기준: VAT별도 = 세전 금액 / VAT포함 = 세후 금액. 클릭해서 전환">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
+                  <input lang="ko" value={notes.get(leaf.id) ?? ''} onChange={e => setNote(leaf.id, e.target.value)} placeholder={leaf.note ? `비고 (공통: ${leaf.note})` : '이 달 비고'} title={leaf.note ? `항목 공통 메모: ${leaf.note}` : '이 달에만 남는 메모'}
                     className="flex-1 min-w-0 h-7 px-2 rounded-md text-[11px] text-fg-3 bg-transparent border border-transparent hover:border-line focus:border-brand focus:bg-card focus:outline-none" />
                   {isAdCoupang && adRaw != null && (
                     <span className="text-[10px] text-fg-4 whitespace-nowrap" title="광고분석 raw 월 집계 (참고)">raw {fmtNum(adRaw)}</span>
