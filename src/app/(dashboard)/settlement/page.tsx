@@ -96,14 +96,19 @@ function SettlementInner() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="정산" description="월 단위로 마켓 실적을 모아 손익을 확인합니다. 월을 먼저 고르고 아래 순서대로 진행하세요.">
-        <label className="flex items-center gap-2 text-[12px] text-fg-3">
-          <span className="hidden sm:inline">정산 월</span>
-          <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)} className={cn(inputClassName, 'w-auto font-semibold text-brand cursor-pointer')}>
+      <PageHeader title="정산" description="월 단위로 마켓 실적을 모아 손익을 확인합니다. 오른쪽 위 배지의 월이 지금 보고 있는 달입니다." />
+
+      {/* 플로팅 월 배지 — 스크롤·탭과 무관하게 항상 보인다. 어느 달을 만지고 있는지 놓치지 않도록 */}
+      <div className="fixed right-4 md:right-6 top-[68px] z-40">
+        <label className={cn('flex items-center gap-2 rounded-full pl-3 pr-2 h-10 shadow-[0_4px_16px_rgba(0,0,0,0.14)] border cursor-pointer transition-colors',
+          closedMonths[selectedYm] ? 'bg-card border-fg/20' : dirty ? 'bg-warn text-white border-warn' : 'bg-brand text-white border-brand')}>
+          <span className="text-[11px] font-medium opacity-90 hidden sm:inline">{closedMonths[selectedYm] ? '🔒 마감된 달' : dirty ? '수정 중 · 저장 전' : '정산 월'}</span>
+          <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)}
+            className={cn('h-7 rounded-full px-2 text-[13px] font-bold cursor-pointer focus:outline-none', closedMonths[selectedYm] ? 'bg-app text-fg' : 'bg-white/15 text-white [&>option]:text-fg')}>
             {monthOptions.map(ym => <option key={ym} value={ym}>{ymLabel(ym)}{closedMonths[ym] ? ' · 🔒 마감' : data.months.includes(ym) ? ' · 저장됨' : ''}</option>)}
           </select>
         </label>
-      </PageHeader>
+      </div>
 
       <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden" />
 
