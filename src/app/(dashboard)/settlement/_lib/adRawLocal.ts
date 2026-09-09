@@ -51,11 +51,16 @@ export async function readLocalAdRows(): Promise<Record<string, unknown>[]> {
 /** rows → { 'YYYY-MM': LocalAdAgg[] } */
 export function aggregateLocalAdRows(rows: Record<string, unknown>[]): Record<string, LocalAdAgg[]> {
   const byMonth = new Map<string, Map<string, LocalAdAgg>>();
-  // 키워드 보고서('-')와 일별 보고서('')가 같은 지출을 두 번 담고 있을 수 있어 정규화 키로 중복 제거
+  // 키워드 보고서(비검색 행의 키워드='-')와 일별 보고서(키워드='') 를 같이 올리면 비검색 영역 지출이 두 번 들어간다.
+  // 규칙: 키워드 보고서가 있는 날짜의 비검색 일별 행은 버린다 (같은 날 합계가 동일함을 확인).
+  const kwDates = new Set<string>();
+  for (let i = 0; i < rows.length; i++) { const r = rows[i]; if (String(r['키워드'] ?? '').trim() === '-' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역') kwDates.add(String(r['날짜'] ?? '')); }
   const seen = new Set<string>();
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    const kw = String(r['키워드'] ?? '').trim(); const key = `${r['날짜']}|${kw === '-' ? '' : kw}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
+    const kw = String(r['키워드'] ?? '').trim();
+    if (kw === '' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역' && kwDates.has(String(r['날짜'] ?? ''))) continue;
+    const key = `${r['날짜']}|${kw === '-' ? '' : kw}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
     if (seen.has(key)) continue; seen.add(key);
     const d = String(r['날짜'] ?? '').replace(/\D/g, '');
     if (d.length < 6) continue;

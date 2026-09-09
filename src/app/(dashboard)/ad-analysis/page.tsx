@@ -805,7 +805,18 @@ export default function AdAnalysisPage() {
   // 키워드 '-'(키워드 보고서의 비검색 행) 와 ''(일별 보고서) 는 같은 지출 — 두 양식을 같이 올리면 비검색 영역이 2배로 잡히던 버그
   const normKw = (v: any) => { const s = String(v ?? '').trim(); return s === '-' ? '' : s; };
   const dedupKey = (r: any) => `${r['날짜']}|${normKw(r['키워드'])}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
-  const dedupeRows = (rows: any[]) => { const seen = new Set<string>(); const out: any[] = []; for (let i = 0; i < rows.length; i++) { const k = dedupKey(rows[i]); if (!seen.has(k)) { seen.add(k); out.push(rows[i]); } } return out; };
+  const dedupeRows = (rows: any[]) => {
+    // 키워드 보고서가 있는 날짜의 비검색 일별 행('' 키워드)은 같은 지출의 중복 → 제거
+    const kwDates = new Set<string>();
+    for (let i = 0; i < rows.length; i++) { const r = rows[i]; if (String(r['키워드'] ?? '').trim() === '-' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역') kwDates.add(String(r['날짜'] ?? '')); }
+    const seen = new Set<string>(); const out: any[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (String(r['키워드'] ?? '').trim() === '' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역' && kwDates.has(String(r['날짜'] ?? ''))) continue;
+      const k = dedupKey(r); if (!seen.has(k)) { seen.add(k); out.push(r); }
+    }
+    return out;
+  };
 
   const toast = useToast();
   const toastRef = useRef(toast); toastRef.current = toast;

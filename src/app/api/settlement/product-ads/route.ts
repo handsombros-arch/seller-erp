@@ -50,16 +50,22 @@ export async function GET(request: NextRequest) {
       admin.from('products').select('id, name, logistics_tier'),
     ]);
     const byOpt = new Map<string, any>(), byProd = new Map<string, any>();
-    for (const p of (ps ?? []) as any[]) { if ((p.channel?.type ?? '') !== 'toss') continue; if (p.platform_sku_id) byOpt.set(String(p.platform_sku_id), p); if (p.platform_product_id) byProd.set(String(p.platform_product_id), p); }
+    const listing: { name: string; p: any }[] = [];   // 마스터 토스 채널 상품명 (토스 노출명)
+    for (const p of (ps ?? []) as any[]) { if ((p.channel?.type ?? '') !== 'toss') continue; if (p.platform_sku_id) byOpt.set(String(p.platform_sku_id), p); if (p.platform_product_id) byProd.set(String(p.platform_product_id), p); if (p.platform_product_name) listing.push({ name: String(p.platform_product_name).trim(), p }); }
     const byName = new Map((prods ?? []).map((p: any) => [String(p.name).trim(), p]));
+    const norm = (v: string) => v.replace(/\s+/g, '').toLowerCase();
+    // 토스 광고 '상품' 은 노출명("그랑누보 프라다 원단 여성 백팩") → 마스터 토스 상품명과 앞부분 일치, 없으면 상품명 포함
+    const matchListing = (adName: string) => { const n = norm(adName); if (!n) return null; let best: any = null, bestLen = 0; for (const l of listing) { const ln = norm(l.name); if (!ln) continue; if ((n.startsWith(ln) || ln.startsWith(n)) && ln.length > bestLen) { best = l.p; bestLen = ln.length; } } return best; };
+    const matchProduct = (adName: string) => { const n = norm(adName); for (const [name, p] of byName) { if (name && n.includes(norm(name))) return p; } return null; };
     const agg = new Map<string, any>();
     for (const r of rows) {
       if (toYm(r['일자']) !== ym) continue;
       const opt = String(r['옵션 ID'] ?? ''); const pid = String(r['상품 ID'] ?? ''); const key = opt || pid || String(r['광고'] ?? '');
       let a = agg.get(key);
       if (!a) {
-        const p = byOpt.get(opt) ?? byProd.get(pid);
-        const prod = p?.sku?.product ?? byName.get(String(r['상품'] ?? '').trim()) ?? null;
+        const adName = String(r['상품'] ?? r['광고'] ?? '');
+        const p = byOpt.get(opt) ?? byProd.get(pid) ?? matchListing(adName);
+        const prod = p?.sku?.product ?? byName.get(adName.trim()) ?? matchProduct(adName) ?? null;
         a = { vendorItemId: opt, name: String(r['광고'] ?? r['상품'] ?? ''), cost: 0, impressions: 0, clicks: 0, convQty14d: 0, convRev14d: 0, rows: 0, skuId: p?.sku?.id ?? null, skuCode: p?.sku?.sku_code ?? null, productId: prod?.id ?? null, productName: prod?.name ?? null, logisticsTier: prod?.logistics_tier ?? null, matched: !!prod?.id };
         agg.set(key, a);
       }
