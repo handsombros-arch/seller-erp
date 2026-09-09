@@ -14,6 +14,8 @@ export interface VatPeriod {
   salesTax: number;        // 매출세액
   purchaseBase: number;    // 세금계산서 매입 (간이: 공급대가, 일반: 공급가액)
   purchaseTax: number;     // 매입세액(일반) / 매입세액공제(간이 0.5%)
+  b2bBase: number;         // B2B 세금계산서 발행 공급가액
+  b2bVat: number;          // B2B 발행 부가세 (공급가액 × 10%)
   payable: number;         // 납부 예상
   note: string;
   monthsWithData: number;
@@ -42,25 +44,25 @@ function monthFigures(items: MCost[], snapshots: Snapshot[], ym: string, regime:
   const view = regime === 'general' ? 'ex' : 'incl';
   const res = buildPL(items, (it) => amounts.get(it.id) ?? 0, { vat: view, regime, vatOf: modeOf });
   // 부가세 계산용: 매출(공급대가/공급가액), 세금계산서 매입(부가세 없는 항목 제외)
-  let salesIncl = 0, salesEx = 0, buyIncl = 0, buyEx = 0;
+  let salesIncl = 0, salesEx = 0, buyIncl = 0, buyEx = 0, b2bEx = 0;
   for (const l of res.leaves) {
     const mode = modeOf(l.item); const a = amounts.get(l.item.id) ?? 0; const sp = vatSplitMode(a, mode); const sign = l.item.is_income ? -1 : 1;
-    if (l.tags.pl_line === 'revenue') { salesIncl += sp.incl * (l.item.is_income ? 1 : -1); salesEx += sp.ex * (l.item.is_income ? 1 : -1); }
+    if (l.tags.pl_line === 'revenue') { salesIncl += sp.incl * (l.item.is_income ? 1 : -1); salesEx += sp.ex * (l.item.is_income ? 1 : -1); if (l.tags.market === 'b2b') b2bEx += sp.ex * (l.item.is_income ? 1 : -1); }
     else if (l.tags.pl_line === 'coupon') { salesIncl -= sp.incl * sign; salesEx -= sp.ex * sign; }
     else if (['cogs', 'market_fee', 'logistics', 'ad', 'marketing', 'fixed', 'other'].includes(l.tags.pl_line) && mode !== 'none') { buyIncl += sp.incl * sign; buyEx += sp.ex * sign; }
   }
-  return { operatingProfit: res.total.operatingProfit, salesIncl, salesEx, buyIncl, buyEx };
+  return { operatingProfit: res.total.operatingProfit, salesIncl, salesEx, buyIncl, buyEx, b2bEx };
 }
 
 /** 해당 연도의 부가세 신고 기간별 예상 */
 export function estimateVat(items: MCost[], snapshots: Snapshot[], year: number, switchYm: string): VatPeriod[] {
   const periods: VatPeriod[] = [];
   const build = (key: string, label: string, months: string[], due: string, regime: Regime, note: string) => {
-    let salesBase = 0, purchaseBase = 0, n = 0;
-    for (const ym of months) { const f = monthFigures(items, snapshots, ym, regime); if (!f) continue; n++; if (regime === 'simplified') { salesBase += f.salesIncl; purchaseBase += f.buyIncl; } else { salesBase += f.salesEx; purchaseBase += f.buyEx; } }
+    let salesBase = 0, purchaseBase = 0, n = 0, b2bBase = 0;
+    for (const ym of months) { const f = monthFigures(items, snapshots, ym, regime); if (!f) continue; n++; b2bBase += f.b2bEx; if (regime === 'simplified') { salesBase += f.salesIncl; purchaseBase += f.buyIncl; } else { salesBase += f.salesEx; purchaseBase += f.buyEx; } }
     const salesTax = regime === 'simplified' ? Math.round(salesBase * 0.10 * 0.10) : Math.round(salesBase * 0.10);
     const purchaseTax = regime === 'simplified' ? Math.round(purchaseBase * 0.005) : Math.round(purchaseBase * 0.10);
-    periods.push({ key, label, months, due, regime, salesBase: Math.round(salesBase), salesTax, purchaseBase: Math.round(purchaseBase), purchaseTax, payable: Math.max(0, salesTax - purchaseTax), note, monthsWithData: n });
+    periods.push({ key, label, months, due, regime, salesBase: Math.round(salesBase), salesTax, purchaseBase: Math.round(purchaseBase), purchaseTax, b2bBase: Math.round(b2bBase), b2bVat: Math.round(b2bBase * 0.1), payable: Math.max(0, salesTax - purchaseTax), note, monthsWithData: n });
   };
   const jan = ymOf(year, 1), jul = ymOf(year, 7);
   const firstHalf = Array.from({ length: 6 }, (_, i) => ymOf(year, i + 1));

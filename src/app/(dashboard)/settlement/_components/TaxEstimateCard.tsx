@@ -36,6 +36,14 @@ export function TaxEstimateCard({ items, snapshots, switchYm, ym }: { items: MCo
               <div><div className="text-[10px] text-fg-4">{p.regime === 'simplified' ? '매입세액공제(0.5%)' : '매입세액'}</div><div className="tabular-nums text-fg">−{won(p.purchaseTax)}</div><div className="text-[10px] text-fg-5">매입 {won(p.purchaseBase)}</div></div>
               <div><div className="text-[10px] text-fg-4">납부 예상</div><div className={cn('tabular-nums font-bold', p.payable > 0 ? 'text-danger' : 'text-success')}>{won(p.payable)}</div><div className="text-[10px] text-fg-5">{p.monthsWithData}/{p.months.length}개월 저장됨</div></div>
             </div>
+            {p.b2bBase > 0 && (
+              <div className="mt-2 rounded-lg bg-card-2 px-3 py-2 text-[11px] text-fg-2">
+                <b>B2B 세금계산서 발행분</b> 공급가액 {won(p.b2bBase)} · 발행 부가세 {won(p.b2bVat)}
+                <div className="text-[10px] text-fg-4 mt-0.5">{p.regime === 'simplified'
+                  ? `간이: 거래처는 이 ${won(p.b2bVat)}을 공제받지만, 내 납부는 부가가치율 방식(공급대가 × 1%)이라 발행 부가세와 다릅니다. 발행분은 위 매출세액에 이미 포함.`
+                  : `일반: 발행 부가세 ${won(p.b2bVat)}이 그대로 매출세액에 포함됩니다 (위 매출세액 중 B2B 몫).`}</div>
+              </div>
+            )}
             {p.note && <p className="mt-1.5 text-[10px] text-fg-4">{p.note}</p>}
           </div>
         ))}
