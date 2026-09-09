@@ -82,11 +82,11 @@ function SettlementInner() {
         <div className="space-y-4">
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={costReloadKey} />
           <CostUpload selectedYm={selectedYm} onApply={() => setCostReloadKey(k => k + 1)} />
-          <AdCoverageCard selectedYm={selectedYm} />
+          <AdCoverageCard selectedYm={selectedYm} onSaved={() => setCostReloadKey(k => k + 1)} />
           <CostEditor reloadKey={costReloadKey} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} />
         </div>
       )}
-      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} />}
+      {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} loading={data.loading} />}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
           : <AnalysisView items={data.items} amounts={amounts} ym={selectedYm} vat={vat} orderCounts={orderCounts} prevAmounts={prevAmounts} />

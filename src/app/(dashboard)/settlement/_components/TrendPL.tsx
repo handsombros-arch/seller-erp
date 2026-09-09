@@ -7,13 +7,13 @@ import { cn } from '@/lib/utils';
 import { PL_ROWS, buildSeries, fmtNum, type MCost, type PL, type Snapshot } from '../_lib/settlement';
 import { useThemeColors } from '../_lib/useThemeColors';
 
-interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string }
+interface Props { items: MCost[]; snapshots: Snapshot[]; months: string[]; vat: 'ex' | 'incl'; currentYm: string; loading?: boolean }
 
 const RANGE = [{ value: '6', label: '6개월' }, { value: '12', label: '12개월' }, { value: 'all', label: '전체' }] as const;
 const MODE = [{ value: 'amount', label: '금액' }, { value: 'ratio', label: '매출 대비 %' }] as const;
 
 /** 월별 추이 — 손익계산서 형식. 열 = 월, 행 = 손익 라인. */
-export function TrendPL({ items, snapshots, months, vat, currentYm }: Props) {
+export function TrendPL({ items, snapshots, months, vat, currentYm, loading }: Props) {
   const [range, setRange] = useState<'6' | '12' | 'all'>('12');
   const [mode, setMode] = useState<'amount' | 'ratio'>('amount');
   const [includeCurrent, setIncludeCurrent] = useState(false);
@@ -45,6 +45,9 @@ export function TrendPL({ items, snapshots, months, vat, currentYm }: Props) {
   const chartData = series.map(s => ({ ym: s.ym.slice(2).replace('-', '.'), 실매출: s.total.netRevenue, 공헌이익: s.total.contribution, 영업이익: s.total.operatingProfit, 광고비: s.total.ad + s.total.marketing }));
   const yTick = (v: number) => Math.abs(v) >= 1e8 ? `${(v / 1e8).toFixed(1)}억` : Math.abs(v) >= 1e4 ? `${Math.round(v / 1e4)}만` : String(v);
 
+  if (loading) {
+    return <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>;
+  }
   if (cols.length === 0) {
     return <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">저장된 월이 없습니다. 입력 탭에서 월을 저장하면 여기에 쌓입니다.</div>;
   }

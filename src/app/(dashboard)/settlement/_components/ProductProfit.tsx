@@ -228,7 +228,7 @@ export function ProductProfit({ ym, sheetMarkets }: { ym: string; sheetMarkets?:
         ) : ads?.error && !ads.products?.length ? (
           <p className="text-[12px] text-danger">광고 raw 집계 오류: {ads.error}. 마이그레이션 00058(인덱스·타임아웃) 적용이 필요할 수 있습니다.</p>
         ) : !ads || ads.totalCost === 0 ? (
-          <p className="text-[12px] text-fg-4">{ym.replace('-', '.')} 광고 raw 가 DB 에 없습니다. <Link href="/ad-analysis" className="text-brand font-semibold hover:underline">광고 분석</Link>에서 해당 월 PA 보고서를 올리고, 로컬 데이터가 DB 보다 많다는 주황 배너가 보이면 "지금 DB 로 동기화"를 눌러 주세요.</p>
+          <p className="text-[12px] text-fg-4">{ym.replace('-', '.')} 광고 집계가 없습니다. <Link href="/settlement?tab=input" className="text-brand font-semibold hover:underline">입력 탭</Link>의 광고비 raw 카드에서 "이 PC 광고 raw → 월 집계 저장"을 누르면 채워집니다. (raw 는 <Link href="/ad-analysis" className="text-brand hover:underline">광고 분석</Link>에 올린 것을 씁니다)</p>
         ) : (
           <div className="text-[12px] text-fg-2 space-y-2">
             <p>광고비 {won(ads.totalCost)}원 중 상품 매칭 {won(ads.matchedCost)}원 ({ads.totalCost ? ((ads.matchedCost / ads.totalCost) * 100).toFixed(0) : 0}%)</p>

@@ -180,6 +180,7 @@ export async function PUT(request: NextRequest) {
     adType: string;
     products: GroupedAd[];
     overrides?: Record<string, string | null>;  // vendorItemId|campaignId → sku_id (수동 매핑)
+    resolveSku?: boolean;                       // true 면 skuId 가 없는 행을 서버에서 옵션ID→sku 매핑
   };
 
   if (!body.yearMonth || !body.platform || !body.adType || !Array.isArray(body.products)) {
@@ -188,6 +189,18 @@ export async function PUT(request: NextRequest) {
 
   const admin = await createAdminClient();
   const overrides = body.overrides || {};
+
+  if (body.resolveSku) {
+    const [{ data: rg }, { data: ps }] = await Promise.all([
+      admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id'),
+      admin.from('platform_skus').select('platform_sku_id, sku_id'),
+    ]);
+    const rgMap = new Map((rg ?? []).map((r: any) => [String(r.vendor_item_id), r.sku_id as string]));
+    const psMap = new Map((ps ?? []).filter((p: any) => p.platform_sku_id).map((p: any) => [String(p.platform_sku_id), p.sku_id as string]));
+    for (const p of body.products) {
+      if (!p.skuId) p.skuId = (rgMap.get(String(p.vendorItemId)) || psMap.get(String(p.vendorItemId)) || null) as string | null;
+    }
+  }
 
   const rows = body.products.map(p => {
     const key = `${p.vendorItemId}||${p.campaignId}`;
