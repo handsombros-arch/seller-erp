@@ -342,7 +342,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                     <button onClick={() => setAmount(leaf.id, prev)} className="text-[10px] text-fg-4 hover:text-brand whitespace-nowrap flex items-center gap-0.5" title={`${ymLabel(prevYm)} 값 가져오기`}><Undo2 className="h-3 w-3" />{fmtNum(prev)}</button>
                   ) : carried.has(leaf.id) ? <span className="text-[10px] text-brand whitespace-nowrap">이월</span> : null}
                   <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} />
-                  <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산">{amt ? `${fmtNum(incl)}` : ''}</span>
+                  <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
               )}
             </div>
