@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (t && t !== 'coupang') continue;
     skuByVendor.set(String(p.platform_sku_id), p);
   }
-  const rgMap = new Map((rg ?? []).map((r: any) => [String(r.vendor_item_id), r.sku_id]));
+  const rgMap = new Map<string, string>((rg ?? []).map((r: any) => [String(r.vendor_item_id), String(r.sku_id)]));
   // rg 만 있는 경우 sku 정보 보강
   const rgOnlyIds = [...new Set((rows ?? []).map((r: any) => String(r.vendor_item_id)).filter((v: string) => v && !skuByVendor.has(v) && rgMap.has(v)))];
   let skuInfo = new Map<string, any>();
