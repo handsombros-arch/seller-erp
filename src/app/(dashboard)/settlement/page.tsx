@@ -51,6 +51,21 @@ function SettlementInner() {
   const vat = vatOn ? 'incl' : 'ex';
 
   const data = useSettlementData(dataKey);
+  const [closedMonths, setClosedMonths] = useState<Record<string, { closed_at: string; note?: string | null }>>({});
+  const loadClosed = useCallback(() => {
+    fetch('/api/settlement/months').then(r => r.json()).then(j => {
+      const m: Record<string, { closed_at: string; note?: string | null }> = {};
+      for (const c of j.closed ?? []) m[c.year_month] = { closed_at: c.closed_at, note: c.note };
+      setClosedMonths(m);
+    }).catch(() => {});
+  }, []);
+  useEffect(() => { loadClosed(); }, [loadClosed]);
+  const toggleClosed = useCallback(async (ym: string, closed: boolean) => {
+    const r = await fetch('/api/settlement/months', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year_month: ym, closed }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(j.error ?? '마감 처리 실패 (마이그레이션 00061 확인)'); return; }
+    loadClosed();
+  }, [loadClosed]);
   const orderCounts = useOrderCounts(tab === 'analysis' ? selectedYm : null);
 
   const guard = useCallback(async (next: () => void) => {
@@ -84,7 +99,7 @@ function SettlementInner() {
         <label className="flex items-center gap-2 text-[12px] text-fg-3">
           <span className="hidden sm:inline">정산 월</span>
           <select value={selectedYm} onChange={(e) => setSelectedYm(e.target.value)} className={cn(inputClassName, 'w-auto font-semibold text-brand cursor-pointer')}>
-            {monthOptions.map(ym => <option key={ym} value={ym}>{ymLabel(ym)}{data.months.includes(ym) ? ' · 저장됨' : ''}</option>)}
+            {monthOptions.map(ym => <option key={ym} value={ym}>{ymLabel(ym)}{closedMonths[ym] ? ' · 🔒 마감' : data.months.includes(ym) ? ' · 저장됨' : ''}</option>)}
           </select>
         </label>
       </PageHeader>
@@ -94,9 +109,9 @@ function SettlementInner() {
       {tab === 'input' && (
         <div className="space-y-4">
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} reloadKey={dataKey} />
-          <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} />
+          <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />
           <AdCoverageCard selectedYm={selectedYm} onSaved={() => setDataKey(k => k + 1)} />
-          <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} />
+          <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} closed={closedMonths[selectedYm] ?? null} onToggleClosed={(c) => toggleClosed(selectedYm, c)} />
         </div>
       )}
       {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} currentYm={currentYm()} loading={data.loading} />}

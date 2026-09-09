@@ -25,6 +25,9 @@ interface Props {
   selectedYm: string;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
+  /** 마감된 달 — 읽기 전용 */
+  closed?: { closed_at: string; note?: string | null } | null;
+  onToggleClosed?: (closed: boolean) => Promise<void>;
 }
 
 type SectionKey = 'revenue' | 'cogs' | 'market' | 'ad' | 'fixed';
@@ -88,7 +91,8 @@ function verdictFor(amount: number, vatApplicable: boolean, keys: string[], refs
 
 const prevOf = (ym: string) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
-export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChange, onSaved }: Props) {
+export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChange, onSaved, closed, onToggleClosed }: Props) {
+  const readOnly = !!closed;
   const toast = useToast();
   const confirmDialog = useConfirm();
   const [mode, setMode] = useState<'input' | 'structure'>('input');
@@ -300,7 +304,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             {blanks > 0 && <span className="text-fg-4"> · 빈칸 {blanks}</span>}
           </p>
         </div>
-        <div className="relative">
+        {!readOnly && <div className="relative">
           <Button variant="outline" size="sm" onClick={() => setFillOpen(o => !o)}><ClipboardPaste /> 다른 달 값 가져오기</Button>
           {fillOpen && (
             <div className="absolute right-0 top-full mt-1 z-40 w-48 rounded-xl border border-line bg-card shadow-lg py-1">
@@ -317,7 +321,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
               </div>
             </div>
           )}
-        </div>
+        </div>}
         <label className="flex items-center gap-1.5 text-[12px] text-fg-3 cursor-pointer select-none mr-1" title="켜 두면 시트를 열거나 저장할 때마다 자동으로 대조합니다 (약 2~3초, 화면을 막지 않음)">
           <input type="checkbox" className="accent-brand" checked={autoCheck} onChange={e => toggleAuto(e.target.checked)} /> 자동 대조
         </label>
@@ -328,9 +332,9 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             {checking ? <Loader2 className="animate-spin" /> : <ScanSearch />} {checking ? '대조 중' : check ? '다시 대조' : 'API 대조'}
           </Button>
         )}
-        <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => { setMode(m => m === 'input' ? 'structure' : 'input'); setView('input'); }}>
+        {!readOnly && <Button variant={mode === 'structure' ? 'default' : 'outline'} size="sm" onClick={() => { setMode(m => m === 'input' ? 'structure' : 'input'); setView('input'); }}>
           <Settings2 /> {mode === 'structure' ? '입력으로 돌아가기' : '항목 구조 편집'}
-        </Button>
+        </Button>}
       </div>
       {mode === 'input' && (
         <div className="flex flex-wrap items-center gap-3">
@@ -340,6 +344,13 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
         </div>
       )}
 
+      {closed && (
+        <div className="rounded-xl border border-fg/15 bg-card-2 px-4 py-2.5 text-[12px] text-fg-2 flex flex-wrap items-center gap-3">
+          <span className="font-semibold text-fg">🔒 {ymLabel(selectedYm)} 마감됨</span>
+          <span className="text-fg-4">{new Date(closed.closed_at).toLocaleString('ko-KR')}{closed.note ? ` · ${closed.note}` : ''} — 금액·비고를 바꿀 수 없습니다.</span>
+          {onToggleClosed && <button onClick={async () => { if (await confirmDialog(`${ymLabel(selectedYm)} 마감을 해제할까요?\n해제하면 다시 수정할 수 있습니다. 수정 후 다시 마감하세요.`)) await onToggleClosed(false); }} className="ml-auto text-brand hover:underline">마감 해제</button>}
+        </div>
+      )}
       {mode === 'structure' && (
         <div className="rounded-xl border border-brand/30 bg-brand-soft px-4 py-2.5 text-[12px] text-fg-2">
           구조 편집: 항목 이름·순서·부호(+ 수입 / − 비용)·VAT·매월 이월·분류/마켓을 바꿉니다. 여기서 바꾼 이름과 분류는 모든 달에 적용됩니다. 저장을 눌러야 반영됩니다.
@@ -370,7 +381,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode}
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote}
                 tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
-                undo={undo} applyRef={async (id, refValue, vatApplicable) => {
+                readOnly={readOnly} undo={undo} applyRef={async (id, refValue, vatApplicable) => {
                   const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
                   if (cur && !(await confirmDialog(`수기 입력 ${fmtNum(cur)}원을 기준값 ${fmtNum(next)}원으로 바꿀까요?\n저장 전까지 이 칸에서 되돌릴 수 있습니다.`))) return;
                   setUndo(prev => { const n = new Map(prev); if (!n.has(id)) n.set(id, cur); return n; });
@@ -403,7 +414,16 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
               {carried.size > 0 && <span className="text-fg-4"> · 이월 {carried.size}개</span>}
             </span>
             <span className="ml-auto text-[12px] tabular-nums text-fg-4 hidden sm:inline">빈칸 {blanks} / {allLeaves.length}</span>
-            <Button onClick={save} disabled={saving || !changed}>{saving ? <Loader2 className="animate-spin" /> : null} {ymLabel(selectedYm)} 저장</Button>
+            {readOnly ? (
+              <span className="text-[12px] font-semibold text-fg-3">🔒 마감됨</span>
+            ) : (
+              <>
+                {onToggleClosed && hasSnapshot && !changed && (
+                  <Button variant="outline" onClick={async () => { if (await confirmDialog(`${ymLabel(selectedYm)} 을 마감할까요?\n마감하면 이 달 시트가 읽기 전용이 되고, 매출 파일 적용도 막힙니다. 필요하면 해제할 수 있습니다.`)) await onToggleClosed(true); }} title="저장이 끝난 달을 잠급니다">월 마감</Button>
+                )}
+                <Button onClick={save} disabled={saving || !changed}>{saving ? <Loader2 className="animate-spin" /> : null} {ymLabel(selectedYm)} 저장</Button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -421,10 +441,11 @@ interface CardProps {
   setAmount: (id: string, v: number) => void; patch: (id: string, p: Partial<MCost>) => void; move: (id: string, d: -1 | 1) => void; removeItem: (id: string) => void;
   onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
   undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
+  readOnly: boolean;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, readOnly, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -445,7 +466,7 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
               <div className="text-[13px] font-bold text-fg truncate">{group.label}</div>
               {hint && <div className="text-[11px] text-fg-4 truncate" title={hint}>{hint}</div>}
             </div>
-            {prevHas && blanks > 0 && <button onClick={onFillPrev} className="text-[11px] text-brand hover:underline whitespace-nowrap" title={`${ymLabel(prevYm)} 값으로 채우기`}>전월 값 채우기</button>}
+            {prevHas && blanks > 0 && !readOnly && <button onClick={onFillPrev} className="text-[11px] text-brand hover:underline whitespace-nowrap" title={`${ymLabel(prevYm)} 값으로 채우기`}>전월 값 채우기</button>}
             <span className={cn('text-[13px] font-semibold tabular-nums whitespace-nowrap', subtotal < 0 ? 'text-success' : 'text-fg')}>{subtotal < 0 ? '+' : ''}{fmtNum(Math.abs(subtotal))}원</span>
           </>
         )}
@@ -481,16 +502,16 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                       {leaf.is_income ? '수입' : '비용'}{leaf.carry_forward ? ' · 매월 이월' : ''}
                     </div>
                   </div>
-                  <Chip on={!!leaf.vat_applicable} onClick={() => patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값 기준: VAT별도 = 세전 금액 / VAT포함 = 세후 금액. 클릭해서 전환">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
-                  <input lang="ko" value={notes.get(leaf.id) ?? ''} onChange={e => setNote(leaf.id, e.target.value)} placeholder={leaf.note ? `비고 (공통: ${leaf.note})` : '이 달 비고'} title={leaf.note ? `항목 공통 메모: ${leaf.note}` : '이 달에만 남는 메모'}
+                  <Chip on={!!leaf.vat_applicable} onClick={() => !readOnly && patch(leaf.id, { vat_applicable: !leaf.vat_applicable })} title="입력값 기준: VAT별도 = 세전 금액 / VAT포함 = 세후 금액. 클릭해서 전환">{leaf.vat_applicable ? 'VAT별도' : 'VAT포함'}</Chip>
+                  <input lang="ko" readOnly={readOnly} value={notes.get(leaf.id) ?? ''} onChange={e => setNote(leaf.id, e.target.value)} placeholder={leaf.note ? `비고 (공통: ${leaf.note})` : '이 달 비고'} title={leaf.note ? `항목 공통 메모: ${leaf.note}` : '이 달에만 남는 메모'}
                     className="flex-1 min-w-0 h-7 px-2 rounded-md text-[11px] text-fg-3 bg-transparent border border-transparent hover:border-line focus:border-brand focus:bg-card focus:outline-none" />
                   {isAdCoupang && adRaw != null && (
                     <span className="text-[10px] text-fg-4 whitespace-nowrap" title="광고분석 raw 월 집계 (참고)">raw {fmtNum(adRaw)}</span>
                   )}
-                  {!amt && prev ? (
+                  {!amt && prev && !readOnly ? (
                     <button onClick={() => setAmount(leaf.id, prev)} className="text-[10px] text-fg-4 hover:text-brand whitespace-nowrap flex items-center gap-0.5" title={`${ymLabel(prevYm)} 값 가져오기`}><Undo2 className="h-3 w-3" />{fmtNum(prev)}</button>
                   ) : carried.has(leaf.id) ? <span className="text-[10px] text-brand whitespace-nowrap">이월</span> : null}
-                  <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} />
+                  <MoneyInput value={amt} onChange={v => setAmount(leaf.id, v)} income={!!leaf.is_income} disabled={readOnly} />
                   {v?.kind === 'match' && <span className="text-success text-[11px] font-semibold" title={`기준 ${fmtNum(v.ref!.value)}원 · ${v.ref!.source} ${v.ref!.detail}`}>✓</span>}
                   <span className="w-20 text-right text-[10px] text-fg-5 tabular-nums whitespace-nowrap hidden sm:inline" title="VAT 포함 환산 (VAT 별도 항목만)">{amt && leaf.vat_applicable ? `≈${fmtNum(incl)}` : ''}</span>
                 </>
@@ -502,11 +523,11 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                   <span className="text-warn/90">대조 불가 · 계산서로 확인</span>
                 ) : (
                   <>
-                    <span className={cn('font-semibold', v.kind === 'match' ? 'text-success' : 'text-danger')}>{v.kind === 'match' ? '일치' : `차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
+                    <span className="font-semibold text-danger">{`차이 ${v.diff! > 0 ? '+' : ''}${fmtNum(v.diff!)} (${v.pct! > 0 ? '+' : ''}${v.pct!.toFixed(1)}%)`}</span>
                     <span className="text-fg-3">기준 {fmtNum(v.ref!.value)}원 · <span className="rounded bg-app px-1 text-[10px] text-fg-4">{v.ref!.source}</span> {v.ref!.detail}</span>
                     {undo.has(leaf.id) ? (
                       <button onClick={() => revertRef(leaf.id)} className="text-warn font-semibold hover:underline">수기 {fmtNum(undo.get(leaf.id)!)}원으로 되돌리기</button>
-                    ) : v.kind === 'diff' ? (
+                    ) : v.kind === 'diff' && !readOnly ? (
                       <button onClick={() => applyRef(leaf.id, v.ref!.value, !!leaf.vat_applicable)} className="text-brand hover:underline" title="확인 후 수기 값을 기준값으로 바꿉니다. 저장 전까지 되돌릴 수 있습니다">기준값 복사</button>
                     ) : null}
                   </>
@@ -598,12 +619,12 @@ function Chip({ on, onClick, title, children }: { on: boolean; onClick: () => vo
 }
 
 /** 콤마 표시 금액 입력. Enter → 다음 금액 칸. */
-function MoneyInput({ value, onChange, income }: { value: number; onChange: (v: number) => void; income: boolean }) {
+function MoneyInput({ value, onChange, income, disabled }: { value: number; onChange: (v: number) => void; income: boolean; disabled?: boolean }) {
   const [text, setText] = useState(value ? fmtNum(value) : '');
   const [focus, setFocus] = useState(false);
   useEffect(() => { if (!focus) setText(value ? fmtNum(value) : ''); }, [value, focus]);
   return (
-    <input type="text" inputMode="numeric" data-money value={text} placeholder="0"
+    <input type="text" inputMode="numeric" data-money value={text} placeholder="0" disabled={disabled}
       onFocus={e => { setFocus(true); e.target.select(); }}
       onBlur={() => setFocus(false)}
       onChange={e => { const n = Number(e.target.value.replace(/[^0-9]/g, '')) || 0; setText(n ? fmtNum(n) : ''); onChange(n); }}

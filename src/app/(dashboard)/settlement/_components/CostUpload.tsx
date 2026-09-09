@@ -17,7 +17,7 @@ const PLATFORMS = [
   { id: 'talkdeal', label: '톡딜', accept: '.xlsx,.xls', hint: '주문 엑셀', manualOnly: true as const },
 ];
 
-export function CostUpload({ selectedYm, onApply }: { selectedYm: string; onApply?: () => void }) {
+export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string; onApply?: () => void; closed?: boolean }) {
   const [platform, setPlatform] = useState(PLATFORMS[0].id);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<CostResult | null>(null);
@@ -62,6 +62,7 @@ export function CostUpload({ selectedYm, onApply }: { selectedYm: string; onAppl
   }
 
   async function applyToSettlement() {
+    if (closed) { toast.warning(`${selectedYm} 은 마감된 달입니다. 시트에서 마감을 해제한 뒤 적용하세요.`); return; }
     if (!result) return;
     const pLabel = PLATFORMS.find(p => p.id === platform)?.label || platform;
 
