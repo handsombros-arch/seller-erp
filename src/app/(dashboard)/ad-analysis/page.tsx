@@ -7,6 +7,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
 
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
+import { BackupRestore, backupFiles } from '@/components/ad-analysis/BackupRestore';
 
 import { Button } from '@/components/ui/button';
 
@@ -802,7 +804,9 @@ export default function AdAnalysisPage() {
   // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
   const dedupKey = (r: any) => `${r['날짜']}|${r['키워드']??''}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
 
-  const handleUpload = useCallback(async (files: File[]) => {
+  const toast = useToast();
+  const toastRef = useRef(toast); toastRef.current = toast;
+  const handleUpload = useCallback(async (files: File[], skipBackup = false) => {
     setLoading(true);
     setError('');
     try {
@@ -905,6 +909,13 @@ export default function AdAnalysisPage() {
       // 다른 PC 와 공유하려면 우측 "DB 로 백업" 버튼을 명시적으로 눌러야 함.
       saveToIdb(raw);
       setLoading(false);
+      // 원본 파일을 서버 저장소에 백업 — 다른 PC 에서 "백업에서 복원"으로 되살린다. 실패는 숨기지 않는다.
+      if (!skipBackup && files.length) {
+        backupFiles(files).then(({ ok, failed }) => {
+          if (failed.length) toastRef.current.error(`원본 백업 실패 ${failed.length}건: ${failed[0]}`);
+          else toastRef.current.success(`원본 ${ok}개 파일 서버 백업 완료`);
+        });
+      }
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -1651,6 +1662,7 @@ export default function AdAnalysisPage() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             데이터 추가
           </button>
+          <BackupRestore disabled={loading} onRestore={(files) => handleUpload(files, true)} />
           {data && (
             <button
               onClick={async () => { if (await confirmDialog('모든 광고 데이터를 삭제하시겠습니까?')) setData(null); }}
