@@ -123,14 +123,14 @@ export async function GET(request: NextRequest) {
   // 매출 = 수량 × 공급단가 × 1.1 (다른 마켓 행과 같은 VAT 포함 실거래 기준), 원가 = 수량 × 선택 당시 원가.
   const rows: any[] = data ?? [];
   if (!platform || platform === 'b2b') {
-    let bq = admin.from('b2b_lines').select('id, year_month, sku_id, display_name, qty, unit_cost, unit_price, sku:skus(id, sku_code, cost_price, product:products(id, name, logistics_tier))').eq('user_id', user.id);
+    let bq = admin.from('b2b_lines').select('id, year_month, sku_id, display_name, qty, unit_cost, unit_price, price_incl_vat, sku:skus(id, sku_code, cost_price, product:products(id, name, logistics_tier))').eq('user_id', user.id);
     if (yearMonth) bq = bq.eq('year_month', yearMonth);
     const { data: b2b } = await bq;   // 테이블 미적용이면 무시
     for (const l of (b2b ?? []) as any[]) {
       const qty = Number(l.qty) || 0;
       rows.push({
         id: `b2b:${l.id}`, year_month: l.year_month, platform: 'b2b', sku_id: l.sku_id, display_name: l.display_name,
-        qty, revenue: Math.round(qty * (Number(l.unit_price) || 0) * 1.1), unit_cost: Number(l.unit_cost) || 0, total_cost: qty * (Number(l.unit_cost) || 0),
+        qty, revenue: Math.round(qty * (l.price_incl_vat ? (Number(l.unit_price) || 0) : (Number(l.unit_price) || 0) * 1.1)), unit_cost: Number(l.unit_cost) || 0, total_cost: qty * (Number(l.unit_cost) || 0),   // 매출은 합계금액(VAT 포함) 기준
         empty_qty: 0, match_method: 'b2b', user_id: user.id, sku: l.sku,
       });
     }

@@ -8,7 +8,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
  *      → 그 달의 내역을 이 목록으로 맞춘다 (목록에 없는 기존 줄은 삭제 — 화면에서 사용자가 지운 줄).
  *      마감된 달은 거부. 재고는 건드리지 않는다.
  */
-const B2B_SELECT = 'id, year_month, sku_id, display_name, qty, unit_cost, unit_price, note, sort_order, sku:skus(id, sku_code, cost_price, product:products(id, name, logistics_tier))';
+const B2B_SELECT = 'id, year_month, sku_id, display_name, qty, unit_cost, unit_price, price_incl_vat, note, sort_order, sku:skus(id, sku_code, cost_price, product:products(id, name, logistics_tier))';
 
 const isMissing = (msg: string) => /does not exist|schema cache|PGRST205/i.test(msg);
 
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest) {
   const { data: closed } = await admin.from('settlement_months').select('year_month').eq('year_month', ym).maybeSingle();
   if (closed) return NextResponse.json({ error: `${ym} 은 마감된 달입니다. 해제 후 수정하세요.` }, { status: 409 });
 
-  type LineIn = { id?: string; sku_id?: string | null; display_name?: string; qty?: number; unit_cost?: number; unit_price?: number; note?: string | null };
+  type LineIn = { id?: string; sku_id?: string | null; display_name?: string; qty?: number; unit_cost?: number; unit_price?: number; price_incl_vat?: boolean; note?: string | null };
   const rows = (body.lines as LineIn[]).map((l, i) => ({
     ...(l.id ? { id: String(l.id) } : {}),
     user_id: user.id,
@@ -47,6 +47,7 @@ export async function PUT(request: NextRequest) {
     qty: Math.max(0, Math.round(Number(l.qty) || 0)),
     unit_cost: Math.max(0, Number(l.unit_cost) || 0),
     unit_price: Math.max(0, Number(l.unit_price) || 0),
+    price_incl_vat: !!l.price_incl_vat,
     note: l.note ? String(l.note) : null,
     sort_order: i,
     updated_at: new Date().toISOString(),

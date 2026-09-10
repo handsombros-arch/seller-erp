@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     admin.from('monthly_product_sales').select('platform, qty, revenue, total_cost, empty_qty').eq('user_id', user.id).eq('year_month', ym),
     admin.from('monthly_product_ads').select('platform, cost').eq('user_id', user.id).eq('year_month', ym),
     admin.from('coupang_credentials').select('rg_saver_enabled').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
-    admin.from('b2b_lines').select('qty, unit_cost, unit_price').eq('user_id', user.id).eq('year_month', ym),   // 테이블 미적용이면 error → 무시
+    admin.from('b2b_lines').select('qty, unit_cost, unit_price, price_incl_vat').eq('user_id', user.id).eq('year_month', ym),   // 테이블 미적용이면 error → 무시
   ]);
 
   const orders = ordersRes.filter((o: any) => !o.is_dummy && !CANCEL.test(String(o.order_status ?? '')) && !CANCEL.test(String(o.claim_type ?? '')));
@@ -103,10 +103,11 @@ export async function GET(request: NextRequest) {
   put('ad:coupang', adCoupang * 1.1, '파일', `광고 raw 월 집계 ${Math.round(adCoupang).toLocaleString('ko-KR')} × 1.1 (보고서는 VAT 별도)`);
 
   // B2B 출고 내역 (SKU × 수량 × 공급단가/원가). 시트 B2B 매출·매입원가의 기준값 — 수기 값은 덮어쓰지 않고 대조만
-  const b2b = (b2bRes.data ?? []) as { qty: number; unit_cost: number; unit_price: number }[];
+  const b2b = (b2bRes.data ?? []) as { qty: number; unit_cost: number; unit_price: number; price_incl_vat?: boolean }[];
+  const supplyOf = (l: { unit_price: number; price_incl_vat?: boolean }) => l.price_incl_vat ? (Number(l.unit_price) || 0) / 1.1 : (Number(l.unit_price) || 0);   // 단가에 VAT 포함이면 공급가액으로
   if (b2b.length) {
     const qty = b2b.reduce((s, l) => s + (Number(l.qty) || 0), 0);
-    const supply = b2b.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0);
+    const supply = b2b.reduce((s, l) => s + (Number(l.qty) || 0) * supplyOf(l), 0);
     const cogs = b2b.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_cost) || 0), 0);
     put('revenue:b2b', supply * 1.1, '내역', `B2B 출고 ${b2b.length}줄 ${qty}개 × 공급단가 (공급가액 ${Math.round(supply).toLocaleString('ko-KR')} × 1.1)`);
     put('cogs:b2b', cogs, '내역', `B2B 출고 ${qty}개 × 선택 당시 원가`);
