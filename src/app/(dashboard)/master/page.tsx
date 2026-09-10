@@ -670,6 +670,19 @@ export default function MasterPage() {
 
   // ── 컬럼 너비 조절 ──────────────────────────────────────────────────────────
   const resizingCol = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  // ── 표 스크롤 영역: 세로 스크롤을 표 안에서 하게 해서 헤더 두 줄(sticky top)과 상품/SKU 열(sticky left)이 같이 고정된다 ──
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [tableMaxH, setTableMaxH] = useState<string>('calc(100vh - 280px)');
+  useEffect(() => {
+    const calc = () => {
+      const toolbarH = toolbarRef.current?.offsetHeight ?? 120;
+      // 상단 헤더 56 + 페이지 도구줄 + 안내 배너 여백 + 하단 푸터 48 + 여유
+      setTableMaxH(`calc(100vh - ${56 + toolbarH + 48 + 88}px)`);
+    };
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [tab]);
   const [colWidths, setColWidths] = useState<Record<string, number>>({
     name: 200, supplier: 140, cost: 120,
     lead: 100, reorder: 100, safety: 100, sales30: 110, avg: 90,
@@ -1140,7 +1153,7 @@ export default function MasterPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="sticky top-14 z-20 bg-app pb-3 -mb-2 space-y-3">
+      <div ref={toolbarRef} className="sticky top-14 z-20 bg-app pb-3 -mb-2 space-y-3">
         <div className="flex items-start justify-between flex-wrap gap-2">
           <div className="min-w-0">
             <PageHeader title="마스터 시트" />
@@ -1251,9 +1264,10 @@ export default function MasterPage() {
         </div>
       ) : (
         <div className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{ maxHeight: tableMaxH, minHeight: 320 }}>
             <table className="w-full border-collapse">
-              <thead>
+              {/* 헤더 두 줄은 표 스크롤 영역 위에 고정. 왼쪽 고정 칸(z-10)보다 위에 두어 교차 지점이 가려지지 않게 */}
+              <thead className="sticky top-0 z-20 bg-card-2">
                 {/* Row 1: Group headers */}
                 <tr className="bg-card-2">
                   <th rowSpan={2} className="w-10 px-2 py-2 border-b border-line-2 sticky left-0 bg-card-2 z-10">
