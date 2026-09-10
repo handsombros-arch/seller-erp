@@ -9,7 +9,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
  *  - 설정: 세이버 구독 등
  * 반환 refs[key] = { value, source, detail }
  */
-export interface Ref { value: number; source: 'API' | '파일' | '설정'; detail: string }
+export interface Ref { value: number; source: 'API' | '파일' | '설정' | '내역'; detail: string }
 
 const CANCEL = /CANCEL|취소|REFUND|RETURN_COMPLETED/i;
 const MARKET_OF_CHANNEL: Record<string, string> = { coupang_rg: 'coupang', coupang: 'coupang', toss: 'toss', smartstore: 'smartstore', naver: 'smartstore', esm: 'esm', gmarket: 'esm', auction: 'esm', talkdeal: 'talkdeal' };
@@ -24,13 +24,14 @@ export async function GET(request: NextRequest) {
   const from = `${ym}-01`, to = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
 
   const admin = await createAdminClient();
-  const [ordersRes, psRes, skusRes, salesRes, adsRes, credRes] = await Promise.all([
+  const [ordersRes, psRes, skusRes, salesRes, adsRes, credRes, b2bRes] = await Promise.all([
     fetchAll((f, t) => admin.from('channel_orders').select('channel, quantity, shipping_cost, order_status, claim_type, sku_id, is_dummy').gte('order_date', from).lte('order_date', to).range(f, t)),
     admin.from('platform_skus').select('sku_id, price, coupon_discount, commission_rate, rg_fee_inout, rg_fee_shipping, rg_fee_return, rg_fee_restock, rg_fee_send, rg_fee_packing, channel:channels(type)'),
     admin.from('skus').select('id, cost_price'),
     admin.from('monthly_product_sales').select('platform, qty, revenue, total_cost, empty_qty').eq('user_id', user.id).eq('year_month', ym),
     admin.from('monthly_product_ads').select('platform, cost').eq('user_id', user.id).eq('year_month', ym),
     admin.from('coupang_credentials').select('rg_saver_enabled').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('b2b_lines').select('qty, unit_cost, unit_price').eq('user_id', user.id).eq('year_month', ym),   // 테이블 미적용이면 error → 무시
   ]);
 
   const orders = ordersRes.filter((o: any) => !o.is_dummy && !CANCEL.test(String(o.order_status ?? '')) && !CANCEL.test(String(o.claim_type ?? '')));
@@ -100,6 +101,16 @@ export async function GET(request: NextRequest) {
   }
   const adCoupang = (adsRes.data ?? []).filter((r: any) => r.platform === 'coupang').reduce((s: number, r: any) => s + (Number(r.cost) || 0), 0);
   put('ad:coupang', adCoupang * 1.1, '파일', `광고 raw 월 집계 ${Math.round(adCoupang).toLocaleString('ko-KR')} × 1.1 (보고서는 VAT 별도)`);
+
+  // B2B 출고 내역 (SKU × 수량 × 공급단가/원가). 시트 B2B 매출·매입원가의 기준값 — 수기 값은 덮어쓰지 않고 대조만
+  const b2b = (b2bRes.data ?? []) as { qty: number; unit_cost: number; unit_price: number }[];
+  if (b2b.length) {
+    const qty = b2b.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+    const supply = b2b.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0);
+    const cogs = b2b.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unit_cost) || 0), 0);
+    put('revenue:b2b', supply * 1.1, '내역', `B2B 출고 ${b2b.length}줄 ${qty}개 × 공급단가 (공급가액 ${Math.round(supply).toLocaleString('ko-KR')} × 1.1)`);
+    put('cogs:b2b', cogs, '내역', `B2B 출고 ${qty}개 × 선택 당시 원가`);
+  }
 
   // 설정
   if ((credRes.data as any)?.rg_saver_enabled) put('saver:coupang', Math.round(99000 * 1.1), '설정', '그로스 세이버 99,000 × 1.1');

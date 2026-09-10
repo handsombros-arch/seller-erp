@@ -10,6 +10,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { effectiveTags, effectiveVatMode, fmtNum, itemVatMode, nextVatMode, vatSplitMode, VAT_MODE_LABEL, ymLabel, type MCost, type PlLine, type Snapshot, type Tags, type VatMode } from '../_lib/settlement';
 import { TagPicker } from './TagPicker';
+import { B2bLinesDialog, type B2bTotals } from './B2bLinesDialog';
 
 /**
  * 정산 시트 입력 — 계산서 단위 카드에 금액만 적는 화면.
@@ -51,11 +52,12 @@ const SOURCE_HINTS: [RegExp, string][] = [
   [/창고비/, '창고 임대·전기 등'],
   [/기타비/, '부자재·샘플 등 그 외 지출'],
   [/^매출$/, '각 마켓 정산 화면의 월 매출 (쿠폰 차감 전)'],
+  [/B2B/, '세금계산서 발행분 — 항목 줄의 "출고 내역"에서 SKU × 수량 × 공급단가로 계산'],
 ];
 const sourceHint = (label: string) => SOURCE_HINTS.find(([re]) => re.test(label))?.[1];
 
 // ── 대조(cross-check) ──
-interface Ref { value: number; source: 'API' | '파일' | '설정'; detail: string }
+interface Ref { value: number; source: 'API' | '파일' | '설정' | '내역'; detail: string }
 type CheckState = { refs: Record<string, Ref>; orders: Record<string, { orders: number; qty: number }> } | null;
 type Verdict = { kind: 'match' | 'diff' | 'soft' | 'none'; ref?: Ref; key?: string; diff?: number; pct?: number };
 // 기준 통일: 시트·매출 파일·광고 raw·설정 = 마켓 확정 기준(구매확정/정산). API 주문 집계 = 주문일 기준 → 이월·확정 시차가 있어 "참고"로만
@@ -117,6 +119,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
   const [adRaw, setAdRaw] = useState<Map<string, number>>(new Map());
   const [newLabel, setNewLabel] = useState<{ parent: string | null; value: string } | null>(null);
   const [check, setCheck] = useState<CheckState>(null);
+  const [b2bOpen, setB2bOpen] = useState(false);   // B2B 출고 내역 다이얼로그
   const [checking, setChecking] = useState(false);
   const AUTO_KEY = 'lv-erp-settlement-autocheck';
   const [autoCheck, setAutoCheck] = useState(true);
@@ -314,6 +317,22 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
     const parent = leaf.parent_id ? byId.get(leaf.parent_id) : null;
     return verdictFor(amounts.get(leaf.id) ?? 0, vatEff(leaf), refKeyFor(leaf, tagsOf(leaf), parent?.label ?? ''), check.refs);
   };
+  /** B2B 출고 내역 저장 후: B2B 매출·매입원가 칸이 비어 있으면 합계를 넣고, 값이 있으면 확인 후 바꾼다 (되돌리기 가능). 그 뒤 대조 갱신 */
+  const onB2bSaved = async (t: B2bTotals) => {
+    for (const leaf of allLeaves) {
+      const tags = tagsOf(leaf);
+      if (tags.market !== 'b2b' || (tags.pl_line !== 'revenue' && tags.pl_line !== 'cogs')) continue;
+      const mode = vatEff(leaf);
+      // 공급단가는 VAT 별도, 원가는 마스터(VAT 포함 실거래) 기준
+      const target = Math.round(tags.pl_line === 'revenue' ? (mode === 'incl' ? t.supply * 1.1 : t.supply) : (mode === 'ex' ? t.cogs / 1.1 : t.cogs));
+      const cur = amounts.get(leaf.id) ?? 0;
+      if (cur === target) continue;
+      if (cur && !(await confirmDialog(`${leaf.label} 수기 입력 ${fmtNum(cur)}원을 출고 내역 합계 ${fmtNum(target)}원으로 바꿀까요?\n저장 전까지 이 칸에서 되돌릴 수 있습니다.`))) continue;
+      if (cur) setUndo(prev => { const n = new Map(prev); if (!n.has(leaf.id)) n.set(leaf.id, cur); return n; });
+      setAmount(leaf.id, target);
+    }
+    if (autoCheck) runCheck();
+  };
   const checkStats = check ? allLeaves.reduce((s, l) => { const v = verdictOf(l); s[v.kind] += 1; return s; }, { match: 0, diff: 0, soft: 0, none: 0 }) : null;
 
   return (
@@ -412,7 +431,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
             {sec.groups.map(g => (
               <GroupCard key={g.id} group={g} leaves={leavesOf(g)} isSingle={childrenOf(g.id).length === 0} mode={mode} collapsed={collapsed.has(`grp:${g.id}`)} onToggle={() => toggleCollapse(`grp:${g.id}`)} vatEff={vatEff} setVatMonth={setVatMonth}
                 amounts={amounts} prevAmounts={prevAmounts} carried={carried} adRaw={adRaw.get(selectedYm)} notes={notes} setNote={setNote} qtys={qtys} setQty={setQty}
-                tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined}
+                tagsOf={tagsOf} leafValue={leafValue} setAmount={setAmount} patch={patch} move={move} removeItem={removeItem} verdictOf={check ? verdictOf : undefined} onB2b={() => setB2bOpen(true)}
                 readOnly={readOnly} undo={undo} applyRef={async (id, refValue, vatApplicable) => {
                   const cur = amounts.get(id) ?? 0; const next = vatApplicable ? Math.round(refValue / 1.1) : refValue;
                   if (cur && !(await confirmDialog(`수기 입력 ${fmtNum(cur)}원을 기준값 ${fmtNum(next)}원으로 바꿀까요?\n저장 전까지 이 칸에서 되돌릴 수 있습니다.`))) return;
@@ -459,6 +478,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
           </div>
         </div>
       </div>
+      <B2bLinesDialog open={b2bOpen} onClose={() => setB2bOpen(false)} ym={selectedYm} readOnly={readOnly} onSaved={onB2bSaved} />
     </div>
   );
 }
@@ -475,12 +495,14 @@ interface CardProps {
   onFillPrev: () => void; prevYm: string; verdictOf?: (l: MCost) => Verdict;
   undo: Map<string, number>; applyRef: (id: string, refValue: number, vatApplicable: boolean) => void; revertRef: (id: string) => void;
   readOnly: boolean;
+  /** B2B 항목 줄에서 출고 내역 열기 */
+  onB2b?: () => void;
   collapsed: boolean; onToggle: () => void;
   vatEff: (l: MCost) => VatMode; setVatMonth: (id: string, v: VatMode) => void;
   newLabel: { parent: string | null; value: string } | null; setNewLabel: (v: { parent: string | null; value: string } | null) => void; addItem: (parent: string | null) => void;
 }
 
-function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, qtys, setQty, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, readOnly, collapsed, onToggle, vatEff, setVatMonth, newLabel, setNewLabel, addItem }: CardProps) {
+function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carried, adRaw, notes, setNote, qtys, setQty, tagsOf, leafValue, setAmount, patch, move, removeItem, onFillPrev, prevYm, verdictOf, undo, applyRef, revertRef, readOnly, onB2b, collapsed, onToggle, vatEff, setVatMonth, newLabel, setNewLabel, addItem }: CardProps) {
   const subtotal = leaves.reduce((s, l) => s + leafValue(l), 0);
   const hint = sourceHint(group.label);
   const prevHas = leaves.some(l => prevAmounts.has(l.id) && prevAmounts.get(l.id));
@@ -547,6 +569,9 @@ function GroupCard({ group, leaves, isSingle, mode, amounts, prevAmounts, carrie
                     className="flex-1 min-w-0 h-7 px-2 rounded-md text-[11px] text-fg-3 bg-transparent border border-transparent hover:border-line focus:border-brand focus:bg-card focus:outline-none" />
                   {isAdCoupang && adRaw != null && (
                     <span className="text-[10px] text-fg-4 whitespace-nowrap" title="광고분석 raw 월 집계 (참고)">raw {fmtNum(adRaw)}</span>
+                  )}
+                  {tags.market === 'b2b' && (tags.pl_line === 'revenue' || tags.pl_line === 'cogs') && onB2b && (
+                    <button onClick={onB2b} className="text-[11px] text-brand hover:underline whitespace-nowrap flex items-center gap-0.5" title="마스터 SKU × 수량 × 공급단가로 B2B 매출·원가를 계산해 기준값으로 씁니다"><ClipboardPaste className="h-3 w-3" />출고 내역</button>
                   )}
                   {!amt && prev && !readOnly ? (
                     <button onClick={() => setAmount(leaf.id, prev)} className="text-[10px] text-fg-4 hover:text-brand whitespace-nowrap flex items-center gap-0.5" title={`${ymLabel(prevYm)} 값 가져오기`}><Undo2 className="h-3 w-3" />{fmtNum(prev)}</button>
