@@ -18,6 +18,7 @@ import { SheetInput } from './_components/SheetInput';
 import { CostUpload } from './_components/CostUpload';
 import { AdCoverageCard } from './_components/AdCoverageCard';
 import { UnregisteredCard } from './_components/UnregisteredCard';
+import { EmptyBoxCard } from './_components/EmptyBoxCard';
 import { TrendPL } from './_components/TrendPL';
 import { AnalysisView } from './_components/AnalysisView';
 import { ProductProfit } from './_components/ProductProfit';
@@ -137,6 +138,7 @@ function SettlementInner() {
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} salesPlatforms={data.salesPlatforms as Market[]} adReady={data.adMonths.some(m => m.year_month === selectedYm)} />
           {!data.loading && <UnregisteredCard selectedYm={selectedYm} onRegistered={() => setDataKey(k => k + 1)} />}
           <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />
+          <EmptyBoxCard selectedYm={selectedYm} closed={!!closedMonths[selectedYm]} onSaved={() => setDataKey(k => k + 1)} />
           <AdCoverageCard selectedYm={selectedYm} months={data.adMonths} onSaved={() => setDataKey(k => k + 1)} />
           <SheetInput items={data.items} snapshots={data.snapshots} loading={data.loading} selectedYm={selectedYm} onDirtyChange={setDirty} onSaved={() => setDataKey(k => k + 1)} closed={closedMonths[selectedYm] ?? null} onToggleClosed={(c) => toggleClosed(selectedYm, c)} />
           {!data.loading && <TaxCheckCard items={data.items} amounts={amounts} vats={vats} ym={selectedYm} regime={regime} switchYm={switchYm} onSwitchYmChange={saveSwitchYm} onItemsChanged={() => setDataKey(k => k + 1)} />}

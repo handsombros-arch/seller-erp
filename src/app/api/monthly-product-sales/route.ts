@@ -64,37 +64,74 @@ export async function PUT(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 빈박스(리뷰) 수량 → 재고 되돌리기. 주문 동기화가 이미 차감했지만 실제로 나가지 않은 수량.
-  // 같은 (월, 플랫폼) 재적용 시 이전 되돌림을 먼저 취소하고 다시 적용 (멱등).
-  const EMPTY_PREFIX = `emptybox:${body.yearMonth}:${body.platform}:`;
-  let restored = 0;
+  // 빈박스(리뷰) 수량 → 재고 되돌리기 (이 달·플랫폼 전체를 다시 계산, 멱등)
   try {
-    const { data: prev } = await admin.from('inventory_adjustments').select('id, sku_id, warehouse_id, reason').like('reason', `${EMPTY_PREFIX}%`);
-    for (const a of prev ?? []) {
-      const m = /:\+(\d+)$/.exec(String(a.reason)); const q = m ? Number(m[1]) : 0;
-      if (q > 0) {
-        const { data: inv } = await admin.from('inventory').select('quantity').eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id).maybeSingle();
-        const before = Number(inv?.quantity ?? 0);
-        await admin.from('inventory').update({ quantity: before - q, updated_at: new Date().toISOString() }).eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id);
-      }
-      await admin.from('inventory_adjustments').delete().eq('id', a.id);
-    }
-    for (const r of rows) {
-      const q = Number(r.empty_qty) || 0;
-      if (q <= 0 || !r.sku_id) continue;
-      const { data: invs } = await admin.from('inventory').select('warehouse_id, quantity').eq('sku_id', r.sku_id).order('quantity', { ascending: false }).limit(1);
-      const inv = invs?.[0];
-      if (!inv) continue;
-      const before = Number(inv.quantity ?? 0);
-      await admin.from('inventory').update({ quantity: before + q, updated_at: new Date().toISOString() }).eq('sku_id', r.sku_id).eq('warehouse_id', inv.warehouse_id);
-      await admin.from('inventory_adjustments').insert({ sku_id: r.sku_id, warehouse_id: inv.warehouse_id, before_quantity: before, after_quantity: before + q, reason: `${EMPTY_PREFIX}${r.sku_id}:+${q}`, adjusted_by: user.id });
-      restored += q;
-    }
+    const restored = await restoreEmptyBoxes(admin, user.id, body.yearMonth, body.platform);
+    return NextResponse.json({ ok: true, saved: rows.length, restored });
   } catch (e: any) {
     return NextResponse.json({ ok: true, saved: rows.length, restoreError: e?.message ?? String(e) });
   }
+}
 
-  return NextResponse.json({ ok: true, saved: rows.length, restored });
+/**
+ * 빈박스 재고 되돌리기. 주문 동기화가 이미 차감했지만 실제로 나가지 않은 수량을 재고에 더한다.
+ * 같은 (월, 플랫폼) 의 이전 되돌림을 먼저 취소하고, 현재 저장된 empty_qty 로 다시 적용한다 (멱등).
+ */
+async function restoreEmptyBoxes(admin: any, userId: string, yearMonth: string, platform: string): Promise<number> {
+  const EMPTY_PREFIX = `emptybox:${yearMonth}:${platform}:`;
+  let restored = 0;
+  const { data: prev } = await admin.from('inventory_adjustments').select('id, sku_id, warehouse_id, reason').like('reason', `${EMPTY_PREFIX}%`);
+  for (const a of prev ?? []) {
+    const m = /:\+(\d+)$/.exec(String(a.reason)); const q = m ? Number(m[1]) : 0;
+    if (q > 0) {
+      const { data: inv } = await admin.from('inventory').select('quantity').eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id).maybeSingle();
+      const before = Number(inv?.quantity ?? 0);
+      await admin.from('inventory').update({ quantity: before - q, updated_at: new Date().toISOString() }).eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id);
+    }
+    await admin.from('inventory_adjustments').delete().eq('id', a.id);
+  }
+  const { data: rows } = await admin.from('monthly_product_sales').select('sku_id, empty_qty').eq('user_id', userId).eq('year_month', yearMonth).eq('platform', platform).gt('empty_qty', 0);
+  for (const r of rows ?? []) {
+    const q = Number(r.empty_qty) || 0;
+    if (q <= 0 || !r.sku_id) continue;
+    const { data: invs } = await admin.from('inventory').select('warehouse_id, quantity').eq('sku_id', r.sku_id).order('quantity', { ascending: false }).limit(1);
+    const inv = invs?.[0];
+    if (!inv) continue;
+    const before = Number(inv.quantity ?? 0);
+    await admin.from('inventory').update({ quantity: before + q, updated_at: new Date().toISOString() }).eq('sku_id', r.sku_id).eq('warehouse_id', inv.warehouse_id);
+    await admin.from('inventory_adjustments').insert({ sku_id: r.sku_id, warehouse_id: inv.warehouse_id, before_quantity: before, after_quantity: before + q, reason: `${EMPTY_PREFIX}${r.sku_id}:+${q}`, adjusted_by: userId });
+    restored += q;
+  }
+  return restored;
+}
+
+/**
+ * PATCH { id, empty_qty } — 이미 적용한 달의 한 행에 빈박스 수량만 넣는다.
+ * 원가 = 단가 × (수량 − 빈박스) 로 다시 계산하고, 그 달·플랫폼의 재고 되돌리기를 다시 맞춘다.
+ */
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  const body = await request.json().catch(() => ({}));
+  const id = String(body.id ?? ''); const empty = Math.max(0, Math.round(Number(body.empty_qty) || 0));
+  if (!id) return NextResponse.json({ error: 'id 필요' }, { status: 400 });
+  const admin = await createAdminClient();
+  const { data: row, error: rErr } = await admin.from('monthly_product_sales').select('id, year_month, platform, qty, unit_cost').eq('id', id).eq('user_id', user.id).maybeSingle();
+  if (rErr || !row) return NextResponse.json({ error: rErr?.message ?? '행을 찾을 수 없습니다' }, { status: 404 });
+  const { data: closed } = await admin.from('settlement_months').select('year_month').eq('year_month', row.year_month).maybeSingle();
+  if (closed) return NextResponse.json({ error: `${row.year_month} 은 마감된 달입니다. 해제 후 수정하세요.` }, { status: 409 });
+  const qty = Number(row.qty) || 0;
+  if (empty > qty) return NextResponse.json({ error: `빈박스 수량이 판매 수량(${qty})보다 큽니다` }, { status: 400 });
+  const unit = Number(row.unit_cost) || 0;
+  const { error } = await admin.from('monthly_product_sales').update({ empty_qty: empty, total_cost: unit * (qty - empty), updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  try {
+    const restored = await restoreEmptyBoxes(admin, user.id, row.year_month, row.platform);
+    return NextResponse.json({ ok: true, restored });
+  } catch (e: any) {
+    return NextResponse.json({ ok: true, restoreError: e?.message ?? String(e) });
+  }
 }
 
 // ──────────────────────────────────────────────────────────
