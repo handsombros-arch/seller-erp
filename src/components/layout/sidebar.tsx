@@ -5,12 +5,15 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { LVLogoText } from '@/components/ui/lv-logo';
 import { useTheme } from '@/components/layout/theme-provider';
+import { useWide } from '@/components/layout/wide-provider';
 import { navItems, navSections, isNavActive } from '@/config/nav';
 import { Sun, Moon } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
+  const { wide } = useWide();
+  if (wide) return null;   // 넓게 보기: 사이드바 숨김 (헤더 ☰ 메뉴로 이동)
 
   return (
     <aside

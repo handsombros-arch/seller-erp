@@ -6,6 +6,7 @@ import { formatCurrency, formatNumber, skuOptionLabel, cn } from '@/lib/utils';
 import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, Download, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
+import { AddProductDialog } from '@/components/products/AddProductDialog';
 
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -664,6 +665,8 @@ export default function MasterPage() {
   const [rgVatIncluded, setRgVatIncluded] = useState(false);
   const [rgSaverEnabled, setRgSaverEnabled] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [addProductOpen, setAddProductOpen] = useState(false);   // 상품 추가 (상품 페이지와 같은 다이얼로그)
+  const toast = useToast();
 
   // ── 컬럼 너비 조절 ──────────────────────────────────────────────────────────
   const resizingCol = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -1177,6 +1180,9 @@ export default function MasterPage() {
               className="flex items-center gap-1.5 h-10 px-4 rounded-xl border border-line text-[13px] font-medium text-fg-3 hover:bg-app transition-colors whitespace-nowrap">
               <Upload className="h-4 w-4" /> 엑셀 업로드
             </button>
+            <Button size="lg" onClick={() => setAddProductOpen(true)} title="상품 1건 + 기본 SKU 1건을 만듭니다. 옵션이 여러 개면 상품 페이지에서 SKU 추가">
+              <Plus className="h-4 w-4" /> 상품 추가
+            </Button>
             {dirtyCount > 0 && (
               <Button size="lg" onClick={saveAllDirty} disabled={savingAll}>
                 {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -1602,6 +1608,8 @@ export default function MasterPage() {
         description="SKU코드와 채널명은 필수입니다. 채널명은 설정>채널에 등록된 이름과 동일해야 합니다."
       />
 
+      <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)}
+        onSave={(created) => { setAddProductOpen(false); toast.success(`상품 추가됨 (${created.map(c => c.sku_code).join(', ')})`); load(); }} />
       </>}
 
     </div>

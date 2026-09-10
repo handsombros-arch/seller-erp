@@ -457,7 +457,7 @@ export function SheetInput({ items, snapshots, loading, selectedYm, onDirtyChang
       ))}
 
       {/* 하단 고정 바 */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 md:left-[220px]">
+      <div className="fixed bottom-0 left-0 right-0 z-30 md:left-[var(--sidebar-w)]">
         <div className="mx-auto max-w-[1100px] px-4 pb-4">
           <div className={cn('flex items-center gap-3 rounded-2xl border px-4 py-2.5 shadow-lg backdrop-blur', changed ? 'bg-card border-brand/40' : 'bg-card/90 border-line')}>
             <span className="text-[12px] text-fg-3">

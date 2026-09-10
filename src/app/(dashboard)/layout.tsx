@@ -4,6 +4,7 @@ import { VatProvider } from '@/components/layout/vat-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { TaxAlert } from '@/components/layout/tax-alert';
+import { WideProvider, MainShell } from '@/components/layout/wide-provider';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -20,14 +21,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <VatProvider>
     <ToastProvider>
     <ConfirmProvider>
+      <WideProvider>
       <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-app)' }}>
         <Sidebar />
-        <div className="md:pl-[220px]">
+        <div className="md:pl-[var(--sidebar-w)]">
           <Header email={user?.email} deployedSha={deployedSha} />
-          <main className="p-4 md:p-6 max-w-[1200px] mx-auto">{children}</main>
+          <MainShell>{children}</MainShell>
           <TaxAlert />
         </div>
       </div>
+      </WideProvider>
     </ConfirmProvider>
     </ToastProvider>
     </VatProvider>

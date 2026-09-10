@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useVat } from '@/components/layout/vat-provider';
+import { useWide } from '@/components/layout/wide-provider';
 import { LVLogoText } from '@/components/ui/lv-logo';
 import { PresenceIndicator } from '@/components/layout/presence';
 import { DeployStatus } from '@/components/layout/deploy-status';
 import { navItems, navSections, isNavActive, currentNavItem } from '@/config/nav';
 import { useState } from 'react';
-import { Menu, LogOut, Settings, RefreshCw } from 'lucide-react';
+import { Menu, LogOut, Settings, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -22,6 +23,7 @@ export function Header({ email, deployedSha }: { email?: string; deployedSha?: s
   const router = useRouter();
   const supabase = createClient();
   const { vatOn, toggleVat } = useVat();
+  const { wide, toggle: toggleWide } = useWide();
   const [spinning, setSpinning] = useState(false);
 
   const currentPage = currentNavItem(pathname);
@@ -49,7 +51,7 @@ export function Header({ email, deployedSha }: { email?: string; deployedSha?: s
           {/* 모바일 메뉴 — 사이드바와 같은 nav 설정 사용 */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden rounded-xl">
+              <Button variant="ghost" size="icon" className={cn('rounded-xl', !wide && 'md:hidden')} title="메뉴">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
@@ -101,6 +103,16 @@ export function Header({ email, deployedSha }: { email?: string; deployedSha?: s
         <div className="flex items-center gap-2">
           <DeployStatus deployedSha={deployedSha} />
           <PresenceIndicator currentEmail={email} />
+
+          <Button
+            variant={wide ? 'default' : 'outline'}
+            size="icon"
+            onClick={toggleWide}
+            title={wide ? '넓게 보기 끄기 (사이드바 표시)' : '넓게 보기 (사이드바 숨기고 표를 화면 폭에 맞춤)'}
+            className="rounded-[10px] hidden md:inline-flex"
+          >
+            {wide ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
 
           <Button
             variant="outline"
