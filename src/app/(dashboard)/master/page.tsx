@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { formatCurrency, formatNumber, skuOptionLabel, cn } from '@/lib/utils';
 import { FileSpreadsheet, Save, Check, Loader2, RefreshCw, Search, Link2, Building2, Plus, Edit2, Trash2, Phone, Mail, Clock, MapPin, Package, Upload, Download, X as XIcon, ChevronDown, ChevronRight, GripVertical, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
-import type { Supplier, SupplierAddress } from '@/types';
+import type { Product, Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 import { AddProductDialog } from '@/components/products/AddProductDialog';
+import { AddSkuDialog } from '@/components/products/AddSkuDialog';
 
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -666,6 +667,8 @@ export default function MasterPage() {
   const [rgSaverEnabled, setRgSaverEnabled] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);   // 상품 추가 (상품 페이지와 같은 다이얼로그)
+  const [productsByName, setProductsByName] = useState<Map<string, Product>>(new Map());   // 상품 행 → 옵션 추가용
+  const [addSkuProduct, setAddSkuProduct] = useState<Product | null>(null);
   const toast = useToast();
 
   // ── 컬럼 너비 조절 ──────────────────────────────────────────────────────────
@@ -736,6 +739,7 @@ export default function MasterPage() {
         fetch('/api/coupang/credentials'),
       ]);
       setSuppliers(supplierData ?? []);
+      setProductsByName(new Map((Array.isArray(products) ? products as Product[] : []).map((p) => [p.name, p])));
 
       const warehouseList: Warehouse[] = whs ?? [];
       const channelList: Channel[] = chs ?? [];
@@ -1367,6 +1371,12 @@ export default function MasterPage() {
                             {group.name}
                           </button>
                           <span className="text-[11px] text-fg-5">{group.skus.length}개 옵션</span>
+                          {productsByName.has(group.name) && (
+                            <button onClick={(e) => { e.stopPropagation(); setAddSkuProduct(productsByName.get(group.name)!); }} draggable={false}
+                              className="ml-1 inline-flex items-center gap-0.5 h-6 px-2 rounded-lg text-[11px] font-medium text-brand hover:bg-brand-bg transition-colors" title="이 상품에 옵션(SKU) 추가">
+                              <Plus className="h-3 w-3" /> 옵션
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1623,6 +1633,10 @@ export default function MasterPage() {
         description="SKU코드와 채널명은 필수입니다. 채널명은 설정>채널에 등록된 이름과 동일해야 합니다."
       />
 
+      {addSkuProduct && (
+        <AddSkuDialog open={true} onClose={() => setAddSkuProduct(null)} product={addSkuProduct}
+          onSave={(created) => { setAddSkuProduct(null); toast.success(`${addSkuProduct.name} 옵션 ${created.length}개 추가`); load(); }} />
+      )}
       <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)}
         onSave={(created) => { setAddProductOpen(false); toast.success(`상품 추가됨 (${created.map(c => c.sku_code).join(', ')})`); load(); }} />
       </>}
