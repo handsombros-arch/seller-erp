@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -33,14 +33,18 @@ export function DrillDown({ items, snapshots, months, vat, vatFor, regimeOf, bas
   const series = useMemo<SeriesPoint[]>(() => buildSeries(items, snapshots, cols, { vat, vatFor, regimeOf, basis }) as SeriesPoint[], [items, snapshots, cols, vat, vatFor, regimeOf, basis]);
 
   // ── 상품 데이터 (상품 단계에서 처음 열 때 한 번) ──
-  const [prod, setProd] = useState<{ lines: Map<string, ProductLine[]>; sales: Map<string, SalesRowLite[]>; ads: Map<string, { coupang: AdProduct[]; toss: AdProduct[] }> } | null>(null);
-  const [prodLoading, setProdLoading] = useState(false);
+  const [prodRaw, setProdRaw] = useState<{ key: string; lines: Map<string, ProductLine[]>; sales: Map<string, SalesRowLite[]>; ads: Map<string, { coupang: AdProduct[]; toss: AdProduct[] }> } | null>(null);
+  const colsKey = cols.join(',');
+  const prod = prodRaw && prodRaw.key === colsKey ? prodRaw : null;   // 기간이 바뀌면 다시 로드
+  const inflight = useRef<string | null>(null);                          // 로딩 중 키 — 상태로 두면 effect 재실행·취소로 영영 안 끝난다
+  const smRef = useRef(sheetMarketingByMonth); smRef.current = sheetMarketingByMonth;   // 부모 렌더마다 바뀌어도 로딩을 취소하지 않도록 ref 로
   const needProd = !!path.market;
+  const prodLoading = needProd && !prod;
   useEffect(() => {
-    if (!needProd || prod || prodLoading) return;
+    if (!needProd || prod || inflight.current === colsKey) return;
+    inflight.current = colsKey;
     let cancelled = false;
     (async () => {
-      setProdLoading(true);
       const [salesAll, pskus] = await Promise.all([
         fetch('/api/monthly-product-sales').then(r => r.ok ? r.json() : []) as Promise<(SalesRowLite & { year_month: string })[]>,
         fetch('/api/platform-skus').then(r => r.ok ? r.json() : []) as Promise<PlatformSkuLite[]>,
@@ -58,11 +62,12 @@ export function DrillDown({ items, snapshots, months, vat, vatFor, regimeOf, bas
       if (cancelled) return;
       const ads = new Map(adsArr);
       const lines = new Map<string, ProductLine[]>();
-      for (const m of cols) { const s = sales.get(m) ?? []; const a = ads.get(m)!; if (!s.length && !a.coupang.length && !a.toss.length) continue; const l = computeProductLines(s, a.coupang, a.toss, psMap); allocateSheetMarketing(l, sheetMarketingByMonth?.(m)); lines.set(m, l); }
-      setProd({ lines, sales, ads }); setProdLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [needProd, prod, prodLoading, cols, sheetMarketingByMonth]);
+      for (const m of cols) { const s = sales.get(m) ?? []; const a = ads.get(m)!; if (!s.length && !a.coupang.length && !a.toss.length) continue; const l = computeProductLines(s, a.coupang, a.toss, psMap); allocateSheetMarketing(l, smRef.current?.(m)); lines.set(m, l); }
+      setProdRaw({ key: colsKey, lines, sales, ads });
+      inflight.current = null;
+    })().catch(() => { inflight.current = null; });
+    return () => { cancelled = true; inflight.current = null; };
+  }, [needProd, prod, cols, colsKey]);
 
   if (cols.length === 0) return <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">저장된 월이 없습니다. 입력 탭에서 월을 저장하면 여기서 내려가며 볼 수 있습니다.</div>;
 
