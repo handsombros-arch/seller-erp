@@ -272,6 +272,8 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
                           ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">연결</span>
                           : p.method === 'saved'
                           ? <span className="text-[9px] font-semibold text-brand bg-brand-bg px-1.5 py-0.5 rounded">누적</span>
+                          : p.method === 'master'
+                          ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded" title="마스터 시트의 플랫폼상품명 또는 연동 상품명으로 매칭">마스터</span>
                           : p.matched
                           ? <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">자동</span>
                           : (

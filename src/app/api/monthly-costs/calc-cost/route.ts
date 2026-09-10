@@ -91,6 +91,9 @@ function parseToss(wb: XLSX.WorkBook): SoldRow[] {
   const iOption = colIdx('옵션명');
   const iQty = colIdx('주문건수');
   const iAmount = colIdx('주문금액');
+  // 상품/옵션 ID 컬럼이 있는 양식이면 마스터(토스 채널 상품ID·옵션ID)로 바로 매칭
+  const iPid = ['상품 ID', '상품ID', '상품번호'].map(c => colIdx(c)).find(i => i >= 0) ?? -1;
+  const iOid = ['옵션 ID', '옵션ID', '옵션번호'].map(c => colIdx(c)).find(i => i >= 0) ?? -1;
   // 날짜 컬럼 인덱스 (후보 중 첫 매칭)
   const dateCandidates = ['결제일자', '결제일', '주문일자', '주문일시'];
   const iDate = dateCandidates.map(c => colIdx(c)).find(i => i >= 0) ?? -1;
@@ -104,6 +107,8 @@ function parseToss(wb: XLSX.WorkBook): SoldRow[] {
       option: String(row[iOption] ?? ''),
       qty: Number(row[iQty]) || 1,
       revenue: Number(row[iAmount]) || 0,
+      vendorId: iOid >= 0 && row[iOid] != null && row[iOid] !== '' ? String(row[iOid]) : undefined,
+      productId: iPid >= 0 && row[iPid] != null && row[iPid] !== '' ? String(row[iPid]) : undefined,
       date: iDate >= 0 ? row[iDate] : undefined,
     });
   }
@@ -212,9 +217,33 @@ export async function POST(request: NextRequest) {
   const soldRows = platform === 'toss' ? parseToss(wb) : platform === 'smartstore' ? parseSmartStore(wb) : platform === 'esm' ? parseESM(wb) : parseCoupang(wb);
 
   // DB 데이터 로드
-  const { data: skus } = await admin.from('skus').select('id, sku_code, cost_price, product:products(name)');
+  const { data: skus } = await admin.from('skus').select('id, sku_code, cost_price, option_values, product:products(name)');
+  const { data: aliasRows } = await admin.from('sku_name_aliases').select('channel_name, sku_id');
   const { data: rg } = await admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id');
-  const { data: ps } = await admin.from('platform_skus').select('platform_sku_id, platform_product_id, sku_id, price, channel:channels(type)');
+  const { data: ps } = await admin.from('platform_skus').select('platform_sku_id, platform_product_id, platform_product_name, sku_id, price, channel:channels(type)');
+  // 1.5차용: 이 플랫폼의 마스터 플랫폼상품명 → 후보 SKU 들 / 연동 상품명(alias) → SKU. 공백·기호 제거 소문자 비교
+  const norm = (v: unknown) => String(v ?? '').toLowerCase().replace(/[\s\[\]()\-_/,.·]/g, '');
+  const masterName = new Map<string, string[]>();
+  for (const p of (ps ?? []) as any[]) {
+    if ((p.channel?.type ?? '') !== platform || !p.platform_product_name || !p.sku_id) continue;
+    const k = norm(p.platform_product_name); if (!k) continue;
+    const arr = masterName.get(k) ?? []; if (!arr.includes(p.sku_id)) arr.push(p.sku_id); masterName.set(k, arr);
+  }
+  const aliasMap = new Map<string, string>();
+  for (const a of (aliasRows ?? []) as any[]) { const k = norm(a.channel_name); if (k && !aliasMap.has(k)) aliasMap.set(k, a.sku_id); }
+  const optionText = (skuId: string) => { const sk = (skus ?? []).find((x: any) => x.id === skuId) as any; const ov = sk?.option_values; return ov && typeof ov === 'object' ? Object.values(ov as Record<string, string>).map(norm).filter(Boolean) : []; };
+  /** 파일 상품명(+옵션) → SKU. 마스터 상품명이 여러 SKU 에 같으면 옵션 텍스트로 고른다 */
+  const matchByMaster = (name: string, option: string): string | undefined => {
+    const full = norm(name + option), n = norm(name), o = norm(option);
+    const alias = aliasMap.get(full) ?? aliasMap.get(n);
+    if (alias) return alias;
+    let cands = masterName.get(full) ?? masterName.get(n);
+    if (!cands) { for (const [k, ids] of masterName) if (k.length >= 6 && (full.startsWith(k) || k.startsWith(n))) { cands = ids; break; } }
+    if (!cands?.length) return undefined;
+    if (cands.length === 1) return cands[0];
+    const byOpt = cands.find(id => { const ov = optionText(id); return ov.length > 0 && ov.every(v => o.includes(v) || full.includes(v)); });
+    return byOpt ?? cands[0];
+  };
 
   const rgMap = new Map((rg ?? []).map((r: any) => [r.vendor_item_id, r.sku_id]));
   const psMap = new Map((ps ?? []).filter((p: any) => p.platform_sku_id).map((p: any) => [p.platform_sku_id, p.sku_id]));
@@ -257,6 +286,12 @@ export async function POST(request: NextRequest) {
       revenueMissingRows++;
       const price = skuId ? priceMap.get(skuId) : undefined;
       if (price) { row.revenue = price * row.qty; revenueEstimated++; }
+    }
+
+    // 1.5차: 마스터 시트 플랫폼상품명 / 연동 상품명(alias) — 마스터에 등록한 이름이 바로 반영되도록
+    if (!skuId) {
+      const m = matchByMaster(row.name, row.option);
+      if (m) { skuId = m; cost = (skuMap.get(m) as any)?.cost_price ?? cost; method = 'master'; }
     }
 
     // 2차: 상품명 키워드 매칭 (skuId 도 함께 잡기 위해 sku.product.name 매칭)
