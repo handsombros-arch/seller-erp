@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
   let q = admin.from('monthly_product_sales')
-    .select('*, sku:skus(id, sku_code, cost_price, product:products(id, name, logistics_tier))')
+    .select('*, sku:skus(id, sku_code, cost_price, option_values, product:products(id, name, logistics_tier))')
     .eq('user_id', user.id);
   if (yearMonth) q = q.eq('year_month', yearMonth);
   if (platform) q = q.eq('platform', platform);

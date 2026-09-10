@@ -20,10 +20,11 @@ import { AdCoverageCard } from './_components/AdCoverageCard';
 import { UnregisteredCard } from './_components/UnregisteredCard';
 import { EmptyBoxCard } from './_components/EmptyBoxCard';
 import { TrendPL } from './_components/TrendPL';
+import { DrillDown } from './_components/DrillDown';
 import { AnalysisView } from './_components/AnalysisView';
 import { ProductProfit } from './_components/ProductProfit';
 
-const TABS = ['summary', 'input', 'trend', 'analysis', 'products'] as const;
+const TABS = ['summary', 'input', 'trend', 'drill', 'analysis', 'products'] as const;
 type Tab = typeof TABS[number];
 
 export default function SettlementPage() {
@@ -99,6 +100,7 @@ function SettlementInner() {
     { value: 'summary' as Tab, label: '요약' },
     { value: 'input' as Tab, label: '입력' },
     { value: 'trend' as Tab, label: '월별 추이', count: data.months.length || undefined },
+    { value: 'drill' as Tab, label: '왜? 드릴다운' },
     { value: 'analysis' as Tab, label: '분석' },
     { value: 'products' as Tab, label: '상품별 순이익' },
   ];
@@ -145,6 +147,8 @@ function SettlementInner() {
         </div>
       )}
       {tab === 'trend' && <TrendPL items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} basis={basis} currentYm={currentYm()} loading={data.loading} />}
+      {tab === 'drill' && (data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
+        : <DrillDown items={data.items} snapshots={data.snapshots} months={data.months} vat={vat} vatFor={(ym) => vatViewFor(regimeFor(ym, switchYm))} regimeOf={(ym) => regimeFor(ym, switchYm)} basis={basis} currentYm={currentYm()} selectedYm={selectedYm} sheetMarketingByMonth={sheetMarketingByMonth} />)}
       {tab === 'analysis' && (
         data.loading ? <div className="bg-card rounded-2xl p-8 text-center text-[13px] text-fg-4">불러오는 중…</div>
           : <>
