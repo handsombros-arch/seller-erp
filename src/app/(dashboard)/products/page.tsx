@@ -556,7 +556,7 @@ export default function ProductsPage() {
       </div>
 
       <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)}
-        onSave={(skus) => { setAddProductOpen(false); loadProducts(); setPlatformSetupSkus(skus); }} />
+        onSave={(product) => { setAddProductOpen(false); loadProducts(); setAddSkuProduct(product); }} />
       <EditProductDialog open={!!editProduct} onClose={() => setEditProduct(null)} product={editProduct} onSave={() => { setEditProduct(null); loadProducts(); }} />
       {addSkuProduct && (
         <AddSkuDialog open={true} onClose={() => setAddSkuProduct(null)} product={addSkuProduct}

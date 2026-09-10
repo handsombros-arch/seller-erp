@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, useTabParam } from '@/components/ui/tabs';
 
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 import { inputClassName } from '@/components/ui/input';
 
@@ -669,6 +670,26 @@ export default function MasterPage() {
   const [addProductOpen, setAddProductOpen] = useState(false);   // 상품 추가 (상품 페이지와 같은 다이얼로그)
   const [productsByName, setProductsByName] = useState<Map<string, Product>>(new Map());   // 상품 행 → 옵션 추가용
   const [addSkuProduct, setAddSkuProduct] = useState<Product | null>(null);
+  const confirmDialog = useConfirm();
+  // 원가 입력 기준 — 'ex' = VAT 제외(저장값 그대로) / 'incl' = VAT 포함으로 입력·표시 (저장은 ÷1.1). 사용자: 공급가도 VAT 선택 가능해야
+  const [costVat, setCostVat] = useState<'ex' | 'incl'>('ex');
+  useEffect(() => { try { if (localStorage.getItem('lv-erp-master-cost-vat') === 'incl') setCostVat('incl'); } catch {} }, []);
+  const toggleCostVat = () => setCostVat((v) => { const n = v === 'ex' ? 'incl' : 'ex'; try { localStorage.setItem('lv-erp-master-cost-vat', n); } catch {} return n; });
+  const costDisplay = (ex: string) => !ex ? '' : costVat === 'incl' ? String(Math.round(Number(ex) * 1.1)) : ex;
+  const costStore = (typed: string) => !typed ? '' : costVat === 'incl' ? String(Math.round(Number(typed) / 1.1 * 100) / 100) : typed;
+  const [deletingSku, setDeletingSku] = useState<string | null>(null);
+  const deleteSku = async (row: UnifiedRow) => {
+    const label = `${row.product_name}${row.option_label ? ' / ' + row.option_label : ''} (${row.sku_code})`;
+    if (!(await confirmDialog(`${label} 옵션을 삭제할까요?\n플랫폼 연결·연동 상품명·재고 스냅샷도 같이 지워지고, 주문·매출 기록의 SKU 연결은 해제됩니다. 재고가 남아 있거나 입출고 기록이 있으면 삭제되지 않습니다.`))) return;
+    setDeletingSku(row.id);
+    try {
+      const r = await fetch(`/api/skus/${row.id}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(j.error ?? '삭제 실패'); return; }
+      toast.success(`${label} 삭제됨`);
+      load();
+    } finally { setDeletingSku(null); }
+  };
   const toast = useToast();
 
   // ── 컬럼 너비 조절 ──────────────────────────────────────────────────────────
@@ -1309,7 +1330,7 @@ export default function MasterPage() {
                 <tr className="bg-card-2 border-b border-line-2">
                   {/* SKU basic sub-headers */}
                   {rTh('supplier', '공급처', 'text-left border-l border-line-2')}
-                  {rTh('cost', <span>원가 <span className="font-normal text-fg-5">(VAT제외)</span></span>, 'text-right')}
+                  {rTh('cost', <span>원가 <button onClick={toggleCostVat} title="원가 칸에 적는 금액 기준을 바꿉니다 (저장은 항상 VAT 제외 금액)" className={`font-semibold rounded px-1 ${costVat === 'incl' ? 'bg-brand text-white' : 'text-fg-5 hover:text-brand'}`}>{costVat === 'incl' ? 'VAT포함' : 'VAT제외'}</button></span>, 'text-right')}
                   {rTh('lead', '리드타임', 'text-right')}
                   {rTh('reorder', '발주점', 'text-right')}
                   {rTh('safety', '안전재고', 'text-right')}
@@ -1407,6 +1428,10 @@ export default function MasterPage() {
                               >
                                 연동 {(aliases[row.id] ?? []).length}개
                               </button>
+                              <button onClick={(e) => { e.stopPropagation(); deleteSku(row); }} disabled={deletingSku === row.id}
+                                className="text-fg-5 hover:text-danger disabled:opacity-50 transition-colors" title="이 옵션(SKU) 삭제">
+                                {deletingSku === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1431,10 +1456,12 @@ export default function MasterPage() {
 
                       {/* 원가 */}
                       <td className="px-2 py-2">
-                        <NumCell value={row.cost_price} onChange={(v) => markDirty(row.id, { cost_price: v })} />
+                        <NumCell value={costDisplay(row.cost_price)} onChange={(v) => markDirty(row.id, { cost_price: costStore(v) })} />
                         {row.cost_price && (
                           <p className="text-[11px] text-fg-5 text-right pr-2.5">
-                            {formatCurrency(Number(row.cost_price))} · VAT포함 {formatCurrency(Math.round(Number(row.cost_price) * 1.1))}
+                            {costVat === 'incl'
+                              ? <>VAT제외 {formatCurrency(Number(row.cost_price))}</>
+                              : <>VAT포함 {formatCurrency(Math.round(Number(row.cost_price) * 1.1))}</>}
                           </p>
                         )}
                       </td>
@@ -1638,7 +1665,7 @@ export default function MasterPage() {
           onSave={(created) => { setAddSkuProduct(null); toast.success(`${addSkuProduct.name} 옵션 ${created.length}개 추가`); load(); }} />
       )}
       <AddProductDialog open={addProductOpen} onClose={() => setAddProductOpen(false)}
-        onSave={(created) => { setAddProductOpen(false); toast.success(`상품 추가됨 (${created.map(c => c.sku_code).join(', ')})`); load(); }} />
+        onSave={(product) => { setAddProductOpen(false); toast.success(`${product.name} 추가됨 — 옵션을 넣어주세요`); setAddSkuProduct(product); }} />
       </>}
 
     </div>
