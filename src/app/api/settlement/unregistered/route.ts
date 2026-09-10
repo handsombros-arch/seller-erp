@@ -60,7 +60,10 @@ export async function GET(request: NextRequest) {
     .filter((r: any) => !ignored.has(`name:${r.platform}:${r.name}`));
   const visibleItems = [...items.values()].filter(it => !ignored.has(`vid:${it.vendorItemId}`));
 
-  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null, costPrice: s.cost_price == null ? null : Number(s.cost_price) }));
+  // SKU 별 기존 쿠팡 옵션ID — 등록 시 다른 옵션ID 를 덮어쓰게 되면 화면에서 경고
+  const coupangVidOf = new Map<string, string>();
+  for (const p of psRes.data ?? []) if (p.platform_sku_id && ((p as any).channel?.type ?? 'coupang') === 'coupang') coupangVidOf.set(String(p.sku_id), String(p.platform_sku_id));
+  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null, costPrice: s.cost_price == null ? null : Number(s.cost_price), coupangVid: coupangVidOf.get(s.id) ?? null }));
 
   return NextResponse.json({
     yearMonth: ym,
