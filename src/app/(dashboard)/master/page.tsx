@@ -1341,8 +1341,9 @@ export default function MasterPage() {
                       onDrop={() => handleDrop(group.name)}
                       onDragEnd={() => { dragGroup.current = null; setDragOverGroup(null); }}
                     >
-                      <td colSpan={totalCols} className="px-4 py-2.5 sticky left-0 bg-inherit">
-                        <div className="flex items-center gap-2">
+                      {/* colSpan 셀은 표 전체 폭이라 sticky 가 안 먹는다 → 안쪽 내용만 스크롤 컨테이너 왼쪽에 고정 */}
+                      <td colSpan={totalCols} className="px-4 py-2.5 bg-inherit">
+                        <div className="flex items-center gap-2 sticky left-4 w-max">
                           <GripVertical className="h-4 w-4 text-fg-5 shrink-0 cursor-grab" />
                           <button onClick={() => toggleMaster(group.name)} className="flex items-center gap-2">
                             {!expandedMaster.has(group.name) ? <ChevronRight className="h-3.5 w-3.5 text-fg-3 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-fg-3 shrink-0" />}
