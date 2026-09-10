@@ -37,7 +37,8 @@ export function DrillDown({ items, snapshots, months, vat, vatFor, regimeOf, bas
   const colsKey = cols.join(',');
   const prod = prodRaw && prodRaw.key === colsKey ? prodRaw : null;   // 기간이 바뀌면 다시 로드
   const inflight = useRef<string | null>(null);                          // 로딩 중 키 — 상태로 두면 effect 재실행·취소로 영영 안 끝난다
-  const smRef = useRef(sheetMarketingByMonth); smRef.current = sheetMarketingByMonth;   // 부모 렌더마다 바뀌어도 로딩을 취소하지 않도록 ref 로
+  const smRef = useRef(sheetMarketingByMonth);   // 부모 렌더마다 바뀌어도 로딩을 취소하지 않도록 ref 로
+  useEffect(() => { smRef.current = sheetMarketingByMonth; }, [sheetMarketingByMonth]);
   const needProd = !!path.market;
   const prodLoading = needProd && !prod;
   useEffect(() => {
