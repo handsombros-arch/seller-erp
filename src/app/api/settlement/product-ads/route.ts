@@ -96,7 +96,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ yearMonth: ym, platform: 'coupang', source: 'monthly_product_ads', totalCost: total, matchedCost, unmatchedCost: total - matchedCost, items: products.length, matchedItems: products.filter(p => p.matched).length, products });
   }
 
-  // 2순위: raw RPC (DB 에 raw 가 동기화돼 있고 00057/00058 적용된 경우)
+  // 2순위: raw RPC — 기본은 건너뛴다. DB ad_raw_rows 는 동기화가 멈춘 데다(9/10) 키워드·일별 보고서 중복이 남아 있어
+  // 결과가 부풀고 수십 초 걸린다. 월 집계가 없는 달은 빈 결과 + 안내로 바로 돌려주고, ?raw=1 일 때만 옛 경로를 쓴다.
+  if (sp.get('raw') !== '1') {
+    return NextResponse.json({ yearMonth: ym, platform: 'coupang', source: 'none', totalCost: 0, matchedCost: 0, unmatchedCost: 0, items: 0, matchedItems: 0, products: [], hint: `${ym} 쿠팡 광고 월 집계가 없습니다. 입력 탭 광고비 raw 카드에서 '이 PC 광고 raw → 월 집계 저장'을 실행하세요.` });
+  }
   const { data: rowsRaw, error } = await admin.rpc('settlement_ad_by_option', { p_user: user.id, p_prefix: prefix });
   const rows = (rowsRaw ?? []) as any[];
   if (error) return NextResponse.json({ needsMigration: isMissing(error), error: error.message, products: [], totalCost: 0 });

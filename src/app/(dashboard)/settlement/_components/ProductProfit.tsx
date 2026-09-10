@@ -14,7 +14,7 @@ interface SalesRow {
   sku?: { id: string; sku_code: string; cost_price: number; product?: { id: string; name: string; logistics_tier: string | null } | null } | null;
 }
 interface AdRow { vendorItemId: string; name: string; cost: number; clicks: number; impressions: number; convQty14d: number; convRev14d: number; skuId: string | null; productId: string | null; productName: string | null; matched: boolean }
-interface AdResp { yearMonth: string; totalCost: number; matchedCost: number; unmatchedCost: number; products: AdRow[]; needsMigration?: boolean; error?: string }
+interface AdResp { yearMonth: string; totalCost: number; matchedCost: number; unmatchedCost: number; products: AdRow[]; needsMigration?: boolean; error?: string; hint?: string }
 interface PlatformSku { sku_id: string; platform_sku_id: string | null; price: number | null; commission_rate: number | null; channel?: { type: string } | null }
 
 interface Line {
@@ -247,6 +247,8 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
           <p className="text-[12px] text-fg-4 flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> 광고 raw 집계 중… (수십만 행이라 몇 초 걸립니다)</p>
         ) : ads?.needsMigration ? (
           <p className="text-[12px] text-warn">DB 마이그레이션(00057) 적용 전이라 광고 raw 집계를 쓸 수 없습니다. 적용 후 새로고침하세요.</p>
+        ) : ads?.hint && !ads.products?.length ? (
+          <p className="text-[12px] text-warn">{ads.hint}</p>
         ) : ads?.error && !ads.products?.length ? (
           <p className="text-[12px] text-danger">광고 raw 집계 오류: {ads.error}. 마이그레이션 00058(인덱스·타임아웃) 적용이 필요할 수 있습니다.</p>
         ) : !ads || ads.totalCost === 0 ? (
