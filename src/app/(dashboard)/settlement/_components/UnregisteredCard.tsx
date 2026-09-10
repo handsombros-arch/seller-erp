@@ -78,6 +78,21 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
   }
 
   const [showRgOnly, setShowRgOnly] = useState(false);
+  // 이름 매칭 실패 행 → 연동 상품명(sku_name_aliases)으로 등록. 파일의 표시명 그대로 저장하면 다음 업로드부터 그 이름은 자동 매칭
+  const [nameLink, setNameLink] = useState<Record<string, string>>({});
+  const [linkingName, setLinkingName] = useState<string | null>(null);
+  async function linkName(r: NameOnly) {
+    const key = `${r.platform}:${r.name}`; const skuId = nameLink[key];
+    if (!skuId) { toast.warning('연결할 SKU 를 고르세요'); return; }
+    setLinkingName(key);
+    try {
+      const res = await fetch('/api/sku-aliases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel_name: r.name, sku_id: skuId }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(`연결 실패: ${j.error ?? res.status}`); return; }
+      toast.success('연동 상품명 등록 — 다음 업로드부터 자동 매칭됩니다. 이 달에 반영하려면 매출 파일을 다시 적용하세요');
+      load(); onRegistered?.();
+    } finally { setLinkingName(null); }
+  }
   if (!data) return null;
   const active = data.items.filter(it => it.sources.some(s => s !== 'RG API'));   // 이번 달 광고·매출에 실제로 나온 옵션
   const rgOnly = data.items.filter(it => !it.sources.some(s => s !== 'RG API'));   // RG 재고에만 있는 옵션 (신규 입고 등)
@@ -145,8 +160,22 @@ export function UnregisteredCard({ selectedYm, onRegistered }: { selectedYm: str
           {data.nameOnly.length > 0 && (
             <div className="rounded-xl bg-card px-3 py-2 border border-line text-[12px] text-fg-2">
               <div className="font-semibold text-fg mb-1">매출 파일에서 상품을 못 찾은 행 {data.nameOnly.length}</div>
+              <p className="text-[11px] text-fg-4 mb-1">SKU 를 골라 연결하면 이 상품명이 그 SKU 의 연동 상품명으로 저장됩니다(한 SKU 에 여러 이름 가능 — 마켓이 이름을 바꿔도 다시 연결만 하면 됨). 마스터 시트 SKU 행의 "연동 N개"에서도 관리합니다.</p>
               <ul className="space-y-0.5">
-                {data.nameOnly.slice(0, 8).map((r, i) => <li key={i} className="flex items-center gap-2 tabular-nums"><span className="text-fg-4 w-14 shrink-0">{r.platform}</span><span className="truncate" title={r.name}>{r.name}</span><span className="ml-auto shrink-0 text-fg-3">{r.qty}개 · {fmtNum(r.revenue)}원</span><button onClick={() => setIgnore(`name:${r.platform}:${r.name}`, r.name, true)} className="text-fg-5 hover:text-fg p-0.5 shrink-0" title="숨기기 (복원 가능)"><EyeOff className="h-3 w-3" /></button></li>)}
+                {data.nameOnly.slice(0, 12).map((r, i) => { const key = `${r.platform}:${r.name}`; return (
+                  <li key={i} className="flex flex-wrap items-center gap-2 tabular-nums">
+                    <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-app text-fg-3 shrink-0 uppercase">{r.platform}</span>
+                    <span className="truncate max-w-[320px]" title={r.name}>{r.name}</span>
+                    <span className="shrink-0 text-fg-3">{r.qty}개 · {fmtNum(r.revenue)}원</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <select value={nameLink[key] ?? ''} onChange={e => setNameLink(prev => ({ ...prev, [key]: e.target.value }))} className={cn(inputClassName, 'h-7 w-56 text-[12px]')} title="이 파일 상품명을 연동 상품명으로 SKU 에 등록">
+                        <option value="">SKU 연결…</option>
+                        {data.skus.map(s => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
+                      </select>
+                      <Button size="sm" onClick={() => linkName(r)} disabled={linkingName === key}>{linkingName === key ? <Loader2 className="animate-spin" /> : '연결'}</Button>
+                      <button onClick={() => setIgnore(`name:${r.platform}:${r.name}`, r.name, true)} className="text-fg-5 hover:text-fg p-0.5 shrink-0" title="숨기기 (복원 가능)"><EyeOff className="h-3 w-3" /></button>
+                    </span>
+                  </li>); })}
               </ul>
               <p className="mt-1.5 text-[11px] text-fg-4">토스·스스는 옵션ID 가 없어 이름으로 찾습니다. <Link href="/master" className="text-brand hover:underline">마스터 시트</Link>에서 해당 채널 상품명·상품번호를 넣거나, 매입원가 업로드에서 단가를 한 번 적어 두면 다음부터 잡힙니다.</p>
             </div>

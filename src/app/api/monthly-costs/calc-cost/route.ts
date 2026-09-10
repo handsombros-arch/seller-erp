@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
   const soldRows = platform === 'toss' ? parseToss(wb) : platform === 'smartstore' ? parseSmartStore(wb) : platform === 'esm' ? parseESM(wb) : parseCoupang(wb);
 
   // DB 데이터 로드
-  const { data: skus } = await admin.from('skus').select('id, sku_code, cost_price, option_values, product:products(name)');
+  const { data: skus } = await admin.from('skus').select('id, sku_code, cost_price, option_values, product:products(id, name)');
   const { data: aliasRows } = await admin.from('sku_name_aliases').select('channel_name, sku_id');
   const { data: rg } = await admin.from('rg_inventory_snapshots').select('vendor_item_id, sku_id');
   const { data: ps } = await admin.from('platform_skus').select('platform_sku_id, platform_product_id, platform_product_name, sku_id, price, channel:channels(type)');
@@ -233,16 +233,24 @@ export async function POST(request: NextRequest) {
   for (const a of (aliasRows ?? []) as any[]) { const k = norm(a.channel_name); if (k && !aliasMap.has(k)) aliasMap.set(k, a.sku_id); }
   const optionText = (skuId: string) => { const sk = (skus ?? []).find((x: any) => x.id === skuId) as any; const ov = sk?.option_values; return ov && typeof ov === 'object' ? Object.values(ov as Record<string, string>).map(norm).filter(Boolean) : []; };
   /** 파일 상품명(+옵션) → SKU. 마스터 상품명이 여러 SKU 에 같으면 옵션 텍스트로 고른다 */
-  const matchByMaster = (name: string, option: string): string | undefined => {
-    const full = norm(name + option), n = norm(name), o = norm(option);
-    const alias = aliasMap.get(full) ?? aliasMap.get(n);
-    if (alias) return alias;
-    let cands = masterName.get(full) ?? masterName.get(n);
-    if (!cands) { for (const [k, ids] of masterName) if (k.length >= 6 && (full.startsWith(k) || k.startsWith(n))) { cands = ids; break; } }
-    if (!cands?.length) return undefined;
+  const pickByOption = (cands: string[], o: string, full: string) => {
     if (cands.length === 1) return cands[0];
     const byOpt = cands.find(id => { const ov = optionText(id); return ov.length > 0 && ov.every(v => o.includes(v) || full.includes(v)); });
     return byOpt ?? cands[0];
+  };
+  const siblingsOf = (skuId: string) => { const sk = (skus ?? []).find((x: any) => x.id === skuId) as any; const pid = sk?.product?.id; return pid ? (skus ?? []).filter((x: any) => (x as any).product?.id === pid).map((x: any) => x.id as string) : [skuId]; };
+  const matchByMaster = (name: string, option: string): string | undefined => {
+    const full = norm(name + option), n = norm(name), o = norm(option);
+    // 연동 상품명: 정확히 같거나, 한쪽이 다른 쪽으로 시작(표시명 55자 잘림·옵션 유무 차이 허용)
+    let alias = aliasMap.get(full);
+    if (!alias) { for (const [k, id] of aliasMap) if (k.length >= 8 && (full === k || full.startsWith(k) || k.startsWith(full))) { alias = id; break; } }
+    if (!alias) alias = aliasMap.get(n);
+    // 상품 단위 이름으로 등록된 연동명이면 같은 상품의 SKU 중 옵션 글자로 고른다
+    if (alias) return pickByOption(siblingsOf(alias), o, full);
+    let cands = masterName.get(full) ?? masterName.get(n);
+    if (!cands) { for (const [k, ids] of masterName) if (k.length >= 6 && (full.startsWith(k) || k.startsWith(n))) { cands = ids; break; } }
+    if (!cands?.length) return undefined;
+    return pickByOption(cands, o, full);
   };
 
   const rgMap = new Map((rg ?? []).map((r: any) => [r.vendor_item_id, r.sku_id]));
