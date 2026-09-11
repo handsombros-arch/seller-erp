@@ -24,8 +24,9 @@ import { TrendPL } from './_components/TrendPL';
 import { DrillDown } from './_components/DrillDown';
 import { AnalysisView } from './_components/AnalysisView';
 import { ProductProfit } from './_components/ProductProfit';
+import { CouponManager } from './_components/CouponManager';
 
-const TABS = ['summary', 'input', 'trend', 'drill', 'analysis', 'products'] as const;
+const TABS = ['summary', 'input', 'trend', 'drill', 'analysis', 'products', 'coupons'] as const;
 type Tab = typeof TABS[number];
 
 export default function SettlementPage() {
@@ -104,6 +105,7 @@ function SettlementInner() {
     { value: 'drill' as Tab, label: '왜? 드릴다운' },
     { value: 'analysis' as Tab, label: '분석' },
     { value: 'products' as Tab, label: '상품별 순이익' },
+    { value: 'coupons' as Tab, label: '쿠폰·할인' },
   ];
 
   return (
@@ -124,11 +126,11 @@ function SettlementInner() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Tabs items={tabItems} value={tab} onChange={setTab} className="overflow-y-hidden flex-1" />
-        {tab !== 'input' && tab !== 'products' && (
+        {tab !== 'input' && tab !== 'products' && tab !== 'coupons' && (
           <SegmentedControl items={[{ value: 'actual', label: '실제 손익' }, { value: 'accounting', label: '회계 손익' }] as const} value={basis} onChange={setBasis} />
         )}
       </div>
-      {tab !== 'input' && tab !== 'products' && basis === 'accounting' && (
+      {tab !== 'input' && tab !== 'products' && tab !== 'coupons' && basis === 'accounting' && (
         <p className="text-[11px] text-fg-4 -mt-2">회계 손익: 구조 편집에서 "경비 인정"을 끈 항목(생활비·미신고 인건비·개인 가구매 등)을 뺀 값. 세무 신고와 대출 심사에서 보는 숫자입니다.</p>
       )}
 
@@ -159,6 +161,7 @@ function SettlementInner() {
             </>
       )}
       {tab === 'products' && <ProductProfit ym={selectedYm} sheetMarkets={sheetMarkets} sheetMarketing={sheetMarketing} sheetMarketingByMonth={sheetMarketingByMonth} />}
+      {tab === 'coupons' && <CouponManager initialYm={selectedYm} />}
     </div>
   );
 }

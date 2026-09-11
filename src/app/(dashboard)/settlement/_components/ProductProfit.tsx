@@ -7,10 +7,12 @@ import { SegmentedControl } from '@/components/ui/tabs';
 import { ProductTrend } from './ProductTrend';
 import { cn } from '@/lib/utils';
 import { MARKETS, MARKET_POLICY, SALES_MARKETS, fmtNum, fmtPct, isOversize, type Market, type MarketPL } from '../_lib/settlement';
+import { InfoTip } from '@/components/ui/info-tip';
+import { toCouponChannel, unitDiscount, type Effective } from '@/lib/settlement/coupons';
 
 interface SalesRow {
   id: string; year_month: string; platform: string; sku_id: string | null; display_name: string;
-  qty: number; revenue: number; unit_cost: number; total_cost: number; match_method: string; empty_qty?: number;
+  qty: number; revenue: number; unit_cost: number; total_cost: number; match_method: string; empty_qty?: number; vendor_item_id?: string | null;
   sku?: { id: string; sku_code: string; cost_price: number; product?: { id: string; name: string; logistics_tier: string | null } | null } | null;
 }
 interface AdRow { vendorItemId: string; name: string; cost: number; clicks: number; impressions: number; convQty14d: number; convRev14d: number; skuId: string | null; productId: string | null; productName: string | null; matched: boolean }
@@ -19,7 +21,7 @@ interface PlatformSku { sku_id: string; platform_sku_id: string | null; price: n
 
 interface Line {
   market: Market; productId: string | null; productName: string; tier: string | null;
-  qty: number; revenue: number; cogs: number; fee: number; feeRate: number; feeDefault: boolean;
+  qty: number; revenue: number; coupon: number; cogs: number; fee: number; feeRate: number; feeDefault: boolean;
   logistics: number; ad: number; marketing: number; masterPriceQty: number; masterPriceSum: number;
 }
 interface Agg extends Omit<Line, 'market'> {
@@ -37,6 +39,7 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
   const [ads, setAds] = useState<AdResp | null>(null);
   const [tossAds, setTossAds] = useState<AdResp | null>(null);
   const [pskus, setPskus] = useState<PlatformSku[]>([]);
+  const [coupons, setCoupons] = useState<{ byVid: Record<string, Effective>; bySku: Record<string, Effective> } | null>(null);   // 쿠폰·할인 관리의 이 달 유효 할인
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState(false); // 상세 열(수량·평균단가·물류·광고 전·손익분기) 표시
@@ -46,13 +49,16 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
     let cancelled = false;
     setLoading(true);
     (async () => {
-      const [s, p] = await Promise.all([
+      const [y, m] = ym.split('-').map(Number); const last = new Date(y, m, 0).getDate();
+      const [s, p, c] = await Promise.all([
         fetch(`/api/monthly-product-sales?year_month=${ym}`).then(r => r.ok ? r.json() : []),
         fetch('/api/platform-skus').then(r => r.ok ? r.json() : []),
+        fetch(`/api/coupons/effective?from=${ym}-01&to=${ym}-${String(last).padStart(2, '0')}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (cancelled) return;
       setSales(Array.isArray(s) ? s : []);
       setPskus(Array.isArray(p) ? p : []);
+      setCoupons(c && c.byVid ? { byVid: c.byVid, bySku: c.bySku ?? {} } : null);
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -80,7 +86,7 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
     const get = (market: Market, productId: string | null, name: string, tier: string | null) => {
       const key = `${market}|${productId ?? '__' + name}`;
       let l = byKey.get(key);
-      if (!l) { l = { market, productId, productName: name, tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0 }; byKey.set(key, l); lines.push(l); }
+      if (!l) { l = { market, productId, productName: name, tier, qty: 0, revenue: 0, coupon: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0 }; byKey.set(key, l); lines.push(l); }
       return l;
     };
     for (const s of sales) {
@@ -93,6 +99,8 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
       const rev = Number(s.revenue) || 0;
       l.qty += qty;
       l.revenue += rev;
+      // 쿠폰·할인 관리: 이 달 유효 할인 × 수량 (판매가 × 률 + 금액). sku 연결이 없으면 옵션ID 로
+      { const cc = toCouponChannel(market); const eff = cc ? (s.sku_id ? coupons?.bySku[`${cc}|${s.sku_id}`] : undefined) ?? (s.vendor_item_id ? coupons?.byVid[`${cc}|${s.vendor_item_id}`] : undefined) : undefined; if (eff && qty > 0) l.coupon += unitDiscount(eff, rev / qty) * qty; }
       l.cogs += empty > 0 && qty > 0 ? Number(s.total_cost) * ((qty - empty) / qty) : Number(s.total_cost) || 0;
       if (empty > 0 && qty > 0) l.marketing += (rev / qty) * empty;   // 빈박스 환불 = 마케팅비
       const policy = MARKET_POLICY[market];
@@ -122,7 +130,7 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
       for (const [mk, amt] of Object.entries(sheetMarketing) as [Market, number][]) { if (mk === 'common') spread(lines, amt); else spread(groups.get(mk) ?? [], amt); }
     }
     return { lines, unmatchedAds };
-  }, [sales, ads, tossAds, psMap, sheetMarketing]);
+  }, [sales, ads, tossAds, psMap, sheetMarketing, coupons]);
 
   const rows = useMemo<Agg[]>(() => {
     const filtered = view === 'all' ? lines : lines.filter(l => l.market === view);
@@ -130,9 +138,9 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
     for (const l of filtered) {
       const key = l.productId ?? `__${l.productName}`;
       let a = byProduct.get(key);
-      if (!a) { a = { key, markets: [], lines: [], productId: l.productId, productName: l.productName, tier: l.tier, qty: 0, revenue: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null }; byProduct.set(key, a); }
+      if (!a) { a = { key, markets: [], lines: [], productId: l.productId, productName: l.productName, tier: l.tier, qty: 0, revenue: 0, coupon: 0, cogs: 0, fee: 0, feeRate: 0, feeDefault: false, logistics: 0, ad: 0, marketing: 0, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null }; byProduct.set(key, a); }
       a.lines.push(l); if (!a.markets.includes(l.market)) a.markets.push(l.market);
-      a.qty += l.qty; a.revenue += l.revenue; a.cogs += l.cogs; a.fee += l.fee; a.logistics += l.logistics; a.ad += l.ad; a.marketing += l.marketing;
+      a.qty += l.qty; a.revenue += l.revenue; a.coupon += l.coupon; a.cogs += l.cogs; a.fee += l.fee; a.logistics += l.logistics; a.ad += l.ad; a.marketing += l.marketing;
       a.masterPriceQty += l.masterPriceQty; a.masterPriceSum += l.masterPriceSum; a.feeDefault = a.feeDefault || l.feeDefault;
     }
     const out = [...byProduct.values()].map(a => finish(a));
@@ -140,7 +148,7 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
   }, [lines, view]);
 
   const totals = useMemo(() => finish({ key: 'total', markets: [], lines: [], productId: null, productName: '합계', tier: null, feeRate: 0, feeDefault: false, masterPriceQty: 0, masterPriceSum: 0, contribution: 0, margin: null, roas: null, beRoas: null, preAdRate: null,
-    qty: rows.reduce((s, r) => s + r.qty, 0), revenue: rows.reduce((s, r) => s + r.revenue, 0), cogs: rows.reduce((s, r) => s + r.cogs, 0), fee: rows.reduce((s, r) => s + r.fee, 0), logistics: rows.reduce((s, r) => s + r.logistics, 0), ad: rows.reduce((s, r) => s + r.ad, 0), marketing: rows.reduce((s, r) => s + r.marketing, 0) }), [rows]);
+    qty: rows.reduce((s, r) => s + r.qty, 0), revenue: rows.reduce((s, r) => s + r.revenue, 0), coupon: rows.reduce((s, r) => s + r.coupon, 0), cogs: rows.reduce((s, r) => s + r.cogs, 0), fee: rows.reduce((s, r) => s + r.fee, 0), logistics: rows.reduce((s, r) => s + r.logistics, 0), ad: rows.reduce((s, r) => s + r.ad, 0), marketing: rows.reduce((s, r) => s + r.marketing, 0) }), [rows]);
 
   const marketsWithData = SALES_MARKETS.filter(m => lines.some(l => l.market === m));
   const viewItems = [{ value: 'all' as const, label: '통합' }, ...SALES_MARKETS.filter(m => m !== 'talkdeal').map(m => ({ value: m, label: MARKETS.find(x => x.id === m)!.short, disabled: !marketsWithData.includes(m) }))];
@@ -169,13 +177,14 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className={cn('w-full text-[12px] border-collapse', detail ? 'min-w-[1180px]' : 'min-w-[760px]')}>
+            <table className={cn('w-full text-[12px] border-collapse', detail ? 'min-w-[1260px]' : 'min-w-[840px]')}>
               <thead>
                 <tr className="h-9 border-b border-line text-[11px] font-semibold text-fg-4">
                   <th className="text-left px-4 min-w-[200px]">상품</th>
                   {view === 'all' && <th className="text-left px-2">마켓</th>}
                   {detail && <th className="text-right px-2">수량</th>}
                   <th className="text-right px-2">매출</th>
+                  <th className="text-right px-2"><span className="inline-flex items-center gap-0.5">쿠폰<InfoTip text={'쿠폰·할인 관리에 등록한 이 달 유효 쿠폰(즉시할인+다운로드) × 수량.\n매출은 판매가 기준이라 쿠폰을 빼야 실매출입니다. 마진·ROAS·손익분기는 쿠폰을 뺀 순매출로 계산합니다. 수수료는 판매가 기준 그대로.'} /></span></th>
                   {detail && <th className="text-right px-2" title="실현 평균단가 · 괄호는 마스터 판매가 대비">평균단가</th>}
                   <th className="text-right px-2">원가</th>
                   <th className="text-right px-2" title="상품별 수수료율 × 매출. 회색 = 마스터 미설정, 기본값 사용">수수료</th>
@@ -279,12 +288,13 @@ export function ProductProfit({ ym, sheetMarkets, sheetMarketing, sheetMarketing
 }
 
 function finish(a: Agg): Agg {
-  const preAd = a.revenue - a.cogs - a.fee - a.logistics;
+  const net = a.revenue - a.coupon;   // 순매출 = 매출(판매가 기준) − 쿠폰. 마진·ROAS·손익분기는 순매출 기준
+  const preAd = net - a.cogs - a.fee - a.logistics;
   a.contribution = preAd - a.ad - a.marketing;   // 광고비 + 마케팅(빈박스 환불)
-  a.margin = a.revenue > 0 ? (a.contribution / a.revenue) * 100 : null;
-  a.preAdRate = a.revenue > 0 ? (preAd / a.revenue) * 100 : null;
-  a.roas = a.ad + a.marketing > 0 ? (a.revenue / (a.ad + a.marketing)) * 100 : null;
-  a.beRoas = preAd > 0 && a.revenue > 0 ? (a.revenue / preAd) * 100 : null;
+  a.margin = net > 0 ? (a.contribution / net) * 100 : null;
+  a.preAdRate = net > 0 ? (preAd / net) * 100 : null;
+  a.roas = a.ad + a.marketing > 0 ? (net / (a.ad + a.marketing)) * 100 : null;
+  a.beRoas = preAd > 0 && net > 0 ? (net / preAd) * 100 : null;
   a.feeRate = a.revenue > 0 ? a.fee / a.revenue : 0;
   return a;
 }
@@ -299,6 +309,7 @@ function Cells({ r, detail }: { r: Agg; detail: boolean }) {
     <>
       {detail && <td className={cn(td, 'text-fg-3')}>{r.qty || '-'}</td>}
       <td className={cn(td, 'text-fg')}>{won(r.revenue)}</td>
+      <td className={cn(td, r.coupon ? 'text-warn' : 'text-fg-5')} title={r.coupon ? `순매출 ${won(r.revenue - r.coupon)}` : '이 달 유효 쿠폰 없음'}>{r.coupon ? `−${won(r.coupon)}` : '-'}</td>
       {detail && <td className={cn(td, 'text-fg-3 whitespace-nowrap')}>{avg ? won(avg) : '-'}{diff != null && Math.abs(diff) >= 1 && <span className={cn('block text-[10px]', diff < 0 ? 'text-danger' : 'text-success')}>{diff > 0 ? '+' : ''}{diff.toFixed(0)}% vs 정가</span>}</td>}
       <td className={cn(td, 'text-warn')}>{won(r.cogs)}</td>
       <td className={cn(td, r.feeDefault ? 'text-fg-5' : 'text-fg-3')} title={`수수료율 ${(r.feeRate * 100).toFixed(1)}%${r.feeDefault ? ' (기본값)' : ''}`}>{won(r.fee)}<span className="block text-[10px] text-fg-5">{fmtPct(r.feeRate * 100)}</span></td>

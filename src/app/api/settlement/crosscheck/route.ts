@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { effectiveByOption, loadCoupons, toCouponChannel, unitDiscount } from '@/lib/settlement/coupons';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 /**
@@ -34,6 +35,9 @@ export async function GET(request: NextRequest) {
     admin.from('b2b_lines').select('qty, unit_cost, unit_price, price_incl_vat').eq('user_id', user.id).eq('year_month', ym),   // 테이블 미적용이면 error → 무시
   ]);
 
+  // 쿠폰 기준값: 쿠폰·할인 관리(coupons) 의 이 달 유효 할인 (마스터 coupon_discount 는 더 이상 쓰지 않음)
+  const couponRes = await loadCoupons(admin, user.id, { from, to });
+  const { bySku: couponBySku } = effectiveByOption(couponRes.coupons, from, to);
   const orders = ordersRes.filter((o: any) => !o.is_dummy && !CANCEL.test(String(o.order_status ?? '')) && !CANCEL.test(String(o.claim_type ?? '')));
   const ps = new Map<string, any>();
   for (const p of psRes.data ?? []) { const t = (p as any).channel?.type; if (t) ps.set(`${t}|${p.sku_id}`, p); }
@@ -53,7 +57,7 @@ export async function GET(request: NextRequest) {
       a.matchedQty += qty;
       const price = Number(p.price);
       a.revenue += price * qty;
-      a.coupon += (Number(p.coupon_discount) || 0) * qty;
+      { const cc = toCouponChannel(market); a.coupon += cc ? unitDiscount(couponBySku.get(`${cc}|${o.sku_id}`), price) * qty : 0; }
       a.commission += price * qty * ((Number(p.commission_rate) || 0) / 100);
       a.inout += (Number(p.rg_fee_inout) || 0) * qty;
       a.send += (Number(p.rg_fee_send) || 0) * qty;
@@ -70,7 +74,7 @@ export async function GET(request: NextRequest) {
     if (market === 'other') continue;
     const cov = a.qty ? `${a.matchedQty}/${a.qty}개 단가 매칭` : '';
     put(`revenue:${market}`, a.revenue, 'API', `주문 ${a.orders}건 × 마스터 판매가 (${cov}, 쿠폰 차감 전)`);
-    put(`coupon:${market}`, a.coupon, 'API', `주문 수량 × 마스터 쿠폰`);
+    put(`coupon:${market}`, a.coupon, 'API', `주문 수량 × 쿠폰·할인 관리의 이 달 유효 할인 (${couponRes.coupons.length}개 쿠폰)`);
     put(`cogs:${market}`, a.cogs, 'API', `주문 수량 ${a.qty}개 × SKU 원가`);
     put(`commission:${market}`, a.commission, 'API', `판매가 × 상품별 수수료율`);
     if (market === 'coupang') {

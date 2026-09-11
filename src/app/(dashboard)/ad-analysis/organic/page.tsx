@@ -7,6 +7,7 @@ import { SegmentedControl } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { InfoTip } from '@/components/ui/info-tip';
+import { unitDiscount, type Effective } from '@/lib/settlement/coupons';
 import { cn } from '@/lib/utils';
 import { readLocalAdRows } from '../../settlement/_lib/adRawLocal';
 
@@ -56,6 +57,7 @@ export default function OrganicPage() {
   const [ebEvents, setEbEvents] = useState<EbEvent[]>([]);
   const [ebClosed, setEbClosed] = useState<string[]>([]);                       // 기간이 걸친 달 중 정산 마감된 달
   const [ebMonth, setEbMonth] = useState<string>('');                           // 기간이 두 달에 걸칠 때 빈박스를 넣을 달
+  const [couponEff, setCouponEff] = useState<Record<string, Effective>>({});   // 쿠폰·할인 관리: 기간 × 옵션ID 유효 할인
   const [recVid, setRecVid] = useState<string | null>(null);                    // 날짜별 기록 편집 중인 옵션
   const [recDraft, setRecDraft] = useState<{ date: string; qty: string }>({ date: '', qty: '' });
   const [showRules, setShowRules] = useState(false);
@@ -91,6 +93,9 @@ export default function OrganicPage() {
       setRows(j.rows ?? []); setEmptyDraft({});
       await loadEmpty(sel);
       if (cancelled) return;
+      const ce = await fetch(`/api/coupons/effective?channel=coupang&from=${sel.period_from}&to=${sel.period_to}`).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (cancelled) return;
+      setCouponEff(ce?.byVid ?? {});
       const raw = await readLocalAdRows();
       if (cancelled) return;
       const from = sel.period_from.replace(/-/g, ''), to = sel.period_to.replace(/-/g, '');
@@ -123,7 +128,7 @@ export default function OrganicPage() {
   const useRev1 = basis === '1d' && !!adInfo?.hasRev1;
 
   // 표 행 (상품 / 상품×판매방식 / 옵션)
-  type T = { key: string; name: string; sub: string; method: string; gross: number; cancel: number; empty: number; net: number; revenue: number; netRevenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; clicks: number; imps: number; rev1: number; rev14: number; unmatched: boolean; rowIds: { id: string; vid: string; empty: number; method: string }[] };
+  type T = { key: string; name: string; sub: string; method: string; gross: number; cancel: number; empty: number; coupon: number; net: number; revenue: number; netRevenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; clicks: number; imps: number; rev1: number; rev14: number; unmatched: boolean; rowIds: { id: string; vid: string; empty: number; method: string }[] };
   const table = useMemo(() => {
     const m = new Map<string, T>();
     for (const r of vrows) {
@@ -133,11 +138,12 @@ export default function OrganicPage() {
       const pid = r.sku?.product?.id ?? `__${pname}`;
       const key = group === 'product' ? pid : group === 'method' ? `${pid}|${meth}` : r.vendor_item_id;
       let t = m.get(key);
-      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', gross: 0, cancel: 0, empty: 0, net: 0, revenue: 0, netRevenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, clicks: 0, imps: 0, rev1: 0, rev14: 0, unmatched: false, rowIds: [] }; m.set(key, t); }
+      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', gross: 0, cancel: 0, empty: 0, coupon: 0, net: 0, revenue: 0, netRevenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, clicks: 0, imps: 0, rev1: 0, rev14: 0, unmatched: false, rowIds: [] }; m.set(key, t); }
       const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = emptyByVid[r.vendor_item_id] ?? 0;
       const netQty = Math.max(0, gross - cancel - empty);
       const unit = r.qty > 0 ? r.revenue / r.qty : 0;   // 취소 반영 평균 단가
-      t.gross += gross; t.cancel += cancel; t.empty += empty; t.net += netQty; t.revenue += r.revenue; t.netRevenue += Math.max(0, r.revenue - empty * unit); t.visitors += r.visitors; t.orders += r.orders;
+      const cpn = netQty * unitDiscount(couponEff[`coupang|${r.vendor_item_id}`], unit);   // 쿠폰·할인 관리 (즉시할인+다운로드, 시간 가중)
+      t.gross += gross; t.cancel += cancel; t.empty += empty; t.coupon += cpn; t.net += netQty; t.revenue += r.revenue; t.netRevenue += Math.max(0, r.revenue - empty * unit - cpn); t.visitors += r.visitors; t.orders += r.orders;
       t.rowIds.push({ id: r.id, vid: r.vendor_item_id, empty, method: meth });
       if (!r.sku_id) t.unmatched = true;
       if (meth && !t.method.includes(meth)) t.method = t.method ? `${t.method}+${meth}` : meth;
@@ -148,8 +154,8 @@ export default function OrganicPage() {
       return { ...t, adQ, organic, adRev, organicPct: t.gross > 0 ? (organic / t.gross) * 100 : null, roas: t.cost > 0 ? (t.netRevenue / t.cost) * 100 : null, adRoas: t.cost > 0 ? (adRev / t.cost) * 100 : null, adRate: t.netRevenue > 0 ? (t.cost / t.netRevenue) * 100 : null, ctr: t.imps > 0 ? (t.clicks / t.imps) * 100 : null, cvr: t.visitors > 0 ? (t.orders / t.visitors) * 100 : null };
     });
     return list.sort((a, b) => (a.name === b.name ? (a.method > b.method ? 1 : -1) : b.gross - a.gross));
-  }, [vrows, ads, group, basis, emptyByVid, useRev1]);
-  const tot = useMemo(() => table.reduce((s, t) => ({ gross: s.gross + t.gross, cancel: s.cancel + t.cancel, empty: s.empty + t.empty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, netRevenue: s.netRevenue + t.netRevenue, cost: s.cost + t.cost, clicks: s.clicks + t.clicks, imps: s.imps + t.imps, adRev: s.adRev + t.adRev, visitors: s.visitors + t.visitors, orders: s.orders + t.orders }), { gross: 0, cancel: 0, empty: 0, net: 0, ad: 0, revenue: 0, netRevenue: 0, cost: 0, clicks: 0, imps: 0, adRev: 0, visitors: 0, orders: 0 }), [table]);
+  }, [vrows, ads, group, basis, emptyByVid, useRev1, couponEff]);
+  const tot = useMemo(() => table.reduce((s, t) => ({ gross: s.gross + t.gross, cancel: s.cancel + t.cancel, empty: s.empty + t.empty, coupon: s.coupon + t.coupon, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, netRevenue: s.netRevenue + t.netRevenue, cost: s.cost + t.cost, clicks: s.clicks + t.clicks, imps: s.imps + t.imps, adRev: s.adRev + t.adRev, visitors: s.visitors + t.visitors, orders: s.orders + t.orders }), { gross: 0, cancel: 0, empty: 0, coupon: 0, net: 0, ad: 0, revenue: 0, netRevenue: 0, cost: 0, clicks: 0, imps: 0, adRev: 0, visitors: 0, orders: 0 }), [table]);
   const orgTot = Math.max(0, tot.gross - tot.ad);
   const totRoas = tot.cost ? (tot.netRevenue / tot.cost) * 100 : null;
   const totAdRoas = tot.cost ? (tot.adRev / tot.cost) * 100 : null;
@@ -160,12 +166,13 @@ export default function OrganicPage() {
     const add = (k: string, r: Row) => {
       const o = out[k] ?? (out[k] = { gross: 0, net: 0, empty: 0, ad: 0, netRevenue: 0, adRev: 0, cost: 0 });
       const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = emptyByVid[r.vendor_item_id] ?? 0; const unit = r.qty > 0 ? r.revenue / r.qty : 0;
-      o.gross += gross; o.net += Math.max(0, gross - cancel - empty); o.empty += empty; o.netRevenue += Math.max(0, r.revenue - empty * unit);
+      const netQ = Math.max(0, gross - cancel - empty); const cpn = netQ * unitDiscount(couponEff[`coupang|${r.vendor_item_id}`], unit);
+      o.gross += gross; o.net += netQ; o.empty += empty; o.netRevenue += Math.max(0, r.revenue - empty * unit - cpn);
       const a = ads?.get(r.vendor_item_id); if (a) { o.ad += basis === '1d' ? a.q1 : a.q14; o.cost += a.cost; o.adRev += useRev1 ? a.rev1 : a.rev14; }
     };
     for (const r of rows) { add('통합', r); const m = methodLabel(r.sales_method); if (m) add(m, r); }
     return out;
-  }, [rows, ads, basis, emptyByVid, useRev1]);
+  }, [rows, ads, basis, emptyByVid, useRev1, couponEff]);
 
   const afterEmptyChange = (synced: Record<string, { skipped?: string }> | undefined) => {
     if (!sel) return;
@@ -235,7 +242,7 @@ export default function OrganicPage() {
   // 카드 본문(s)에는 금액·비율 같은 사실만, 계산 공식·정책은 ⓘ(info) 호버로
   const salesKpis = [
     { l: '총 판매 (취소 전)', v: `${fmt(tot.gross)}개`, s: `취소 ${fmt(tot.cancel)} · 빈박스 ${fmt(tot.empty)}`, info: '인사이트 리포트의 총 판매수 (취소 전). 광고 전환 판매도 취소 전 주문 기준이라 같은 잣대로 비교합니다.' },
-    { l: '순판매', v: `${fmt(tot.net)}개`, s: `순매출 ${fmt(tot.netRevenue)}원`, hi: true, info: '순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)\n순매출 = 매출(취소 반영) − 빈박스 × 평균 단가' },
+    { l: '순판매', v: `${fmt(tot.net)}개`, s: `순매출 ${fmt(tot.netRevenue)}원${tot.coupon ? ` · 쿠폰 −${fmt(tot.coupon)}` : ''}`, hi: true, info: '순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)\n순매출 = 매출(취소 반영) − 빈박스 × 평균 단가 − 쿠폰(쿠폰·할인 관리의 즉시할인+다운로드 × 순판매)' },
     { l: `광고 판매 (${basisLabel} 전환)`, v: `${fmt(tot.ad)}개`, s: `총 판매의 ${pct(tot.gross ? (Math.min(tot.ad, tot.gross) / tot.gross) * 100 : null)}`, info: '광고 raw 의 전환 판매수량 (당일 / 14일 귀속). 14일은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다.' },
     { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: `총 판매의 ${pct(tot.gross ? (orgTot / tot.gross) * 100 : null)}`, hi: true, info: '오가닉 = 총 판매 − 광고 전환 판매. 당일·14일 두 기준 사이가 실제 범위입니다.' },
   ];
@@ -294,7 +301,7 @@ export default function OrganicPage() {
           <div className="rounded-xl bg-app px-3 py-2.5 text-[11px] text-fg-3 leading-relaxed grid gap-1 md:grid-cols-2">
             <div><b className="text-fg">총 판매</b> = 인사이트 총 판매수(취소 전)</div>
             <div><b className="text-fg">순판매</b> = 총 판매 − 취소 − 빈박스(리뷰용 발송)</div>
-            <div><b className="text-fg">순매출</b> = 매출(취소 반영) − 빈박스 × 평균 단가</div>
+            <div><b className="text-fg">순매출</b> = 매출(취소 반영) − 빈박스 × 평균 단가 − 쿠폰 (정산 › 쿠폰·할인 관리의 기간 유효 할인 × 순판매)</div>
             <div><b className="text-fg">오가닉</b> = 총 판매 − 광고 전환 판매 (광고 전환도 취소 전 주문 기준)</div>
             <div><b className="text-fg">전체 ROAS</b> = 순매출(오가닉 포함) ÷ 광고비(VAT 포함) — 광고가 가게 전체에 만든 효율</div>
             <div><b className="text-fg">광고 ROAS</b> = 광고 전환매출 ÷ 광고비 — 쿠팡 광고센터의 ROAS 와 같은 개념</div>
@@ -361,10 +368,10 @@ export default function OrganicPage() {
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> : (
             <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full text-[12px] border-collapse min-w-[1350px]">
+              <table className="w-full text-[12px] border-collapse min-w-[1420px]">
                 <thead><tr className="h-9 border-b border-line">
                   <th className={cn(th, 'text-left sticky left-0')}>{group === 'option' ? '옵션' : '상품'}</th><th className={cn(th, 'text-left')}>판매방식</th>
-                  <th className={th} title="총 판매수 (취소 전)">총 판매</th><th className={th}>취소</th><th className={th} title="리뷰용 빈박스 — 옵션 보기에서 입력">빈박스</th><th className={th} title="총 판매 − 취소 − 빈박스">순판매</th>
+                  <th className={th} title="총 판매수 (취소 전)">총 판매</th><th className={th}>취소</th><th className={th} title="리뷰용 빈박스 — 옵션 보기에서 입력">빈박스</th><th className={th} title="총 판매 − 취소 − 빈박스">순판매</th><th className={th} title="쿠폰·할인 관리의 유효 할인 × 순판매 (즉시할인+다운로드)">쿠폰</th>
                   <th className={th} title={`광고 전환 판매 (${basisLabel})`}>광고 판매</th><th className={th}>오가닉</th><th className={th} title="오가닉 ÷ 총 판매">오가닉 비율</th>
                   <th className={th} title="매출(취소 반영) − 빈박스 × 평균 단가">순매출</th><th className={th} title="VAT 포함">광고비</th>
                   <th className={th} title="순매출(오가닉 포함) ÷ 광고비">전체 ROAS</th><th className={th} title="광고 전환매출 ÷ 광고비 (광고센터 ROAS)">광고 ROAS</th><th className={th} title="광고비 ÷ 순매출">광고비율</th>
@@ -389,6 +396,7 @@ export default function OrganicPage() {
                         </span>
                       ) : <span className={cn(td, 'block', t.empty ? 'text-warn font-semibold' : 'text-fg-5')}>{t.empty ? fmt(t.empty) : '-'}</span>}</td>
                       <td className={cn(td, 'font-semibold text-fg')}>{fmt(t.net)}</td>
+                      <td className={cn(td, t.coupon ? 'text-warn' : 'text-fg-5')}>{t.coupon ? `−${fmt(t.coupon)}` : '-'}</td>
                       <td className={td}>{fmt(t.adQ)}</td>
                       <td className={td}>{fmt(t.organic)}</td>
                       <td className={cn(td, t.organicPct != null && t.organicPct < 20 ? 'text-warn' : t.organicPct != null && t.organicPct >= 50 ? 'text-success' : '')}>{pct(t.organicPct)}</td>
@@ -405,7 +413,7 @@ export default function OrganicPage() {
                     </tr>,
                     one && recVid === one.vid ? (
                       <tr key={`${t.key}|rec`} className="border-b border-line-2 bg-app/40">
-                        <td colSpan={19} className="px-3 py-2">
+                        <td colSpan={20} className="px-3 py-2">
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
                             <span className="font-semibold text-fg flex items-center gap-1"><History className="h-3.5 w-3.5" /> {t.name} · 빈박스 날짜별 기록</span>
                             {evs.length === 0 && <span className="text-fg-5">이 기간에 기록 없음</span>}
@@ -427,7 +435,7 @@ export default function OrganicPage() {
                     ) : null,
                   ]; })}
                   <tr className="h-9 font-semibold bg-card-2/60"><td className="px-2 sticky left-0 bg-card-2">합계 {table.length}</td><td />
-                    <td className={td}>{fmt(tot.gross)}</td><td className={td}>{fmt(tot.cancel)}</td><td className={td}>{fmt(tot.empty)}</td><td className={td}>{fmt(tot.net)}</td>
+                    <td className={td}>{fmt(tot.gross)}</td><td className={td}>{fmt(tot.cancel)}</td><td className={td}>{fmt(tot.empty)}</td><td className={td}>{fmt(tot.net)}</td><td className={td}>{tot.coupon ? `−${fmt(tot.coupon)}` : '-'}</td>
                     <td className={td}>{fmt(tot.ad)}</td><td className={td}>{fmt(orgTot)}</td><td className={td}>{pct(tot.gross ? (orgTot / tot.gross) * 100 : null)}</td>
                     <td className={td}>{fmt(tot.netRevenue)}</td><td className={td}>{fmt(tot.cost)}</td><td className={cn(td, roasColor(totRoas))}>{pct(totRoas)}</td><td className={cn(td, roasColor(totAdRoas))}>{pct(totAdRoas)}</td><td className={td}>{pct(tot.netRevenue ? (tot.cost / tot.netRevenue) * 100 : null)}</td>
                     <td className={td}>{fmt(tot.imps)}</td><td className={td}>{fmt(tot.clicks)}</td><td className={td}>{pct(tot.imps ? (tot.clicks / tot.imps) * 100 : null, 2)}</td><td className={td}>{fmt(tot.visitors)}</td><td /></tr>

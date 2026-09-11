@@ -170,7 +170,7 @@ export function MasterQuickEdit() {
           if (JSON.stringify(e) === JSON.stringify(oe)) continue;
           const isC = c.type === 'coupang';
           const ids = splitIds(e.ids);
-          const body: any = { sku_id: r.skuId, channel_id: c.id, platform_product_name: e.name.trim() || null, price: e.price.trim() ? num(e.price) : null, commission_rate: e.rate.trim() ? Number(e.rate) : null, coupon_discount: e.coupon.trim() ? num(e.coupon) : 0 };
+          const body: any = { sku_id: r.skuId, channel_id: c.id, platform_product_name: e.name.trim() || null, price: e.price.trim() ? num(e.price) : null, commission_rate: e.rate.trim() ? Number(e.rate) : null };   // 쿠폰은 정산 › 쿠폰·할인 관리에서 (coupon_discount 는 더 이상 쓰지 않음)
           if (isC) { body.platform_sku_id = ids[0] ?? null; body.platform_product_id = null; } else { body.platform_sku_id = e.ids.trim() || null; body.platform_product_id = e.productId.trim() || null; }
           const res = await fetch('/api/platform-skus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           if (!res.ok) errors.push(`${r.skuCode} ${c.name}: ${(await res.json().catch(() => ({}))).error ?? res.status}`);
@@ -254,7 +254,6 @@ export function MasterQuickEdit() {
                   <th className={cn(th, 'min-w-[150px]')}>{c.type === 'coupang' ? '옵션ID (쉼표로 여러 개)' : c.type === 'toss' ? '상품ID · 옵션ID' : '상품번호'}</th>
                   <th className={cn(th, 'w-24')}>판매가</th>
                   {c.type === 'coupang' && <th className={cn(th, 'w-16')} title="비우면 기본 12%">수수료%</th>}
-                  {c.type === 'coupang' && <th className={cn(th, 'w-16')}>쿠폰</th>}
                 </Fragment>)}
                 <th className={cn(th, 'min-w-[90px] border-l border-line')}>연동 이름</th>
                 <th className={cn(th, 'w-10')} />
@@ -311,7 +310,6 @@ export function MasterQuickEdit() {
                           </td>
                           <td className="px-1"><input data-col={`price:${c.id}`} inputMode="numeric" value={e.price} onChange={ev => setField(r.skuId, `${c.id}:price`, ev.target.value.replace(/[^0-9]/g, ''))} onKeyDown={onKey} placeholder="판매가" className={cn(inp, 'text-right tabular-nums', has && !num(e.price) && warnInp)} /></td>
                           {isC && <td className="px-1"><input data-col={`rate:${c.id}`} inputMode="decimal" value={e.rate} onChange={ev => setField(r.skuId, `${c.id}:rate`, ev.target.value.replace(/[^0-9.]/g, ''))} onKeyDown={onKey} placeholder="12" className={cn(inp, 'text-right tabular-nums')} /></td>}
-                          {isC && <td className="px-1"><input data-col={`coupon:${c.id}`} inputMode="numeric" value={e.coupon} onChange={ev => setField(r.skuId, `${c.id}:coupon`, ev.target.value.replace(/[^0-9]/g, ''))} onKeyDown={onKey} placeholder="0" className={cn(inp, 'text-right tabular-nums')} /></td>}
                         </Fragment>; })}
                       <td className="px-2 border-l border-line-2 relative">
                         <button onClick={() => { setAliasOpen(v => v === r.skuId ? null : r.skuId); setAliasDraft(''); }} className={cn('text-[11px] whitespace-nowrap hover:underline', r.aliases.length ? 'text-brand' : 'text-fg-4')} title="마켓이 쓰는 다른 이름들 — 매출 파일·주문 매칭에 사용">연동 {r.aliases.length}</button>
