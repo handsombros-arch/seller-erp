@@ -4,6 +4,7 @@
  * 기여 매출(총 전환 거래액)은 토스 보고서 기준 윈도우이며 통합 지표에는 쓰지 않는다 (마켓 안 참고용).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadExtraIds } from './extraIds';
 
 export const toYm = (v: unknown): string => {
   if (typeof v === 'number' && v > 25569) { const d = new Date((v - 25569) * 86400000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; }
@@ -28,6 +29,10 @@ export async function buildTossMatcher(admin: SupabaseClient) {
     if (p.platform_product_id) byProd.set(String(p.platform_product_id), p);
     if (p.platform_product_name) listing.push({ name: String(p.platform_product_name).trim(), p });
   }
+  // 추가 옵션ID: 같은 SKU 의 기본 행 정보를 물려받는다
+  const bySku = new Map<string, any>();
+  for (const p of (ps ?? []) as any[]) if (p.sku?.id && !bySku.has(p.sku.id)) bySku.set(p.sku.id, p);
+  for (const e of await loadExtraIds(admin)) { if (e.channelType !== 'toss' || byOpt.has(e.vid)) continue; const p = bySku.get(e.skuId); if (p) byOpt.set(e.vid, p); }
   const byName = new Map((prods ?? []).map((p: any) => [String(p.name).trim(), p]));
   const norm = (v: string) => v.replace(/\s+/g, '').toLowerCase();
   const matchListing = (adName: string) => { const n = norm(adName); if (!n) return null; let best: any = null, bestLen = 0; for (const l of listing) { const ln = norm(l.name); if (!ln) continue; if ((n.startsWith(ln) || ln.startsWith(n)) && ln.length > bestLen) { best = l.p; bestLen = ln.length; } } return best; };

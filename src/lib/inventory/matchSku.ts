@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadExtraVidMap } from '@/lib/settlement/extraIds';
 
 interface SkuRule {
   sku_id: string;
@@ -56,6 +57,8 @@ export async function buildSkuMatcher(admin: SupabaseClient): Promise<SkuMatcher
     if ((p as any).platform_sku_id) vidMap.set(String((p as any).platform_sku_id), (p as any).sku_id);
     if ((p as any).platform_sku_id_return) vidMap.set(String((p as any).platform_sku_id_return), (p as any).sku_id);
   }
+  // 추가 옵션ID (윙/그로스 등 같은 SKU 의 다른 리스팅)
+  for (const [vid, skuId] of await loadExtraVidMap(admin, 'coupang')) if (!vidMap.has(vid)) vidMap.set(vid, skuId);
   for (const r of returnItems ?? []) {
     if (!vidMap.has(r.vendor_item_id)) vidMap.set(r.vendor_item_id, r.sku_id as string);
   }

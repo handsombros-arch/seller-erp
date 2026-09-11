@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { loadExtraVidMap } from '@/lib/settlement/extraIds';
 import * as XLSX from 'xlsx';
 
 interface ParsedRow {
@@ -197,6 +198,7 @@ export async function PUT(request: NextRequest) {
     ]);
     const rgMap = new Map((rg ?? []).map((r: any) => [String(r.vendor_item_id), r.sku_id as string]));
     const psMap = new Map((ps ?? []).filter((p: any) => p.platform_sku_id).map((p: any) => [String(p.platform_sku_id), p.sku_id as string]));
+    for (const [vid, skuId] of await loadExtraVidMap(admin)) if (!psMap.has(vid)) psMap.set(vid, skuId);   // 추가 옵션ID
     for (const p of body.products) {
       if (!p.skuId) p.skuId = (rgMap.get(String(p.vendorItemId)) || psMap.get(String(p.vendorItemId)) || null) as string | null;
     }

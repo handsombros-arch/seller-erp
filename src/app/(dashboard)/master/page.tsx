@@ -750,7 +750,7 @@ export default function MasterPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [products, whs, chs, supplierData, platformRes, aliasRes, credRes] = await Promise.all([
+      const [products, whs, chs, supplierData, platformRes, aliasRes, credRes, extraRes] = await Promise.all([
         fetch('/api/products').then((r) => r.json()).catch(() => []),
         fetch('/api/settings/warehouses').then((r) => r.json()).catch(() => []),
         fetch('/api/settings/channels').then((r) => r.json()).catch(() => []),
@@ -758,6 +758,7 @@ export default function MasterPage() {
         fetch('/api/platform-skus'),
         fetch('/api/sku-aliases'),
         fetch('/api/coupang/credentials'),
+        fetch('/api/platform-sku-ids').then(r => r.ok ? r.json() : { ids: [] }).catch(() => ({ ids: [] })),
       ]);
       setSuppliers(supplierData ?? []);
       setProductsByName(new Map((Array.isArray(products) ? products as Product[] : []).map((p) => [p.name, p])));
@@ -791,6 +792,16 @@ export default function MasterPage() {
           rg_fee_send:     p.rg_fee_send != null ? String(p.rg_fee_send) : '',
           rg_fee_packing:  p.rg_fee_packing != null ? String(p.rg_fee_packing) : '',
         };
+      }
+
+      // 추가 옵션ID (platform_sku_ids) → 옵션ID 칸에 "기본, 추가…" 로 합쳐 보여준다
+      const extraBy: Record<string, Record<string, string[]>> = {};
+      for (const e of ((extraRes as any)?.ids ?? []) as any[]) { const bySku = (extraBy[e.sku_id] = extraBy[e.sku_id] ?? {}); (bySku[e.channel_id] = bySku[e.channel_id] ?? []).push(String(e.platform_sku_id)); }
+      for (const [skuId, byCh] of Object.entries(extraBy)) for (const [chId, vids] of Object.entries(byCh)) {
+        if (!bySkuId[skuId]) bySkuId[skuId] = {};
+        const e = bySkuId[skuId][chId] ?? { ...EMPTY_ENTRY };
+        e.product_id = [e.product_id, ...vids].filter(Boolean).join(', ');
+        bySkuId[skuId][chId] = e;
       }
 
       // Aliases
@@ -904,7 +915,10 @@ export default function MasterPage() {
             const e = row.entries[c.id];
             if (!e) return;
             const name       = e.name.trim();
-            const product_id = e.product_id.trim() || null;
+            // 옵션ID 칸에 쉼표로 여러 개: 첫 번째가 기본(platform_skus), 나머지는 추가 옵션ID(platform_sku_ids)
+            const idList = e.product_id.split(/[,\s]+/).map(v => v.trim()).filter(Boolean);
+            const product_id = idList[0] ?? null;
+            const extraIds = idList.slice(1);
             const price      = e.price.trim() ? Number(e.price.replace(/,/g, '')) : null;
             const coupon_discount = e.coupon_discount?.trim() ? Number(e.coupon_discount.replace(/,/g, '')) : 0;
             const sku_id_return = e.sku_id_return.trim() || null;
@@ -935,6 +949,10 @@ export default function MasterPage() {
             if (!res.ok) {
               const d = await res.json().catch(() => ({}));
               errors.push(`${c.name}: ${d.error ?? res.status}`);
+            }
+            if (isCoupang) {
+              const er = await fetch('/api/platform-sku-ids', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sku_id: row.id, channel_id: c.id, ids: extraIds.map(v => ({ platform_sku_id: v })) }) });
+              if (!er.ok && extraIds.length) { const d = await er.json().catch(() => ({})); errors.push(`${c.name} 추가 옵션ID: ${d.error ?? er.status}`); }
             }
             if (name) {
               await fetch('/api/sku-aliases', {
@@ -1015,7 +1033,7 @@ export default function MasterPage() {
             channel_id: coupangChannel.id,
             platform_product_name: e.name.trim() || null,
             platform_product_id: null,
-            platform_sku_id: e.product_id.trim() || null,
+            platform_sku_id: e.product_id.split(/[,s]+/).map((v) => v.trim()).filter(Boolean)[0] ?? null,   // 쉼표 목록이면 첫 번째가 기본 ID
             price,
             coupon_discount: Number(val.replace(/,/g, '')) || 0,
             platform_sku_id_return: e.sku_id_return?.trim() || null,
@@ -1354,7 +1372,7 @@ export default function MasterPage() {
                   {channels.map((c) => (
                     <Fragment key={c.id}>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[180px] border-l border-line">플랫폼상품명</th>
-                      <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[130px]">{c.type === 'coupang' ? '옵션ID (vendorItemId)' : '상품ID'}</th>
+                      <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[130px]" title={c.type === 'coupang' ? '쿠팡 옵션ID(vendorItemId). 윙·그로스처럼 리스팅이 둘이면 쉼표로 여러 개 — 첫 번째가 기본' : ''}>{c.type === 'coupang' ? '옵션ID (여러 개는 쉼표)' : '상품ID'}</th>
                       <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[100px]">판매가</th>
                       {c.type === 'coupang' && <th className="text-left px-3 py-2 text-[11px] font-medium text-fg-5 whitespace-nowrap min-w-[80px]">쿠폰할인</th>}
                       {c.type === 'coupang' && <>

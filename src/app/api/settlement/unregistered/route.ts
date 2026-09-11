@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { loadExtraIds } from '@/lib/settlement/extraIds';
 
 /**
  * GET /api/settlement/unregistered?year_month=YYYY-MM
@@ -33,6 +34,10 @@ export async function GET(request: NextRequest) {
   const coupangChannel = (chRes.data ?? []).find((c: any) => c.type === 'coupang');
   const known = new Set<string>();
   for (const p of psRes.data ?? []) if (p.platform_sku_id && ((p as any).channel?.type ?? 'coupang') === 'coupang') known.add(String(p.platform_sku_id));
+  const extras = (await loadExtraIds(admin)).filter(e => e.channelType === 'coupang');
+  for (const e of extras) known.add(e.vid);
+  const extraVidsOf = new Map<string, string[]>();
+  for (const e of extras) { const a = extraVidsOf.get(e.skuId) ?? []; a.push(e.vid); extraVidsOf.set(e.skuId, a); }
 
   type Item = { vendorItemId: string; name: string; sources: string[]; adCost: number; suggestedSkuId: string | null };
   const items = new Map<string, Item>();
@@ -63,7 +68,7 @@ export async function GET(request: NextRequest) {
   // SKU 별 기존 쿠팡 옵션ID — 등록 시 다른 옵션ID 를 덮어쓰게 되면 화면에서 경고
   const coupangVidOf = new Map<string, string>();
   for (const p of psRes.data ?? []) if (p.platform_sku_id && ((p as any).channel?.type ?? 'coupang') === 'coupang') coupangVidOf.set(String(p.sku_id), String(p.platform_sku_id));
-  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null, costPrice: s.cost_price == null ? null : Number(s.cost_price), coupangVid: coupangVidOf.get(s.id) ?? null }));
+  const skus = (skusRes.data ?? []).map((s: any) => ({ id: s.id, code: s.sku_code, name: `${s.product?.name ?? ''}${s.option_values ? ' ' + (typeof s.option_values === 'string' ? s.option_values : JSON.stringify(s.option_values)) : ''}`.trim(), productId: s.product?.id ?? null, costPrice: s.cost_price == null ? null : Number(s.cost_price), coupangVid: coupangVidOf.get(s.id) ?? null, extraVids: extraVidsOf.get(s.id) ?? [] }));
 
   return NextResponse.json({
     yearMonth: ym,

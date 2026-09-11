@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { loadExtraVidMap } from '@/lib/settlement/extraIds';
 import * as XLSX from 'xlsx';
 import * as officeCrypto from 'officecrypto-tool';
 
@@ -255,6 +256,7 @@ export async function POST(request: NextRequest) {
 
   const rgMap = new Map((rg ?? []).map((r: any) => [r.vendor_item_id, r.sku_id]));
   const psMap = new Map((ps ?? []).filter((p: any) => p.platform_sku_id).map((p: any) => [p.platform_sku_id, p.sku_id]));
+  for (const [vid, skuId] of await loadExtraVidMap(admin)) if (!psMap.has(vid)) psMap.set(vid, skuId);   // 추가 옵션ID
   // 스마트스토어: 상품번호(platform_product_id) → sku, 판매가(금액 컬럼 없는 양식일 때 추정용)
   const ppMap = new Map<string, string>();
   const priceMap = new Map<string, number>();

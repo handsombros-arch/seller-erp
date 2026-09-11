@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { loadExtraIds } from '@/lib/settlement/extraIds';
 
 // GET: 가격 정보만 반환 (xlsx 처리는 클라이언트)
 export async function GET(request: NextRequest) {
@@ -95,6 +96,16 @@ export async function GET(request: NextRequest) {
       const existing = skuIdToInfo.get(sku.id);
       if (!existing) skuIdToInfo.set(sku.id, prices[String(ps.platform_sku_id)] ?? { price: 0, cost_price: 0, product_name: '', sku_code: '', commission_rate: 0, rg_cost: 0 });
     }
+  }
+
+  // 추가 옵션ID (윙/그로스 등): 기본 ID 의 원가·수수료를 물려받고, 판매가는 따로 있으면 그 값
+  const bySku = new Map<string, typeof prices[string]>();
+  for (const ps of platformSkus ?? []) if (ps.platform_sku_id && prices[String(ps.platform_sku_id)]) bySku.set(String((ps as any).sku?.id ?? ''), prices[String(ps.platform_sku_id)]);
+  for (const e of await loadExtraIds(admin)) {
+    if (e.channelType !== 'coupang' || prices[e.vid]) continue;
+    const base = bySku.get(e.skuId) ?? skuIdToInfo.get(e.skuId);
+    if (!base) continue;
+    prices[e.vid] = { ...base, price: e.price != null && e.price > 0 ? e.price : base.price };
   }
 
   for (const ret of returnItems ?? []) {

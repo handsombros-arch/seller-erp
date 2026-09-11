@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { loadExtraVidMap } from '@/lib/settlement/extraIds';
 import { coupangFetch } from '@/lib/coupang/auth';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest) {
       nameToSkuId.set((r.platform_product_name as string).trim().toLowerCase(), r.sku_id as string);
     }
   }
+
+  for (const [vid, skuId] of await loadExtraVidMap(admin, 'coupang')) if (!platformMap.has(vid)) platformMap.set(vid, skuId);   // 추가 옵션ID
 
   // 이미 등록된 반품 vendor_item_id
   const { data: existingReturns } = await admin
