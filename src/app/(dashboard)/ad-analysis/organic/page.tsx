@@ -223,7 +223,8 @@ export default function OrganicPage() {
       const r = await fetch('/api/coupang/insight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: uFrom, period_to: uTo, rows: rowsX, source: 'upload' }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { toast.error(j.error ?? '업로드 실패'); setNeedsMigration(!!j.needsMigration); return; }
-      toast.success(`${uFrom}~${uTo} 저장: 옵션 ${j.saved}개 (SKU 연결 ${j.matched}, 미연결 ${j.unmatched}) · 판매 ${fmt(j.qty)}개`);
+      toast.success(`${uFrom}~${uTo} 저장: 옵션 ${j.saved}개 (SKU 연결 ${j.matched}, 미연결 ${j.unmatched}) · 판매 ${fmt(j.qty)}개${j.priceUpdated ? ` · 마스터 판매가 ${j.priceUpdated}개 갱신` : ''}`);
+      if (j.priceSkipped) toast.info(j.priceSkipped);
       await loadPeriods(); setSel({ period_from: uFrom, period_to: uTo, rows: j.saved, qty: j.qty, revenue: j.revenue, updated_at: '' });
     } catch (e) { toast.error(e instanceof Error ? e.message : '파일을 읽지 못했습니다'); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }

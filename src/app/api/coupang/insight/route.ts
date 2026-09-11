@@ -80,7 +80,31 @@ export async function POST(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
   const matched = payload.filter(p => p.sku_id).length;
-  return NextResponse.json({ ok: true, saved: payload.length, matched, unmatched: payload.length - matched, qty: payload.reduce((s, p) => s + p.qty, 0), revenue: payload.reduce((s, p) => s + p.revenue, 0) });
+  // 마스터 판매가(정가 = 쿠폰 적용 전) 자동 갱신 — 리포트의 총 매출 ÷ 총 판매수가 옵션의 판매가. 가장 최근 기간을 올렸을 때만(옛 리포트로 되돌리지 않음)
+  const priceSync = await syncMasterPrices(admin, user.id, to, payload.map(p => ({ vid: p.vendor_item_id, unit: p.gross_qty > 0 ? p.gross_revenue / p.gross_qty : 0 })));
+  return NextResponse.json({ ok: true, saved: payload.length, matched, unmatched: payload.length - matched, qty: payload.reduce((s, p) => s + p.qty, 0), revenue: payload.reduce((s, p) => s + p.revenue, 0), ...priceSync });
+}
+
+/** 인사이트 판매가 → platform_skus.price(기본 옵션ID) · platform_sku_ids.price(추가 옵션ID). 정수 단가만, 값이 다를 때만. */
+async function syncMasterPrices(admin: Awaited<ReturnType<typeof createAdminClient>>, userId: string, periodTo: string, units: { vid: string; unit: number }[]): Promise<{ priceUpdated: number; priceSkipped?: string }> {
+  try {
+    const { data: latest } = await admin.from('coupang_insight_metrics').select('period_to').eq('user_id', userId).order('period_to', { ascending: false }).limit(1).maybeSingle();
+    if (latest?.period_to && String(latest.period_to) > periodTo) return { priceUpdated: 0, priceSkipped: `최근 기간(${latest.period_to})보다 앞선 리포트라 판매가는 갱신하지 않음` };
+    const want = new Map<string, number>();
+    for (const u of units) if (u.vid && u.unit > 0 && Number.isInteger(u.unit)) want.set(u.vid, u.unit);
+    if (!want.size) return { priceUpdated: 0 };
+    const vids = [...want.keys()];
+    const [{ data: ps }, { data: ex }] = await Promise.all([
+      admin.from('platform_skus').select('id, platform_sku_id, price, channel:channels(type)').in('platform_sku_id', vids),
+      admin.from('platform_sku_ids').select('id, platform_sku_id, price, channel:channels(type)').in('platform_sku_id', vids),
+    ]);
+    let n = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of ((ps ?? []) as any[])) { if ((p.channel?.type ?? 'coupang') !== 'coupang') continue; const w = want.get(String(p.platform_sku_id)); if (w == null || Number(p.price) === w) continue; const { error } = await admin.from('platform_skus').update({ price: w, updated_at: new Date().toISOString() }).eq('id', p.id); if (!error) n++; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of ((ex ?? []) as any[])) { if ((p.channel?.type ?? 'coupang') !== 'coupang') continue; const w = want.get(String(p.platform_sku_id)); if (w == null || Number(p.price) === w) continue; const { error } = await admin.from('platform_sku_ids').update({ price: w }).eq('id', p.id); if (!error) n++; }
+    return { priceUpdated: n };
+  } catch { return { priceUpdated: 0 }; }
 }
 
 export async function DELETE(request: NextRequest) {

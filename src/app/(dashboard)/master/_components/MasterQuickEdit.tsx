@@ -332,7 +332,7 @@ export function MasterQuickEdit() {
                 {shownChannels.map(c => <Fragment key={c.id}>
                   <th className={cn(th, 'min-w-[220px] border-l border-line')}>{c.name} 상품명</th>
                   <th className={cn(th, 'min-w-[150px]')}>{c.type === 'coupang' ? '옵션ID (쉼표로 여러 개)' : c.type === 'toss' ? '상품ID · 옵션ID' : '상품번호'}</th>
-                  <th className={cn(th, 'w-24')} title="마켓 정가 (쿠폰 차감 전)">판매가</th>
+                  <th className={cn(th, 'w-24')} title={c.type === 'coupang' ? '쿠폰 적용 전 판매가. 쿠팡은 인사이트 리포트(오가닉 탭·정산 매출 파일)를 올릴 때 자동으로 채워집니다' : '쿠폰 적용 전 판매가'}>판매가{c.type === 'coupang' && <span className="ml-1 text-[10px] font-normal text-fg-5">자동</span>}</th>
                   <th className={cn(th, 'w-20')} title="정산 › 쿠폰·할인 관리에 등록된 오늘 유효 쿠폰 — 개당 할인액 (읽기 전용)">쿠폰(오늘)</th>
                   {c.type === 'coupang' && <th className={cn(th, 'w-16')} title="비우면 기본 12%">수수료%</th>}
                 </Fragment>)}
