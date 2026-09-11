@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { restoreEmptyBoxes } from '@/lib/settlement/emptyBox';
+import { restoreEmptyBoxes, closedMonthSet, sumEventsByVid, syncMonthFromEvents, monthRange } from '@/lib/settlement/emptyBox';
 
 interface SalesRow {
   name: string;
@@ -33,6 +33,34 @@ export async function PUT(request: NextRequest) {
   }
 
   const admin = await createAdminClient();
+  if ((await closedMonthSet(admin, [body.yearMonth])).size) return NextResponse.json({ error: `${body.yearMonth} 은 마감된 달입니다. 해제 후 적용하세요.` }, { status: 409 });
+
+  // 쿠팡: 빈박스는 공용 기록(empty_box_events)이 원천. 미리보기에 적은 값과 이미 있는 기록 중 큰 쪽을 쓴다
+  // (빈박스는 늘어나기만 하는 값 — 먼저 적어 둔 기록이 파일 적용으로 사라지면 안 된다)
+  const { from: mFrom, to: mTo } = monthRange(body.yearMonth);
+  const evSums = body.platform === 'coupang' ? await sumEventsByVid(admin, user.id, mFrom, mTo) : new Map<string, number>();
+  const bump: { vid: string; add: number }[] = [];   // 미리보기 > 기록 → 차이를 월 말일 기록으로 추가
+  const rows = body.products.map(p => {
+    const preview = Number((p as any).emptyQty) || 0;
+    const existing = p.vendorId ? (evSums.get(String(p.vendorId)) ?? 0) : 0;
+    const empty = Math.min(p.qty, Math.max(preview, existing));
+    if (p.vendorId && preview > existing) bump.push({ vid: String(p.vendorId), add: preview - existing });
+    return {
+      user_id: user.id,
+      year_month: body.yearMonth,
+      platform: body.platform,
+      sku_id: p.skuId,
+      display_name: p.name,
+      qty: p.qty,
+      revenue: p.revenue,
+      unit_cost: p.unitCost,
+      total_cost: p.unitCost * Math.max(0, p.qty - empty),
+      empty_qty: empty,                                // 빈박스(리뷰) 수량 — 원가 제외
+      vendor_item_id: p.vendorId || null,              // 옵션ID (등록 필요 큐용, 00064)
+      match_method: p.method,
+      updated_at: new Date().toISOString(),
+    };
+  });
 
   // 같은 (user_id, year_month, platform) 의 이전 데이터 전부 삭제 후 재삽입
   // — calc-cost 재실행 시 displayName이 바뀔 수 있어 incremental upsert 보다 안전
@@ -40,22 +68,6 @@ export async function PUT(request: NextRequest) {
     .eq('user_id', user.id)
     .eq('year_month', body.yearMonth)
     .eq('platform', body.platform);
-
-  const rows = body.products.map(p => ({
-    user_id: user.id,
-    year_month: body.yearMonth,
-    platform: body.platform,
-    sku_id: p.skuId,
-    display_name: p.name,
-    qty: p.qty,
-    revenue: p.revenue,
-    unit_cost: p.unitCost,
-    total_cost: p.cost,
-    empty_qty: Number((p as any).emptyQty) || 0,   // 빈박스(리뷰) 수량 — 원가 제외
-    vendor_item_id: p.vendorId || null,              // 옵션ID (등록 필요 큐용, 00064)
-    match_method: p.method,
-    updated_at: new Date().toISOString(),
-  }));
 
   if (rows.length > 0) {
     let { error } = await admin.from('monthly_product_sales').insert(rows);
@@ -67,6 +79,16 @@ export async function PUT(request: NextRequest) {
 
   // 빈박스(리뷰) 수량 → 재고 되돌리기 (이 달·플랫폼 전체를 다시 계산, 멱등)
   try {
+    if (body.platform === 'coupang') {
+      // 미리보기에서 늘린 만큼 공용 기록(월 말일)에 더한 뒤, 그 달 정산 행을 기록 기준으로 맞춘다 (재고 되돌리기 포함)
+      for (const b of bump) {
+        const { data: cur } = await admin.from('empty_box_events').select('qty').eq('user_id', user.id).eq('vendor_item_id', b.vid).eq('date', mTo).maybeSingle();
+        const skuId = body.products.find(p => String(p.vendorId) === b.vid)?.skuId ?? null;
+        await admin.from('empty_box_events').upsert({ user_id: user.id, date: mTo, vendor_item_id: b.vid, sku_id: skuId, qty: (Number(cur?.qty) || 0) + b.add, updated_at: new Date().toISOString() }, { onConflict: 'user_id,date,vendor_item_id' });
+      }
+      const { restored } = await syncMonthFromEvents(admin, user.id, body.yearMonth);
+      return NextResponse.json({ ok: true, saved: rows.length, restored, emptyFromEvents: bump.length });
+    }
     const restored = await restoreEmptyBoxes(admin, user.id, body.yearMonth, body.platform);
     return NextResponse.json({ ok: true, saved: rows.length, restored });
   } catch (e: any) {

@@ -119,10 +119,7 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
     if (platform === 'coupang' && result.insightRows?.length) {
       const [y, m] = selectedYm.split('-').map(Number);
       const last = new Date(y, m, 0).getDate();
-      // 미리보기에 적은 빈박스는 공용 빈박스 기록(empty_box_events)에도 남긴다 → 오가닉 탭과 한 곳
-      for (const p of result.products.filter(x => (x.emptyQty || 0) > 0 && x.vendorId)) {
-        await fetch('/api/empty-box', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: `${selectedYm}-01`, period_to: `${selectedYm}-${String(last).padStart(2, '0')}`, vendor_item_id: p.vendorId, total: p.emptyQty }) }).catch(() => {});
-      }
+      // 미리보기에 적은 빈박스는 적용 API(monthly-product-sales PUT)가 공용 기록(empty_box_events)과 합쳐 저장한다 — 먼저 적어 둔 기록은 유지, 늘린 만큼만 추가
       await fetch('/api/coupang/insight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: `${selectedYm}-01`, period_to: `${selectedYm}-${String(last).padStart(2, '0')}`, rows: result.insightRows, source: 'settlement' }) }).catch(() => {});
     }
 

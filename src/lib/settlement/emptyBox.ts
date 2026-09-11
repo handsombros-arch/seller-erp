@@ -70,3 +70,29 @@ export async function syncMonthFromEvents(admin: Admin, userId: string, ym: stri
   try { restored = await restoreEmptyBoxes(admin, userId, ym, 'coupang'); } catch { /* 재고 되돌리기 실패는 집계에 영향 없음 */ }
   return { updated, restored };
 }
+
+/** from~to 가 걸치는 달 목록 (YYYY-MM, 오름차순) */
+export function monthsBetween(from: string, to: string): string[] {
+  const out: string[] = []; let [y, m] = from.slice(0, 7).split('-').map(Number); const end = to.slice(0, 7);
+  for (let i = 0; i < 36; i++) { const ym = `${y}-${String(m).padStart(2, '0')}`; out.push(ym); if (ym >= end) break; m += 1; if (m > 12) { m = 1; y += 1; } }
+  return out;
+}
+
+/** 마감된 달 집합 (settlement_months) */
+export async function closedMonthSet(admin: Admin, yms: Iterable<string>): Promise<Set<string>> {
+  const list = [...new Set(yms)];
+  if (!list.length) return new Set();
+  const { data } = await admin.from('settlement_months').select('year_month').in('year_month', list);
+  return new Set((data ?? []).map((r: { year_month: string }) => String(r.year_month)));
+}
+
+export type MonthSync = { updated: number; restored: number; skipped?: 'closed' };
+
+/** 여러 달을 기록 기준으로 동기화. 마감된 달은 손대지 않고 skipped 로 표시 */
+export async function syncMonths(admin: Admin, userId: string, yms: Iterable<string>): Promise<Record<string, MonthSync>> {
+  const list = [...new Set(yms)];
+  const closed = await closedMonthSet(admin, list);
+  const out: Record<string, MonthSync> = {};
+  for (const ym of list) out[ym] = closed.has(ym) ? { updated: 0, restored: 0, skipped: 'closed' } : await syncMonthFromEvents(admin, userId, ym);
+  return out;
+}
