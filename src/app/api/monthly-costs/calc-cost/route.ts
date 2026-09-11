@@ -374,6 +374,8 @@ export async function POST(request: NextRequest) {
     totalItems: soldRows.length,
     detectedYm,
     products: [...grouped.entries()].map(([name, d]) => ({ name, ...d })).sort((a, b) => b.cost - a.cost),
+    // 쿠팡 인사이트 파일은 '오가닉 vs 광고'용 총 판매 데이터와 같은 파일 → 적용 시 coupang_insight_metrics 에도 저장하도록 원본 행을 돌려준다
+    insightRows: platform === 'coupang' ? XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]) : undefined,
   });
 }
 

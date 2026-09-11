@@ -875,16 +875,16 @@ export default function AdAnalysisPage() {
       const seen = new Set<string>();
       let raw: any[] = [];
 
-      // 기존 데이터가 있으면 항상 누적
+      // 새로 올린 파일이 우선(같은 키면 교체) — 14일 귀속 전환·매출은 나중에 내려받은 보고서일수록 채워져 있다. 기존 행은 새 파일에 없는 키만 유지
+      for (const r of allRows) {
+        const key = dedupKey(r);
+        if (!seen.has(key)) { seen.add(key); raw.push(r); }
+      }
       if (data?._rawRows) {
         for (const r of data._rawRows) {
           const key = dedupKey(r);
           if (!seen.has(key)) { seen.add(key); raw.push(r); }
         }
-      }
-      for (const r of allRows) {
-        const key = dedupKey(r);
-        if (!seen.has(key)) { seen.add(key); raw.push(r); }
       }
 
       // 미매칭 상품 퍼지 매칭

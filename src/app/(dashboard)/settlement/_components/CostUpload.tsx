@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/toast';
 
 interface CostProduct { name: string; qty: number; revenue: number; cost: number; unitCost: number; matched: boolean; method: string; emptyQty?: number; skuId?: string | null; vendorId?: string | null; }
 interface SkuOpt { id: string; code: string; name: string; costPrice?: number | null }
-interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; revenueMissingRows?: number; revenueEstimated?: number; }
+interface CostResult { platform: string; totalRevenue: number; totalQty: number; matchCount: number; totalItems: number; products: CostProduct[]; detectedYm?: string; revenueMissingRows?: number; revenueEstimated?: number; insightRows?: Record<string, unknown>[]; }
 
 const PLATFORMS = [
   { id: 'coupang', label: '쿠팡 그로스', accept: '.xlsx,.xls', hint: '셀러 인사이트 엑셀' },
@@ -114,6 +114,13 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
         products: result.products,
       }),
     });
+
+    // 쿠팡 인사이트 파일 = 오가닉 vs 광고의 총 판매 데이터. 그 달 기간(1일~말일)으로 같이 저장
+    if (platform === 'coupang' && result.insightRows?.length) {
+      const [y, m] = selectedYm.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      await fetch('/api/coupang/insight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: `${selectedYm}-01`, period_to: `${selectedYm}-${String(last).padStart(2, '0')}`, rows: result.insightRows, source: 'settlement' }) }).catch(() => {});
+    }
 
     const costRes = await fetch('/api/monthly-costs');
     const allItems: any[] = costRes.ok ? await costRes.json() : [];

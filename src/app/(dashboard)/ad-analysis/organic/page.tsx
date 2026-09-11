@@ -16,7 +16,7 @@ import { readLocalAdRows } from '../../settlement/_lib/adRawLocal';
  *  - 오가닉 = 총 판매 − 광고 판매(당일). 14일 기준은 광고일 귀속이라 기간 경계에서 앞뒤로 새므로 참고로만.
  */
 interface Period { period_from: string; period_to: string; rows: number; qty: number; revenue: number; updated_at: string }
-interface Row { vendor_item_id: string; option_name: string | null; product_name: string | null; sales_method: string | null; revenue: number; orders: number; qty: number; visitors: number; views: number; conv_rate: number | null; cancel_qty: number; sku_id: string | null; sku?: { sku_code: string; option_values?: Record<string, string> | null; product?: { id: string; name: string } | null } | null }
+interface Row { vendor_item_id: string; option_name: string | null; product_name: string | null; sales_method: string | null; revenue: number; orders: number; qty: number; gross_qty: number; visitors: number; views: number; conv_rate: number | null; cancel_qty: number; sku_id: string | null; sku?: { sku_code: string; option_values?: Record<string, string> | null; product?: { id: string; name: string } | null } | null }
 interface AdAgg { q1: number; q14: number; cost: number; clicks: number; rev14: number }
 type Basis = '1d' | '14d';
 type Group = 'product' | 'option';
@@ -88,15 +88,16 @@ export default function OrganicPage() {
 
   // 표 행 (상품 또는 옵션 단위)
   const table = useMemo(() => {
-    type T = { key: string; name: string; sub: string; method: string; qty: number; revenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; rev14: number; unmatched: boolean };
+    type T = { key: string; name: string; sub: string; method: string; qty: number; net: number; revenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; rev14: number; unmatched: boolean };
     const m = new Map<string, T>();
     for (const r of rows) {
       const pname = r.sku?.product?.name ?? r.product_name ?? '(상품명 없음)';
       const opt = r.sku?.option_values ? Object.values(r.sku.option_values).filter(Boolean).join(' / ') : (r.option_name ?? '');
       const key = group === 'product' ? (r.sku?.product?.id ?? `__${pname}`) : r.vendor_item_id;
       let t = m.get(key);
-      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', qty: 0, revenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, rev14: 0, unmatched: false }; m.set(key, t); }
-      t.qty += r.qty; t.revenue += r.revenue; t.visitors += r.visitors; t.orders += r.orders;
+      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', qty: 0, net: 0, revenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, rev14: 0, unmatched: false }; m.set(key, t); }
+      // 광고 전환은 취소 전 주문 기준 → 총 판매도 취소 전(총 판매수)으로 맞춘다. 취소 반영 판매량은 따로 표시
+      t.qty += Number(r.gross_qty) || 0; t.net += r.qty; t.revenue += r.revenue; t.visitors += r.visitors; t.orders += r.orders;
       if (!r.sku_id) t.unmatched = true;
       const meth = r.sales_method === '로켓그로스' ? '그로스' : r.sales_method === '판매자배송' ? '윙' : (r.sales_method ?? '');
       if (meth && !t.method.includes(meth)) t.method = t.method ? `${t.method}+${meth}` : meth;
@@ -105,7 +106,7 @@ export default function OrganicPage() {
     const list = [...m.values()].map(t => { const adQ = basis === '1d' ? t.ad : t.ad14; const organic = Math.max(0, t.qty - adQ); return { ...t, adQ, organic, organicPct: t.qty > 0 ? (organic / t.qty) * 100 : null, adPct: t.qty > 0 ? (Math.min(adQ, t.qty) / t.qty) * 100 : null, cvr: t.visitors > 0 ? (t.orders / t.visitors) * 100 : null }; });
     return list.sort((a, b) => b.qty - a.qty);
   }, [rows, ads, group, basis]);
-  const tot = useMemo(() => table.reduce((s, t) => ({ qty: s.qty + t.qty, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, cost: s.cost + t.cost, rev14: s.rev14 + t.rev14, visitors: s.visitors + t.visitors }), { qty: 0, ad: 0, revenue: 0, cost: 0, rev14: 0, visitors: 0 }), [table]);
+  const tot = useMemo(() => table.reduce((s, t) => ({ qty: s.qty + t.qty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, cost: s.cost + t.cost, rev14: s.rev14 + t.rev14, visitors: s.visitors + t.visitors }), { qty: 0, net: 0, ad: 0, revenue: 0, cost: 0, rev14: 0, visitors: 0 }), [table]);
   const orgTot = Math.max(0, tot.qty - tot.ad);
 
   // 업로드 (엑셀 → JSON → API). 기간은 파일에 없어 직접 입력
@@ -179,27 +180,28 @@ export default function OrganicPage() {
           {/* KPI */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {[
-              { l: '총 판매', v: `${fmt(tot.qty)}개`, s: `매출 ${fmt(tot.revenue)}원` },
+              { l: '총 판매 (취소 전)', v: `${fmt(tot.qty)}개`, s: `취소 반영 ${fmt(tot.net)}개 · 매출 ${fmt(tot.revenue)}원` },
               { l: `광고 판매 (${basis === '1d' ? '당일' : '14일'})`, v: `${fmt(tot.ad)}개`, s: pct(tot.qty ? (Math.min(tot.ad, tot.qty) / tot.qty) * 100 : null) },
               { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: pct(tot.qty ? (orgTot / tot.qty) * 100 : null), hi: true },
               { l: '광고비 (VAT 포함)', v: `${fmt(tot.cost)}원`, s: tot.revenue ? `매출 대비 ${pct((tot.cost / tot.revenue) * 100)}` : '' },
               { l: '방문자', v: fmt(tot.visitors), s: tot.visitors ? `구매전환 ${pct((table.reduce((s, t) => s + t.orders, 0) / tot.visitors) * 100)}` : '' },
             ].map(k => <div key={k.l} className={cn('rounded-xl border border-line px-3 py-2', k.hi && 'bg-brand-bg/50 border-brand/30')}><div className="text-[11px] text-fg-4">{k.l}</div><div className="text-[18px] font-bold text-fg tabular-nums">{k.v}</div><div className="text-[11px] text-fg-3">{k.s}</div></div>)}
           </div>
-          <p className="text-[11px] text-fg-4">오가닉 = 인사이트 총 판매 − 광고 전환 판매. 당일 전환은 광고 클릭 당일 판매만 잡아 오가닉이 조금 크게, 14일 전환은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다. 둘 사이가 실제 범위입니다. 총 판매는 취소 반영 판매량입니다.</p>
+          <p className="text-[11px] text-fg-4">오가닉 = 인사이트 총 판매수(취소 전) − 광고 전환 판매(취소 전 주문 기준). 당일 전환은 광고 클릭 당일 판매만 잡아 오가닉이 조금 크게, 14일 전환은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다. 둘 사이가 실제 범위입니다. 광고 raw 의 전환 수는 보고서를 나중에 다시 내려받으면 늘어나므로(14일 귀속), 최신 보고서를 광고 분석에 다시 올려 두는 게 정확합니다.</p>
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> : (
             <div className="overflow-x-auto rounded-xl border border-line">
               <table className="w-full text-[12px] border-collapse min-w-[900px]">
                 <thead><tr className="h-9 border-b border-line">
                   <th className={cn(th, 'text-left sticky left-0')}>{group === 'product' ? '상품' : '옵션'}</th><th className={cn(th, 'text-left')}>판매방식</th>
-                  <th className={th}>총 판매</th><th className={th}>광고 판매</th><th className={th}>오가닉</th><th className={th}>오가닉 비율</th><th className={th}>매출</th><th className={th}>광고비</th><th className={th} title="광고비 ÷ 매출">광고비율</th><th className={th}>방문자</th><th className={th}>구매전환</th>
+                  <th className={th} title="총 판매수 (취소 전)">총 판매</th><th className={th} title="취소 반영 판매량">순판매</th><th className={th}>광고 판매</th><th className={th}>오가닉</th><th className={th}>오가닉 비율</th><th className={th}>매출</th><th className={th}>광고비</th><th className={th} title="광고비 ÷ 매출">광고비율</th><th className={th}>방문자</th><th className={th}>구매전환</th>
                 </tr></thead>
                 <tbody>
                   {table.map(t => <tr key={t.key} className="h-9 border-b border-line-2 hover:bg-app/60">
                     <td className="px-2 sticky left-0 bg-card whitespace-nowrap"><div className="text-fg font-medium truncate max-w-[280px]" title={t.name}>{t.name}{t.unmatched && <span className="ml-1 text-[10px] text-warn" title="옵션ID 가 마스터에 없음 — 등록 큐에서 연결">미연결</span>}</div>{t.sub && <div className="text-[10px] text-fg-5 truncate max-w-[280px]">{t.sub}</div>}</td>
                     <td className="px-2 text-fg-4 whitespace-nowrap">{t.method}</td>
                     <td className="px-2 text-right tabular-nums font-semibold">{fmt(t.qty)}</td>
+                    <td className="px-2 text-right tabular-nums text-fg-3">{fmt(t.net)}</td>
                     <td className="px-2 text-right tabular-nums">{fmt(t.adQ)}</td>
                     <td className="px-2 text-right tabular-nums">{fmt(t.organic)}</td>
                     <td className={cn('px-2 text-right tabular-nums', t.organicPct != null && t.organicPct < 20 ? 'text-warn' : t.organicPct != null && t.organicPct >= 50 ? 'text-success' : '')}>{pct(t.organicPct)}</td>
@@ -210,7 +212,7 @@ export default function OrganicPage() {
                     <td className="px-2 text-right tabular-nums text-fg-3">{pct(t.cvr)}</td>
                   </tr>)}
                   <tr className="h-9 font-semibold bg-card-2/60"><td className="px-2 sticky left-0 bg-card-2">합계 {table.length}</td><td />
-                    <td className="px-2 text-right tabular-nums">{fmt(tot.qty)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.ad)}</td><td className="px-2 text-right tabular-nums">{fmt(orgTot)}</td><td className="px-2 text-right tabular-nums">{pct(tot.qty ? (orgTot / tot.qty) * 100 : null)}</td>
+                    <td className="px-2 text-right tabular-nums">{fmt(tot.qty)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.net)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.ad)}</td><td className="px-2 text-right tabular-nums">{fmt(orgTot)}</td><td className="px-2 text-right tabular-nums">{pct(tot.qty ? (orgTot / tot.qty) * 100 : null)}</td>
                     <td className="px-2 text-right tabular-nums">{fmt(tot.revenue)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.cost)}</td><td className="px-2 text-right tabular-nums">{tot.revenue ? pct((tot.cost / tot.revenue) * 100) : '-'}</td><td className="px-2 text-right tabular-nums">{fmt(tot.visitors)}</td><td /></tr>
                 </tbody>
               </table>
