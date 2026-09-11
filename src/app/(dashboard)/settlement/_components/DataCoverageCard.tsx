@@ -40,7 +40,7 @@ export function DataCoverageCard({ selectedYm, refreshKey }: { selectedYm: strin
   return (
     <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-4 md:px-5 py-4">
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => setOpen(v => !v)} className="flex items-center gap-1.5 text-left mr-auto">
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 text-left mr-auto">
           <LayoutGrid className="h-4 w-4 text-brand" />
           <span className="text-[15px] font-bold text-fg">데이터 현황</span>
           <span className="text-[12px] text-fg-3">달마다 무엇이 올라와 있는지 · 빠졌거나 일부만 있으면 주황{!open && missing.length ? ` · 최근 6개월 빠진 것 ${missing.length}건` : ''}</span>
@@ -78,7 +78,7 @@ export function DataCoverageCard({ selectedYm, refreshKey }: { selectedYm: strin
               </table>
             </div>
           )}
-          <p className="text-[11px] text-fg-4">읽는 법 — 매출 파일: 파일 안의 상품 종류 수, "미연결"은 아직 SKU 를 안 정한 상품(등록 큐에서 연결). 광고 보고서: 보고서에 날짜가 며칠 들어 있는지 — "14일치만"이면 그 달 절반만 올라온 것이라 나머지 날짜를 다시 올려야 합니다. ✓ 초록 = 다 있음, 주황 = 일부/미연결, – = 없음.</p>
+          <p className="text-[11px] text-fg-4">읽는 법 — 매출 파일: 파일 안의 상품 종류 수, ‘미연결’은 아직 SKU 를 안 정한 상품(등록 큐에서 연결). 광고 보고서: 보고서에 날짜가 며칠 들어 있는지 — ‘14일치만’이면 그 달 절반만 올라온 것이라 나머지 날짜를 다시 올려야 합니다. ✓ 초록 = 다 있음, 주황 = 일부/미연결, – = 없음.</p>
           {data && missing.length > 0 && <p className="text-[11px] text-warn">최근 6개월 빠진 것: {missing.join(' · ')}</p>}
         </div>
       )}
