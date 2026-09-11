@@ -1033,7 +1033,7 @@ export default function MasterPage() {
             channel_id: coupangChannel.id,
             platform_product_name: e.name.trim() || null,
             platform_product_id: null,
-            platform_sku_id: e.product_id.split(/[,s]+/).map((v) => v.trim()).filter(Boolean)[0] ?? null,   // 쉼표 목록이면 첫 번째가 기본 ID
+            platform_sku_id: e.product_id.split(/[,\s]+/).map((v) => v.trim()).filter(Boolean)[0] ?? null,   // 쉼표 목록이면 첫 번째가 기본 ID
             price,
             coupon_discount: Number(val.replace(/,/g, '')) || 0,
             platform_sku_id_return: e.sku_id_return?.trim() || null,
