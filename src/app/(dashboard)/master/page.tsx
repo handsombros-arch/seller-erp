@@ -8,6 +8,7 @@ import type { Product, Supplier, SupplierAddress } from '@/types';
 import CsvImportDialog from '@/components/CsvImportDialog';
 import { AddProductDialog } from '@/components/products/AddProductDialog';
 import { AddSkuDialog } from '@/components/products/AddSkuDialog';
+import { MasterQuickEdit } from './_components/MasterQuickEdit';
 
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -646,7 +647,7 @@ function SuppliersTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function MasterPage() {
-  const [tab, setTab] = useTabParam('tab', ['master', 'discount', 'supplier'] as const, 'master');
+  const [tab, setTab] = useTabParam('tab', ['quick', 'master', 'discount', 'supplier'] as const, 'quick');
   const [rows, setRows] = useState<UnifiedRow[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -1204,7 +1205,7 @@ export default function MasterPage() {
           </div>
           <Tabs
             className="border-b-0 shrink-0"
-            items={[{ value: 'master', label: 'SKU 마스터' }, { value: 'discount', label: '반품 할인율' }, { value: 'supplier', label: '공급처' }]}
+            items={[{ value: 'quick', label: '빠른 입력' }, { value: 'master', label: '전체 보기' }, { value: 'discount', label: '반품 할인율' }, { value: 'supplier', label: '공급처' }]}
             value={tab}
             onChange={setTab}
           />
@@ -1248,6 +1249,9 @@ export default function MasterPage() {
           </div>
         )}
       </div>
+
+      {/* 빠른 입력 탭 — 수기 칸만 모은 화면 */}
+      {tab === 'quick' && <MasterQuickEdit />}
 
       {/* 반품 할인율 탭 */}
       {tab === 'discount' && <GradeDiscountTab skuOptions={skuOptions} />}
