@@ -19,6 +19,7 @@ import { CostUpload } from './_components/CostUpload';
 import { AdCoverageCard } from './_components/AdCoverageCard';
 import { UnregisteredCard } from './_components/UnregisteredCard';
 import { EmptyBoxCard } from './_components/EmptyBoxCard';
+import { DataCoverageCard } from './_components/DataCoverageCard';
 import { TrendPL } from './_components/TrendPL';
 import { DrillDown } from './_components/DrillDown';
 import { AnalysisView } from './_components/AnalysisView';
@@ -137,6 +138,7 @@ function SettlementInner() {
       )}
       {tab === 'input' && (
         <div className="space-y-4">
+          <DataCoverageCard selectedYm={selectedYm} refreshKey={dataKey} />
           <StepGuide selectedYm={selectedYm} saved={data.months.includes(selectedYm)} salesPlatforms={data.salesPlatforms as Market[]} adReady={data.adMonths.some(m => m.year_month === selectedYm)} />
           {!data.loading && <UnregisteredCard selectedYm={selectedYm} onRegistered={() => setDataKey(k => k + 1)} />}
           <CostUpload selectedYm={selectedYm} onApply={() => setDataKey(k => k + 1)} closed={!!closedMonths[selectedYm]} />

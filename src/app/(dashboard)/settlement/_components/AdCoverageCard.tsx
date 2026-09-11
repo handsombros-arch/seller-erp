@@ -59,7 +59,11 @@ export function AdCoverageCard({ selectedYm, months: monthsProp, onSaved }: { se
       if (!rows.length) { toast.warning('이 PC 브라우저에 광고 raw 가 없습니다. 광고 분석 페이지에서 보고서를 먼저 올려 주세요.'); return; }
       const agg = aggregateLocalAdRows(rows);
       const yms = Object.keys(agg).sort();
-      const info = { rows: rows.length, months: yms };
+      // 달별 raw 날짜 수 — 데이터 현황판에서 "며칠치가 있는지" 보여주기 위해
+      const dayset = new Map<string, Set<string>>();
+      for (const r of rows) { const d = String((r as Record<string, unknown>)['날짜'] ?? '').replace(/\D/g, ''); if (d.length >= 8) { const m = `${d.slice(0, 4)}-${d.slice(4, 6)}`; const s = dayset.get(m) ?? new Set(); s.add(d.slice(0, 8)); dayset.set(m, s); } }
+      const daysByMonth = Object.fromEntries([...dayset.entries()].map(([m, s]) => [m, s.size]));
+      const info = { rows: rows.length, months: yms, daysByMonth };
       setLocalInfo(info);
       try { localStorage.setItem(LOCAL_INFO_KEY, JSON.stringify(info)); } catch {}
       let saved = 0;
