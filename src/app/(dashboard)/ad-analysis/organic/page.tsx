@@ -115,7 +115,18 @@ export default function OrganicPage() {
   }, [rows, ads, group, basis]);
   const tot = useMemo(() => table.reduce((s, t) => ({ gross: s.gross + t.gross, cancel: s.cancel + t.cancel, empty: s.empty + t.empty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, netRevenue: s.netRevenue + t.netRevenue, cost: s.cost + t.cost, visitors: s.visitors + t.visitors, orders: s.orders + t.orders }), { gross: 0, cancel: 0, empty: 0, net: 0, ad: 0, revenue: 0, netRevenue: 0, cost: 0, visitors: 0, orders: 0 }), [table]);
   const orgTot = Math.max(0, tot.gross - tot.ad);
-  const byMethod = useMemo(() => { const out: Record<string, { gross: number; net: number; empty: number; ad: number; netRevenue: number; cost: number }> = {}; for (const t of table) for (const m of t.method.split('+')) { if (!m) continue; const share = t.method.includes('+') ? 0 : 1; const o = out[m] ?? (out[m] = { gross: 0, net: 0, empty: 0, ad: 0, netRevenue: 0, cost: 0 }); if (share) { o.gross += t.gross; o.net += t.net; o.empty += t.empty; o.ad += t.adQ; o.netRevenue += t.netRevenue; o.cost += t.cost; } } return out; }, [table]);
+  // 판매방식별(통합·그로스·윙) 요약 — 보기 방식과 무관하게 원 행에서 직접 집계
+  const byMethod = useMemo(() => {
+    const out: Record<string, { gross: number; net: number; empty: number; ad: number; netRevenue: number; cost: number }> = {};
+    const add = (k: string, r: Row) => {
+      const o = out[k] ?? (out[k] = { gross: 0, net: 0, empty: 0, ad: 0, netRevenue: 0, cost: 0 });
+      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = Number(r.empty_qty) || 0; const unit = r.qty > 0 ? r.revenue / r.qty : 0;
+      o.gross += gross; o.net += Math.max(0, gross - cancel - empty); o.empty += empty; o.netRevenue += Math.max(0, r.revenue - empty * unit);
+      const a = ads?.get(r.vendor_item_id); if (a) { o.ad += basis === '1d' ? a.q1 : a.q14; o.cost += a.cost; }
+    };
+    for (const r of rows) { add('통합', r); const m = methodLabel(r.sales_method); if (m) add(m, r); }
+    return out;
+  }, [rows, ads, basis]);
 
   async function saveEmpty(rowId: string, v: string) {
     const n = Math.max(0, Number(v.replace(/[^0-9]/g, '')) || 0);
@@ -209,11 +220,13 @@ export default function OrganicPage() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             {kpis.map(k => <div key={k.l} className={cn('rounded-xl border border-line px-3 py-2', k.hi && 'bg-brand-bg/50 border-brand/30')}><div className="text-[11px] text-fg-4">{k.l}</div><div className="text-[18px] font-bold text-fg tabular-nums">{k.v}</div><div className="text-[11px] text-fg-3">{k.s}</div></div>)}
           </div>
-          {Object.keys(byMethod).length > 1 && (
-            <div className="flex flex-wrap gap-2 text-[11px]">
-              {Object.entries(byMethod).map(([m, v]) => <span key={m} className="rounded-lg border border-line px-2.5 py-1 text-fg-3"><b className="text-fg">{m}</b> 총 {fmt(v.gross)} · 순 {fmt(v.net)}{v.empty ? ` (빈박스 ${fmt(v.empty)})` : ''} · 광고 {fmt(v.ad)} · 오가닉 {pct(v.gross ? (Math.max(0, v.gross - v.ad) / v.gross) * 100 : null)} · ROAS {pct(v.cost ? (v.netRevenue / v.cost) * 100 : null)}</span>)}
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {['통합', '그로스', '윙'].map(m => { const v = byMethod[m]; const roas = v && v.cost ? (v.netRevenue / v.cost) * 100 : null; const org = v && v.gross ? (Math.max(0, v.gross - v.ad) / v.gross) * 100 : null;
+              return <div key={m} className={cn('rounded-xl border px-3 py-2', m === '통합' ? 'border-brand/40 bg-brand-bg/40' : 'border-line')}>
+                <div className="flex items-baseline gap-2"><span className="text-[12px] font-bold text-fg">{m} ROAS</span><span className={cn('text-[20px] font-bold tabular-nums', roas == null ? 'text-fg-5' : roas < 300 ? 'text-danger' : roas >= 500 ? 'text-success' : 'text-fg')}>{v ? pct(roas) : '-'}</span></div>
+                {v ? <div className="text-[11px] text-fg-3 mt-0.5">순매출 {fmt(v.netRevenue)}원 ÷ 광고비 {fmt(v.cost)}원 · 순판매 {fmt(v.net)}개{v.empty ? ` (빈박스 ${fmt(v.empty)} 제외)` : ''} · 광고 {fmt(v.ad)} · 오가닉 {pct(org)}</div> : <div className="text-[11px] text-fg-5 mt-0.5">이 기간 {m} 판매 없음</div>}
+              </div>; })}
+          </div>
           <p className="text-[11px] text-fg-4">당일 전환은 광고 클릭 당일 판매만 잡아 오가닉이 조금 크게, 14일 전환은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다. 광고 raw 의 전환 수는 보고서를 나중에 다시 내려받으면 늘어나므로(14일 귀속) 최신 보고서를 광고 분석에 다시 올려 두는 게 정확합니다.</p>
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> : (
