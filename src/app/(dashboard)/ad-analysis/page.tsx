@@ -2065,96 +2065,15 @@ export default function AdAnalysisPage() {
               </div>
             ) : (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[12px] text-amber-700">
-                순이익 계산 불가 — 마스터시트 &gt; 플랫폼 탭에서 해당 상품의 <strong>원가(cost_price)</strong>를 입력하세요.
+                {t.orders14d === 0
+                  ? <>이 기간에 광고 전환 주문이 없어 매출·순이익이 0 입니다. (마스터 판매가·원가는 전환 주문 수에 곱해서 계산되므로, 주문이 생기면 채워집니다)</>
+                  : data.unmatchedOptionIds.length > 0
+                    ? <>전환 주문이 있는 옵션ID 중 마스터에 없는 것이 있어 순이익을 계산할 수 없습니다. 정산 › 입력 탭의 <strong>등록 필요</strong> 큐에서 연결하거나(일반 옵션), 반품 재판매 옵션이면 재고 관리 › 로켓그로스에서 <strong>반품 등급</strong>으로 등록하세요.</>
+                    : <>매출은 있는데 원가가 비어 있습니다. 마스터 시트에서 해당 SKU 의 <strong>원가</strong>를 입력하세요.</>}
                 {data.unmatchedOptionIds.length > 0 && (
-                  <span className="ml-2">매칭 실패 옵션ID: {data.unmatchedOptionIds.join(', ')}</span>
+                  <span className="ml-2">미등록 옵션ID: {data.unmatchedOptionIds.join(', ')}</span>
                 )}
-              </div>
-            );
-          })()}
-
-          {/* Rule-based Insights */}
-          {(() => {
-            const insights: { type: 'danger' | 'warn' | 'good'; text: string }[] = [];
-            const ctr = t.impressions > 0 ? t.clicks / t.impressions : 0;
-            const cvr = t.clicks > 0 ? t.orders14d / t.clicks : 0;
-            const roas = t.cost > 0 ? t.revenue14d / t.cost : 0;
-            const cpc = t.clicks > 0 ? Math.round(t.cost / t.clicks) : 0;
-            const commission = t.commission14d ?? 0;
-            const profit = t.revenue14d - t.cogs14d - commission - t.cost;
-
-            // Overall ROAS
-            if (roas > 0 && roas < 1) insights.push({ type: 'danger', text: `전체 ROAS ${roas.toFixed(2)} — 광고비 대비 매출 적자. 저효율 키워드 정리 필요` });
-            else if (roas >= 1 && roas < 2) insights.push({ type: 'warn', text: `전체 ROAS ${roas.toFixed(2)} — 원가/수수료 고려 시 실질 수익 미미. 키워드 최적화 권장` });
-            else if (roas >= 3) insights.push({ type: 'good', text: `전체 ROAS ${roas.toFixed(2)} — 양호. 광고비 증액 여지 있음` });
-
-            // Profit
-            if (t.cogs14d > 0 && profit < 0) insights.push({ type: 'danger', text: `순이익 ${fmtW(profit)} 적자 — 광고비(${fmtW(t.cost)}) 또는 원가 구조 점검 필요` });
-
-            // CTR
-            if (ctr > 0 && ctr < 0.005) insights.push({ type: 'warn', text: `CTR ${(ctr*100).toFixed(2)}% 낮음 — 광고 소재(썸네일/타이틀) 개선 권장` });
-            else if (ctr >= 0.02) insights.push({ type: 'good', text: `CTR ${(ctr*100).toFixed(2)}% 우수 — 소재 경쟁력 양호` });
-
-            // CVR
-            if (cvr > 0 && cvr < 0.01) insights.push({ type: 'warn', text: `CVR ${(cvr*100).toFixed(2)}% 저조 — 상세페이지/가격/리뷰 점검 필요` });
-
-            // Per-keyword insights
-            const topKw = dateFiltered.keywords.filter(k => k.cost > 0).sort((a, b) => {
-              const ra = a.cost > 0 ? a.revenue14d / a.cost : 0;
-              const rb = b.cost > 0 ? b.revenue14d / b.cost : 0;
-              return ra - rb;
-            });
-
-            // Worst keywords (ROAS < 0.5, cost > 5% of total)
-            const worstKws = topKw.filter(k => {
-              const r = k.cost > 0 ? k.revenue14d / k.cost : 0;
-              return r < 0.5 && k.cost > t.cost * 0.05;
-            });
-            if (worstKws.length > 0) {
-              const names = worstKws.slice(0, 3).map(k => `"${k.keyword}"(ROAS ${k.cost > 0 ? (k.revenue14d / k.cost).toFixed(1) : '0'})`).join(', ');
-              const totalWaste = worstKws.reduce((s, k) => s + k.cost, 0);
-              insights.push({ type: 'danger', text: `비효율 키워드: ${names} → 광고비 ${fmtW(totalWaste)} 낭비. 중단 또는 입찰가 조정 권장` });
-            }
-
-            // Best keywords (ROAS > 3, has orders)
-            const bestKws = topKw.filter(k => {
-              const r = k.cost > 0 ? k.revenue14d / k.cost : 0;
-              return r > 3 && k.orders14d > 0;
-            }).reverse();
-            if (bestKws.length > 0) {
-              const names = bestKws.slice(0, 3).map(k => `"${k.keyword}"(ROAS ${(k.revenue14d / k.cost).toFixed(1)})`).join(', ');
-              insights.push({ type: 'good', text: `고효율 키워드: ${names} → 입찰가 상향 또는 예산 집중 권장` });
-            }
-
-            // High CPC warning
-            if (cpc > 500 && roas < 2) insights.push({ type: 'warn', text: `CPC ${fmtW(cpc)} 높음 + ROAS 낮음 — 경쟁 키워드 대신 롱테일 키워드 활용 고려` });
-
-            // Product-level insight
-            const prodMap = new Map<string, { cost: number; revenue: number; orders: number }>();
-            for (const r of dateFiltered.rows) {
-              const p = prodMap.get(r.product) ?? { cost: 0, revenue: 0, orders: 0 };
-              p.cost += r.cost; p.revenue += r.revenue14d; p.orders += r.orders14d;
-              prodMap.set(r.product, p);
-            }
-            for (const [name, p] of prodMap) {
-              const pr = p.cost > 0 ? p.revenue / p.cost : 0;
-              if (pr < 0.5 && p.cost > t.cost * 0.15) {
-                insights.push({ type: 'danger', text: `"${name.slice(0, 20)}" ROAS ${pr.toFixed(1)} — 광고비 비중 ${Math.round(p.cost / t.cost * 100)}%인데 효율 낮음. 예산 재배분 고려` });
-              }
-            }
-
-            if (insights.length === 0) return null;
-            const colors = { danger: 'bg-red-50 border-red-200 text-red-700', warn: 'bg-amber-50 border-amber-200 text-amber-700', good: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
-            const icons = { danger: '!', warn: '?', good: '+' };
-            return (
-              <div className="bg-card rounded-[18px] border border-line p-5 space-y-2">
-                <h3 className="text-[13px] font-bold text-fg">자동 인사이트</h3>
-                {insights.map((ins, i) => (
-                  <div key={i} className={`${colors[ins.type]} border rounded-lg px-3 py-2 text-[12px] flex items-start gap-2`}>
-                    <span className="font-bold shrink-0 w-4 text-center">{icons[ins.type]}</span>
-                    <span>{ins.text}</span>
-                  </div>
-                ))}
+                <span className="ml-2 text-amber-600">마스터를 방금 고쳤다면 이 페이지를 새로고침하세요 (판매가·원가는 페이지를 열 때 읽습니다).</span>
               </div>
             );
           })()}
