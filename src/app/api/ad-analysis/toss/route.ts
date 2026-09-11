@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { aggregateToss, toYm } from '@/lib/settlement/tossAgg';
 
 // GET: 저장된 토스 광고 데이터 조회
 export async function GET() {
@@ -39,7 +40,11 @@ export async function POST(req: NextRequest) {
   // upsert (중복 스킵)
   const { error } = await admin.from('toss_ad_rows').upsert(payload, { onConflict: 'dedup_key', ignoreDuplicates: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ inserted: payload.length });
+  // 올라온 달의 월 집계를 바로 갱신 (정산·드릴다운이 raw 를 다시 훑지 않도록)
+  const months = [...new Set(rows.map((r: any) => toYm(r['일자'])).filter(Boolean))] as string[];
+  let aggregated: unknown = null;
+  try { aggregated = months.length ? await aggregateToss(admin, user.id, months) : null; } catch (e: unknown) { aggregated = { error: e instanceof Error ? e.message : String(e) }; }
+  return NextResponse.json({ inserted: payload.length, aggregated });
 }
 
 // DELETE: 사용자 전체 삭제 (재업로드 전 리셋)

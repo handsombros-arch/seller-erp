@@ -22,11 +22,27 @@ export function AdCoverageCard({ selectedYm, months: monthsProp, onSaved }: { se
   const [localInfo, setLocalInfo] = useState<{ rows: number; months: string[] } | null>(null);
   const toast = useToast();
 
+  const [tossMonths, setTossMonths] = useState<MonthRow[] | null>(null);
+  const [tossBusy, setTossBusy] = useState(false);
   const load = useCallback(() => {
     fetch('/api/settlement/product-ads?months=1').then(r => r.json()).then(j => {
       setMonths(Array.isArray(j.months) ? j.months : []);
     }).catch(() => setMonths([]));
+    fetch('/api/settlement/product-ads?months=1&platform=toss').then(r => r.json()).then(j => setTossMonths(Array.isArray(j.months) ? j.months : [])).catch(() => setTossMonths([]));
   }, []);
+  useEffect(() => { fetch('/api/settlement/product-ads?months=1&platform=toss').then(r => r.json()).then(j => setTossMonths(Array.isArray(j.months) ? j.months : [])).catch(() => setTossMonths([])); }, []);
+  /** 토스: raw(toss_ad_rows) 는 이미 DB 에 있으므로 서버에서 월 집계만 다시 만든다 (업로드 때 자동, 여기선 전체 재집계) */
+  async function reaggregateToss() {
+    setTossBusy(true);
+    try {
+      const r = await fetch('/api/settlement/product-ads/aggregate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ platform: 'toss' }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(`토스 재집계 실패: ${j.error ?? r.status}`); return; }
+      const ms = Object.keys(j.months ?? {}).sort();
+      toast.success(`토스 광고 월 집계 ${ms.length}개월 저장 (raw ${fmtNum(j.rawRows ?? 0)}행)`);
+      load(); onSaved?.();
+    } finally { setTossBusy(false); }
+  }
   useEffect(() => { if (!monthsProp) load(); }, [load, monthsProp]);
 
   // 이 PC 브라우저의 raw 보유 현황 — IndexedDB 전체(수십만 행)를 읽으면 화면이 수 초 멈추므로
@@ -97,6 +113,14 @@ export function AdCoverageCard({ selectedYm, months: monthsProp, onSaved }: { se
           );
         })}
         <span className="text-[11px] text-fg-4 ml-1">✓ DB 저장됨 · PC 이 브라우저에만 있음</span>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+        <span className="text-[11px] font-semibold text-fg-3 w-8">토스</span>
+        {recent.map(ym => { const m = (tossMonths ?? []).find(x => x.year_month === ym); const sel = ym === selectedYm;
+          return <span key={ym} title={m ? `월 집계 ${fmtNum(m.rows_count)}건 · 광고비 ${fmtNum(m.cost)}원` : '집계 없음 — 광고 분석 > 토스에 보고서를 올리면 자동 집계'}
+            className={cn('h-7 px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 border', m ? 'bg-success/10 text-success border-success/20' : 'bg-app text-fg-4 border-transparent', sel && 'ring-2 ring-brand/30')}>{ym.slice(2).replace('-', '.')}{m ? ' ✓' : ''}</span>; })}
+        <button onClick={reaggregateToss} disabled={tossBusy} className="ml-1 text-[11px] text-brand hover:underline disabled:opacity-50 flex items-center gap-1" title="DB 의 토스 raw 전체를 월별로 다시 집계합니다 (마스터 매칭을 고친 뒤에도 누르세요)">{tossBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} 토스 raw → 월 집계 재저장</button>
+        <span className="text-[11px] text-fg-4">토스 raw 는 <Link href="/ad-analysis/toss" className="text-brand hover:underline">광고 분석 › 토스</Link>에 올리면 DB 에 저장되고 그 달이 자동 집계됩니다.</span>
       </div>
       {months && months.length > 0 && !cur ? (
         <p className="mt-2 text-[11px] text-warn">{selectedYm.replace('-', '.')} 광고 집계가 DB 에 없습니다.{localHasCur ? ' 이 PC 에 raw 가 있으니 위 버튼을 누르면 저장됩니다.' : ' 광고 분석에 해당 월 보고서를 먼저 올려 주세요.'}</p>
