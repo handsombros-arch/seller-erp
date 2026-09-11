@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { InfoTip } from '@/components/ui/info-tip';
 import { cn } from '@/lib/utils';
 import { readLocalAdRows } from '../../settlement/_lib/adRawLocal';
 
@@ -231,22 +232,23 @@ export default function OrganicPage() {
   const td = 'px-2 text-right tabular-nums';
   const basisLabel = basis === '1d' ? '당일' : '14일';
   const filterLabel = methodFilter === 'all' ? '윙+그로스' : `${methodFilter}만`;
+  // 카드 본문(s)에는 금액·비율 같은 사실만, 계산 공식·정책은 ⓘ(info) 호버로
   const salesKpis = [
-    { l: '총 판매 (취소 전)', v: `${fmt(tot.gross)}개`, s: `취소 ${fmt(tot.cancel)} · 빈박스 ${fmt(tot.empty)}` },
-    { l: '순판매', v: `${fmt(tot.net)}개`, s: `순매출 ${fmt(tot.netRevenue)}원`, hi: true },
-    { l: `광고 판매 (${basisLabel} 전환)`, v: `${fmt(tot.ad)}개`, s: `총 판매의 ${pct(tot.gross ? (Math.min(tot.ad, tot.gross) / tot.gross) * 100 : null)}` },
-    { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: `총 판매의 ${pct(tot.gross ? (orgTot / tot.gross) * 100 : null)}`, hi: true },
+    { l: '총 판매 (취소 전)', v: `${fmt(tot.gross)}개`, s: `취소 ${fmt(tot.cancel)} · 빈박스 ${fmt(tot.empty)}`, info: '인사이트 리포트의 총 판매수 (취소 전). 광고 전환 판매도 취소 전 주문 기준이라 같은 잣대로 비교합니다.' },
+    { l: '순판매', v: `${fmt(tot.net)}개`, s: `순매출 ${fmt(tot.netRevenue)}원`, hi: true, info: '순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)\n순매출 = 매출(취소 반영) − 빈박스 × 평균 단가' },
+    { l: `광고 판매 (${basisLabel} 전환)`, v: `${fmt(tot.ad)}개`, s: `총 판매의 ${pct(tot.gross ? (Math.min(tot.ad, tot.gross) / tot.gross) * 100 : null)}`, info: '광고 raw 의 전환 판매수량 (당일 / 14일 귀속). 14일은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다.' },
+    { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: `총 판매의 ${pct(tot.gross ? (orgTot / tot.gross) * 100 : null)}`, hi: true, info: '오가닉 = 총 판매 − 광고 전환 판매. 당일·14일 두 기준 사이가 실제 범위입니다.' },
   ];
   const adKpis = [
-    { l: '광고비 (VAT 포함)', v: `${fmt(tot.cost)}원`, s: `순매출 대비 ${pct(tot.netRevenue ? (tot.cost / tot.netRevenue) * 100 : null)}` },
-    { l: '전체 ROAS', v: pct(totRoas), s: '순매출(오가닉 포함) ÷ 광고비', hi: true, c: roasColor(totRoas) },
-    { l: `광고 ROAS (${useRev1 ? '당일' : '14일'})`, v: pct(totAdRoas), s: `광고 전환매출 ${fmt(tot.adRev)}원 ÷ 광고비`, hi: true, c: roasColor(totAdRoas) },
-    { l: '노출 → 클릭', v: `${fmt(tot.imps)} → ${fmt(tot.clicks)}`, s: `클릭률 ${pct(tot.imps ? (tot.clicks / tot.imps) * 100 : null, 2)}` },
-    { l: '방문자 (인사이트)', v: fmt(tot.visitors), s: tot.visitors ? `구매전환 ${pct((tot.orders / tot.visitors) * 100, 1)}` : '' },
+    { l: '광고비 (VAT 포함)', v: `${fmt(tot.cost)}원`, s: `순매출 대비 ${pct(tot.netRevenue ? (tot.cost / tot.netRevenue) * 100 : null)}`, info: '광고 raw 광고비 × 1.1 (VAT 포함). 집행 옵션ID 기준으로 합산합니다.' },
+    { l: '전체 ROAS', v: pct(totRoas), s: `순매출 ${fmt(tot.netRevenue)}원 기준`, hi: true, c: roasColor(totRoas), info: '전체 ROAS = 순매출(오가닉 포함) ÷ 광고비\n광고가 가게 전체 매출에 만든 효율. 색: 300% 미만 빨강, 500% 이상 초록.' },
+    { l: `광고 ROAS (${useRev1 ? '당일' : '14일'})`, v: pct(totAdRoas), s: `광고 전환매출 ${fmt(tot.adRev)}원 기준`, hi: true, c: roasColor(totAdRoas), info: '광고 ROAS = 광고 전환매출 ÷ 광고비\n쿠팡 광고센터의 ROAS 와 같은 개념 (오가닉 제외).' },
+    { l: '노출 → 클릭', v: `${fmt(tot.imps)} → ${fmt(tot.clicks)}`, s: `클릭률 ${pct(tot.imps ? (tot.clicks / tot.imps) * 100 : null, 2)}`, info: '광고 raw 의 노출수·클릭수 (집행 옵션 기준). 클릭률 = 클릭 ÷ 노출' },
+    { l: '방문자 (인사이트)', v: fmt(tot.visitors), s: tot.visitors ? `구매전환 ${pct((tot.orders / tot.visitors) * 100, 1)}` : '', info: '인사이트 리포트의 방문자·주문. 구매전환 = 주문 ÷ 방문자' },
   ];
-  const Kpi = ({ k }: { k: { l: string; v: string; s: string; hi?: boolean; c?: string } }) => (
+  const Kpi = ({ k }: { k: { l: string; v: string; s: string; hi?: boolean; c?: string; info?: string } }) => (
     <div className={cn('rounded-xl border border-line px-3 py-2.5 min-w-0', k.hi && 'bg-brand-bg/50 border-brand/30')}>
-      <div className="text-[11px] text-fg-4 truncate">{k.l}</div>
+      <div className="text-[11px] text-fg-4 flex items-center gap-0.5 min-w-0"><span className="truncate">{k.l}</span>{k.info && <InfoTip text={k.info} />}</div>
       <div className={cn('text-[18px] font-bold tabular-nums leading-tight mt-0.5 truncate', k.c ?? 'text-fg')}>{k.v}</div>
       <div className="text-[11px] text-fg-3 truncate">{k.s}</div>
     </div>
@@ -336,8 +338,8 @@ export default function OrganicPage() {
               return <div key={m} className={cn('rounded-xl border px-3 py-2.5', active ? 'border-brand/40 bg-brand-bg/40' : 'border-line')}>
                 <div className="flex items-baseline gap-3 flex-wrap">
                   <span className="text-[12px] font-bold text-fg w-10">{m}</span>
-                  <span className="text-[11px] text-fg-4">전체 ROAS <b className={cn('text-[18px] tabular-nums', roasColor(roas))}>{v ? pct(roas) : '-'}</b></span>
-                  <span className="text-[11px] text-fg-4">광고 ROAS <b className={cn('text-[18px] tabular-nums', roasColor(adRoas))}>{v ? pct(adRoas) : '-'}</b></span>
+                  <span className="text-[11px] text-fg-4">전체 ROAS<InfoTip text="순매출(오가닉 포함) ÷ 광고비" /> <b className={cn('text-[18px] tabular-nums', roasColor(roas))}>{v ? pct(roas) : '-'}</b></span>
+                  <span className="text-[11px] text-fg-4">광고 ROAS<InfoTip text="광고 전환매출 ÷ 광고비 (광고센터 ROAS)" /> <b className={cn('text-[18px] tabular-nums', roasColor(adRoas))}>{v ? pct(adRoas) : '-'}</b></span>
                 </div>
                 {v ? <div className="text-[11px] text-fg-3 mt-0.5">순매출 {fmt(v.netRevenue)}원 · 광고비 {fmt(v.cost)}원 · 순판매 {fmt(v.net)}개{v.empty ? ` (빈박스 ${fmt(v.empty)} 제외)` : ''} · 광고 {fmt(v.ad)} · 오가닉 {pct(org)}</div> : <div className="text-[11px] text-fg-5 mt-0.5">이 기간 {m} 판매 없음</div>}
               </div>; })}
