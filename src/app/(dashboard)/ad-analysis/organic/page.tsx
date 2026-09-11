@@ -44,6 +44,7 @@ export default function OrganicPage() {
   const [uploading, setUploading] = useState(false);
   const [uFrom, setUFrom] = useState(''); const [uTo, setUTo] = useState('');
   const [emptyDraft, setEmptyDraft] = useState<Record<string, string>>({});
+  const [emptyByVid, setEmptyByVid] = useState<Record<string, number>>({});   // 빈박스 기록(empty_box_events) 기간 합계 — 정산과 같은 원천
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadPeriods = useCallback(async () => {
@@ -63,6 +64,9 @@ export default function OrganicPage() {
       const j = await fetch(`/api/coupang/insight?from=${sel.period_from}&to=${sel.period_to}`).then(r => r.json()).catch(() => ({ rows: [] }));
       if (cancelled) return;
       setRows(j.rows ?? []); setEmptyDraft({});
+      const eb = await fetch(`/api/empty-box?from=${sel.period_from}&to=${sel.period_to}`).then(r => r.json()).catch(() => ({ byVid: {} }));
+      if (cancelled) return;
+      setEmptyByVid(eb.byVid ?? {});
       const raw = await readLocalAdRows();
       if (cancelled) return;
       const from = sel.period_from.replace(/-/g, ''), to = sel.period_to.replace(/-/g, '');
@@ -101,7 +105,7 @@ export default function OrganicPage() {
       const key = group === 'product' ? pid : group === 'method' ? `${pid}|${meth}` : r.vendor_item_id;
       let t = m.get(key);
       if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', gross: 0, cancel: 0, empty: 0, net: 0, revenue: 0, netRevenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, rev14: 0, unmatched: false, rowIds: [] }; m.set(key, t); }
-      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = Number(r.empty_qty) || 0;
+      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = emptyByVid[r.vendor_item_id] ?? 0;
       const netQty = Math.max(0, gross - cancel - empty);
       const unit = r.qty > 0 ? r.revenue / r.qty : 0;   // 취소 반영 평균 단가
       t.gross += gross; t.cancel += cancel; t.empty += empty; t.net += netQty; t.revenue += r.revenue; t.netRevenue += Math.max(0, r.revenue - empty * unit); t.visitors += r.visitors; t.orders += r.orders;
@@ -112,7 +116,7 @@ export default function OrganicPage() {
     }
     const list = [...m.values()].map(t => { const adQ = basis === '1d' ? t.ad : t.ad14; const organic = Math.max(0, t.gross - adQ); return { ...t, adQ, organic, organicPct: t.gross > 0 ? (organic / t.gross) * 100 : null, roas: t.cost > 0 ? (t.netRevenue / t.cost) * 100 : null, adRate: t.netRevenue > 0 ? (t.cost / t.netRevenue) * 100 : null, cvr: t.visitors > 0 ? (t.orders / t.visitors) * 100 : null }; });
     return list.sort((a, b) => (a.name === b.name ? (a.method > b.method ? 1 : -1) : b.gross - a.gross));
-  }, [rows, ads, group, basis]);
+  }, [rows, ads, group, basis, emptyByVid]);
   const tot = useMemo(() => table.reduce((s, t) => ({ gross: s.gross + t.gross, cancel: s.cancel + t.cancel, empty: s.empty + t.empty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, netRevenue: s.netRevenue + t.netRevenue, cost: s.cost + t.cost, visitors: s.visitors + t.visitors, orders: s.orders + t.orders }), { gross: 0, cancel: 0, empty: 0, net: 0, ad: 0, revenue: 0, netRevenue: 0, cost: 0, visitors: 0, orders: 0 }), [table]);
   const orgTot = Math.max(0, tot.gross - tot.ad);
   // 판매방식별(통합·그로스·윙) 요약 — 보기 방식과 무관하게 원 행에서 직접 집계
@@ -120,22 +124,25 @@ export default function OrganicPage() {
     const out: Record<string, { gross: number; net: number; empty: number; ad: number; netRevenue: number; cost: number }> = {};
     const add = (k: string, r: Row) => {
       const o = out[k] ?? (out[k] = { gross: 0, net: 0, empty: 0, ad: 0, netRevenue: 0, cost: 0 });
-      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = Number(r.empty_qty) || 0; const unit = r.qty > 0 ? r.revenue / r.qty : 0;
+      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = emptyByVid[r.vendor_item_id] ?? 0; const unit = r.qty > 0 ? r.revenue / r.qty : 0;
       o.gross += gross; o.net += Math.max(0, gross - cancel - empty); o.empty += empty; o.netRevenue += Math.max(0, r.revenue - empty * unit);
       const a = ads?.get(r.vendor_item_id); if (a) { o.ad += basis === '1d' ? a.q1 : a.q14; o.cost += a.cost; }
     };
     for (const r of rows) { add('통합', r); const m = methodLabel(r.sales_method); if (m) add(m, r); }
     return out;
-  }, [rows, ads, basis]);
+  }, [rows, ads, basis, emptyByVid]);
 
-  async function saveEmpty(rowId: string, v: string) {
+  /** 빈박스 입력 → empty_box_events (기간 합계가 n 이 되도록 기간 마지막 날 기록). 정산 월 빈박스도 같이 갱신된다 */
+  async function saveEmpty(vid: string, v: string) {
+    if (!sel) return;
     const n = Math.max(0, Number(v.replace(/[^0-9]/g, '')) || 0);
-    const cur = rows.find(r => r.id === rowId); if (!cur || (Number(cur.empty_qty) || 0) === n) return;
-    const r = await fetch('/api/coupang/insight', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId, empty_qty: n }) });
+    if ((emptyByVid[vid] ?? 0) === n) return;
+    const r = await fetch('/api/empty-box', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: sel.period_from, period_to: sel.period_to, vendor_item_id: vid, total: n }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { toast.error(j.error ?? '빈박스 저장 실패'); return; }
-    setRows(prev => prev.map(x => x.id === rowId ? { ...x, empty_qty: n } : x));
-    toast.success(`빈박스 ${n}개 저장`);
+    setEmptyByVid(prev => ({ ...prev, [vid]: Number(j.total) || 0 }));
+    const months = Object.keys(j.synced ?? {}).join(', ');
+    toast.success(`빈박스 ${n}개 저장 — 정산 ${months} 빈박스도 같이 갱신됨`);
   }
 
   async function upload(f: File) {
@@ -201,7 +208,7 @@ export default function OrganicPage() {
           </div>
         )}
         <div className="rounded-xl bg-app px-3 py-2 text-[11px] text-fg-3 leading-relaxed">
-          <b className="text-fg">기준 (정산 앱 공통)</b> · 총 판매 = 인사이트 총 판매수(취소 전) · <b className="text-fg">순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)</b> · 순매출 = 매출(취소 반영) − 빈박스 × 평균 단가 · 오가닉 = 총 판매 − 광고 전환 판매(광고 전환도 취소 전 주문 기준) · <b className="text-fg">ROAS = 순매출 ÷ 광고비(VAT 포함)</b> · 윙(판매자배송)과 그로스는 옵션ID 가 달라 따로 잡히고, 빈박스는 옵션 보기에서 윙 행에 적습니다.
+          <b className="text-fg">기준 (정산 앱 공통)</b> · 총 판매 = 인사이트 총 판매수(취소 전) · <b className="text-fg">순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)</b> · 순매출 = 매출(취소 반영) − 빈박스 × 평균 단가 · 오가닉 = 총 판매 − 광고 전환 판매(광고 전환도 취소 전 주문 기준) · <b className="text-fg">ROAS = 순매출 ÷ 광고비(VAT 포함)</b> · 윙(판매자배송)과 그로스는 옵션ID 가 달라 따로 잡히고, 빈박스는 옵션 보기에서 윙 행에 적습니다. 빈박스는 한 번만 적으면 됩니다 — 여기 기록이 정산 월 빈박스(매입원가·빈박스 환불·재고 되돌리기)에 그대로 쓰입니다.
         </div>
       </section>
 
@@ -245,9 +252,9 @@ export default function OrganicPage() {
                     <td className={cn(td, 'font-semibold')}>{fmt(t.gross)}</td>
                     <td className={cn(td, 'text-fg-4')}>{t.cancel ? fmt(t.cancel) : '-'}</td>
                     <td className="px-1">{group === 'option' && t.rowIds.length === 1 ? (
-                      <input type="text" inputMode="numeric" value={emptyDraft[t.rowIds[0].id] ?? (t.empty ? String(t.empty) : '')} placeholder="0"
-                        onChange={e => setEmptyDraft(d => ({ ...d, [t.rowIds[0].id]: e.target.value.replace(/[^0-9]/g, '') }))}
-                        onBlur={e => saveEmpty(t.rowIds[0].id, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+                      <input type="text" inputMode="numeric" value={emptyDraft[t.rowIds[0].vid] ?? (t.empty ? String(t.empty) : '')} placeholder="0"
+                        onChange={e => setEmptyDraft(d => ({ ...d, [t.rowIds[0].vid]: e.target.value.replace(/[^0-9]/g, '') }))}
+                        onBlur={e => saveEmpty(t.rowIds[0].vid, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
                         title={t.method === '윙' ? '윙(판매자배송) 리뷰용 빈박스 수량' : '그로스는 보통 0'}
                         className={cn('h-7 w-16 px-2 rounded-lg border text-right text-[12px] tabular-nums focus:outline-none focus:border-brand', t.method === '윙' ? 'border-warn/50 bg-warn/[0.06]' : 'border-line bg-card')} />
                     ) : <span className={cn(td, 'block', t.empty ? 'text-warn font-semibold' : 'text-fg-5')}>{t.empty ? fmt(t.empty) : '-'}</span>}</td>

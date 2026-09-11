@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { restoreEmptyBoxes } from '@/lib/settlement/emptyBox';
 
 interface SalesRow {
   name: string;
@@ -71,38 +72,6 @@ export async function PUT(request: NextRequest) {
   } catch (e: any) {
     return NextResponse.json({ ok: true, saved: rows.length, restoreError: e?.message ?? String(e) });
   }
-}
-
-/**
- * 빈박스 재고 되돌리기. 주문 동기화가 이미 차감했지만 실제로 나가지 않은 수량을 재고에 더한다.
- * 같은 (월, 플랫폼) 의 이전 되돌림을 먼저 취소하고, 현재 저장된 empty_qty 로 다시 적용한다 (멱등).
- */
-async function restoreEmptyBoxes(admin: any, userId: string, yearMonth: string, platform: string): Promise<number> {
-  const EMPTY_PREFIX = `emptybox:${yearMonth}:${platform}:`;
-  let restored = 0;
-  const { data: prev } = await admin.from('inventory_adjustments').select('id, sku_id, warehouse_id, reason').like('reason', `${EMPTY_PREFIX}%`);
-  for (const a of prev ?? []) {
-    const m = /:\+(\d+)$/.exec(String(a.reason)); const q = m ? Number(m[1]) : 0;
-    if (q > 0) {
-      const { data: inv } = await admin.from('inventory').select('quantity').eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id).maybeSingle();
-      const before = Number(inv?.quantity ?? 0);
-      await admin.from('inventory').update({ quantity: before - q, updated_at: new Date().toISOString() }).eq('sku_id', a.sku_id).eq('warehouse_id', a.warehouse_id);
-    }
-    await admin.from('inventory_adjustments').delete().eq('id', a.id);
-  }
-  const { data: rows } = await admin.from('monthly_product_sales').select('sku_id, empty_qty').eq('user_id', userId).eq('year_month', yearMonth).eq('platform', platform).gt('empty_qty', 0);
-  for (const r of rows ?? []) {
-    const q = Number(r.empty_qty) || 0;
-    if (q <= 0 || !r.sku_id) continue;
-    const { data: invs } = await admin.from('inventory').select('warehouse_id, quantity').eq('sku_id', r.sku_id).order('quantity', { ascending: false }).limit(1);
-    const inv = invs?.[0];
-    if (!inv) continue;
-    const before = Number(inv.quantity ?? 0);
-    await admin.from('inventory').update({ quantity: before + q, updated_at: new Date().toISOString() }).eq('sku_id', r.sku_id).eq('warehouse_id', inv.warehouse_id);
-    await admin.from('inventory_adjustments').insert({ sku_id: r.sku_id, warehouse_id: inv.warehouse_id, before_quantity: before, after_quantity: before + q, reason: `${EMPTY_PREFIX}${r.sku_id}:+${q}`, adjusted_by: userId });
-    restored += q;
-  }
-  return restored;
 }
 
 /**

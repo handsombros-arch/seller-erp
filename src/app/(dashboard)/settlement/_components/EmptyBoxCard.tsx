@@ -13,7 +13,7 @@ import { fmtNum, ymLabel } from '../_lib/settlement';
  * 저장하면 그 행의 원가 = 단가 × (수량 − 빈박스) 로 다시 계산되고, 재고가 그만큼 되돌아오며,
  * 시트 "빈박스 - 마켓" 기준값(Σ 빈박스 × 판매가)과 상품별 순이익(마케팅비)에 반영된다. 매출·택배비는 그대로.
  */
-interface Row { id: string; platform: string; display_name: string; qty: number; empty_qty: number | null; unit_cost: number; revenue: number; sku?: { sku_code?: string; product?: { name?: string } | null } | null }
+interface Row { id: string; platform: string; display_name: string; qty: number; empty_qty: number | null; unit_cost: number; revenue: number; vendor_item_id?: string | null; sku?: { sku_code?: string; product?: { name?: string } | null } | null }
 
 const PLATFORM_LABEL: Record<string, string> = { coupang: '쿠팡', toss: '토스', smartstore: '스스', esm: 'ESM' };
 
@@ -51,7 +51,14 @@ export function EmptyBoxCard({ selectedYm, closed, onSaved }: { selectedYm: stri
     if (v === (Number(r.empty_qty) || 0)) return;
     setSaving(r.id);
     try {
-      const res = await fetch('/api/monthly-product-sales', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, empty_qty: v }) });
+      // 쿠팡(옵션ID 있음)은 빈박스 기록(empty_box_events, 오가닉 탭과 공유)에 적고 정산 행은 자동 동기화. 그 외는 행에 직접
+      let res: Response;
+      if (r.platform === 'coupang' && r.vendor_item_id) {
+        const [y, m] = selectedYm.split('-').map(Number); const last = new Date(y, m, 0).getDate();
+        res = await fetch('/api/empty-box', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period_from: `${selectedYm}-01`, period_to: `${selectedYm}-${String(last).padStart(2, '0')}`, vendor_item_id: r.vendor_item_id, total: v }) });
+      } else {
+        res = await fetch('/api/monthly-product-sales', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, empty_qty: v }) });
+      }
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(j.error ?? '저장 실패'); return; }
       toast.success(`${r.display_name} 빈박스 ${v}개 저장${j.restored != null ? ` · 재고 되돌림 ${j.restored}개` : ''}`);
@@ -71,7 +78,7 @@ export function EmptyBoxCard({ selectedYm, closed, onSaved }: { selectedYm: stri
       </button>
       {open && (
         <div className="mt-3 space-y-2">
-          <p className="text-[11px] text-fg-4">매출 파일을 적용한 행 기준입니다. 매출 파일 미리보기의 빈박스 열에 적어도 같고, 여기서는 적용 뒤에 고칠 수 있습니다. 매출·택배비는 그대로 두고 원가만 빠집니다.{closed ? ' 마감된 달은 수정할 수 없습니다.' : ''}</p>
+          <p className="text-[11px] text-fg-4">매출 파일을 적용한 행 기준입니다. 매출 파일 미리보기의 빈박스 열에 적어도 같고, 여기서는 적용 뒤에 고칠 수 있습니다. 쿠팡은 광고 분석 › 오가닉 vs 광고의 빈박스와 같은 기록이라 한 번만 적으면 됩니다. 매출·택배비는 그대로 두고 원가만 빠집니다.{closed ? ' 마감된 달은 수정할 수 없습니다.' : ''}</p>
           <input lang="ko" value={q} onChange={e => setQ(e.target.value)} placeholder="상품명 · SKU 검색" className={cn(inputClassName, 'h-8 w-72 text-[12px]')} />
           {loading ? <div className="py-4 text-center text-fg-4 text-[12px]"><Loader2 className="h-4 w-4 animate-spin inline mr-1" />불러오는 중</div>
           : rows.length === 0 ? <div className="py-4 text-center text-fg-4 text-[12px]">이 달 적용된 매출 파일 행이 없습니다. 먼저 매출 파일을 올려 적용하세요.</div>
