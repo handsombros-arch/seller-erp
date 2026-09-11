@@ -11,19 +11,23 @@ import { readLocalAdRows } from '../../settlement/_lib/adRawLocal';
 
 /**
  * 오가닉 vs 광고 — 쿠팡 비즈니스 인사이트(총 판매) 와 광고 raw(광고 전환 판매)를 옵션ID 로 맞댄다.
- *  - 총 판매·매출·방문자·전환율: 인사이트 상품별 판매 리포트 (기간 합계, 취소 반영 판매량)
- *  - 광고 판매: 이 PC 의 광고 raw 에서 같은 기간의 '총 판매수량(1일)'(당일 전환) 과 '(14일)' 을 옵션ID 로 합산
- *  - 오가닉 = 총 판매 − 광고 판매(당일). 14일 기준은 광고일 귀속이라 기간 경계에서 앞뒤로 새므로 참고로만.
+ * 기준(정산 앱 공통):
+ *  - 총 판매 = 인사이트 '총 판매수' (취소 전). 광고 전환 판매도 취소 전 주문 기준이라 같은 잣대.
+ *  - 순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송). 순매출 = 매출(원, 취소 반영) − 빈박스 × 평균 단가.
+ *  - 오가닉 = 총 판매 − 광고 전환 판매(당일 / 14일). 두 기준 사이가 실제 범위.
+ *  - ROAS(순) = 순매출 ÷ 광고비(VAT 포함). 광고 효율은 이 값으로 본다.
+ *  - 윙(판매자배송)과 그로스는 옵션ID 가 달라 따로 집계되며, 빈박스는 윙 옵션 행에 적는다.
  */
 interface Period { period_from: string; period_to: string; rows: number; qty: number; revenue: number; updated_at: string }
-interface Row { vendor_item_id: string; option_name: string | null; product_name: string | null; sales_method: string | null; revenue: number; orders: number; qty: number; gross_qty: number; visitors: number; views: number; conv_rate: number | null; cancel_qty: number; sku_id: string | null; sku?: { sku_code: string; option_values?: Record<string, string> | null; product?: { id: string; name: string } | null } | null }
+interface Row { id: string; vendor_item_id: string; option_name: string | null; product_name: string | null; sales_method: string | null; revenue: number; orders: number; qty: number; gross_qty: number; cancel_qty: number; empty_qty?: number | null; visitors: number; views: number; sku_id: string | null; sku?: { sku_code: string; option_values?: Record<string, string> | null; product?: { id: string; name: string } | null } | null }
 interface AdAgg { q1: number; q14: number; cost: number; clicks: number; rev14: number }
 type Basis = '1d' | '14d';
-type Group = 'product' | 'option';
+type Group = 'product' | 'method' | 'option';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ko-KR');
 const pct = (n: number | null) => n == null || !isFinite(n) ? '-' : `${n.toFixed(0)}%`;
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const methodLabel = (m: string | null) => m === '로켓그로스' ? '그로스' : m === '판매자배송' ? '윙' : (m ?? '');
 
 export default function OrganicPage() {
   const toast = useToast();
@@ -36,9 +40,10 @@ export default function OrganicPage() {
   const [adInfo, setAdInfo] = useState<{ rows: number; days: number; missingDays: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [basis, setBasis] = useState<Basis>('1d');
-  const [group, setGroup] = useState<Group>('product');
+  const [group, setGroup] = useState<Group>('method');
   const [uploading, setUploading] = useState(false);
   const [uFrom, setUFrom] = useState(''); const [uTo, setUTo] = useState('');
+  const [emptyDraft, setEmptyDraft] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadPeriods = useCallback(async () => {
@@ -57,7 +62,7 @@ export default function OrganicPage() {
     (async () => {
       const j = await fetch(`/api/coupang/insight?from=${sel.period_from}&to=${sel.period_to}`).then(r => r.json()).catch(() => ({ rows: [] }));
       if (cancelled) return;
-      setRows(j.rows ?? []);
+      setRows(j.rows ?? []); setEmptyDraft({});
       const raw = await readLocalAdRows();
       if (cancelled) return;
       const from = sel.period_from.replace(/-/g, ''), to = sel.period_to.replace(/-/g, '');
@@ -65,20 +70,18 @@ export default function OrganicPage() {
       // 키워드 보고서('-' 비검색)가 있는 날의 비검색 일별 행('')은 중복 → 제외 (광고 분석·월 집계와 같은 규칙)
       const kwDates = new Set<string>();
       for (const r of raw) if (String(r['키워드'] ?? '').trim() === '-' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역') kwDates.add(String(r['날짜'] ?? ''));
+      const get = (k: string) => { let a = agg.get(k); if (!a) { a = { q1: 0, q14: 0, cost: 0, clicks: 0, rev14: 0 }; agg.set(k, a); } return a; };
       for (const r of raw) {
         const d = String(r['날짜'] ?? '').replace(/\D/g, '').slice(0, 8); if (d < from || d > to) continue;
         const kw = String(r['키워드'] ?? '').trim();
         if (kw === '' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역' && kwDates.has(String(r['날짜'] ?? ''))) continue;
         days.add(d);
-        const vid = String(r['광고전환매출발생 옵션ID'] ?? '').replace(/\.0$/, '').trim(); if (!vid) continue;
-        const a = agg.get(vid) ?? { q1: 0, q14: 0, cost: 0, clicks: 0, rev14: 0 };
-        a.q1 += Number(r['총 판매수량(1일)']) || 0; a.q14 += Number(r['총 판매수량(14일)']) || 0; a.rev14 += Number(r['총 전환매출액(14일)']) || 0; a.clicks += Number(r['클릭수']) || 0;
-        // 광고비는 집행 옵션 기준 — 전환 옵션과 다를 수 있어 집행 옵션ID 에 붙인다
-        const execVid = String(r['광고집행 옵션ID'] ?? '').replace(/\.0$/, '').trim() || vid;
-        const e = agg.get(execVid) ?? { q1: 0, q14: 0, cost: 0, clicks: 0, rev14: 0 }; e.cost += (Number(r['광고비']) || 0) * 1.1; if (execVid !== vid) agg.set(execVid, e); else a.cost += (Number(r['광고비']) || 0) * 1.1;
-        agg.set(vid, a);
+        const conv = String(r['광고전환매출발생 옵션ID'] ?? '').replace(/\.0$/, '').trim();
+        const exec = String(r['광고집행 옵션ID'] ?? '').replace(/\.0$/, '').trim();
+        if (conv) { const a = get(conv); a.q1 += Number(r['총 판매수량(1일)']) || 0; a.q14 += Number(r['총 판매수량(14일)']) || 0; a.rev14 += Number(r['총 전환매출액(14일)']) || 0; }
+        // 광고비·클릭은 집행 옵션 기준 (전환 옵션과 다를 수 있음)
+        if (exec || conv) { const e = get(exec || conv); e.cost += (Number(r['광고비']) || 0) * 1.1; e.clicks += Number(r['클릭수']) || 0; }
       }
-      // 기간 안에 raw 가 없는 날
       const missing: string[] = []; const s = new Date(sel.period_from), e = new Date(sel.period_to);
       for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) { const k = ymd(d).replace(/-/g, ''); if (!days.has(k)) missing.push(ymd(d).slice(5)); }
       setAds(agg); setAdInfo({ rows: raw.length, days: days.size, missingDays: missing }); setLoading(false);
@@ -86,30 +89,44 @@ export default function OrganicPage() {
     return () => { cancelled = true; };
   }, [sel]);
 
-  // 표 행 (상품 또는 옵션 단위)
+  // 표 행 (상품 / 상품×판매방식 / 옵션)
+  type T = { key: string; name: string; sub: string; method: string; gross: number; cancel: number; empty: number; net: number; revenue: number; netRevenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; rev14: number; unmatched: boolean; rowIds: { id: string; vid: string; empty: number; method: string }[] };
   const table = useMemo(() => {
-    type T = { key: string; name: string; sub: string; method: string; qty: number; net: number; revenue: number; visitors: number; orders: number; ad: number; ad14: number; cost: number; rev14: number; unmatched: boolean };
     const m = new Map<string, T>();
     for (const r of rows) {
       const pname = r.sku?.product?.name ?? r.product_name ?? '(상품명 없음)';
       const opt = r.sku?.option_values ? Object.values(r.sku.option_values).filter(Boolean).join(' / ') : (r.option_name ?? '');
-      const key = group === 'product' ? (r.sku?.product?.id ?? `__${pname}`) : r.vendor_item_id;
+      const meth = methodLabel(r.sales_method);
+      const pid = r.sku?.product?.id ?? `__${pname}`;
+      const key = group === 'product' ? pid : group === 'method' ? `${pid}|${meth}` : r.vendor_item_id;
       let t = m.get(key);
-      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', qty: 0, net: 0, revenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, rev14: 0, unmatched: false }; m.set(key, t); }
-      // 광고 전환은 취소 전 주문 기준 → 총 판매도 취소 전(총 판매수)으로 맞춘다. 취소 반영 판매량은 따로 표시
-      t.qty += Number(r.gross_qty) || 0; t.net += r.qty; t.revenue += r.revenue; t.visitors += r.visitors; t.orders += r.orders;
+      if (!t) { t = { key, name: pname, sub: group === 'option' ? `${opt || '기본'} · ${r.vendor_item_id}` : '', method: '', gross: 0, cancel: 0, empty: 0, net: 0, revenue: 0, netRevenue: 0, visitors: 0, orders: 0, ad: 0, ad14: 0, cost: 0, rev14: 0, unmatched: false, rowIds: [] }; m.set(key, t); }
+      const gross = Number(r.gross_qty) || 0, cancel = Math.abs(Number(r.cancel_qty) || 0), empty = Number(r.empty_qty) || 0;
+      const netQty = Math.max(0, gross - cancel - empty);
+      const unit = r.qty > 0 ? r.revenue / r.qty : 0;   // 취소 반영 평균 단가
+      t.gross += gross; t.cancel += cancel; t.empty += empty; t.net += netQty; t.revenue += r.revenue; t.netRevenue += Math.max(0, r.revenue - empty * unit); t.visitors += r.visitors; t.orders += r.orders;
+      t.rowIds.push({ id: r.id, vid: r.vendor_item_id, empty, method: meth });
       if (!r.sku_id) t.unmatched = true;
-      const meth = r.sales_method === '로켓그로스' ? '그로스' : r.sales_method === '판매자배송' ? '윙' : (r.sales_method ?? '');
       if (meth && !t.method.includes(meth)) t.method = t.method ? `${t.method}+${meth}` : meth;
       const a = ads?.get(r.vendor_item_id); if (a) { t.ad += a.q1; t.ad14 += a.q14; t.cost += a.cost; t.rev14 += a.rev14; }
     }
-    const list = [...m.values()].map(t => { const adQ = basis === '1d' ? t.ad : t.ad14; const organic = Math.max(0, t.qty - adQ); return { ...t, adQ, organic, organicPct: t.qty > 0 ? (organic / t.qty) * 100 : null, adPct: t.qty > 0 ? (Math.min(adQ, t.qty) / t.qty) * 100 : null, cvr: t.visitors > 0 ? (t.orders / t.visitors) * 100 : null }; });
-    return list.sort((a, b) => b.qty - a.qty);
+    const list = [...m.values()].map(t => { const adQ = basis === '1d' ? t.ad : t.ad14; const organic = Math.max(0, t.gross - adQ); return { ...t, adQ, organic, organicPct: t.gross > 0 ? (organic / t.gross) * 100 : null, roas: t.cost > 0 ? (t.netRevenue / t.cost) * 100 : null, adRate: t.netRevenue > 0 ? (t.cost / t.netRevenue) * 100 : null, cvr: t.visitors > 0 ? (t.orders / t.visitors) * 100 : null }; });
+    return list.sort((a, b) => (a.name === b.name ? (a.method > b.method ? 1 : -1) : b.gross - a.gross));
   }, [rows, ads, group, basis]);
-  const tot = useMemo(() => table.reduce((s, t) => ({ qty: s.qty + t.qty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, cost: s.cost + t.cost, rev14: s.rev14 + t.rev14, visitors: s.visitors + t.visitors }), { qty: 0, net: 0, ad: 0, revenue: 0, cost: 0, rev14: 0, visitors: 0 }), [table]);
-  const orgTot = Math.max(0, tot.qty - tot.ad);
+  const tot = useMemo(() => table.reduce((s, t) => ({ gross: s.gross + t.gross, cancel: s.cancel + t.cancel, empty: s.empty + t.empty, net: s.net + t.net, ad: s.ad + t.adQ, revenue: s.revenue + t.revenue, netRevenue: s.netRevenue + t.netRevenue, cost: s.cost + t.cost, visitors: s.visitors + t.visitors, orders: s.orders + t.orders }), { gross: 0, cancel: 0, empty: 0, net: 0, ad: 0, revenue: 0, netRevenue: 0, cost: 0, visitors: 0, orders: 0 }), [table]);
+  const orgTot = Math.max(0, tot.gross - tot.ad);
+  const byMethod = useMemo(() => { const out: Record<string, { gross: number; net: number; empty: number; ad: number; netRevenue: number; cost: number }> = {}; for (const t of table) for (const m of t.method.split('+')) { if (!m) continue; const share = t.method.includes('+') ? 0 : 1; const o = out[m] ?? (out[m] = { gross: 0, net: 0, empty: 0, ad: 0, netRevenue: 0, cost: 0 }); if (share) { o.gross += t.gross; o.net += t.net; o.empty += t.empty; o.ad += t.adQ; o.netRevenue += t.netRevenue; o.cost += t.cost; } } return out; }, [table]);
 
-  // 업로드 (엑셀 → JSON → API). 기간은 파일에 없어 직접 입력
+  async function saveEmpty(rowId: string, v: string) {
+    const n = Math.max(0, Number(v.replace(/[^0-9]/g, '')) || 0);
+    const cur = rows.find(r => r.id === rowId); if (!cur || (Number(cur.empty_qty) || 0) === n) return;
+    const r = await fetch('/api/coupang/insight', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId, empty_qty: n }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast.error(j.error ?? '빈박스 저장 실패'); return; }
+    setRows(prev => prev.map(x => x.id === rowId ? { ...x, empty_qty: n } : x));
+    toast.success(`빈박스 ${n}개 저장`);
+  }
+
   async function upload(f: File) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(uFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(uTo)) { toast.warning('리포트를 내려받을 때 설정한 기간(시작·끝)을 먼저 넣어 주세요'); return; }
     setUploading(true);
@@ -133,14 +150,23 @@ export default function OrganicPage() {
   }
 
   const th = 'px-2 py-2 text-[11px] font-semibold text-fg-4 whitespace-nowrap text-right bg-card-2';
+  const td = 'px-2 text-right tabular-nums';
+  const kpis = [
+    { l: '총 판매 (취소 전)', v: `${fmt(tot.gross)}개`, s: `취소 ${fmt(tot.cancel)} · 빈박스 ${fmt(tot.empty)}` },
+    { l: '순판매', v: `${fmt(tot.net)}개`, s: `순매출 ${fmt(tot.netRevenue)}원`, hi: true },
+    { l: `광고 판매 (${basis === '1d' ? '당일' : '14일'})`, v: `${fmt(tot.ad)}개`, s: pct(tot.gross ? (Math.min(tot.ad, tot.gross) / tot.gross) * 100 : null) + ' (총 판매 대비)' },
+    { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: pct(tot.gross ? (orgTot / tot.gross) * 100 : null) + ' (총 판매 대비)', hi: true },
+    { l: 'ROAS (순매출 ÷ 광고비)', v: pct(tot.cost ? (tot.netRevenue / tot.cost) * 100 : null), s: `광고비 ${fmt(tot.cost)}원 (VAT 포함) · 광고비율 ${pct(tot.netRevenue ? (tot.cost / tot.netRevenue) * 100 : null)}`, hi: true },
+    { l: '방문자', v: fmt(tot.visitors), s: tot.visitors ? `구매전환 ${pct((tot.orders / tot.visitors) * 100)}` : '' },
+  ];
+
   return (
     <div className="space-y-4">
-      {/* 업로드 + 기간 */}
       <section className="bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] px-5 py-4 space-y-3">
         <div className="flex flex-wrap items-start gap-3">
           <div className="mr-auto">
             <h2 className="text-[15px] font-bold text-fg">오가닉 vs 광고 (쿠팡)</h2>
-            <p className="text-[12px] text-fg-3 mt-0.5">윙 › 비즈니스 인사이트 › 엑셀 다운로드 › 기간 설정 › <b>상품별 판매 리포트</b> 파일을 올리면 총 판매(오가닉+광고)가 들어오고, 이 PC 의 광고 raw 와 옵션ID 로 맞대 오가닉 비중을 냅니다. 파일에 기간이 없어서 내려받을 때 설정한 기간을 같이 넣습니다.</p>
+            <p className="text-[12px] text-fg-3 mt-0.5">윙 › 비즈니스 인사이트 › 엑셀 다운로드 › 기간 설정 › <b>상품별 판매 리포트</b>. 정산 입력의 쿠팡 매출 파일과 같은 파일이며, 정산에서 적용한 달은 여기에도 자동으로 들어옵니다. 파일에 기간이 없어 내려받을 때 설정한 기간을 같이 넣습니다.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <input type="date" value={uFrom} onChange={e => setUFrom(e.target.value)} className="h-9 px-2 rounded-lg border border-line text-[12px]" title="리포트 기간 시작" />
@@ -163,6 +189,9 @@ export default function OrganicPage() {
               </span>; })}
           </div>
         )}
+        <div className="rounded-xl bg-app px-3 py-2 text-[11px] text-fg-3 leading-relaxed">
+          <b className="text-fg">기준 (정산 앱 공통)</b> · 총 판매 = 인사이트 총 판매수(취소 전) · <b className="text-fg">순판매 = 총 판매 − 취소 − 빈박스(리뷰용 발송)</b> · 순매출 = 매출(취소 반영) − 빈박스 × 평균 단가 · 오가닉 = 총 판매 − 광고 전환 판매(광고 전환도 취소 전 주문 기준) · <b className="text-fg">ROAS = 순매출 ÷ 광고비(VAT 포함)</b> · 윙(판매자배송)과 그로스는 옵션ID 가 달라 따로 잡히고, 빈박스는 옵션 보기에서 윙 행에 적습니다.
+        </div>
       </section>
 
       {sel && (
@@ -174,50 +203,61 @@ export default function OrganicPage() {
             </div>
             <span className="text-[11px] text-fg-4">광고 판매 기준</span>
             <SegmentedControl items={[{ value: '1d', label: '당일 전환' }, { value: '14d', label: '14일 전환' }] as const} value={basis} onChange={setBasis} />
-            <SegmentedControl items={[{ value: 'product', label: '상품' }, { value: 'option', label: '옵션' }] as const} value={group} onChange={setGroup} />
+            <SegmentedControl items={[{ value: 'product', label: '상품' }, { value: 'method', label: '상품 × 윙/그로스' }, { value: 'option', label: '옵션 (빈박스 입력)' }] as const} value={group} onChange={setGroup} />
           </div>
 
-          {/* KPI */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {[
-              { l: '총 판매 (취소 전)', v: `${fmt(tot.qty)}개`, s: `취소 반영 ${fmt(tot.net)}개 · 매출 ${fmt(tot.revenue)}원` },
-              { l: `광고 판매 (${basis === '1d' ? '당일' : '14일'})`, v: `${fmt(tot.ad)}개`, s: pct(tot.qty ? (Math.min(tot.ad, tot.qty) / tot.qty) * 100 : null) },
-              { l: '오가닉 판매', v: `${fmt(orgTot)}개`, s: pct(tot.qty ? (orgTot / tot.qty) * 100 : null), hi: true },
-              { l: '광고비 (VAT 포함)', v: `${fmt(tot.cost)}원`, s: tot.revenue ? `매출 대비 ${pct((tot.cost / tot.revenue) * 100)}` : '' },
-              { l: '방문자', v: fmt(tot.visitors), s: tot.visitors ? `구매전환 ${pct((table.reduce((s, t) => s + t.orders, 0) / tot.visitors) * 100)}` : '' },
-            ].map(k => <div key={k.l} className={cn('rounded-xl border border-line px-3 py-2', k.hi && 'bg-brand-bg/50 border-brand/30')}><div className="text-[11px] text-fg-4">{k.l}</div><div className="text-[18px] font-bold text-fg tabular-nums">{k.v}</div><div className="text-[11px] text-fg-3">{k.s}</div></div>)}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            {kpis.map(k => <div key={k.l} className={cn('rounded-xl border border-line px-3 py-2', k.hi && 'bg-brand-bg/50 border-brand/30')}><div className="text-[11px] text-fg-4">{k.l}</div><div className="text-[18px] font-bold text-fg tabular-nums">{k.v}</div><div className="text-[11px] text-fg-3">{k.s}</div></div>)}
           </div>
-          <p className="text-[11px] text-fg-4">오가닉 = 인사이트 총 판매수(취소 전) − 광고 전환 판매(취소 전 주문 기준). 당일 전환은 광고 클릭 당일 판매만 잡아 오가닉이 조금 크게, 14일 전환은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다. 둘 사이가 실제 범위입니다. 광고 raw 의 전환 수는 보고서를 나중에 다시 내려받으면 늘어나므로(14일 귀속), 최신 보고서를 광고 분석에 다시 올려 두는 게 정확합니다.</p>
+          {Object.keys(byMethod).length > 1 && (
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              {Object.entries(byMethod).map(([m, v]) => <span key={m} className="rounded-lg border border-line px-2.5 py-1 text-fg-3"><b className="text-fg">{m}</b> 총 {fmt(v.gross)} · 순 {fmt(v.net)}{v.empty ? ` (빈박스 ${fmt(v.empty)})` : ''} · 광고 {fmt(v.ad)} · 오가닉 {pct(v.gross ? (Math.max(0, v.gross - v.ad) / v.gross) * 100 : null)} · ROAS {pct(v.cost ? (v.netRevenue / v.cost) * 100 : null)}</span>)}
+            </div>
+          )}
+          <p className="text-[11px] text-fg-4">당일 전환은 광고 클릭 당일 판매만 잡아 오가닉이 조금 크게, 14일 전환은 기간 밖 판매까지 광고일에 붙어 오가닉이 작게 나옵니다. 광고 raw 의 전환 수는 보고서를 나중에 다시 내려받으면 늘어나므로(14일 귀속) 최신 보고서를 광고 분석에 다시 올려 두는 게 정확합니다.</p>
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-brand" /></div> : (
             <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full text-[12px] border-collapse min-w-[900px]">
+              <table className="w-full text-[12px] border-collapse min-w-[1100px]">
                 <thead><tr className="h-9 border-b border-line">
-                  <th className={cn(th, 'text-left sticky left-0')}>{group === 'product' ? '상품' : '옵션'}</th><th className={cn(th, 'text-left')}>판매방식</th>
-                  <th className={th} title="총 판매수 (취소 전)">총 판매</th><th className={th} title="취소 반영 판매량">순판매</th><th className={th}>광고 판매</th><th className={th}>오가닉</th><th className={th}>오가닉 비율</th><th className={th}>매출</th><th className={th}>광고비</th><th className={th} title="광고비 ÷ 매출">광고비율</th><th className={th}>방문자</th><th className={th}>구매전환</th>
+                  <th className={cn(th, 'text-left sticky left-0')}>{group === 'option' ? '옵션' : '상품'}</th><th className={cn(th, 'text-left')}>판매방식</th>
+                  <th className={th} title="총 판매수 (취소 전)">총 판매</th><th className={th}>취소</th><th className={th} title="리뷰용 빈박스 — 옵션 보기에서 입력">빈박스</th><th className={th} title="총 판매 − 취소 − 빈박스">순판매</th>
+                  <th className={th}>광고 판매</th><th className={th}>오가닉</th><th className={th} title="오가닉 ÷ 총 판매">오가닉 비율</th>
+                  <th className={th} title="매출(취소 반영) − 빈박스 × 평균 단가">순매출</th><th className={th}>광고비</th><th className={th} title="순매출 ÷ 광고비">ROAS</th><th className={th} title="광고비 ÷ 순매출">광고비율</th><th className={th}>방문자</th><th className={th}>구매전환</th>
                 </tr></thead>
                 <tbody>
                   {table.map(t => <tr key={t.key} className="h-9 border-b border-line-2 hover:bg-app/60">
                     <td className="px-2 sticky left-0 bg-card whitespace-nowrap"><div className="text-fg font-medium truncate max-w-[280px]" title={t.name}>{t.name}{t.unmatched && <span className="ml-1 text-[10px] text-warn" title="옵션ID 가 마스터에 없음 — 등록 큐에서 연결">미연결</span>}</div>{t.sub && <div className="text-[10px] text-fg-5 truncate max-w-[280px]">{t.sub}</div>}</td>
-                    <td className="px-2 text-fg-4 whitespace-nowrap">{t.method}</td>
-                    <td className="px-2 text-right tabular-nums font-semibold">{fmt(t.qty)}</td>
-                    <td className="px-2 text-right tabular-nums text-fg-3">{fmt(t.net)}</td>
-                    <td className="px-2 text-right tabular-nums">{fmt(t.adQ)}</td>
-                    <td className="px-2 text-right tabular-nums">{fmt(t.organic)}</td>
-                    <td className={cn('px-2 text-right tabular-nums', t.organicPct != null && t.organicPct < 20 ? 'text-warn' : t.organicPct != null && t.organicPct >= 50 ? 'text-success' : '')}>{pct(t.organicPct)}</td>
-                    <td className="px-2 text-right tabular-nums">{fmt(t.revenue)}</td>
-                    <td className="px-2 text-right tabular-nums text-fg-3">{fmt(t.cost)}</td>
-                    <td className={cn('px-2 text-right tabular-nums', t.revenue && t.cost / t.revenue > 0.3 ? 'text-danger' : '')}>{t.revenue ? pct((t.cost / t.revenue) * 100) : '-'}</td>
-                    <td className="px-2 text-right tabular-nums text-fg-3">{fmt(t.visitors)}</td>
-                    <td className="px-2 text-right tabular-nums text-fg-3">{pct(t.cvr)}</td>
+                    <td className={cn('px-2 whitespace-nowrap', t.method === '윙' ? 'text-warn' : 'text-fg-4')}>{t.method}</td>
+                    <td className={cn(td, 'font-semibold')}>{fmt(t.gross)}</td>
+                    <td className={cn(td, 'text-fg-4')}>{t.cancel ? fmt(t.cancel) : '-'}</td>
+                    <td className="px-1">{group === 'option' && t.rowIds.length === 1 ? (
+                      <input type="text" inputMode="numeric" value={emptyDraft[t.rowIds[0].id] ?? (t.empty ? String(t.empty) : '')} placeholder="0"
+                        onChange={e => setEmptyDraft(d => ({ ...d, [t.rowIds[0].id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                        onBlur={e => saveEmpty(t.rowIds[0].id, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+                        title={t.method === '윙' ? '윙(판매자배송) 리뷰용 빈박스 수량' : '그로스는 보통 0'}
+                        className={cn('h-7 w-16 px-2 rounded-lg border text-right text-[12px] tabular-nums focus:outline-none focus:border-brand', t.method === '윙' ? 'border-warn/50 bg-warn/[0.06]' : 'border-line bg-card')} />
+                    ) : <span className={cn(td, 'block', t.empty ? 'text-warn font-semibold' : 'text-fg-5')}>{t.empty ? fmt(t.empty) : '-'}</span>}</td>
+                    <td className={cn(td, 'font-semibold text-fg')}>{fmt(t.net)}</td>
+                    <td className={td}>{fmt(t.adQ)}</td>
+                    <td className={td}>{fmt(t.organic)}</td>
+                    <td className={cn(td, t.organicPct != null && t.organicPct < 20 ? 'text-warn' : t.organicPct != null && t.organicPct >= 50 ? 'text-success' : '')}>{pct(t.organicPct)}</td>
+                    <td className={td}>{fmt(t.netRevenue)}</td>
+                    <td className={cn(td, 'text-fg-3')}>{fmt(t.cost)}</td>
+                    <td className={cn(td, 'font-semibold', t.roas != null && t.roas < 300 ? 'text-danger' : t.roas != null && t.roas >= 500 ? 'text-success' : '')}>{pct(t.roas)}</td>
+                    <td className={cn(td, t.adRate != null && t.adRate > 30 ? 'text-danger' : '')}>{pct(t.adRate)}</td>
+                    <td className={cn(td, 'text-fg-3')}>{fmt(t.visitors)}</td>
+                    <td className={cn(td, 'text-fg-3')}>{pct(t.cvr)}</td>
                   </tr>)}
                   <tr className="h-9 font-semibold bg-card-2/60"><td className="px-2 sticky left-0 bg-card-2">합계 {table.length}</td><td />
-                    <td className="px-2 text-right tabular-nums">{fmt(tot.qty)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.net)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.ad)}</td><td className="px-2 text-right tabular-nums">{fmt(orgTot)}</td><td className="px-2 text-right tabular-nums">{pct(tot.qty ? (orgTot / tot.qty) * 100 : null)}</td>
-                    <td className="px-2 text-right tabular-nums">{fmt(tot.revenue)}</td><td className="px-2 text-right tabular-nums">{fmt(tot.cost)}</td><td className="px-2 text-right tabular-nums">{tot.revenue ? pct((tot.cost / tot.revenue) * 100) : '-'}</td><td className="px-2 text-right tabular-nums">{fmt(tot.visitors)}</td><td /></tr>
+                    <td className={td}>{fmt(tot.gross)}</td><td className={td}>{fmt(tot.cancel)}</td><td className={td}>{fmt(tot.empty)}</td><td className={td}>{fmt(tot.net)}</td>
+                    <td className={td}>{fmt(tot.ad)}</td><td className={td}>{fmt(orgTot)}</td><td className={td}>{pct(tot.gross ? (orgTot / tot.gross) * 100 : null)}</td>
+                    <td className={td}>{fmt(tot.netRevenue)}</td><td className={td}>{fmt(tot.cost)}</td><td className={td}>{pct(tot.cost ? (tot.netRevenue / tot.cost) * 100 : null)}</td><td className={td}>{pct(tot.netRevenue ? (tot.cost / tot.netRevenue) * 100 : null)}</td><td className={td}>{fmt(tot.visitors)}</td><td /></tr>
                 </tbody>
               </table>
             </div>
           )}
+          <p className="text-[11px] text-fg-5">ROAS 색: 300% 미만 빨강(대부분 적자 구간), 500% 이상 초록. 상품별 손익분기는 정산 › 상품별 순이익의 손익분기 ROAS 를 보세요.</p>
         </section>
       )}
       {periods && periods.length === 0 && !needsMigration && <p className="text-[12px] text-fg-4 px-1">아직 올린 리포트가 없습니다. 위에서 기간을 넣고 파일을 올려 주세요.</p>}

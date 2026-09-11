@@ -191,6 +191,7 @@ export function CostUpload({ selectedYm, onApply, closed }: { selectedYm: string
       <div className="px-5 py-4 border-b border-line-2">
         <h3 className="text-[15px] font-bold text-fg">플랫폼별 매입원가</h3>
         <p className="text-[12px] text-fg-3 mt-0.5">엑셀 업로드 → SKU 원가 자동 매칭 → 정산시트에 적용</p>
+        <p className="text-[11px] text-fg-4 mt-1"><b className="text-fg-3">순판매 기준</b> = 마켓 판매량(취소·반품 반영) − 빈박스(리뷰용 발송). 매출·원가·상품별 순이익·ROAS 는 모두 이 순판매로 계산합니다. 쿠팡 윙(판매자배송) 판매량에는 빈박스가 섞이므로 미리보기 빈박스 열이나 아래 빈박스 카드에서 빼 주세요.</p>
       </div>
 
       <div className="px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4">

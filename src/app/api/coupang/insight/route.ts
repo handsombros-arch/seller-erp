@@ -53,10 +53,13 @@ export async function POST(request: NextRequest) {
   for (const r of (rg ?? []) as any[]) if (!vid2sku.has(String(r.vendor_item_id))) vid2sku.set(String(r.vendor_item_id), r.sku_id);
 
   const pct = (v: unknown) => { const n = num(v); return isFinite(n) ? n : null; };
+  // 같은 기간을 다시 올려도 손으로 적은 빈박스 수량은 유지 (말없는 삭제 금지)
+  const { data: prevRows } = await admin.from('coupang_insight_metrics').select('vendor_item_id, empty_qty').eq('user_id', user.id).eq('period_from', from).eq('period_to', to);
+  const prevEmpty = new Map<string, number>((prevRows ?? []).map((r: any) => [String(r.vendor_item_id), Number(r.empty_qty) || 0]));
   const payload = (body.rows as Record<string, unknown>[]).map(r => {
     const vid = String(r['옵션 ID'] ?? r['옵션ID'] ?? '').replace(/\.0$/, '').trim();
     return {
-      user_id: user.id, period_from: from, period_to: to, vendor_item_id: vid,
+      user_id: user.id, period_from: from, period_to: to, vendor_item_id: vid, empty_qty: prevEmpty.get(vid) ?? 0,
       option_name: String(r['옵션명'] ?? '') || null, product_name: String(r['상품명'] ?? '') || null, product_id: String(r['등록상품ID'] ?? '').replace(/\.0$/, '') || null,
       category: String(r['카테고리'] ?? '') || null, sales_method: String(r['판매방식'] ?? '') || null,
       revenue: num(r['매출(원)']), orders: Math.round(num(r['주문'])), qty: Math.round(num(r['판매량'])), visitors: Math.round(num(r['방문자'])), views: Math.round(num(r['조회'])), carts: Math.round(num(r['장바구니'])),
@@ -70,7 +73,10 @@ export async function POST(request: NextRequest) {
   const del = await admin.from('coupang_insight_metrics').delete().eq('user_id', user.id).eq('period_from', from).eq('period_to', to);
   if (del.error) return NextResponse.json({ error: isMissing(del.error.message) ? '마이그레이션 00072(coupang_insight_metrics) 를 적용해 주세요' : del.error.message, needsMigration: isMissing(del.error.message) }, { status: 400 });
   for (let i = 0; i < payload.length; i += 500) {
-    const { error } = await admin.from('coupang_insight_metrics').upsert(payload.slice(i, i + 500), { onConflict: 'user_id,period_from,period_to,vendor_item_id' });
+    let { error } = await admin.from('coupang_insight_metrics').upsert(payload.slice(i, i + 500), { onConflict: 'user_id,period_from,period_to,vendor_item_id' });
+    if (error && /empty_qty/.test(error.message)) {   // 00073 미적용 DB: 빈박스 컬럼 없이 저장
+      ({ error } = await admin.from('coupang_insight_metrics').upsert(payload.slice(i, i + 500).map(({ empty_qty: _e, ...r }) => r), { onConflict: 'user_id,period_from,period_to,vendor_item_id' }));
+    }
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   }
   const matched = payload.filter(p => p.sku_id).length;
@@ -86,5 +92,19 @@ export async function DELETE(request: NextRequest) {
   const admin = await createAdminClient();
   const { error } = await admin.from('coupang_insight_metrics').delete().eq('user_id', user.id).eq('period_from', from).eq('period_to', to);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}
+
+/** PATCH { id, empty_qty } — 기간 행의 빈박스(리뷰용) 수량. 순판매 = 총 판매수 − 취소 − 빈박스 */
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  const b = await request.json().catch(() => ({}));
+  const id = String(b.id ?? ''); const empty = Math.max(0, Math.round(Number(b.empty_qty) || 0));
+  if (!id) return NextResponse.json({ error: 'id 필요' }, { status: 400 });
+  const admin = await createAdminClient();
+  const { error } = await admin.from('coupang_insight_metrics').update({ empty_qty: empty, updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', user.id);
+  if (error) return NextResponse.json({ error: isMissing(error.message) || /empty_qty/.test(error.message) ? '마이그레이션 00073(empty_qty) 을 적용해 주세요' : error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
