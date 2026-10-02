@@ -1085,8 +1085,10 @@ export default function AdAnalysisPage() {
         //    로컬(IDB)에만 있든 DB 에만 있든 모든 행을 보존한다. 데이터가 줄어드는 방향은 없음.
         //    ⚠️ 과거 사고: 여기서 DB 로 IDB 를 통째로 덮어써 로컬 풀 데이터가 말없이 사라짐.
         try {
+          // A slow cloud history must not lock local work indefinitely.
+          const historyTimeout = AbortSignal.timeout(60000);
           const dbRows = await fetchAdHistory(async page => {
-            const dbRes = await fetch(`/api/ad-analysis/rows?page=${page}`, { signal: AbortSignal.timeout(30000) });
+            const dbRes = await fetch(`/api/ad-analysis/rows?page=${page}`, { signal: AbortSignal.any([historyTimeout, AbortSignal.timeout(30000)]) });
             if (!dbRes.ok) throw new Error('서버 광고 데이터 조회 실패 — 로컬 원본은 유지됩니다');
             return dbRes.json();
           });
@@ -1121,7 +1123,7 @@ export default function AdAnalysisPage() {
 
           // 로컬에만 있고 DB 엔 아직 없는 행 수 = |IDB ∪ DB| − |DB|. >0 이면 백업 안 된 데이터 존재.
           setUnsyncedCount(Math.max(pendingRowsRef.current.length, merged.length - dbRows.length));
-        } catch (err: any) { recoveryFiles = []; setError(err.message ?? '서버 데이터를 불러오지 못했습니다'); }
+        } catch (err: any) { recoveryFiles = []; setError(err.name === 'TimeoutError' || err.name === 'AbortError' ? '서버 이력 조회가 지연되어 중단했습니다. 로컬 원본은 유지되며 새 보고서를 추가할 수 있습니다.' : (err.message ?? '서버 데이터를 불러오지 못했습니다')); }
       } catch (err: any) {
         setError(err.message ?? '광고 데이터를 불러오지 못했습니다');
       } finally {
