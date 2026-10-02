@@ -62,38 +62,70 @@ export function assertCompatible(current,incoming){
   for(const r of current.records)if(!wanted.has(r.key)||wanted.get(r.key)!==encode(r.value))throw Error(`기존 광고 데이터 충돌: ${r.key}. 빈 브라우저에서 복원하세요.`);
 }
 export async function restore(data){
-  const before=await snapshot();assertCompatible(before,data);
+  const before=await snapshot();
+  for(const [k,v]of Object.entries(before.settings))if(k in data.settings&&v!==data.settings[k])throw Error(`기존 설정 충돌: ${k}`);
+  const incoming=new Map((await fingerprints(data)).records.map(r=>[r.key,JSON.stringify(r)]));
+  for(const r of (await fingerprints(before)).records)if(incoming.get(r.key)!==JSON.stringify(r))throw Error(`기존 광고 데이터 충돌: ${r.key}`);
   const added=[];
   try{
     for(const [k,v]of Object.entries(data.settings))if(localStorage.getItem(k)===null){localStorage.setItem(k,v);added.push(k);}
     const db=await open(true);
     try{
       const tx=db.transaction(STORE,'readwrite');const finished=done(tx);const store=tx.objectStore(STORE);
-      // Recheck inside the write transaction so concurrent changes cannot be overwritten.
-      const reads=store.getAll();const keys=store.getAllKeys();let values,recordKeys;
-      const write=()=>{if(!values||!recordKeys)return;try{assertCompatible({settings:{},records:recordKeys.map((key,i)=>({key,value:values[i]}))},data);for(const r of data.records)store.put(r.value,r.key);}catch{tx.abort();}};
-      reads.onsuccess=()=>{values=reads.result;write();};keys.onsuccess=()=>{recordKeys=keys.result;write();};await finished;
+      // Never replace any existing key, including keys written concurrently.
+      const keys=store.getAllKeys();
+      keys.onsuccess=()=>{const existing=new Set(keys.result);for(const r of data.records)if(!existing.has(r.key))store.add(r.value,r.key);};await finished;
     }finally{db.close();}
   }catch(error){for(const k of added)if(localStorage.getItem(k)===data.settings[k])localStorage.removeItem(k);throw error;}
 }
 export async function compare(data){
   const actual=await snapshot();
-  const expected=await digest(encode(data));const found=await digest(encode(actual));
+  const expected=await digest(JSON.stringify(await fingerprints(data)));const found=await digest(JSON.stringify(await fingerprints(actual)));
   if(expected!==found)throw Error('현재 데이터와 백업이 완전히 일치하지 않습니다. 기존의 추가 설정이나 다른 ERP 탭의 변경을 확인하세요.');
   return {verified:true,sha256:found,summary:summarize(actual)};
+}
+const CHUNK=10000;
+export async function fingerprints(data){
+  const settings=Object.fromEntries(Object.entries(data.settings).sort(([a],[b])=>a.localeCompare(b)));
+  const records=[];
+  for(const r of data.records){const hashes=[];for(let i=0;i<r.value.length;i+=CHUNK)hashes.push(await digest(encode(r.value.slice(i,i+CHUNK))));records.push({key:r.key,rows:r.value.length,hashes});}
+  records.sort((a,b)=>a.key.localeCompare(b.key));return {settings,records};
+}
+// JSONL chunks keep each string below browser limits even for millions of rows.
+export async function archive(data){
+  const manifest=await fingerprints(data);const header={format:'lv-erp-browser-chunks',version:1,origin:location.origin,createdAt:new Date().toISOString(),manifest,sha256:await digest(JSON.stringify(manifest))};
+  async function* lines(){yield JSON.stringify(header)+'\n';for(const r of data.records)for(let i=0;i<r.value.length;i+=CHUNK)yield JSON.stringify({key:r.key,index:i/CHUNK,payload:encode(r.value.slice(i,i+CHUNK))})+'\n';}
+  const iterator=lines();const stream=new ReadableStream({async pull(controller){const item=await iterator.next();if(item.done)controller.close();else controller.enqueue(new TextEncoder().encode(item.value));}});
+  return {blob:await new Response(stream.pipeThrough(new CompressionStream('gzip'))).blob(),sha256:header.sha256,summary:summarize(data)};
+}
+export async function readArchive(stream){
+  const reader=stream.pipeThrough(new TextDecoderStream()).getReader();let buffer='',header=null;const records=new Map();let seen=0;
+  async function line(text){
+    const item=JSON.parse(text);
+    if(!header){header=item;if(header.format!=='lv-erp-browser-chunks'||header.version!==1||header.origin!==location.origin)throw Error('백업 형식 또는 ERP 주소가 다릅니다.');
+      if(await digest(JSON.stringify(header.manifest))!==header.sha256)throw Error('목록 무결성 검사 실패');
+      for(const[k,v]of Object.entries(header.manifest.settings))if(!allowedKey(k)||typeof v!=='string')throw Error('허용되지 않은 설정');
+      for(const r of header.manifest.records){if(typeof r.key!=='string'||records.has(r.key)||!Number.isSafeInteger(r.rows)||r.rows<0||!Array.isArray(r.hashes)||r.hashes.length!==Math.ceil(r.rows/CHUNK))throw Error('저장 목록 오류');records.set(r.key,{key:r.key,value:[],hashes:r.hashes,rows:r.rows,seen:0});}return;
+    }
+    const r=records.get(item.key);if(!r||item.index!==r.seen||typeof item.payload!=='string'||await digest(item.payload)!==r.hashes[item.index])throw Error('원본 조각 무결성 검사 실패');
+    const rows=decode(item.payload);if(!Array.isArray(rows)||rows.length!==Math.min(CHUNK,r.rows-r.value.length))throw Error('원본 행 수 오류');for(const row of rows)r.value.push(row);r.seen++;seen++;
+  }
+  try{while(true){const {value,done}=await reader.read();if(done)break;buffer+=value;let end;while((end=buffer.indexOf('\n'))>=0){const text=buffer.slice(0,end);buffer=buffer.slice(end+1);if(text)await line(text);}}if(buffer.trim())await line(buffer);}finally{reader.releaseLock();}
+  if(!header)throw Error('빈 파일');
+  for(const r of records.values())if(r.seen!==r.hashes.length||r.value.length!==r.rows)throw Error('백업 파일이 잘렸습니다.');
+  return {settings:header.manifest.settings,records:Array.from(records.values(),r=>({key:r.key,value:r.value}))};
 }
 if(typeof document!=='undefined'){
   const $=id=>document.getElementById(id);let selected=null;let busy=false;
   const show=v=>{$('status').textContent=typeof v==='string'?v:JSON.stringify(v,null,2);};
   const run=async work=>{if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);try{await work();}catch(e){show(`중단: ${e.message}`);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);for(const id of ['verify','restore','compare'])$(id).disabled=!selected;}};
   $('file').onchange=()=>{selected=$('file').files[0]||null;for(const id of ['verify','restore','compare'])$(id).disabled=!selected;};
-  async function load(){if(!selected)throw Error('파일을 선택하세요.');let stream=selected.stream();if(selected.name.endsWith('.gz'))stream=stream.pipeThrough(new DecompressionStream('gzip'));return validate(JSON.parse(await new Response(stream).text()));}
+  async function load(){if(!selected)throw Error('파일을 선택하세요.');let stream=selected.stream();if(selected.name.endsWith('.gz'))stream=stream.pipeThrough(new DecompressionStream('gzip'));return readArchive(stream);}
   $('inspect').onclick=()=>run(async()=>{show('저장소 읽는 중…');show(summarize(await snapshot()));});
   $('export').onclick=()=>run(async()=>{
-    show('원본을 그대로 읽고 압축하는 중…');const data=await snapshot();const file=await envelope(data);
-    const compressed=await new Response(new Blob([JSON.stringify(file)]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
-    const url=URL.createObjectURL(compressed);const a=document.createElement('a');a.href=url;a.download=`erp-browser-${new Date().toISOString().replace(/[:.]/g,'-')}.json.gz`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
-    show({message:'백업 파일 생성 완료. 다운로드 파일을 선택하고 파일과 현재 데이터 대조를 실행하세요.',sha256:file.sha256,bytes:compressed.size,summary:file.summary});
+    show('원본을 그대로 읽고 압축하는 중…');const data=await snapshot();const file=await archive(data);
+    const url=URL.createObjectURL(file.blob);const a=document.createElement('a');a.href=url;a.download=`erp-browser-${new Date().toISOString().replace(/[:.]/g,'-')}.jsonl.gz`;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    show({message:'백업 파일 생성 완료. 다운로드 파일을 선택하고 파일과 현재 데이터 대조를 실행하세요.',sha256:file.sha256,bytes:file.blob.size,summary:file.summary});
   });
   $('verify').onclick=()=>run(async()=>{show('파일 검증 중…');show({message:'파일 무결성 검사 통과',summary:summarize(await load())});});
   $('restore').onclick=()=>run(async()=>{show('파일 검증 및 복원 중…');const data=await load();await restore(data);show(await compare(data));});

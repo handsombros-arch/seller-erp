@@ -19,3 +19,12 @@ for(const key of ['sb-abc-auth-token','password','access_token','__proto__'])ass
 await assert.rejects(validate(await envelope({...data,settings:{password:'secret'}})),/허용/);
 await assert.rejects(validate(await envelope({...data,records:[...data.records,...data.records]})),/항목/);
 console.log('PASS: lossless raw rows and dates, gzip roundtrip, integrity, origin, conflict protection, credential exclusion, duplicate-key rejection');
+const {archive,readArchive,fingerprints}=await import('../public/browser-backup.mjs');
+const large={settings:data.settings,records:[{key:'all',value:Array.from({length:25001},(_,i)=>({...rows[i%3],index:i}))},{key:'pending-cloud',value:[]}]};
+const packed=await archive(large);
+const unpacked=await readArchive(packed.blob.stream().pipeThrough(new DecompressionStream('gzip')));
+assert.deepEqual(await fingerprints(unpacked),await fingerprints(large));
+const plain=await new Response(packed.blob.stream().pipeThrough(new DecompressionStream('gzip'))).text();
+await assert.rejects(readArchive(new Blob([plain.split('\n').slice(0,-2).join('\n')]).stream()),/잘렸/);
+await assert.rejects(readArchive(new Blob([plain.replace('123.4','124.4')]).stream()),/무결성/);
+console.log('PASS: multi-chunk backup, empty records, large restore equality, truncated/corrupt chunk rejection');
