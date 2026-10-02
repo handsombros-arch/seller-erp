@@ -61,7 +61,7 @@ let fail = false;
 let storedRows = [];
 const admin = { from: table => ({ select() { return this; }, eq() { return this; },
   order() { return table === 'ad_uploads' ? Promise.resolve({ data: [] }) : this; },
-  async range(from, to) { return { data: storedRows.slice(from, to + 1) }; }, upsert: async (rows, options) => {
+  async range(from, to) { return { data: storedRows.slice(from, to + 1), count: storedRows.length }; }, upsert: async (rows, options) => {
   writes.push({ table, rows, options });
   return { error: fail && table === 'ad_raw_rows' ? { code: 'TEST', message: 'offline' } : null };
 } }) };
@@ -97,6 +97,14 @@ const request = body => ({ headers: new Headers(), json: async () => body });
     loaded = await api.GET({ nextUrl: new URL('https://example.test/api/ad-analysis/rows') });
     assert.equal(loaded.body.totalRows, 4117, 'GET pages and expands entire real report');
     assert.equal(loaded.body.rows.reduce((n, r) => n + Number(r['광고비'] || 0), 0), 243061);
+    const paged = await sync.fetchAdHistory(async page => {
+      const response = await api.GET({ nextUrl: new URL('https://example.test/api/ad-analysis/rows?page=' + page) });
+      assert.equal(response.status, 200);return response.body;
+    });
+    assert.equal(paged.length, 4117);
+    assert.equal(paged.reduce((n,r)=>n+Number(r['광고비']||0),0),243061);
+    await assert.rejects(sync.fetchAdHistory(async page=>{if(page===2)throw Error('offline');return {rows:[],storedCount:2000,pageSize:500};}),/offline/);
+    console.log('PASS: bounded parallel server pages preserve entire real report and reject partial failure');
   }
   fail = true;
   const result = await api.POST(request({ rows: [pending], replaceExisting: true }));

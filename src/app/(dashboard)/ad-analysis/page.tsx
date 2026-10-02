@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
-import { mergeAdRows, packAdRows, unpackAdRows } from '@/lib/ad-analysis/sync';
+import { mergeAdRows, packAdRows, unpackAdRows, fetchAdHistory } from '@/lib/ad-analysis/sync';
 import { PageHeader } from '@/components/ui/page-header';
 
 import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
@@ -1085,10 +1085,11 @@ export default function AdAnalysisPage() {
         //    로컬(IDB)에만 있든 DB 에만 있든 모든 행을 보존한다. 데이터가 줄어드는 방향은 없음.
         //    ⚠️ 과거 사고: 여기서 DB 로 IDB 를 통째로 덮어써 로컬 풀 데이터가 말없이 사라짐.
         try {
-          const dbRes = await fetch('/api/ad-analysis/rows');
-          if (!dbRes.ok) throw new Error('서버 광고 데이터 조회 실패');
-          const j = await dbRes.json();
-          const dbRows: any[] = j.rows ?? [];
+          const dbRows = await fetchAdHistory(async page => {
+            const dbRes = await fetch(`/api/ad-analysis/rows?page=${page}`, { signal: AbortSignal.timeout(30000) });
+            if (!dbRes.ok) throw new Error('서버 광고 데이터 조회 실패 — 로컬 원본은 유지됩니다');
+            return dbRes.json();
+          });
 
           // Pending uploads win, then cloud values; retain local-only history.
           const merged = mergeAdRows(idbRows ?? [], dbRows, pendingRowsRef.current);

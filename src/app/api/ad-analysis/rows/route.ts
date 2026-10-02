@@ -13,6 +13,20 @@ export async function GET(request: NextRequest) {
 
   const admin = await createAdminClient();
 
+  // Bounded responses avoid serverless time/body limits for large histories.
+  if (request.nextUrl.searchParams.has('page')) {
+    const page = Number(request.nextUrl.searchParams.get('page'));
+    if (!Number.isSafeInteger(page) || page < 0) return NextResponse.json({ error: '잘못된 페이지' }, { status: 400 });
+    const size = 500;
+    const { data, error, count } = await admin.from('ad_raw_rows')
+      .select('data', page === 0 ? { count: 'exact' } : {})
+      .eq('user_id', user.id).order('dedup_key', { ascending: true })
+      .range(page * size, (page + 1) * size - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ rows: unpackAdRows((data ?? []).map(r => r.data as AdRow)),
+      storedCount: page === 0 ? count : undefined, pageSize: size, page });
+  }
+
   const { data: uploads } = await admin
     .from('ad_uploads')
     .select('filename, row_count, uploaded_at')

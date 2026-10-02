@@ -1,5 +1,17 @@
 export type AdRow = Record<string, unknown>;
 
+export async function fetchAdHistory(fetchPage: (page: number) => Promise<{ rows: AdRow[]; storedCount?: number; pageSize: number }>): Promise<AdRow[]> {
+  const first = await fetchPage(0);
+  if (!Number.isSafeInteger(first.storedCount) || first.storedCount! < 0 || first.pageSize !== 500) throw new Error('서버 광고 건수 확인 실패');
+  const rows = [...first.rows];
+  const pages = Math.ceil(first.storedCount! / first.pageSize);
+  for (let page = 1; page < pages; page += 4) {
+    const results = await Promise.all(Array.from({ length: Math.min(4, pages - page) }, (_, i) => fetchPage(page + i)));
+    for (const result of results) for (const row of result.rows) rows.push(row);
+  }
+  return rows;
+}
+
 // Preserve the existing database key so corrected reports replace legacy rows.
 export function adRowKey(row: AdRow): string {
   const keyword = String(row['키워드'] ?? '').trim();
