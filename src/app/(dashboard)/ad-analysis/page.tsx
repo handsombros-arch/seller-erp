@@ -1089,7 +1089,10 @@ export default function AdAnalysisPage() {
           const historyTimeout = AbortSignal.timeout(60000);
           const dbRows = await fetchAdHistory(async page => {
             const dbRes = await fetch(`/api/ad-analysis/rows?page=${page}`, { signal: AbortSignal.any([historyTimeout, AbortSignal.timeout(30000)]) });
-            if (!dbRes.ok) throw new Error('서버 광고 데이터 조회 실패 — 로컬 원본은 유지됩니다');
+            if (!dbRes.ok) {
+              const detail = await dbRes.json().catch(() => ({}));
+              throw new Error(`서버 광고 데이터 조회 실패 (${dbRes.status}${detail.error ? `: ${detail.error}` : ''}) — 로컬 원본은 유지됩니다`);
+            }
             return dbRes.json();
           });
 
