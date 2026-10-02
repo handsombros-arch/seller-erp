@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ERP 브라우저 데이터 이전</title>
+<style>body{font:16px system-ui;max-width:850px;margin:50px auto;padding:20px;color:#172b3a;background:#f5f7fa}section{background:white;padding:24px;margin:20px 0;border-radius:16px}button,input{font:inherit;padding:12px;margin:8px 8px 8px 0}button{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf2f6;padding:18px}small{line-height:1.8}h1{font-size:28px}</style>
+<h1>ERP 브라우저 데이터 이전</h1>
+<p>광고 원본과 이 브라우저에 저장된 업무 기록·설정을 파일로 보관합니다. 서버 자료와 로그인 정보는 포함하지 않습니다.</p>
+<section><h2>1. 기존 브라우저에서 백업</h2><p>다른 ERP 탭의 작업을 저장하고 닫은 뒤 실행하세요. 날짜 인식에 실패한 행도 그대로 보존합니다.</p><button id="inspect">저장 현황 확인</button><button id="export">로컬 백업 파일 저장</button></section>
+<section><h2>2. 새 브라우저에서 복원</h2><p>같은 ERP 주소의 새 브라우저에서 파일을 선택하세요. 기존 데이터와 충돌하면 덮어쓰지 않고 중단합니다.</p><input id="file" type="file" accept=".gz,.json"><br><button id="verify" disabled>파일 검증</button><button id="restore" disabled>이 브라우저에 복원</button><button id="compare" disabled>파일과 현재 데이터 대조</button></section>
+<pre id="status" role="status" aria-live="polite">준비됨</pre>
+<small>백업 파일에는 업무 데이터가 포함됩니다. 복원 후 광고 화면을 열기 전에 파일과 현재 데이터 대조를 실행하세요. 이 도구는 서버로 데이터를 전송하지 않습니다.</small>
+<script type="module" src="/browser-backup.mjs"></script></html>
