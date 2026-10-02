@@ -18,8 +18,16 @@ export async function GET(request: NextRequest) {
     const page = Number(request.nextUrl.searchParams.get('page'));
     if (!Number.isSafeInteger(page) || page < 0) return NextResponse.json({ error: '잘못된 페이지' }, { status: 400 });
     const size = 500;
-    const { data, error, count } = await admin.from('ad_raw_rows')
-      .select('data', page === 0 ? { count: 'exact' } : {})
+    // Count without loading JSONB: combining exact count with data selection
+    // can make PostgREST materialize the entire account history.
+    let count: number | null = null;
+    if (page === 0) {
+      const result = await admin.from('ad_raw_rows').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+      if (result.error) return NextResponse.json({ error: `건수 조회: ${result.error.message}` }, { status: 500 });
+      count = result.count;
+    }
+    const { data, error } = await admin.from('ad_raw_rows')
+      .select('data')
       .eq('user_id', user.id).order('dedup_key', { ascending: true })
       .range(page * size, (page + 1) * size - 1);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -59,7 +59,7 @@ if (process.argv[2]) {
 const writes = [];
 let fail = false;
 let storedRows = [];
-const admin = { from: table => ({ select() { return this; }, eq() { return this; },
+const admin = { from: table => ({ select(_columns, options) { this.head = options?.head; return this; }, eq() { return this.head ? Promise.resolve({count: storedRows.length}) : this; },
   order() { return table === 'ad_uploads' ? Promise.resolve({ data: [] }) : this; },
   async range(from, to) { return { data: storedRows.slice(from, to + 1), count: storedRows.length }; }, upsert: async (rows, options) => {
   writes.push({ table, rows, options });
