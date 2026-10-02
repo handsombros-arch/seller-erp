@@ -9,15 +9,17 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
   const admin = await createAdminClient();
-  const { data, error } = await admin
-    .from('toss_ad_rows')
-    .select('data')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(100000);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ rows: (data ?? []).map((r: any) => r.data) });
+  const rows: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin.from('toss_ad_rows')
+      .select('data').eq('user_id', user.id)
+      .order('dedup_key', { ascending: true }).range(from, from + pageSize - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    for (const row of data ?? []) rows.push(row.data);
+    if (!data || data.length < pageSize) break;
+  }
+  return NextResponse.json({ rows });
 }
 
 // POST: 새 행 누적 저장 (dedup_key 기준)

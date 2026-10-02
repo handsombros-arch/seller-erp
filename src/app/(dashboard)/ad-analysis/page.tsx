@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from 'react';
 import { formatNumber } from '@/lib/utils';
+import { mergeAdRows, packAdRows, unpackAdRows } from '@/lib/ad-analysis/sync';
 import { PageHeader } from '@/components/ui/page-header';
 
 import { Tabs, SegmentedControl, useTabParam } from '@/components/ui/tabs';
@@ -95,6 +96,7 @@ interface AnalysisData {
   _rawRows?: any[]; // 누적 업로드용 원본 데이터
   _diagnostics?: {
     skippedNoDate: number;     // 날짜 파싱 실패로 버려진 행 수
+    missingDateColumn: number;
     sampleKeys: string[];      // 첫 행의 컬럼명들 (디버깅)
     missingCols: string[];     // 기대 컬럼 중 빠진 것
   };
@@ -596,10 +598,10 @@ export default function AdAnalysisPage() {
     const kwDateMap = new Map<string, any>();
     const compactMap = new Map<string, any>();
 
-    let skippedNoDate = 0;
+    let skippedNoDate = 0, missingDateColumn = 0;
     for (const r of raw) {
       const date = normalizeDate(r['날짜']);
-      if (!date) { skippedNoDate++; continue; }
+      if (!date) { skippedNoDate++; if (!('날짜' in r)) missingDateColumn++; continue; }
       const keyword = r['키워드'] || '-';
       const placement = r['광고 노출 지면'] || '기타';
       // 쿠팡 PA export 양식 변경(2026-06): '캠페인명' → '캠페인'. 둘 다 지원.
@@ -726,7 +728,7 @@ export default function AdAnalysisPage() {
         unmatchedOptionIds: [...unmatchedIds],
         campaigns, products, rows, totals, daily, keywords, placements, placementDaily, keywordDaily,
         _rawRows: raw,
-        _diagnostics: { skippedNoDate, sampleKeys, missingCols },
+        _diagnostics: { skippedNoDate, missingDateColumn, sampleKeys, missingCols },
       } as AnalysisData;
     }, []);
 
@@ -740,6 +742,8 @@ export default function AdAnalysisPage() {
   const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
   // 로컬(IDB)에만 있고 DB 엔 아직 없는 행 수. >0 이면 백업 권유 배너 노출.
   const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const pendingRowsRef = useRef<any[]>([]);
+  const syncBusyRef = useRef(false);
   // 본문 gzip 압축 (CompressionStream 지원하는 모던 브라우저). 실패 시 raw JSON.
   const gzipJson = async (obj: unknown): Promise<{ body: BodyInit; gzipped: boolean }> => {
     const json = JSON.stringify(obj);
@@ -756,10 +760,12 @@ export default function AdAnalysisPage() {
   const uploadRowsInChunks = useCallback(async (
     rows: any[],
     filename: string,
-    opts: { abortOnFirstFail?: boolean } = {},
+    opts: { abortOnFirstFail?: boolean; replaceExisting?: boolean } = {},
   ) => {
     // 5000 행은 서버 단일 함수에서 17×300 upsert 돌 때 Postgres statement_timeout 위험.
     // 2000 행으로 줄여 청크당 ~7×300 upsert 로 timeout 여유 확보. gzip 후엔 여전히 1MB 미만.
+    // Pack before chunking: a source family must never cross request boundaries.
+    rows = packAdRows(rows);
     const CHUNK = 2000;
     const totalChunks = Math.ceil(rows.length / CHUNK);
     let inserted = 0, attempted = 0, failedChunks = 0;
@@ -768,7 +774,7 @@ export default function AdAnalysisPage() {
     for (let i = 0; i < rows.length; i += CHUNK) {
       const batch = rows.slice(i, i + CHUNK);
       try {
-        const { body, gzipped } = await gzipJson({ rows: batch, filename });
+        const { body, gzipped } = await gzipJson({ rows: batch, filename, replaceExisting: opts.replaceExisting === true });
         const res = await fetch('/api/ad-analysis/rows', {
           method: 'POST',
           headers: { 'Content-Type': gzipped ? 'application/gzip' : 'application/json' },
@@ -801,26 +807,15 @@ export default function AdAnalysisPage() {
     return { inserted, attempted, failedChunks, totalChunks, firstServerError };
   }, []);
 
-  // ─── Upload handler (클라이언트에서 바로 처리, DB 없음) ─────────
-  // 키워드 '-'(키워드 보고서의 비검색 행) 와 ''(일별 보고서) 는 같은 지출 — 두 양식을 같이 올리면 비검색 영역이 2배로 잡히던 버그
-  const normKw = (v: any) => { const s = String(v ?? '').trim(); return s === '-' ? '' : s; };
-  const dedupKey = (r: any) => `${r['날짜']}|${normKw(r['키워드'])}|${r['광고전환매출발생 옵션ID']??''}|${r['광고 노출 지면']??''}`;
-  const dedupeRows = (rows: any[]) => {
-    // 키워드 보고서가 있는 날짜의 비검색 일별 행('' 키워드)은 같은 지출의 중복 → 제거
-    const kwDates = new Set<string>();
-    for (let i = 0; i < rows.length; i++) { const r = rows[i]; if (String(r['키워드'] ?? '').trim() === '-' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역') kwDates.add(String(r['날짜'] ?? '')); }
-    const seen = new Set<string>(); const out: any[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (String(r['키워드'] ?? '').trim() === '' && String(r['광고 노출 지면'] ?? '').trim() === '비검색 영역' && kwDates.has(String(r['날짜'] ?? ''))) continue;
-      const k = dedupKey(r); if (!seen.has(k)) { seen.add(k); out.push(r); }
-    }
-    return out;
-  };
+  // ─── Upload handler: local preview plus durable cloud synchronization ───
+  // Cached rows are already merged by report family; preserve every source row.
+  const dedupeRows = unpackAdRows;
 
   const toast = useToast();
   const toastRef = useRef(toast); toastRef.current = toast;
   const handleUpload = useCallback(async (files: File[], skipBackup = false) => {
+    if (syncBusyRef.current || !initialLoadDone.current) return;
+    syncBusyRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -846,7 +841,7 @@ export default function AdAnalysisPage() {
 
       // 여러 파일 동시 읽기 — CSV/TSV/TXT 는 구분자 자동인식 + 스트리밍 파서(PapaParse),
       // 엑셀(.xlsx/.xls)은 기존 XLSX. CSV 가 커도 안 멈추고, TSV(탭)도 자동 인식됨.
-      const allRows: any[] = [];
+      let allRows: any[] = [];
       for (const file of files) {
         if (/\.(csv|tsv|txt)$/i.test(file.name)) {
           const Papa = (await import('papaparse')).default;
@@ -861,31 +856,18 @@ export default function AdAnalysisPage() {
               error: (err) => reject(err),
             });
           });
-          for (const r of rows) allRows.push(r); // spread(...) 금지 — 대용량이면 스택 초과
+          allRows = mergeAdRows(allRows, rows as any[], []);
         } else {
           const buffer = await file.arrayBuffer();
           const wb = XLSX.read(buffer, { type: 'array' });
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-          for (const r of rows) allRows.push(r); // spread(...) 금지 — 대용량이면 스택 초과
+          allRows = mergeAdRows(allRows, rows as any[], []);
         }
       }
       if (!allRows.length) throw new Error('데이터가 없습니다');
 
-      // 중복 제거 (기존 데이터 + 새 파일 누적)
-      const seen = new Set<string>();
-      let raw: any[] = [];
-
-      // 새로 올린 파일이 우선(같은 키면 교체) — 14일 귀속 전환·매출은 나중에 내려받은 보고서일수록 채워져 있다. 기존 행은 새 파일에 없는 키만 유지
-      for (const r of allRows) {
-        const key = dedupKey(r);
-        if (!seen.has(key)) { seen.add(key); raw.push(r); }
-      }
-      if (data?._rawRows) {
-        for (const r of data._rawRows) {
-          const key = dedupKey(r);
-          if (!seen.has(key)) { seen.add(key); raw.push(r); }
-        }
-      }
+      // Replace complete report families, preserving distinct rows within each file.
+      const raw = mergeAdRows(data?._rawRows ?? [], allRows, []);
 
       // 미매칭 상품 퍼지 매칭
       const adProductNames = new Set<string>();
@@ -919,10 +901,20 @@ export default function AdAnalysisPage() {
       const result = processData(raw, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0);
       saveResult(result);
 
-      // IDB 만 갱신 — DB 동기화는 수동 버튼으로 분리 (자동 청크 업로드가 느려서 사용자 요청).
-      // 다른 PC 와 공유하려면 우측 "DB 로 백업" 버튼을 명시적으로 눌러야 함.
-      saveToIdb(raw);
-      setLoading(false);
+      // Persist an outbox before attempting cloud writes; failed uploads survive reloads.
+      const pendingCloud = mergeAdRows(pendingRowsRef.current, allRows, []);
+      setUnsyncedCount(pendingCloud.length);
+      await saveToIdb(pendingCloud, 'pending-cloud');
+      pendingRowsRef.current = pendingCloud;
+      await saveToIdb(raw);
+      const sync = await uploadRowsInChunks(pendingCloud, files.map(f => f.name).join(', ').slice(0, 200), { replaceExisting: true, abortOnFirstFail: true });
+      if (sync.failedChunks || sync.firstServerError) {
+        setError(`서버 저장 대기 중 — 자동으로 재시도합니다. ${sync.firstServerError ?? ''}`);
+      } else {
+        await saveToIdb([], 'pending-cloud');
+        pendingRowsRef.current = [];
+        setUnsyncedCount(0);
+      }
       // 원본 파일을 서버 저장소에 백업 — 다른 PC 에서 "백업에서 복원"으로 되살린다. 실패는 숨기지 않는다.
       if (!skipBackup && files.length) {
         backupFiles(files).then(({ ok, failed }) => {
@@ -932,25 +924,47 @@ export default function AdAnalysisPage() {
       }
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      syncBusyRef.current = false;
       setLoading(false);
     }
-  }, [data, processData, saveResult]);
+  }, [data, processData, saveResult, uploadRowsInChunks]);
 
-  // 수동 DB 백업 — 현재 IDB/메모리에 있는 전체 raw 를 청크 업로드.
-  // dedup_key 로 ignoreDuplicates 되므로 여러 번 눌러도 안전.
-  const handleSyncToDb = useCallback(async () => {
-    if (!data?._rawRows?.length) return;
-    const sync = await uploadRowsInChunks(data._rawRows, `manual-sync-${new Date().toISOString().slice(0, 10)}`);
-    if (sync.failedChunks > 0 || sync.firstServerError) {
-      setError(`DB 업로드 부분 실패 — ${sync.failedChunks}/${sync.totalChunks} 청크 실패` +
-        (sync.firstServerError ? ` · 서버: ${sync.firstServerError}` : '') +
-        ` (다시 누르면 dedup 으로 중복은 자동 스킵)`);
-      // 부분 실패면 미백업분이 남아있으니 배너 유지.
-    } else {
+  // Retry pending reports and migrate local-only historical rows.
+  const handleSyncToDb = useCallback(async (pendingOnly = false) => {
+    if (!data?._rawRows?.length || syncBusyRef.current) return;
+    syncBusyRef.current = true;
+    try {
+      // Old device caches may only add missing records, never replace cloud records.
+      if (!pendingOnly) {
+        const migration = await uploadRowsInChunks(data._rawRows, 'manual-cache-migration', { abortOnFirstFail: true });
+        if (migration.failedChunks || migration.firstServerError) throw new Error(migration.firstServerError ?? '서버 저장 실패');
+      }
+      const pending = pendingRowsRef.current;
+      if (pending.length) {
+        const sync = await uploadRowsInChunks(pending, 'automatic-report-sync', { replaceExisting: true, abortOnFirstFail: true });
+        if (sync.failedChunks || sync.firstServerError) throw new Error(sync.firstServerError ?? '서버 저장 실패');
+        await saveToIdb([], 'pending-cloud');
+        pendingRowsRef.current = [];
+      }
+      setUnsyncedCount(0);
       setError('');
-      setUnsyncedCount(0); // 전체 성공 시에만 미백업 0 으로.
+    } catch (err: any) {
+      setError(`서버 저장 대기 중 — 자동으로 재시도합니다. ${err.message}`);
+    } finally {
+      syncBusyRef.current = false;
     }
   }, [data, uploadRowsInChunks]);
+
+  useEffect(() => {
+    if (!unsyncedCount) return;
+    // Only retry user-uploaded reports; never migrate all historical cache on a timer.
+    const retry = () => { if (navigator.onLine && pendingRowsRef.current.length) void handleSyncToDb(true); };
+    const timer = window.setTimeout(retry, 30000);
+    const interval = window.setInterval(retry, 60000);
+    window.addEventListener('online', retry);
+    return () => { clearTimeout(timer); clearInterval(interval); window.removeEventListener('online', retry); };
+  }, [unsyncedCount, handleSyncToDb]);
 
   // 매칭 확인 → DB 저장 → 재처리
   const handleConfirmMatches = useCallback(async () => {
@@ -1009,20 +1023,21 @@ export default function AdAnalysisPage() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-  const saveToIdb = async (rows: any[]) => {
-    try {
+  const saveToIdb = async (rows: any[], key = 'data') => {
       const db = await openIdb();
-      const tx = db.transaction(idbStore, 'readwrite');
-      tx.objectStore(idbStore).put(rows, 'data');
-      db.close();
-    } catch {}
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(idbStore, 'readwrite');
+        tx.objectStore(idbStore).put(rows, key);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = tx.onabort = () => { db.close(); reject(tx.error ?? new Error('브라우저 저장 실패')); };
+      });
   };
-  const loadFromIdb = async (): Promise<any[] | null> => {
+  const loadFromIdb = async (key = 'data'): Promise<any[] | null> => {
     try {
       const db = await openIdb();
       return new Promise((resolve) => {
         const tx = db.transaction(idbStore, 'readonly');
-        const req = tx.objectStore(idbStore).get('data');
+        const req = tx.objectStore(idbStore).get(key);
         req.onsuccess = () => { db.close(); const v = req.result ?? null; resolve(Array.isArray(v) ? dedupeRows(v) : v); };
         req.onerror = () => { db.close(); resolve(null); };
       });
@@ -1030,12 +1045,14 @@ export default function AdAnalysisPage() {
   };
 
   // ─── 페이지 로드: IDB 캐시 즉시 표시 → 백그라운드에서 DB 로 갱신 ───
-  const [initialLoading, setInitialLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const initialLoadDone = useRef(false);
   useEffect(() => {
     if (initialLoadDone.current || data) return;
     initialLoadDone.current = true;
     (async () => {
+      syncBusyRef.current = true;
+      let recoveryFiles: File[] = [];
       setInitialLoading(true);
       try {
         const [pricesRes, mappingsRes] = await Promise.all([
@@ -1058,9 +1075,10 @@ export default function AdAnalysisPage() {
 
         // 1) IDB 캐시 즉시 표시 — 새로고침 시 1초 미만
         const idbRows = await loadFromIdb();
+        pendingRowsRef.current = await loadFromIdb('pending-cloud') ?? [];
+        if (pendingRowsRef.current.length) setUnsyncedCount(pendingRowsRef.current.length);
         if (idbRows?.length) {
           saveResult(processData(idbRows, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
-          setInitialLoading(false); // 화면 즉시 사용 가능
         }
 
         // 2) 백그라운드 DB 갱신 — 절대 일방 덮어쓰기 금지. dedup_key 기준 합집합(union)만.
@@ -1068,38 +1086,47 @@ export default function AdAnalysisPage() {
         //    ⚠️ 과거 사고: 여기서 DB 로 IDB 를 통째로 덮어써 로컬 풀 데이터가 말없이 사라짐.
         try {
           const dbRes = await fetch('/api/ad-analysis/rows');
-          if (!dbRes.ok) return;
+          if (!dbRes.ok) throw new Error('서버 광고 데이터 조회 실패');
           const j = await dbRes.json();
           const dbRows: any[] = j.rows ?? [];
 
-          // IDB ∪ DB — 같은 dedup_key 는 한 번만(중복 적재 없음), 어느 쪽에만 있어도 보존.
-          // union 키는 DB PK(route.ts) 및 dedupKey() 와 완전히 동일하므로 idempotent.
-          const merged: any[] = [];
-          const seen = new Set<string>();
-          for (const r of (idbRows ?? [])) {
-            const k = dedupKey(r);
-            if (!seen.has(k)) { seen.add(k); merged.push(r); }
-          }
-          for (const r of dbRows) {
-            const k = dedupKey(r);
-            if (!seen.has(k)) { seen.add(k); merged.push(r); }
+          // Pending uploads win, then cloud values; retain local-only history.
+          const merged = mergeAdRows(idbRows ?? [], dbRows, pendingRowsRef.current);
+
+          if (!merged.length) {
+            // Legacy installations backed up source files without storing parsed rows.
+            // A fresh device can recover these automatically, newest report first.
+            const filesRes = await fetch('/api/ad-analysis/files');
+            const filesJson = await filesRes.json();
+            if (!filesRes.ok || filesJson.error) throw new Error(filesJson.error ?? '기존 보고서 조회 실패');
+            for (const file of filesJson.files ?? []) {
+              const urlRes = await fetch(`/api/ad-analysis/files?download=${encodeURIComponent(file.path)}`);
+              const urlJson = await urlRes.json();
+              if (!urlRes.ok) throw new Error(urlJson.error ?? '기존 보고서 복원 실패');
+              const response = await fetch(urlJson.url);
+              if (!response.ok) throw new Error(`보고서 다운로드 실패: ${file.name}`);
+              recoveryFiles.push(new File([await response.blob()], file.name));
+            }
+            return;
           }
 
-          if (!merged.length) return; // 양쪽 다 비었으면 둘 곳도, 그릴 것도 없음
-
-          // 합집합이 로컬과 달라졌을 때만 IDB/화면 갱신. merged 는 idbRows 의 상위집합이라
-          // 절대 줄지 않음(삭제 0). DB 에서 새로 받은 행이 있으면 그만큼 늘어남.
-          if (!idbRows || merged.length !== idbRows.length) {
-            saveToIdb(merged);
+          // Refresh even when row counts match: attribution values may have changed.
+          {
+            // Preserve the pre-migration cache in case historical local values differ.
+            if (idbRows?.length && !(await loadFromIdb('before-cloud-sync'))) await saveToIdb(idbRows, 'before-cloud-sync');
+            await saveToIdb(merged);
             saveResult(processData(merged, prices, confirmedMap, saverCost ?? 0, mTotal ?? 0));
           }
 
           // 로컬에만 있고 DB 엔 아직 없는 행 수 = |IDB ∪ DB| − |DB|. >0 이면 백업 안 된 데이터 존재.
-          setUnsyncedCount(Math.max(0, merged.length - dbRows.length));
-        } catch {}
-      } catch {
+          setUnsyncedCount(Math.max(pendingRowsRef.current.length, merged.length - dbRows.length));
+        } catch (err: any) { recoveryFiles = []; setError(err.message ?? '서버 데이터를 불러오지 못했습니다'); }
+      } catch (err: any) {
+        setError(err.message ?? '광고 데이터를 불러오지 못했습니다');
       } finally {
+        syncBusyRef.current = false;
         setInitialLoading(false);
+        if (recoveryFiles.length) await handleUpload(recoveryFiles, true);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1670,13 +1697,13 @@ export default function AdAnalysisPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => fileRef.current?.click()}
-            disabled={loading}
+            disabled={loading || initialLoading || !!syncProgress}
             className="flex items-center gap-2 h-10 px-4 rounded-xl bg-brand text-white text-[13px] font-semibold hover:bg-brand-hover disabled:opacity-60 transition-colors"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             데이터 추가
           </button>
-          <BackupRestore disabled={loading} onRestore={(files) => handleUpload(files, true)} localRows={data?._rawRows ?? null} />
+          <BackupRestore disabled={loading || initialLoading || !!syncProgress} onRestore={(files) => handleUpload(files, true)} localRows={data?._rawRows ?? null} />
           {data && (
             <button
               onClick={async () => { if (await confirmDialog('모든 광고 데이터를 삭제하시겠습니까?')) setData(null); }}
@@ -1738,14 +1765,14 @@ export default function AdAnalysisPage() {
       {/* 미백업 데이터 경고 — 로컬에만 있고 DB 엔 없는 행이 있을 때. 데이터 안전 가시화. */}
       {unsyncedCount > 0 && (
         <div className="flex flex-wrap items-center gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-[12px] text-amber-900">
-          <span className="font-semibold">⚠️ {unsyncedCount.toLocaleString()}행이 이 브라우저(로컬)에만 있고 DB 엔 백업되지 않았습니다.</span>
-          <span className="text-amber-800">캐시가 지워지거나 다른 기기에서 열면 이 데이터를 잃을 수 있습니다. 지금 DB 로 백업하세요.</span>
+          <span className="font-semibold">서버 저장 대기: {unsyncedCount.toLocaleString()}행</span>
+          <span className="text-amber-800">자동으로 저장하고 실패하면 재시도합니다. 저장이 끝날 때까지 이 화면을 열어 두세요.</span>
           <button
-            onClick={handleSyncToDb}
+            onClick={() => void handleSyncToDb()}
             disabled={!!syncProgress}
             className="ml-auto h-7 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-semibold whitespace-nowrap"
           >
-            {syncProgress ? `백업 중 ${syncProgress.done}/${syncProgress.total}` : '지금 DB 로 백업'}
+            {syncProgress ? `저장 중 ${syncProgress.done}/${syncProgress.total}` : '지금 재시도'}
           </button>
         </div>
       )}
@@ -1753,26 +1780,24 @@ export default function AdAnalysisPage() {
       {/* 데이터 요약 + 수동 DB 백업 */}
       {data?._rawRows && (
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-fg-4">
-          <span>데이터: {data._rawRows.length.toLocaleString()}행 로드됨 (로컬)</span>
+          <span>데이터: {data._rawRows.length.toLocaleString()}행 · 기기 간 자동 동기화</span>
           {data.dateRange?.from && data.dateRange?.to && (
             <span>· 데이터 기간: {data.dateRange.from} ~ {data.dateRange.to}</span>
           )}
           {data._diagnostics && data._diagnostics.skippedNoDate > 0 && (
-            data._diagnostics.missingCols?.includes('날짜') ? (
-              <span className="text-red-600">· ‘날짜’ 컬럼이 없는 보고서입니다 ({data._diagnostics.skippedNoDate.toLocaleString()}행 무시) — 쿠팡에서 <b>일자별 보고서</b>로 다시 받아주세요 (지금 파일은 캠페인 합계 리포트)</span>
-            ) : (
-              <span className="text-amber-600">· 날짜 형식 인식 실패 {data._diagnostics.skippedNoDate.toLocaleString()}행 건너뜀</span>
-            )
+            <span className="text-amber-600">· 일별 날짜 열 없음 {(data._diagnostics.missingDateColumn ?? 0).toLocaleString()}행
+              {data._diagnostics.skippedNoDate > (data._diagnostics.missingDateColumn ?? 0) && ` · 날짜 값 확인 필요 ${(data._diagnostics.skippedNoDate - (data._diagnostics.missingDateColumn ?? 0)).toLocaleString()}행`}
+              {' '}(원본 보존, 일별 집계 제외)</span>
           )}
           <button
-            onClick={handleSyncToDb}
+            onClick={() => void handleSyncToDb()}
             disabled={!!syncProgress}
             className="ml-auto h-7 px-2.5 rounded-lg border border-[#BFD7FF] text-brand hover:bg-[#F0F6FF] disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
-            title="다른 PC 와 공유하려면 눌러 DB 에 백업. 평소엔 로컬(IDB)만으로 동작."
+            title="자동 저장을 다시 시도합니다. 같은 계정으로 다른 기기에서도 불러옵니다."
           >
             {syncProgress
-              ? `DB 백업 중 ${syncProgress.done}/${syncProgress.total}`
-              : 'DB 로 백업'}
+              ? `서버 저장 중 ${syncProgress.done}/${syncProgress.total}`
+              : '서버 저장 재시도'}
           </button>
         </div>
       )}

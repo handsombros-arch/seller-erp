@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { gunzipSync } from 'zlib';
+import { adRowKey, packAdRows, unpackAdRows, type AdRow } from '@/lib/ad-analysis/sync';
 
 export const maxDuration = 60;
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   // Supabase 기본 max-rows 제한(보통 1000)에 맞춰 안전하게 페이지네이션.
   // (user_id, dedup_key) PK 정렬 — unique 정렬 키라 페이지 경계가 절대 안 흔들림.
-  const allRows: unknown[] = [];
+  const allRows: AdRow[] = [];
   const PAGE = 1000;
   let from = 0;
   // 무한 루프 방지 안전장치
@@ -50,15 +51,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message, fetched: allRows.length }, { status: 500 });
     }
     if (!data?.length) break;
-    for (const r of data) allRows.push((r as { data: unknown }).data);
+    for (const r of data) allRows.push((r as { data: AdRow }).data);
     if (data.length < PAGE) break;
     from += PAGE;
   }
 
-  return NextResponse.json({ uploads: uploads ?? [], rows: allRows, totalRows: allRows.length });
+  const sourceRows = unpackAdRows(allRows);
+  return NextResponse.json({ uploads: uploads ?? [], rows: sourceRows, totalRows: sourceRows.length });
 }
 
-// POST: raw rows upsert (user_id 포함, dedup_key 중복은 무시)
+// POST: store whole source families under the legacy key; revised reports replace them.
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
 
   const admin = await createAdminClient();
 
-  let body: { filename?: string; rows: Record<string, unknown>[] };
+  let body: { filename?: string; rows: Record<string, unknown>[]; replaceExisting?: boolean };
   if (request.headers.get('content-type') === 'application/gzip') {
     const buffer = Buffer.from(await request.arrayBuffer());
     body = JSON.parse(gunzipSync(buffer).toString());
@@ -80,13 +82,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '데이터 필요' }, { status: 400 });
   }
 
-  const normKw = (v: unknown) => { const s = String(v ?? '').trim(); return s === '-' ? '' : s; };
-  const dedupKey = (r: Record<string, unknown>) =>
-    `${r['날짜']}|${normKw(r['키워드'])}|${r['광고전환매출발생 옵션ID'] ?? ''}|${r['광고 노출 지면'] ?? ''}`;
-
-  const upsertRows = rows.map((r) => ({
+  const upsertRows = packAdRows(rows).map((r) => ({
     user_id: user.id,
-    dedup_key: dedupKey(r),
+    dedup_key: adRowKey(r),
     data: r,
     filename,
   }));
@@ -99,7 +97,9 @@ export async function POST(request: NextRequest) {
   const tryUpsert = async (batch: typeof upsertRows) => {
     return admin
       .from('ad_raw_rows')
-      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: true });
+      // New reports contain revised attribution. Legacy cache migration must
+      // remain insert-only so an old device cannot overwrite newer reports.
+      .upsert(batch, { onConflict: 'user_id,dedup_key', ignoreDuplicates: body.replaceExisting !== true });
   };
   const BATCH = 300;
   for (let i = 0; i < upsertRows.length; i += BATCH) {
@@ -119,18 +119,18 @@ export async function POST(request: NextRequest) {
       }
     }
   }
-  // ignoreDuplicates 라 정확한 신규 행 수 알기 어려움 — attempted 만 보고.
+  // Upsert does not return a reliable newly-inserted count; report attempted families.
   const actuallyInserted = firstError ? 0 : attempted;
 
   // ad_uploads 이력 기록 (user_id + filename UNIQUE 로 upsert)
   await admin.from('ad_uploads').upsert({
     user_id: user.id,
     filename,
-    row_count: rows.length,
+    row_count: unpackAdRows(rows).length,
     uploaded_at: new Date().toISOString(),
   }, { onConflict: 'user_id,filename' });
 
-  // 모든 배치가 에러였다면 500 으로 반환 (클라이언트가 조용한 실패로 오인하지 않도록)
+  // Any failed batch must keep the client retry queue intact.
   if (firstError && actuallyInserted === 0) {
     return NextResponse.json(
       { error: firstError, attempted, inserted: 0, total: rows.length },
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    inserted: actuallyInserted, // 진짜로 새로 들어간 행 수 (중복 제외)
+    inserted: actuallyInserted, // Successfully attempted families, not newly inserted rows.
     attempted,                  // 시도한 행 수
     total: rows.length,
     ...(firstError ? { partialError: firstError } : {}),
