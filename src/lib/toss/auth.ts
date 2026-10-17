@@ -1,19 +1,7 @@
+import { relayFetch as proxyFetch } from '../api-relay';
 const TOKEN_URL = 'https://oauth2.cert.toss.im/token';
 const BASE      = 'https://shopping-fep.toss.im';
 
-function proxyFetch(targetUrl: string, init: RequestInit = {}): Promise<Response> {
-  const proxyUrl    = process.env.COUPANG_PROXY_URL;
-  const proxySecret = process.env.COUPANG_PROXY_SECRET;
-  if (!proxyUrl) return fetch(targetUrl, init);
-  return fetch(proxyUrl, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      'X-Target-URL': targetUrl,
-      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-    },
-  });
-}
 
 export interface TossCredentials {
   accessKey: string;
@@ -38,8 +26,7 @@ export async function getTossToken(creds: TossCredentials): Promise<string> {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`토스 토큰 발급 실패 ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`토스 토큰 발급 실패 ${res.status}`);
   }
 
   const json = await res.json();
@@ -64,15 +51,14 @@ export async function tossFetch(
       cache: 'no-store',
     });
 
-    if (res.status === 429 && attempt < retries) {
+    if (res.status === 429 && attempt < retries && ['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase())) {
       await sleep(delay);
       delay *= 2;
       continue;
     }
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`토스 API ${res.status}: ${text.slice(0, 300)}`);
+        throw new Error(`토스 API ${res.status}`);
     }
 
     return res.json();

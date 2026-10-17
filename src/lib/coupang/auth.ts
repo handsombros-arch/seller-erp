@@ -1,3 +1,4 @@
+import { relayFetch } from '../api-relay';
 import crypto from 'crypto';
 
 export interface CoupangCredentials {
@@ -51,7 +52,7 @@ async function coupangFetchOnce(
   vendorId: string,
   extraHeaders: Record<string, string> = {}
 ): Promise<any> {
-  const res = await fetch(url, {
+  const res = await relayFetch(url, {
     headers: {
       Authorization: authorization,
       'Content-Type': 'application/json;charset=UTF-8',
@@ -64,21 +65,21 @@ async function coupangFetchOnce(
   const text = await res.text();
 
   if (!res.ok) {
-    throw new Error(`Coupang API ${res.status}: ${text.slice(0, 400)}`);
+    throw new Error(`Coupang API ${res.status}`);
   }
 
   if (text.trimStart().startsWith('<')) {
-    throw new Error(`Coupang API: HTML 응답 수신 (프록시/게이트웨이 오류) - ${text.slice(0, 200)}`);
+    throw new Error('COUPANG_RESPONSE_INVALID');
   }
 
   let json: any;
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error(`Coupang API: JSON 파싱 실패 - ${text.slice(0, 200)}`);
+    throw new Error('COUPANG_RESPONSE_INVALID');
   }
   if (json.code && String(json.code) !== '200') {
-    throw new Error(`Coupang API 오류: ${json.message ?? json.code}`);
+    throw new Error('COUPANG_PROVIDER_FAILED');
   }
 
   return json;
@@ -86,56 +87,22 @@ async function coupangFetchOnce(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * 쿠팡 API 호출 (리트라이 3회 + 프록시 실패 시 직접 호출 폴백)
- */
+/** Authenticated relay only; bounded retries for transient GET failures. */
 export async function coupangFetch(
   path: string,
   params: Record<string, string>,
   creds: CoupangCredentials
 ): Promise<any> {
   const { authorization, url } = buildCoupangAuth('GET', path, params, creds);
-
-  const proxyUrl = process.env.COUPANG_PROXY_URL;
-  const proxySecret = process.env.COUPANG_PROXY_SECRET;
-  const useProxy = !!proxyUrl;
-
-  const MAX_RETRIES = 3;
-  const BACKOFF = [1000, 2000, 4000];
-
-  // 프록시 먼저 시도, 실패하면 직접 호출 폴백
-  const strategies: Array<{ label: string; fetchUrl: string; extra: Record<string, string> }> = [];
-  if (useProxy) {
-    strategies.push({
-      label: 'proxy',
-      fetchUrl: proxyUrl!,
-      extra: { 'X-Target-URL': url, ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) },
-    });
-  }
-  strategies.push({ label: 'direct', fetchUrl: url, extra: {} });
-
-  let lastError: Error | null = null;
-
-  for (const strategy of strategies) {
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      try {
-        return await coupangFetchOnce(strategy.fetchUrl, authorization, creds.vendorId, strategy.extra);
-      } catch (err: any) {
-        lastError = err;
-        const status = err.message?.match(/Coupang API (\d+)/)?.[1];
-        // 인증 오류(401/403)는 리트라이 무의미 → 즉시 다음 전략
-        if (status === '401' || status === '403') break;
-        // 마지막 시도가 아니면 백오프 후 재시도
-        if (attempt < MAX_RETRIES - 1) {
-          await sleep(BACKOFF[attempt]);
-        }
-      }
-    }
-    // 프록시 실패 → 직접 호출 폴백 로그
-    if (strategy.label === 'proxy' && strategies.length > 1) {
-      console.warn(`[coupangFetch] 프록시 실패, 직접 호출로 폴백: ${lastError?.message?.slice(0, 100)}`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await coupangFetchOnce(url, authorization, creds.vendorId); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      const status = message.match(/^Coupang API (\d+)$/)?.[1];
+      // Never retry authentication/IP failures or missing/broken relay configuration.
+      if (!status || !['429','500','502','503','504'].includes(status) || attempt === 2) throw error;
+      await sleep(1000 * 2 ** attempt);
     }
   }
-
-  throw lastError ?? new Error('Coupang API: 알 수 없는 오류');
+  throw new Error('COUPANG_REQUEST_FAILED');
 }
