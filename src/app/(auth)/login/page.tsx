@@ -6,6 +6,29 @@ import { createClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { LVLogo } from '@/components/ui/lv-logo';
 
+function safeLoginError(value: unknown) {
+  const error = value as { status?: unknown; code?: unknown } | null;
+  const allowedStatus = [0,400,401,403,408,422,429,500,502,503,504];
+  const status = typeof error?.status === 'number' && allowedStatus.includes(error.status) ? error.status : null;
+  const code = typeof error?.code === 'string' ? error.code : '';
+  let diagnostic = 'AUTH_UNKNOWN';
+  let message = '로그인 요청을 완료하지 못했습니다.';
+  if (code === 'invalid_credentials' && (status === 400 || status === 401)) {
+    diagnostic = 'LOGIN_INVALID_CREDENTIALS'; message = '인증 서버가 로그인 정보를 거부했습니다.';
+  } else if (code === 'request_timeout' || status === 408 || status === 504) {
+    diagnostic = 'AUTH_TIMEOUT'; message = '인증 서버 응답 시간이 초과됐습니다.';
+  } else if (code === 'over_request_rate_limit' || status === 429) {
+    diagnostic = 'AUTH_RATE_LIMITED'; message = '인증 요청이 제한됐습니다. 잠시 후 다시 확인하세요.';
+  } else if (code === 'unexpected_failure' || status === 500 || status === 502 || status === 503) {
+    diagnostic = 'AUTH_SERVER_ERROR'; message = '인증 서버에서 오류가 발생했습니다.';
+  } else if (status === 0) {
+    diagnostic = 'AUTH_NETWORK_ERROR'; message = '인증 서버에 연결하지 못했습니다.';
+  } else if (status !== null) {
+    diagnostic = 'AUTH_REJECTED'; message = '인증 요청이 거부됐습니다. 원인은 아직 확인되지 않았습니다.';
+  }
+  return `${message} [${diagnostic} · HTTP ${status ?? 'UNKNOWN'}]`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -18,13 +41,18 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(safeLoginError(error));
+        setLoading(false);
+      } else {
+        router.push('/');
+        router.refresh();
+      }
+    } catch (error: unknown) {
+      setError(safeLoginError(error));
       setLoading(false);
-    } else {
-      router.push('/');
-      router.refresh();
     }
   };
 
@@ -41,7 +69,7 @@ export default function LoginPage() {
         <div className="bg-card rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-7">
           <form onSubmit={handleLogin} className="space-y-4">
             {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-[13px] text-red-600">
+              <div role="alert" className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-[13px] text-red-600">
                 {error}
               </div>
             )}
