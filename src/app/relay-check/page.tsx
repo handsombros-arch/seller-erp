@@ -1,27 +1,60 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 type Result = Record<string, string | number | boolean | null>;
 const evidenceKey = 'rg-snapshot-check-evidence-v1';
 export default function RelayCheckPage() {
   const [busy, setBusy] = useState(false), [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<Result[]>([]);
-  useEffect(() => { try { setHistory(JSON.parse(localStorage.getItem(evidenceKey) ?? '[]')); } catch {} }, []);
+  const [confirmation, setConfirmation] = useState<'prepare' | 'save' | null>(null);
+  const [mustRead, setMustRead] = useState(false);
+  const requestLock = useRef(false);
+  useEffect(() => { try {
+    const saved: Result[] = JSON.parse(localStorage.getItem(evidenceKey) ?? '[]');
+    setHistory(saved);
+    const last = saved[saved.length - 1];
+    if (last && ['SAVE_REQUEST_PENDING', 'PREPARE_REQUEST_PENDING', 'WRITE_UNCERTAIN', 'RESPONSE_UNCERTAIN_USE_DB_READ'].includes(String(last.state))) {
+      setResult(last); setMustRead(true);
+    }
+  } catch {} }, []);
+  function record(data: Result) {
+    setResult(data);
+    setHistory(previous => { const next = [...previous, data].slice(-20);
+      try { localStorage.setItem(evidenceKey, JSON.stringify(next)); } catch {} return next; });
+  }
+  function ask(action: 'prepare' | 'save') {
+    if (busy || requestLock.current || mustRead || confirmation) return;
+    setConfirmation(action);
+  }
+  function confirmRun() {
+    if (!confirmation || busy || requestLock.current || mustRead) return;
+    const action = confirmation; setConfirmation(null);
+    return run(action);
+  }
   async function run(action: 'prepare' | 'save' | 'read') {
-    if (busy) return;
-    if (action === 'prepare' && !confirm('다른 수집이 없도록 단독 조율했나요? 쿠팡 첫 페이지를 1회 조회합니다. 아직 저장하지 않습니다.')) return;
-    if (action === 'save' && !confirm('준비된 스냅샷을 최대 1행 추가합니다. 기존 행·분류·창고 재고는 변경하지 않습니다. 진행할까요?')) return;
+    if (busy || requestLock.current || (action !== 'read' && mustRead)) return;
+    requestLock.current = true;
     setBusy(true);
+    if (action !== 'read') record({ state: action === 'save' ? 'SAVE_REQUEST_PENDING' : 'PREPARE_REQUEST_PENDING', checked_utc: new Date().toISOString() });
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const response = await fetch('/api/coupang/snapshot-check', action === 'read' ? { cache: 'no-store' } : {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
-      const data: Result = await response.json();
-      setResult(data);
-      setHistory(previous => { const next = [...previous, data].slice(-20);
-        try { localStorage.setItem(evidenceKey, JSON.stringify(next)); } catch {} return next; });
+      const request = async () => {
+        const response = await fetch('/api/coupang/snapshot-check', action === 'read' ? { cache: 'no-store', signal: controller.signal } : {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }), signal: controller.signal });
+        return await response.json() as Result;
+      };
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error('CLIENT_WAIT_EXPIRED')); }, 35000);
+      });
+      const data = await Promise.race([request(), deadline]);
+      record(data);
+      if (action === 'read') {
+        if (['INDEPENDENT_READ_PRESENT', 'INDEPENDENT_READ_ABSENT'].includes(String(data.state))) setMustRead(false);
+      } else if (['WRITE_UNCERTAIN', 'PRESENT_AFTER_UNCERTAIN_WRITE'].includes(String(data.state))) setMustRead(true);
     } catch {
-      const data = { state: 'RESPONSE_UNCERTAIN_USE_DB_READ', checked_utc: new Date().toISOString() };
-      setResult(data);
-    } finally { setBusy(false); }
+      record({ state: action === 'save' ? 'WRITE_UNCERTAIN' : action === 'read' ? 'READ_UNCERTAIN' : 'RESPONSE_UNCERTAIN_USE_DB_READ', checked_utc: new Date().toISOString() });
+      if (action !== 'read') setMustRead(true);
+    } finally { if (timer !== undefined) clearTimeout(timer); requestLock.current = false; setBusy(false); }
   }
   function download() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' }));
@@ -32,11 +65,18 @@ export default function RelayCheckPage() {
     <p>다른 수집과 겹치지 않도록 조율한 뒤 실행하세요. 첫 페이지 1회에서 최대 10개 후보를 확인하고, 오늘 스냅샷이 없는 항목 최대 1행만 추가합니다.</p>
     <p>기존 스냅샷 덮어쓰기, 반품 분류 추가·삭제·연결, 창고 재고 차감·복원, 판매 플랫폼 변경, Slack, 다른 플랫폼 수집은 하지 않습니다. 전체 수집 검증은 아닙니다.</p>
     <div className="flex flex-wrap gap-3">
-      <button disabled={busy} onClick={() => run('prepare')} className="border rounded px-4 py-2 disabled:opacity-50">1. 쿠팡 조회 · 저장 준비</button>
-      <button disabled={busy || !(result?.state === 'READY_TO_SAVE' || result?.can_save === true)} onClick={() => run('save')} className="border rounded px-4 py-2 disabled:opacity-50">2. 스냅샷 최대 1행 저장</button>
-      <button disabled={busy} onClick={() => run('read')} className="border rounded px-4 py-2 disabled:opacity-50">3. DB 독립 재조회</button>
+      <button disabled={busy || mustRead || !!confirmation} onClick={() => ask('prepare')} className="border rounded px-4 py-2 disabled:opacity-50">1. 쿠팡 조회 · 저장 준비</button>
+      <button disabled={busy || mustRead || !!confirmation || !(result?.state === 'READY_TO_SAVE' || result?.can_save === true)} onClick={() => ask('save')} className="border rounded px-4 py-2 disabled:opacity-50">2. 스냅샷 최대 1행 저장</button>
+      <button disabled={busy || !!confirmation} onClick={() => run('read')} className="border rounded px-4 py-2 disabled:opacity-50">3. DB 독립 재조회</button>
       <button disabled={!history.length || busy} onClick={download} className="border rounded px-4 py-2 disabled:opacity-50">비민감 결과 저장</button>
     </div>
+    {confirmation && <section className="border rounded p-4 space-y-3" aria-label="실행 확인">
+      <h2 className="font-semibold">실행 내용을 확인하세요</h2>
+      <p>{confirmation === 'prepare' ? '다른 수집과 단독 조율한 상태에서 쿠팡 첫 페이지를 1회 조회합니다. 이 단계는 저장하지 않습니다.' : '준비된 스냅샷을 최대 1행 추가합니다. 기존 행·반품 분류·창고 재고·판매 플랫폼은 변경하지 않습니다.'}</p>
+      <button disabled={busy} onClick={confirmRun} className="border rounded px-4 py-2">확인 후 실행</button>
+      <button disabled={busy} onClick={() => setConfirmation(null)} className="border rounded px-4 py-2 ml-3">취소</button>
+    </section>}
+    {mustRead && <p role="alert">이전 요청의 완료 여부가 불확실합니다. 취소 성공이나 DB 실패로 확정한 것이 아닙니다. 준비·저장을 다시 누르지 말고 DB 독립 재조회부터 하세요.</p>}
     <p>응답이 불확실하면 저장을 다시 누르지 말고 DB 독립 재조회부터 하세요. 준비 기록은 10분간 유지됩니다. 후보가 모두 기존 행이면 신규 저장은 하지 않습니다.</p>
     {busy && <p role="status">처리 중입니다. 다른 탭에서 중복 실행하지 마세요.</p>}
     <section id="snapshot-check-summary" aria-label="검증 비민감 요약" className="border rounded p-4 space-y-2" aria-live="polite">
