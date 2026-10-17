@@ -7,7 +7,7 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "relay/fail-closed-1f02e78": false
+      "relay/fail-closed-1f02e78": true
     }
   }
 }

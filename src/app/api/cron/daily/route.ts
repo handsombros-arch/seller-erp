@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
 
   // Slack 알림
   const slackUrl = process.env.SLACK_WEBHOOK_URL;
-  if (slackUrl) {
+  // Preview must never send Slack, even if it inherits a real shared webhook.
+  // The explicit sentinel also disables delivery in local isolation tests.
+  if (process.env.VERCEL_ENV !== 'preview' && slackUrl && slackUrl !== 'disabled-preview') {
     const syncOrders = results.syncOrders ?? {};
     const lines = [
       `*LV ERP 일일 동기화 완료* (${new Date().toISOString().slice(0, 10)})`,
