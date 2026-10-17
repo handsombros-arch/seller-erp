@@ -2,6 +2,12 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function proxy(request: NextRequest) {
+  // These verification routes enforce their own authentication before any work.
+  // Avoid a second unbounded auth request in front of their request deadline.
+  const { pathname } = request.nextUrl;
+  if (pathname === '/api/coupang/full-snapshot-check' || pathname === '/api/cron/rg-snapshot-verification') {
+    return NextResponse.next({ request });
+  }
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -24,7 +30,6 @@ export async function proxy(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  const { pathname } = request.nextUrl;
 
   // 홈(랜딩) · 로그인 페이지는 통과
   if (pathname === '/home' || pathname.startsWith('/login')) {

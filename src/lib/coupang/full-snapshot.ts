@@ -31,10 +31,15 @@ export function parsePage(value: unknown): { items: VerificationItem[]; next: st
   if (next !== null && (typeof next !== 'string' || next.length > 4096)) throw new Error('INVALID_CURSOR');
   return { items, next };
 }
-async function call(name: string, args: Record<string, unknown>): Promise<Raw> {
+function remainingSignal(deadline: number, cap: number) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error('REQUEST_DEADLINE');
+  return AbortSignal.timeout(Math.min(cap, remaining));
+}
+async function call(name: string, args: Record<string, unknown>, deadline = Date.now() + 4000): Promise<Raw> {
   if (!rpcNames.has(name)) throw new Error('RPC_REJECTED');
   const admin = await createAdminClient();
-  const { data, error } = await admin.rpc(name, args).abortSignal(AbortSignal.timeout(4000));
+  const { data, error } = await admin.rpc(name, args).abortSignal(remainingSignal(deadline, 4000));
   if (error || !data || typeof data !== 'object') throw new Error('VERIFICATION_DB_UNAVAILABLE');
   return data as Raw;
 }
@@ -85,29 +90,30 @@ export async function collectAllPages(deps: {
   try { return publicResult(await deps.finish(run, contentHash([...items.values()]))); }
   catch { return uncertain(); }
 }
-export async function runFullVerification(actor: string | null, requestKey: string, trigger: 'manual' | 'scheduled') {
+export async function runFullVerification(actor: string | null, requestKey: string, trigger: 'manual' | 'scheduled', deadline = Date.now() + 22000) {
   if (!['https://15.165.83.123','https://15.165.83.123/'].includes(process.env.COUPANG_PROXY_URL ?? '')) return { state: 'BLOCKED', error_code: 'AWS_RELAY_CONFIG_REQUIRED' };
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) return { state: 'BLOCKED', error_code: 'CONFIG_REQUIRED' };
   const admin = await createAdminClient();
   const { data: cred, error } = await admin.from('coupang_credentials').select('access_key,secret_key,vendor_id')
-    .order('updated_at', { ascending: false }).limit(1).abortSignal(AbortSignal.timeout(4000)).maybeSingle();
+    .order('updated_at', { ascending: false }).limit(1).abortSignal(remainingSignal(deadline, 4000)).maybeSingle();
   if (error || !cred || !/^\w+$/.test(cred.vendor_id)) return { state: 'BLOCKED', error_code: 'CREDENTIALS_UNAVAILABLE' };
   const account = createHmac('sha256', secret).update('rg-full-snapshot-v1/'+cred.vendor_id).digest('hex');
   const args = (run: Raw) => ({ p_run: run.run_id, p_lease: run.lease_token });
   return collectAllPages({
-    claim: () => call('rg_verify_claim', { p_account_key: account, p_request_key: requestKey, p_actor: actor, p_trigger: trigger }),
-    stage: (run,cursor,next,items) => call('rg_verify_stage', { ...args(run), p_cursor: cursor, p_next: next, p_items: items }),
-    finish: (run,hash) => call('rg_verify_finish', { ...args(run), p_expected_hash: hash }),
-    fail: (run,code) => call('rg_verify_fail', { ...args(run), p_code: code }),
-    status: () => call('rg_verify_status', { p_request_key: requestKey, p_actor: actor }),
+    claim: () => call('rg_verify_claim', { p_account_key: account, p_request_key: requestKey, p_actor: actor, p_trigger: trigger }, deadline),
+    stage: (run,cursor,next,items) => call('rg_verify_stage', { ...args(run), p_cursor: cursor, p_next: next, p_items: items }, deadline),
+    finish: (run,hash) => call('rg_verify_finish', { ...args(run), p_expected_hash: hash }, deadline),
+    fail: (run,code) => call('rg_verify_fail', { ...args(run), p_code: code }, deadline),
+    status: () => call('rg_verify_status', { p_request_key: requestKey, p_actor: actor }, deadline),
     fetchPage: async cursor => {
+      const signal = remainingSignal(deadline, 5000);
       const path = `/v2/providers/rg_open_api/apis/api/v1/vendors/${cred.vendor_id}/rg/inventory/summaries`;
       const signed = buildCoupangAuth('GET', path, cursor ? { nextToken: cursor } : {},
         { accessKey: cred.access_key, secretKey: cred.secret_key, vendorId: cred.vendor_id });
       const response = await relayFetch(signed.url, { method: 'GET', cache: 'no-store',
         headers: { Authorization: signed.authorization, 'X-Requested-By': cred.vendor_id, 'Content-Type': 'application/json;charset=UTF-8' },
-        signal: AbortSignal.timeout(5000) });
+        signal });
       return { ok: response.ok, json: () => response.json(), discard: async () => { if (response.body) await response.body.cancel(); } };
     },
   });

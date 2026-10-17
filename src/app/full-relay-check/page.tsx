@@ -10,7 +10,8 @@ export default function FullRelayCheck() {
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
     setRequestId(saved.request_id ?? ''); setHistory(saved.history ?? []); setSummary(saved.history?.at(-1) ?? null);
   } catch {} }, []);
-  function record(value: Summary, id: string) {
+  function record(result: Summary, id: string, kind: 'start' | 'read' | 'scheduled') {
+    const value = { ...result, action_kind: kind };
     setSummary(value); setHistory(previous => { const next = [...previous,value].slice(-30);
       try { localStorage.setItem(storageKey,JSON.stringify({request_id:id,history:next})); } catch {} return next; });
   }
@@ -19,7 +20,7 @@ export default function FullRelayCheck() {
     if (kind === 'start' && !confirming) return;
     lock.current = true; setBusy(true); setConfirming(false);
     const id = kind === 'start' ? crypto.randomUUID() : requestId;
-    if (kind === 'start') { setRequestId(id); record({state:'REQUEST_PENDING',error_code:'USE_INDEPENDENT_READ',checked_utc:new Date().toISOString()},id); }
+    if (kind === 'start') { setRequestId(id); record({state:'REQUEST_PENDING',error_code:'USE_INDEPENDENT_READ',checked_utc:new Date().toISOString()},id,kind); }
     let timer: ReturnType<typeof setTimeout> | undefined; const controller = new AbortController();
     try {
       const action = async () => {
@@ -30,11 +31,14 @@ export default function FullRelayCheck() {
         return await response.json() as Summary;
       };
       const deadline = new Promise<never>((_,reject) => { timer=setTimeout(()=>{controller.abort();reject(new Error('WAIT_EXPIRED'));},35000); });
-      record(await Promise.race([action(),deadline]),id);
-    } catch { record({state:kind==='start'?'WRITE_UNCERTAIN':'READ_UNCERTAIN',error_code:'USE_INDEPENDENT_READ',checked_utc:new Date().toISOString()},id); }
+      record(await Promise.race([action(),deadline]),id,kind);
+    } catch { record({state:kind==='start'?'WRITE_UNCERTAIN':'READ_UNCERTAIN',error_code:'USE_INDEPENDENT_READ',checked_utc:new Date().toISOString()},id,kind); }
     finally { if(timer!==undefined)clearTimeout(timer);lock.current=false;setBusy(false); }
   }
-  const terminal = ['COMPLETE','FAILED','EXPIRED','NOT_FOUND','BLOCKED'].includes(String(summary?.state)) || summary?.lease_expired === true;
+  // A login failure or a scheduled read says nothing about the pending manual run.
+  const manualSummary = [...history].reverse().find(row => row.action_kind !== 'scheduled');
+  const terminal = ['COMPLETE','FAILED','EXPIRED','NOT_FOUND'].includes(String(manualSummary?.state)) ||
+    (!!manualSummary?.run_id && manualSummary?.lease_expired === true);
   function download() {
     const url=URL.createObjectURL(new Blob([JSON.stringify(history,null,2)],{type:'application/json'}));
     const link=document.createElement('a');link.href=url;link.download=`full-snapshot-check-${Date.now()}.json`;link.click();URL.revokeObjectURL(url);
