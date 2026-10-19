@@ -5,7 +5,7 @@ export async function proxy(request: NextRequest) {
   // These verification routes enforce their own authentication before any work.
   // Avoid a second unbounded auth request in front of their request deadline.
   const { pathname } = request.nextUrl;
-  if (pathname === '/api/coupang/full-snapshot-check' || pathname === '/api/cron/rg-snapshot-verification' || pathname === '/api/naver/read-only-check') {
+  if (pathname === '/api/coupang/full-snapshot-check' || pathname === '/api/cron/rg-snapshot-verification' || pathname === '/api/naver/read-only-check' || pathname === '/api/coupang/orders-read-only-check') {
     return NextResponse.next({ request });
   }
   let supabaseResponse = NextResponse.next({ request });
